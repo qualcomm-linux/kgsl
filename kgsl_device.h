@@ -302,6 +302,8 @@ struct kgsl_device {
 	rwlock_t event_groups_lock;
 	/** @speed_bin: Speed bin for the GPU device if applicable */
 	u32 speed_bin;
+	/** @soc_code: Identifier containing product and feature code */
+	u32 soc_code;
 	/** @gmu_fault: Set when a gmu or rgmu fault is encountered */
 	bool gmu_fault;
 	/** @regmap: GPU register map */
@@ -336,6 +338,10 @@ struct kgsl_device {
 	unsigned long idle_jiffies;
 	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
 	bool dump_all_ibs;
+	/** @freq_limiter_irq_clear: reset controller to clear freq limiter irq */
+	struct reset_control *freq_limiter_irq_clear;
+	/** @freq_limiter_intr_num: The interrupt number for freq limiter */
+	int freq_limiter_intr_num;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
