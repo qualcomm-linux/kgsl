@@ -18,6 +18,7 @@
 #include "adreno_gen7_hwsched.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "kgsl_pwrscale.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
@@ -1611,7 +1612,7 @@ int gen7_probe_common(struct platform_device *pdev,
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
 
-	device->pwrscale.avoid_ddr_stall = true;
+	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
 	device->pwrctrl.cx_gdsc_offset = GEN7_GPU_CC_CX_GDSCR;
