@@ -1401,12 +1401,18 @@ static void gen7_snapshot_lpac_roq(struct kgsl_device *device,
 			GEN7_CP_LPAC_ROQ_DBG_ADDR, GEN7_CP_LPAC_ROQ_DBG_DATA, 0, (roq_size << 2));
 }
 
-static void gen7_snapshot_external_core_regs(struct kgsl_device *device,
+void gen7_snapshot_external_core_regs(struct kgsl_device *device,
 			struct kgsl_snapshot *snapshot)
 {
 	size_t i;
-	const u32 **external_core_regs = gen7_snapshot_block_list->external_core_regs;
-	unsigned int num_external_core_regs = gen7_snapshot_block_list->num_external_core_regs;
+	const u32 **external_core_regs;
+	unsigned int num_external_core_regs;
+	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
+
+	gen7_snapshot_block_list = gpucore->gen7_snapshot_block_list;
+	external_core_regs = gen7_snapshot_block_list->external_core_regs;
+	num_external_core_regs = gen7_snapshot_block_list->num_external_core_regs;
+
 	for (i = 0; i < num_external_core_regs; i++) {
 		const u32 *regs = external_core_regs[i];
 
@@ -1436,6 +1442,10 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 
 	gen7_snapshot_block_list = gpucore->gen7_snapshot_block_list;
 
+	/* External registers are dumped in the beginning of gmu snapshot */
+	if (!gmu_core_isenabled(device))
+		gen7_snapshot_external_core_regs(device, snapshot);
+
 	gen7_snapshot_trace_buffer(device, snapshot);
 
 	/*
@@ -1464,10 +1474,8 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL3_TP0, cgc2);
 	}
 
-	if (!adreno_gx_is_on(adreno_dev)) {
-		gen7_snapshot_external_core_regs(device, snapshot);
+	if (!adreno_gx_is_on(adreno_dev))
 		return;
-	}
 
 	is_current_rt = rt_task(current);
 
@@ -1507,8 +1515,6 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
 		snapshot, adreno_snapshot_registers_v2,
 		(void *) gen7_snapshot_block_list->pre_crashdumper_regs);
-
-	gen7_snapshot_external_core_regs(device, snapshot);
 
 	gen7_reglist_snapshot(device, snapshot);
 

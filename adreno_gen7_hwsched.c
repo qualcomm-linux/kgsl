@@ -369,7 +369,9 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	gen7_gmu_register_config(adreno_dev);
 
-	gen7_gmu_version_info(adreno_dev);
+	ret = gen7_gmu_version_info(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
 
 	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
 		set_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &adreno_dev->hwsched.flags);

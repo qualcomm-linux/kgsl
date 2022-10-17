@@ -799,10 +799,11 @@ int gen7_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-void gen7_gmu_version_info(struct adreno_device *adreno_dev)
+int gen7_gmu_version_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 
 	/* GMU version info is at a fixed offset in the DTCM */
 	gmu_core_regread(device, GEN7_GMU_CM3_DTCM_START + 0xff8,
@@ -815,6 +816,15 @@ void gen7_gmu_version_info(struct adreno_device *adreno_dev)
 			&gmu->ver.pwr_dev);
 	gmu_core_regread(device, GEN7_GMU_CM3_DTCM_START + 0xffc,
 			&gmu->ver.hfi);
+
+	/* Check if gmu fw version on device is compatible with kgsl driver */
+	if (gmu->ver.core < gen7_core->gmu_fw_version) {
+		dev_err_once(&gmu->pdev->dev,
+			     "GMU FW version 0x%x error (expected 0x%x)\n",
+			     gmu->ver.core, gen7_core->gmu_fw_version);
+		return -EINVAL;
+	}
+	return 0;
 }
 
 int gen7_gmu_itcm_shadow(struct adreno_device *adreno_dev)
@@ -1799,7 +1809,9 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
-	gen7_gmu_version_info(adreno_dev);
+	ret = gen7_gmu_version_info(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
 
 	ret = gen7_gmu_itcm_shadow(adreno_dev);
 	if (ret)
