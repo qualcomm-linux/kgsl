@@ -1256,6 +1256,9 @@ int adreno_device_probe(struct platform_device *pdev,
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
 
+	/* Add FUSA block to the regmap */
+	kgsl_regmap_add_region(&device->regmap, pdev, "fusa", NULL, NULL);
+
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);
 

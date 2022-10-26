@@ -2244,9 +2244,11 @@ void a6xx_crashdump_init(struct adreno_device *adreno_dev)
 	/* Program the capturescript for the MVC regsiters */
 	ptr += _a6xx_crashdump_init_mvc(adreno_dev, ptr, &offset);
 
-	ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
+	if (!adreno_is_a663(adreno_dev)) {
+		ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
 
-	ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
+		ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
+	}
 
 	/* Save CD register end pointer to check CD status completion */
 	a6xx_cd_reg_end = a6xx_crashdump_registers->hostptr + offset;
