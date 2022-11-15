@@ -7,6 +7,7 @@
 #include <linux/kthread.h>
 #include <linux/notifier.h>
 #include <linux/shmem_fs.h>
+#include <linux/version.h>
 
 #include "kgsl_reclaim.h"
 #include "kgsl_sharedmem.h"
@@ -393,7 +394,11 @@ int kgsl_reclaim_init(void)
 	int ret;
 
 	/* Initialize shrinker */
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	ret = register_shrinker(&kgsl_reclaim_shrinker, "kgsl_reclaim_shrinker");
+#else
 	ret = register_shrinker(&kgsl_reclaim_shrinker);
+#endif
 	if (ret)
 		pr_err("kgsl: reclaim: Failed to register shrinker\n");
 	else

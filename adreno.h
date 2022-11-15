@@ -684,6 +684,11 @@ struct adreno_device {
 	struct dentry *bcl_debugfs_dir;
 	/** @bcl_throttle_time_us: Total time in us spent in BCL throttling */
 	u32 bcl_throttle_time_us;
+	/* @preemption_debugfs_dir: Debugfs directory node for preemption related nodes */
+	struct dentry *preemption_debugfs_dir;
+	/* @hwsched_enabled: If true, hwsched is enabled */
+	bool hwsched_enabled;
+
 };
 
 /**

@@ -490,6 +490,77 @@ static int _bcl_throttle_time_us_get(void *data, u64 *val)
 }
 DEFINE_DEBUGFS_ATTRIBUTE(_bcl_throttle_fops, _bcl_throttle_time_us_get, NULL, "%llu\n");
 
+static int _skipsaverestore_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	if (adreno_dev->hwsched_enabled)
+		return adreno_power_cycle_bool(adreno_dev,
+			&adreno_dev->preempt.skipsaverestore, val);
+
+	adreno_dev->preempt.skipsaverestore = val ? true : false;
+	return 0;
+
+}
+
+static int _skipsaverestore_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) adreno_dev->preempt.skipsaverestore;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(skipsaverestore_fops, _skipsaverestore_show, _skipsaverestore_store,
+	"%llu\n");
+
+static int _usesgmem_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	if (adreno_dev->hwsched_enabled)
+		return adreno_power_cycle_bool(adreno_dev,
+			&adreno_dev->preempt.usesgmem, val);
+
+	adreno_dev->preempt.usesgmem = val ? true : false;
+	return 0;
+
+}
+
+static int _usesgmem_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) adreno_dev->preempt.usesgmem;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(usesgmem_fops, _usesgmem_show, _usesgmem_store, "%llu\n");
+
+static int _preempt_level_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	if (adreno_dev->hwsched_enabled)
+		return adreno_power_cycle_u32(adreno_dev,
+			&adreno_dev->preempt.preempt_level,
+			min_t(u64, val, 2));
+
+	adreno_dev->preempt.preempt_level = min_t(u64, val, 2);
+	return 0;
+
+}
+
+static int _preempt_level_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) adreno_dev->preempt.preempt_level;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level_store, "%llu\n");
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -531,5 +602,15 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("sid2", 0644, adreno_dev->bcl_debugfs_dir, device, &_sid2_fops);
 		debugfs_create_file("bcl_throttle_time_us", 0444, adreno_dev->bcl_debugfs_dir,
 						device, &_bcl_throttle_fops);
+	}
+
+	adreno_dev->preemption_debugfs_dir = debugfs_create_dir("preemption", device->d_debugfs);
+	if (!IS_ERR_OR_NULL(adreno_dev->preemption_debugfs_dir)) {
+		debugfs_create_file("preempt_level", 0644, adreno_dev->preemption_debugfs_dir,
+			device, &preempt_level_fops);
+		debugfs_create_file("usesgmem", 0644, adreno_dev->preemption_debugfs_dir, device,
+			&usesgmem_fops);
+		debugfs_create_file("skipsaverestore", 0644, adreno_dev->preemption_debugfs_dir,
+			device, &skipsaverestore_fops);
 	}
 }

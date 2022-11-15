@@ -100,8 +100,8 @@ enum gmu_pwrctrl_mode {
 #define GMU_VER_MAJOR(ver) (((ver) >> 28) & 0xF)
 #define GMU_VER_MINOR(ver) (((ver) >> 16) & 0xFFF)
 #define GMU_VER_STEP(ver) ((ver) & 0xFFFF)
-#define GMU_VERSION(major, minor) \
-	((((major) & 0xF) << 28) | (((minor) & 0xFFF) << 16))
+#define GMU_VERSION(major, minor, step) \
+	((((major) & 0xF) << 28) | (((minor) & 0xFFF) << 16) | ((step) & 0xFFFF))
 
 #define GMU_INT_WDOG_BITE		BIT(0)
 #define GMU_INT_RSCC_COMP		BIT(1)
@@ -237,6 +237,7 @@ struct gmu_dev_ops {
 	int (*acd_set)(struct kgsl_device *device, bool val);
 	int (*bcl_sid_set)(struct kgsl_device *device, u32 sid_id, u64 sid_val);
 	u64 (*bcl_sid_get)(struct kgsl_device *device, u32 sid_id);
+	void (*force_first_boot)(struct kgsl_device *device);
 };
 
 /**
@@ -332,5 +333,6 @@ struct iommu_domain;
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_CORE_H */

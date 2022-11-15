@@ -539,7 +539,8 @@ int gen7_start(struct adreno_device *adreno_dev)
 			0x1);
 
 	/* Disable non-ubwc read reqs from passing write reqs */
-	kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, 0x800, 0x800);
+	if (!adreno_is_gen7_9_0(adreno_dev))
+		kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, 0x800, 0x800);
 
 	/* Enable GMU power counter 0 to count GPU busy */
 	kgsl_regwrite(device, GEN7_GPU_GMU_AO_GPU_CX_BUSY_MASK, 0xff000000);

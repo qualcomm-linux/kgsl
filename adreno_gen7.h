@@ -71,6 +71,8 @@ struct gen7_protected_regs {
 struct adreno_gen7_core {
 	/** @base: Container for the generic GPU definitions */
 	struct adreno_gpu_core base;
+	/** @gmu_fw_version: Minimum firmware version required to support this core */
+	u32 gmu_fw_version;
 	/** @sqefw_name: Name of the SQE microcode file */
 	const char *sqefw_name;
 	/** @gmufw_name: Name of the GMU firmware file */
@@ -260,6 +262,16 @@ void gen7_preemption_context_destroy(struct kgsl_context *context);
 void gen7_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot);
 void gen7_crashdump_init(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_snapshot_external_core_regs - Dump external registers into snapshot
+ * @device: Pointer to KGSL device
+ * @snapshot: Pointer to the snapshot
+ *
+ * Dump external core registers like GPUCC, CPR into GPU snapshot.
+ */
+void gen7_snapshot_external_core_regs(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot);
 
 /**
  * gen7_read_alwayson - Read the current always on clock value

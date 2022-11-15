@@ -10,6 +10,7 @@
 #include <linux/mempool.h>
 #include <linux/of.h>
 #include <linux/scatterlist.h>
+#include <linux/version.h>
 
 #include "kgsl_debugfs.h"
 #include "kgsl_device.h"
@@ -707,7 +708,11 @@ void kgsl_probe_page_pools(void)
 	of_node_put(node);
 
 	/* Initialize shrinker */
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	register_shrinker(&kgsl_pool_shrinker, "kgsl_pool_shrinker");
+#else
 	register_shrinker(&kgsl_pool_shrinker);
+#endif
 }
 
 void kgsl_exit_page_pools(void)

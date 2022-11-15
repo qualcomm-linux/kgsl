@@ -9,7 +9,8 @@
 #include "adreno_gen7.h"
 #include "adreno_gen7_gmu.h"
 #include "adreno_snapshot.h"
-#include "adreno_gen7_snapshot.h"
+#include "adreno_gen7_0_0_snapshot.h"
+#include "adreno_gen7_2_0_snapshot.h"
 #include "kgsl_device.h"
 
 size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
@@ -273,6 +274,13 @@ void gen7_gmu_snapshot(struct adreno_device *adreno_dev,
 	/* Send nmi only if it was a gmu fault */
 	if (device->gmu_fault)
 		gen7_gmu_send_nmi(adreno_dev, false);
+
+	/*
+	 * Dump external register first to have GPUCC and other external
+	 * register in snapshot to analyze the system state even in partial
+	 * snapshot dump
+	 */
+	gen7_snapshot_external_core_regs(device, snapshot);
 
 	gen7_gmu_device_snapshot(device, snapshot);
 

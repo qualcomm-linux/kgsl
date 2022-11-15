@@ -1919,6 +1919,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_0 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_4M,
 	},
+	.gmu_fw_version = GMU_VERSION(4, 0, 0),
 	.sqefw_name = "a730_sqe.fw",
 	.gmufw_name = "gmu_gen70000.bin",
 	.gmufw_bak_name = "c500_gmu.bin",
@@ -1952,6 +1953,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_4M,
 	},
+	.gmu_fw_version = GMU_VERSION(4, 0, 0),
 	.sqefw_name = "a730_sqe.fw",
 	.gmufw_name = "gmu_gen70000.bin",
 	.gmufw_bak_name = "c500_gmu.bin",
@@ -2050,6 +2052,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_0 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
 	},
+	.gmu_fw_version = GMU_VERSION(4, 1, 0),
 	.sqefw_name = "a740_sqe.fw",
 	.gmufw_name = "gmu_gen70200.bin",
 	.zap_name = "a740_zap.mbn",
@@ -2083,6 +2086,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
 	},
+	.gmu_fw_version = GMU_VERSION(4, 1, 0),
 	.sqefw_name = "a740_sqe.fw",
 	.gmufw_name = "gmu_gen70200.bin",
 	.zap_name = "a740_zap.mbn",
@@ -2116,6 +2120,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_4M,
 	},
+	.gmu_fw_version = GMU_VERSION(4, 0, 7),
 	.sqefw_name = "a730_sqe.fw",
 	.gmufw_name = "gmu_gen70000.bin",
 	.gmufw_bak_name = "c500_gmu.bin",
@@ -2132,6 +2137,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
 };
+
+extern const struct gen7_snapshot_block_list gen7_9_0_snapshot_block_list;
 
 /* GEN7_9_0 protected register list */
 static const struct gen7_protected_regs gen7_9_0_protected_regs[] = {
@@ -2212,7 +2219,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.protected_regs = gen7_9_0_protected_regs,
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
-	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
+	.gen7_snapshot_block_list = &gen7_9_0_snapshot_block_list,
 	.bcl_data = 1,
 };
 

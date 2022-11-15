@@ -900,7 +900,7 @@ size_t adreno_snapshot_global(struct kgsl_device *device, u8 *buf,
 
 	u8 *ptr = buf + sizeof(*header);
 
-	if (!memdesc || memdesc->size == 0)
+	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
 		return 0;
 
 	if (remain < (memdesc->size + sizeof(*header))) {

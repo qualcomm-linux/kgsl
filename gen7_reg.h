@@ -126,8 +126,8 @@
 #define GEN7_CP_BV_SQE_STAT_DATA         0xa88
 #define GEN7_CP_BV_RB_RPTR_ADDR_LO       0xa98
 #define GEN7_CP_BV_RB_RPTR_ADDR_HI       0xa99
-#define GEN7_CP_RESOURCE_TBL_DBG_ADDR    0xa9a
-#define GEN7_CP_RESOURCE_TBL_DBG_DATA    0xa9b
+#define GEN7_CP_RESOURCE_TABLE_DBG_ADDR  0xa9a
+#define GEN7_CP_RESOURCE_TABLE_DBG_DATA  0xa9b
 #define GEN7_CP_BV_MEM_POOL_DBG_ADDR     0xa96
 #define GEN7_CP_BV_MEM_POOL_DBG_DATA     0xa97
 #define GEN7_CP_BV_APRIV_CNTL            0xad0
@@ -154,6 +154,18 @@
 #define GEN7_CP_LPAC_ROQ_DBG_DATA        0xb35
 #define GEN7_CP_LPAC_FIFO_DBG_DATA       0xb36
 #define GEN7_CP_LPAC_FIFO_DBG_ADDR       0xb40
+#define GEN7_CP_AQE_ROQ_DBG_ADDR_0       0xba8
+#define GEN7_CP_AQE_ROQ_DBG_ADDR_1       0xba9
+#define GEN7_CP_AQE_ROQ_DBG_DATA_0       0xbac
+#define GEN7_CP_AQE_ROQ_DBG_DATA_1       0xbad
+#define GEN7_CP_AQE_UCODE_DBG_ADDR_0     0xbb0
+#define GEN7_CP_AQE_UCODE_DBG_ADDR_1     0xbb1
+#define GEN7_CP_AQE_UCODE_DBG_DATA_0     0xbb4
+#define GEN7_CP_AQE_UCODE_DBG_DATA_1     0xbb5
+#define GEN7_CP_AQE_STAT_ADDR_0          0xbb8
+#define GEN7_CP_AQE_STAT_ADDR_1          0xbb9
+#define GEN7_CP_AQE_STAT_DATA_0          0xbbc
+#define GEN7_CP_AQE_STAT_DATA_1          0xbbd
 #define GEN7_LPAC_RBBM_STATUS            0x5fe
 
 /* RBBM registers */
@@ -765,8 +777,8 @@
 #define GEN7_RB_PERFCTR_UFC_SEL_3           0x8e33
 #define GEN7_RB_PERFCTR_UFC_SEL_4           0x8e34
 #define GEN7_RB_PERFCTR_UFC_SEL_5           0x8e35
-#define GEN7_RB_RB_SUB_BLOCK_SEL_CNTL_HOST  0x8e3b
-#define GEN7_RB_RB_SUB_BLOCK_SEL_CNTL_CD    0x8e3d
+#define GEN7_RB_SUB_BLOCK_SEL_CNTL_HOST     0x8e3b
+#define GEN7_RB_SUB_BLOCK_SEL_CNTL_CD       0x8e3d
 #define GEN7_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE 0x8e50
 
 /* PC registers */
