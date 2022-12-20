@@ -2525,40 +2525,6 @@ static void adreno_dispatcher_setup_context(struct adreno_device *adreno_dev,
 	drawctxt->rb = dispatch_get_rb(adreno_dev, drawctxt);
 }
 
-static int _skipsaverestore_store(struct adreno_device *adreno_dev, bool val)
-{
-	adreno_dev->preempt.skipsaverestore = val ? true : false;
-	return 0;
-}
-
-static bool _skipsaverestore_show(struct adreno_device *adreno_dev)
-{
-	return adreno_dev->preempt.skipsaverestore;
-}
-
-static int _usesgmem_store(struct adreno_device *adreno_dev, bool val)
-{
-	adreno_dev->preempt.usesgmem = val ? true : false;
-	return 0;
-}
-
-static bool _usesgmem_show(struct adreno_device *adreno_dev)
-{
-	return adreno_dev->preempt.usesgmem;
-}
-
-static int _preempt_level_store(struct adreno_device *adreno_dev,
-		unsigned int val)
-{
-	adreno_dev->preempt.preempt_level = min_t(unsigned int, val, 2);
-	return 0;
-}
-
-static unsigned int _preempt_level_show(struct adreno_device *adreno_dev)
-{
-	return adreno_dev->preempt.preempt_level;
-}
-
 static void change_preemption(struct adreno_device *adreno_dev, void *priv)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2632,17 +2598,11 @@ static bool _ft_long_ib_detect_show(struct adreno_device *adreno_dev)
 }
 
 static ADRENO_SYSFS_BOOL(preemption);
-static ADRENO_SYSFS_U32(preempt_level);
-static ADRENO_SYSFS_BOOL(usesgmem);
-static ADRENO_SYSFS_BOOL(skipsaverestore);
 static ADRENO_SYSFS_RO_U32(preempt_count);
 static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
 
 static const struct attribute *_dispatch_attr_list[] = {
 	&adreno_attr_preemption.attr.attr,
-	&adreno_attr_preempt_level.attr.attr,
-	&adreno_attr_usesgmem.attr.attr,
-	&adreno_attr_skipsaverestore.attr.attr,
 	&adreno_attr_preempt_count.attr.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
 	NULL,

@@ -7,6 +7,10 @@ else
 	KGSL_ENABLED := true
 endif # TARGET_USES_QMAA
 
+ifeq ($(ENABLE_HYP), true)
+        KGSL_ENABLED := false
+endif
+
 ifeq ($(KGSL_ENABLED),true)
 KGSL_SELECT := CONFIG_QCOM_KGSL=m
 

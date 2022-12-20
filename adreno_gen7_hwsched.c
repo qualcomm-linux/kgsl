@@ -346,7 +346,7 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gen7_gmu_enable_clks(adreno_dev);
+	ret = gen7_gmu_enable_clks(adreno_dev, GMU_MAX_PWRLEVELS - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -438,7 +438,7 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gen7_gmu_enable_clks(adreno_dev);
+	ret = gen7_gmu_enable_clks(adreno_dev, GMU_MAX_PWRLEVELS - 1);
 	if (ret)
 		goto gdsc_off;
 
@@ -794,6 +794,8 @@ static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 	set_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags);
 	set_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
+	adreno_dev->hwsched_enabled = true;
+
 	/*
 	 * BCL needs respective Central Broadcast register to
 	 * be programed from TZ. This programing happens only
@@ -825,31 +827,6 @@ static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 	trace_kgsl_pwr_set_state(device, KGSL_STATE_ACTIVE);
 
 	return 0;
-}
-
-static void reset_preemption_records(struct adreno_device *adreno_dev)
-{
-	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
-	static struct kgsl_memdesc *preemption_md = NULL;
-	u32 i;
-
-	if (!adreno_is_preemption_enabled(adreno_dev))
-		return;
-
-	if (preemption_md) {
-		memset(preemption_md->hostptr, 0x0, preemption_md->size);
-		return;
-	}
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_desc *desc = &hw_hfi->mem_alloc_table[i].desc;
-
-		if (desc->mem_kind == HFI_MEMKIND_CSW_PRIV_NON_SECURE) {
-			preemption_md = hw_hfi->mem_alloc_table[i].md;
-			memset(preemption_md->hostptr, 0x0, preemption_md->size);
-			return;
-		}
-	}
 }
 
 /**
@@ -961,13 +938,6 @@ no_gx_power:
 	kgsl_pwrscale_sleep(device);
 
 	kgsl_pwrctrl_clear_l3_vote(device);
-
-	/*
-	 * Reset the context records so that CP can start
-	 * at the correct read pointer for BV thread after
-	 * coming out of slumber.
-	 */
-	reset_preemption_records(adreno_dev);
 
 	trace_kgsl_pwr_set_state(device, KGSL_STATE_SLUMBER);
 

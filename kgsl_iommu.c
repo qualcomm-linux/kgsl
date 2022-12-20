@@ -1190,7 +1190,7 @@ static void _enable_gpuhtw_llc(struct kgsl_mmu *mmu, struct iommu_domain *domain
 		iommu_set_pgtable_quirks(domain, IO_PGTABLE_QUIRK_ARM_OUTER_WBWA);
 }
 
-static int set_smmu_aperture(struct kgsl_device *device,
+int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
 	int ret;
@@ -2213,7 +2213,7 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	kgsl_iommu_enable_ttbr0(&iommu->user_context,
 		to_iommu_pt(mmu->defaultpagetable));
 
-	set_smmu_aperture(device, &iommu->user_context);
+	kgsl_set_smmu_aperture(device, &iommu->user_context);
 
 	kgsl_iommu_enable_ttbr0(&iommu->lpac_context,
 		to_iommu_pt(mmu->defaultpagetable));
