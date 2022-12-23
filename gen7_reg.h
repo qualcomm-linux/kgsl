@@ -31,6 +31,7 @@
 #define GEN7_INT_DEBUGBUSINTERRUPT0     26
 #define GEN7_INT_DEBUGBUSINTERRUPT1     27
 #define GEN7_INT_TSBWRITEERROR          28
+#define GEN7_INT_SWFUSEVIOLATION        29
 #define GEN7_INT_ISDBCPUIRQ             30
 #define GEN7_INT_ISDBUNDERDEBUG         31
 
@@ -666,6 +667,7 @@
 #define GEN7_RBBM_CLOCK_MODE_HLSQ        0x0011b
 #define GEN7_RBBM_CLOCK_DELAY_HLSQ       0x0011c
 #define GEN7_RBBM_CLOCK_HYST_HLSQ        0x0011d
+#define GEN7_RBBM_CGC_GLOBAL_LOAD_CMD    0x0011e
 #define GEN7_RBBM_CLOCK_HYST2_VFD        0x0012f
 #define GEN7_RBBM_CLOCK_MODE_CP          0x00260
 #define GEN7_RBBM_CLOCK_MODE_BV_LRZ      0x00284
@@ -673,6 +675,8 @@
 #define GEN7_RBBM_CLOCK_MODE2_GRAS       0x00286
 #define GEN7_RBBM_CLOCK_MODE_BV_VFD      0x00287
 #define GEN7_RBBM_CLOCK_MODE_BV_GPC      0x00288
+#define GEN7_RBBM_SW_FUSE_INT_STATUS     0x002c0
+#define GEN7_RBBM_SW_FUSE_INT_MASK       0x002c1
 
 /* DBGC_CFG registers */
 #define GEN7_DBGC_CFG_DBGBUS_SEL_A                  0x600
@@ -1062,6 +1066,8 @@
 #define GEN7_CX_DBGC_PERF_ATB_DRAIN_CMD                 0x1844a
 #define GEN7_CX_DBGC_ECO_CNTL                           0x18450
 #define GEN7_CX_DBGC_AHB_DBG_CNTL                       0x18451
+#define GEN7_CX_DBGC_TCM_DBG_ADDR                       0x18580
+#define GEN7_CX_DBGC_TCM_DBG_DATA                       0x18581
 
 /* GMU control registers */
 #define GEN7_GMU_CM3_ITCM_START			0x1b400
@@ -1238,6 +1244,16 @@
 
 /* GPU CX_MISC registers */
 #define GEN7_GPU_CX_MISC_TCM_RET_CNTL		0x39
+
+/* GPU SW Fuse Feature bit fields */
+#define GEN7_FASTBLEND_SW_FUSE		0
+#define GEN7_LPAC_SW_FUSE		1
+#define GEN7_RAYTRACING_SW_FUSE		2
+
+#define GEN7_SW_FUSE_INT_MASK \
+	((1 << GEN7_FASTBLEND_SW_FUSE) |	\
+	(1 << GEN7_LPAC_SW_FUSE) |	\
+	(1 << GEN7_RAYTRACING_SW_FUSE))
 
 /* QDSS register offsets */
 #define QDSS_AOSS_APB_TMC_RSZ 0x04

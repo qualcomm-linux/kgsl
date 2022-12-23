@@ -1485,7 +1485,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	 * 0x5c00bd00. Disable clock gating for SP and TP to capture
 	 * debugbus data.
 	 */
-	if (device->ftbl->is_hwcg_on(device)) {
+	if (!adreno_is_gen7_9_0(adreno_dev) && device->ftbl->is_hwcg_on(device)) {
 		kgsl_regread(device, GEN7_RBBM_CLOCK_CNTL2_SP0, &cgc);
 		kgsl_regread(device, GEN7_RBBM_CLOCK_CNTL_TP0, &cgc1);
 		kgsl_regread(device, GEN7_RBBM_CLOCK_CNTL3_TP0, &cgc2);
@@ -1497,7 +1497,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	gen7_snapshot_debugbus(adreno_dev, snapshot);
 
 	/* Restore the value of the clockgating registers */
-	if (device->ftbl->is_hwcg_on(device)) {
+	if (!adreno_is_gen7_9_0(adreno_dev) && device->ftbl->is_hwcg_on(device)) {
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL2_SP0, cgc);
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_TP0, cgc1);
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL3_TP0, cgc2);

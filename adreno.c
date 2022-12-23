@@ -376,8 +376,13 @@ static void _soft_reset(struct adreno_device *adreno_dev)
  */
 void adreno_irqctrl(struct adreno_device *adreno_dev, int state)
 {
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+
 	adreno_writereg(adreno_dev, ADRENO_REG_RBBM_INT_0_MASK,
 		state ? adreno_dev->irq_mask : 0);
+
+	if (gpudev->swfuse_irqctrl)
+		gpudev->swfuse_irqctrl(adreno_dev, state);
 }
 
 /*
@@ -1296,6 +1301,9 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
+
+	/* Add FUSA block to the regmap */
+	kgsl_regmap_add_region(&device->regmap, pdev, "fusa", NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);
