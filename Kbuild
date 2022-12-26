@@ -32,6 +32,9 @@ endif
 ifeq ($(CONFIG_ARCH_MONACO), y)
 	include $(KGSL_PATH)/config/gki_monaco.conf
 endif
+ifeq ($(CONFIG_ARCH_LEMANS), y)
+	include $(KGSL_PATH)/config/gki_lemans.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
 

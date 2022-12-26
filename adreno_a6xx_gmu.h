@@ -208,6 +208,12 @@ void a6xx_enable_gpu_irq(struct adreno_device *adreno_dev);
 void a6xx_disable_gpu_irq(struct adreno_device *adreno_dev);
 
 /**
+ * a6xx_fusa_init - Init gpu fusa
+ * @adreno_dev: Pointer to the adreno device
+ */
+void a6xx_fusa_init(struct adreno_device *adreno_dev);
+
+/**
  * a6xx_gmu_snapshot- Take snapshot for gmu targets
  * @adreno_dev: Pointer to the adreno device
  * @snapshot: Pointer to the snapshot structure
