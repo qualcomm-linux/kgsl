@@ -101,6 +101,10 @@ struct a6xx_gmu_device {
 	struct notifier_block gdsc_nb;
 	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
 	struct completion gdsc_gate;
+	/** @pdc_cfg_base: Base address of PDC cfg registers */
+	void __iomem *pdc_cfg_base;
+	/** @pdc_seq_base: Base address of PDC seq registers */
+	void __iomem *pdc_seq_base;
 };
 
 /* Helper function to get to a6xx gmu device from adreno device */
@@ -431,10 +435,11 @@ void a6xx_gmu_remove(struct kgsl_device *device);
 /**
  * a6xx_gmu_enable_clks - Enable gmu clocks
  * @adreno_dev: Pointer to the adreno device
+ * @level: GMU frequency level
  *
  * Return: 0 on success or negative error on failure
  */
-int a6xx_gmu_enable_clks(struct adreno_device *adreno_dev);
+int a6xx_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
 
 /**
  * a6xx_gmu_enable_gdsc - Enable gmu gdsc

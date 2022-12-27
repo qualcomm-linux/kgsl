@@ -1573,7 +1573,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 			DEV_PM_QOS_MAX_FREQUENCY,
 			PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
 	if (result < 0)
-		dev_err(device->dev, "PM QoS thermal request failed:\n", result);
+		dev_err(device->dev, "PM QoS thermal request failed:%d\n", result);
 
 	for (i = 0; i < pwr->num_pwrlevels; i++) {
 		freq = pwr->pwrlevels[i].gpu_freq;

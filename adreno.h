@@ -214,6 +214,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A662 = 662,
 	ADRENO_REV_A663 = 663,
 	ADRENO_REV_A680 = 680,
+	ADRENO_REV_A702 = 702,
 	/*
 	 * Gen7 and higher version numbers may exceed 1 digit
 	 * Bits 16-23: Major
@@ -917,6 +918,10 @@ struct adreno_gpudev {
 	 * @context_destroy: Target specific function called during context destruction
 	 */
 	void (*context_destroy)(struct adreno_device *adreno_dev, struct adreno_context *drawctxt);
+	/**
+	 * @swfuse_irqctrl: To enable/disable sw fuse violation interrupt
+	 */
+	void (*swfuse_irqctrl)(struct adreno_device *adreno_dev, bool state);
 };
 
 /**
@@ -1099,7 +1104,7 @@ static inline int adreno_is_a505_or_a506(struct adreno_device *adreno_dev)
 static inline int adreno_is_a6xx(struct adreno_device *adreno_dev)
 {
 	return ADRENO_GPUREV(adreno_dev) >= 600 &&
-			ADRENO_GPUREV(adreno_dev) < 700;
+			ADRENO_GPUREV(adreno_dev) <= 702;
 }
 
 static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
@@ -1122,6 +1127,7 @@ ADRENO_TARGET(a640, ADRENO_REV_A640)
 ADRENO_TARGET(a650, ADRENO_REV_A650)
 ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
+ADRENO_TARGET(a702, ADRENO_REV_A702)
 
 /* A635 is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)
@@ -1506,6 +1512,8 @@ void adreno_writereg64(struct adreno_device *adreno_dev,
 		enum adreno_regs lo, enum adreno_regs hi, uint64_t val);
 
 unsigned int adreno_get_rptr(struct adreno_ringbuffer *rb);
+
+void adreno_touch_wake(struct kgsl_device *device);
 
 static inline bool adreno_rb_empty(struct adreno_ringbuffer *rb)
 {

@@ -23,6 +23,7 @@
 #define HLSQ_DP 1
 #define SP_TOP 2
 #define USPTP 3
+#define HLSQ_DP_STR 4
 
 #define STATE_NON_CONTEXT 0
 #define STATE_TOGGLE_CTXT 1
@@ -149,6 +150,10 @@ struct gen7_snapshot_block_list {
 	size_t num_sptp_clusters;
 	/* post_crashdumper_regs : Registers which need to be dumped after CD runs */
 	const u32 *post_crashdumper_regs;
+	/* index_registers : List of index_registers */
+	struct gen7_cp_indexed_reg *index_registers;
+	/* index_registers_len : Length of the index registers */
+	size_t index_registers_len;
 };
 
 struct gen7_trace_buffer_info {
@@ -252,6 +257,20 @@ enum gen7_debugbus_ids {
 	DEBUGBUS_CCHE_0           = 396,
 	DEBUGBUS_CCHE_1           = 397,
 	DEBUGBUS_CCHE_2           = 398,
+	DEBUGBUS_VPC_DSTR_0       = 408,
+	DEBUGBUS_VPC_DSTR_1       = 409,
+	DEBUGBUS_VPC_DSTR_2       = 410,
+	DEBUGBUS_HLSQ_DP_STR_0    = 411,
+	DEBUGBUS_HLSQ_DP_STR_1    = 412,
+	DEBUGBUS_HLSQ_DP_STR_2    = 413,
+	DEBUGBUS_HLSQ_DP_STR_3    = 414,
+	DEBUGBUS_HLSQ_DP_STR_4    = 415,
+	DEBUGBUS_HLSQ_DP_STR_5    = 416,
+	DEBUGBUS_UFC_DSTR_0       = 443,
+	DEBUGBUS_UFC_DSTR_1       = 444,
+	DEBUGBUS_UFC_DSTR_2       = 445,
+	DEBUGBUS_CGC_SUBCORE      = 446,
+	DEBUGBUS_CGC_CORE         = 447,
 };
 
 static const u32 gen7_gbif_debugbus_blocks[] = {
@@ -308,6 +327,9 @@ enum gen7_statetype_ids {
 	SP_LB_10_DATA                  = 61,
 	SP_LB_11_DATA                  = 62,
 	SP_LB_12_DATA                  = 63,
+	HLSQ_DATAPATH_DSTR_META        = 64,
+	HLSQ_L2STC_TAG_RAM             = 67,
+	HLSQ_L2STC_INFO_CMD            = 68,
 	HLSQ_CVS_BE_CTXT_BUF_RAM_TAG   = 69,
 	HLSQ_CPS_BE_CTXT_BUF_RAM_TAG   = 70,
 	HLSQ_GFX_CVS_BE_CTXT_BUF_RAM   = 71,
@@ -329,9 +351,12 @@ enum gen7_statetype_ids {
 	HLSQ_INST_RAM_TAG              = 87,
 	HLSQ_GFX_CVS_CONST_RAM_TAG     = 88,
 	HLSQ_GFX_CPS_CONST_RAM_TAG     = 89,
+	HLSQ_GFX_LOCAL_MISC_RAM        = 90,
+	HLSQ_GFX_LOCAL_MISC_RAM_TAG    = 91,
 	HLSQ_INST_RAM_1                = 92,
 	HLSQ_STPROC_META               = 93,
 	HLSQ_BV_BE_META                = 94,
+	HLSQ_INST_RAM_2                = 95,
 	HLSQ_DATAPATH_META             = 96,
 	HLSQ_FRONTEND_META             = 97,
 	HLSQ_INDIRECT_META             = 98,

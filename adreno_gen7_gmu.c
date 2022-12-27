@@ -1753,18 +1753,19 @@ void gen7_gmu_aop_send_acd_state(struct gen7_gmu_device *gmu, bool flag)
 			"AOP mbox send message failed: %d\n", ret);
 }
 
-int gen7_gmu_enable_clks(struct adreno_device *adreno_dev)
+int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	gen7_rdpm_cx_freq_update(gmu, gmu->freqs[0] / 1000);
+	gen7_rdpm_cx_freq_update(gmu, gmu->freqs[level] / 1000);
 
 	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk",
-			gmu->freqs[0]);
+			gmu->freqs[level]);
 	if (ret) {
-		dev_err(&gmu->pdev->dev, "Unable to set the GMU clock\n");
+		dev_err(&gmu->pdev->dev, "GMU clock:%d set failed:%d\n",
+			gmu->freqs[level], ret);
 		return ret;
 	}
 
@@ -1801,7 +1802,7 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gen7_gmu_enable_clks(adreno_dev);
+	ret = gen7_gmu_enable_clks(adreno_dev, 0);
 	if (ret)
 		goto gdsc_off;
 
@@ -1885,7 +1886,7 @@ static int gen7_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gen7_gmu_enable_clks(adreno_dev);
+	ret = gen7_gmu_enable_clks(adreno_dev, 0);
 	if (ret)
 		goto gdsc_off;
 
