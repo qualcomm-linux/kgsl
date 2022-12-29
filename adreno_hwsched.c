@@ -147,7 +147,7 @@ static void _retire_timestamp_only(struct kgsl_drawobj *drawobj)
 
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
-		atomic_inc(&drawobj->context->proc_priv->period.frames);
+		atomic_inc(&drawobj->context->proc_priv->period->frames);
 	}
 
 	/* Retire pending GPU events for the object */
@@ -774,6 +774,19 @@ void adreno_hwsched_trigger(struct adreno_device *adreno_dev)
 static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	/*
+	 * Skip the inline submission path if GPU is not active.
+	 * Otherwise, the submitting thread will be blocked until wakeup is complete.
+	 * This is done without any locking to keep the submit path lightweight at the
+	 * acceptable risk of a wrong guess which would result in an inline submit when
+	 * the device goes into slumber soon after the check.
+	 */
+	if (device->state != KGSL_STATE_ACTIVE) {
+		adreno_hwsched_trigger(adreno_dev);
+		return;
+	}
 
 	/* If the dispatcher is busy then schedule the work for later */
 	if (!mutex_trylock(&hwsched->mutex)) {
@@ -785,7 +798,6 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
-		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 		mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
@@ -1122,7 +1134,7 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	drawobj = DRAWOBJ(cmdobj);
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
-		atomic_inc(&drawobj->context->proc_priv->period.frames);
+		atomic_inc(&drawobj->context->proc_priv->period->frames);
 	}
 
 	entry = cmdobj->profiling_buf_entry;
@@ -1700,6 +1712,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 		(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 		(cmd->error == GMU_GPU_SW_HANG) ||
+		(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
 		context_is_throttled(device, context)) {
 		adreno_drawctxt_set_guilty(device, context);
 	}
@@ -1781,6 +1794,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
+			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
 			context_is_throttled(device, context))
 			adreno_drawctxt_set_guilty(device, context);
 		/*
@@ -1795,6 +1809,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		if ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
+			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
 			context_is_throttled(device, context_lpac))
 			adreno_drawctxt_set_guilty(device, context_lpac);
 		/*
@@ -2009,7 +2024,7 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	 */
 	if (device->state != KGSL_STATE_ACTIVE) {
 		dev_err_ratelimited(device->dev,
-			"GMU shouldn't be in SLUMBER because ctx:%d fence ts:%d is not retired\n",
+			"GMU shouldn't be in SLUMBER because ctx:%d ts:%d fence ts:%d is not retired\n",
 			context->id, retired, kfence->timestamp);
 		msm_hw_fence_destroy(kfence->hw_fence_handle, &kfence->fence);
 		goto decrement;

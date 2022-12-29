@@ -94,8 +94,7 @@ int kgsl_reclaim_to_pinned_state(
 			break;
 		}
 
-		if (!entry->pending_free &&
-				(entry->memdesc.priv & KGSL_MEMDESC_RECLAIMED))
+		if (entry->memdesc.priv & KGSL_MEMDESC_RECLAIMED)
 			valid_entry = kgsl_mem_entry_get(entry);
 		spin_unlock(&process->mem_lock);
 
@@ -361,6 +360,9 @@ kgsl_reclaim_shrink_count_objects(struct shrinker *shrinker,
 	struct kgsl_process_private *process;
 	unsigned long count_reclaimable = 0;
 
+	if (!current_is_kswapd())
+		return 0;
+
 	read_lock(&kgsl_driver.proclist_lock);
 	list_for_each_entry(process, &kgsl_driver.process_list, list) {
 		if (!test_bit(KGSL_PROC_STATE, &process->state))
@@ -369,7 +371,7 @@ kgsl_reclaim_shrink_count_objects(struct shrinker *shrinker,
 	}
 	read_unlock(&kgsl_driver.proclist_lock);
 
-	return (count_reclaimable << PAGE_SHIFT);
+	return count_reclaimable;
 }
 
 /* Shrinker callback data*/

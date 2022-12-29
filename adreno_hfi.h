@@ -275,7 +275,7 @@ static const char * const hfi_memkind_strings[] = {
 /* Host can access */
 #define HFI_MEMFLAG_HOST_ACC		BIT(8)
 
-/* Host initializes the buffer */
+/* Host initializes(zero-init) the buffer */
 #define HFI_MEMFLAG_HOST_INIT		BIT(9)
 
 /* Gfx buffer needs to be secure */
@@ -932,6 +932,7 @@ struct payload_section {
 #define KEY_CP_LPAC_OPCODE_ERROR 7
 #define KEY_CP_LPAC_PROTECTED_ERROR 8
 #define KEY_CP_LPAC_HW_FAULT 9
+#define KEY_SWFUSE_VIOLATION_FAULT 10
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -991,6 +992,8 @@ struct payload_section {
 #define GMU_CP_LPAC_ILLEGAL_INST_ERROR 619
 /* Fault due to LPAC Long IB timeout */
 #define GMU_GPU_LPAC_SW_HANG 620
+/* Fault due to software fuse violation interrupt */
+#define GMU_GPU_SW_FUSE_VIOLATION 621
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 

@@ -217,19 +217,10 @@ static void adreno_input_work(struct work_struct *work)
 	mutex_unlock(&device->mutex);
 }
 
-/*
- * Process input events and schedule work if needed.  At this point we are only
- * interested in groking EV_ABS touchscreen events
- */
-static void adreno_input_event(struct input_handle *handle, unsigned int type,
-		unsigned int code, int value)
+/* Wake up the touch event kworker to initiate GPU wakeup */
+void adreno_touch_wake(struct kgsl_device *device)
 {
-	struct kgsl_device *device = handle->handler->private;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	/* Only consider EV_ABS (touch) events */
-	if (type != EV_ABS)
-		return;
 
 	/*
 	 * Don't do anything if anything hasn't been rendered since we've been
@@ -261,6 +252,20 @@ static void adreno_input_event(struct input_handle *handle, unsigned int type,
 	} else if (device->state == KGSL_STATE_SLUMBER) {
 		schedule_work(&adreno_dev->input_work);
 	}
+}
+
+/*
+ * Process input events and schedule work if needed.  At this point we are only
+ * interested in groking EV_ABS touchscreen events
+ */
+static void adreno_input_event(struct input_handle *handle, unsigned int type,
+		unsigned int code, int value)
+{
+	struct kgsl_device *device = handle->handler->private;
+
+	/* Only consider EV_ABS (touch) events */
+	if (type == EV_ABS)
+		adreno_touch_wake(device);
 }
 
 #ifdef CONFIG_INPUT
@@ -371,8 +376,13 @@ static void _soft_reset(struct adreno_device *adreno_dev)
  */
 void adreno_irqctrl(struct adreno_device *adreno_dev, int state)
 {
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+
 	adreno_writereg(adreno_dev, ADRENO_REG_RBBM_INT_0_MASK,
 		state ? adreno_dev->irq_mask : 0);
+
+	if (gpudev->swfuse_irqctrl)
+		gpudev->swfuse_irqctrl(adreno_dev, state);
 }
 
 /*
@@ -533,7 +543,16 @@ static struct {
 
 static int adreno_get_chipid(struct platform_device *pdev, u32 *chipid)
 {
-	return of_property_read_u32(pdev->dev.of_node, "qcom,chipid", chipid);
+	u32 id;
+
+	if (!of_property_read_u32(pdev->dev.of_node, "qcom,chipid", chipid))
+		return 0;
+
+	id = socinfo_get_partinfo_chip_id(SOCINFO_PART_GPU);
+	if (id)
+		*chipid = id;
+
+	return id ? 0 : -EINVAL;
 }
 
 static void
@@ -1021,14 +1040,22 @@ const char *adreno_get_gpu_model(struct kgsl_device *device)
 	of_node_put(node);
 
 	if (!ret)
-		strlcpy(gpu_model, model, sizeof(gpu_model));
-	else
-		scnprintf(gpu_model, sizeof(gpu_model), "Adreno%d%d%dv%d",
-			ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
-			ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),
-			ADRENO_CHIPID_MINOR(ADRENO_DEVICE(device)->chipid),
-			ADRENO_CHIPID_PATCH(ADRENO_DEVICE(device)->chipid) + 1);
+		goto done;
 
+	model = socinfo_get_partinfo_part_name(SOCINFO_PART_GPU);
+	if (model)
+		goto done;
+
+	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%d%d%dv%d",
+		ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
+		ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),
+		ADRENO_CHIPID_MINOR(ADRENO_DEVICE(device)->chipid),
+		ADRENO_CHIPID_PATCH(ADRENO_DEVICE(device)->chipid) + 1);
+
+	return gpu_model;
+
+done:
+	strscpy(gpu_model, model, sizeof(gpu_model));
 	return gpu_model;
 }
 
@@ -1036,6 +1063,8 @@ static u32 adreno_get_vk_device_id(struct kgsl_device *device)
 {
 	struct device_node *node;
 	static u32 device_id;
+	u32 vk_id;
+	int ret;
 
 	if (device_id)
 		return device_id;
@@ -1044,10 +1073,13 @@ static u32 adreno_get_vk_device_id(struct kgsl_device *device)
 	if (!node)
 		node = of_node_get(device->pdev->dev.of_node);
 
-	if (of_property_read_u32(node, "qcom,vk-device-id", &device_id))
-		device_id = ADRENO_DEVICE(device)->chipid;
-
+	ret = of_property_read_u32(node, "qcom,vk-device-id", &device_id);
 	of_node_put(node);
+	if (!ret)
+		return device_id;
+
+	vk_id = socinfo_get_partinfo_vulkan_id(SOCINFO_PART_GPU);
+	device_id = vk_id ? vk_id : ADRENO_DEVICE(device)->chipid;
 
 	return device_id;
 }
@@ -1269,6 +1301,9 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
+
+	/* Add FUSA block to the regmap */
+	kgsl_regmap_add_region(&device->regmap, pdev, "fusa", NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);
@@ -3581,7 +3616,7 @@ module_exit(kgsl_3d_exit);
 
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SOFTDEP("pre: qcom-arm-smmu-mod nvmem_qfprom");
+MODULE_SOFTDEP("pre: qcom-arm-smmu-mod nvmem_qfprom socinfo");
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
