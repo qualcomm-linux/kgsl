@@ -343,9 +343,9 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev);
  * gen7_gmu_version_info - Get gmu firmware version
  * @adreno_dev: Pointer to the adreno device
  *
- * Program gmu regsiters based on features
+ * Return: 0 on success or negative error on failure
  */
-void gen7_gmu_version_info(struct adreno_device *adreno_dev);
+int gen7_gmu_version_info(struct adreno_device *adreno_dev);
 
 /**
  * gen7_gmu_irq_enable - Enable gmu interrupts
@@ -457,10 +457,11 @@ void gen7_gmu_remove(struct kgsl_device *device);
 /**
  * gen7_gmu_enable_clks - Enable gmu clocks
  * @adreno_dev: Pointer to the adreno device
+ * @level: GMU frequency level
  *
  * Return: 0 on success or negative error on failure
  */
-int gen7_gmu_enable_clks(struct adreno_device *adreno_dev);
+int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
 
 /**
  * gen7_gmu_enable_gdsc - Enable gmu gdsc

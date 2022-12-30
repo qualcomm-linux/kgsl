@@ -212,7 +212,9 @@ enum adreno_gpurev {
 	ADRENO_REV_A650 = 650,
 	ADRENO_REV_A660 = 660,
 	ADRENO_REV_A662 = 662,
+	ADRENO_REV_A663 = 663,
 	ADRENO_REV_A680 = 680,
+	ADRENO_REV_A702 = 702,
 	/*
 	 * Gen7 and higher version numbers may exceed 1 digit
 	 * Bits 16-23: Major
@@ -684,6 +686,11 @@ struct adreno_device {
 	struct dentry *bcl_debugfs_dir;
 	/** @bcl_throttle_time_us: Total time in us spent in BCL throttling */
 	u32 bcl_throttle_time_us;
+	/* @preemption_debugfs_dir: Debugfs directory node for preemption related nodes */
+	struct dentry *preemption_debugfs_dir;
+	/* @hwsched_enabled: If true, hwsched is enabled */
+	bool hwsched_enabled;
+
 };
 
 /**
@@ -911,6 +918,10 @@ struct adreno_gpudev {
 	 * @context_destroy: Target specific function called during context destruction
 	 */
 	void (*context_destroy)(struct adreno_device *adreno_dev, struct adreno_context *drawctxt);
+	/**
+	 * @swfuse_irqctrl: To enable/disable sw fuse violation interrupt
+	 */
+	void (*swfuse_irqctrl)(struct adreno_device *adreno_dev, bool state);
 };
 
 /**
@@ -1093,7 +1104,7 @@ static inline int adreno_is_a505_or_a506(struct adreno_device *adreno_dev)
 static inline int adreno_is_a6xx(struct adreno_device *adreno_dev)
 {
 	return ADRENO_GPUREV(adreno_dev) >= 600 &&
-			ADRENO_GPUREV(adreno_dev) < 700;
+			ADRENO_GPUREV(adreno_dev) <= 702;
 }
 
 static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
@@ -1114,7 +1125,9 @@ ADRENO_TARGET(a635, ADRENO_REV_A635)
 ADRENO_TARGET(a662, ADRENO_REV_A662)
 ADRENO_TARGET(a640, ADRENO_REV_A640)
 ADRENO_TARGET(a650, ADRENO_REV_A650)
+ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
+ADRENO_TARGET(a702, ADRENO_REV_A702)
 
 /* A635 is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)
@@ -1152,7 +1165,7 @@ static inline int adreno_is_a640_family(struct adreno_device *adreno_dev)
  * Derived GPUs from A650 needs to be added to this list.
  * A650 is derived from A640 but register specs has been
  * changed hence do not belongs to A640 family. A620, A621,
- * A660, A690 follows the register specs of A650.
+ * A660, A663, A690 follows the register specs of A650.
  *
  */
 static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
@@ -1161,7 +1174,8 @@ static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
 
 	return (rev == ADRENO_REV_A650 || rev == ADRENO_REV_A620 ||
 		rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
-		rev == ADRENO_REV_A662 ||  rev == ADRENO_REV_A621);
+		rev == ADRENO_REV_A662 || rev == ADRENO_REV_A621 ||
+		rev == ADRENO_REV_A663);
 }
 
 static inline int adreno_is_a619_holi(struct adreno_device *adreno_dev)
@@ -1498,6 +1512,8 @@ void adreno_writereg64(struct adreno_device *adreno_dev,
 		enum adreno_regs lo, enum adreno_regs hi, uint64_t val);
 
 unsigned int adreno_get_rptr(struct adreno_ringbuffer *rb);
+
+void adreno_touch_wake(struct kgsl_device *device);
 
 static inline bool adreno_rb_empty(struct adreno_ringbuffer *rb)
 {

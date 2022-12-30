@@ -190,4 +190,13 @@ struct kgsl_iommu_pt {
 	struct io_pgtable_cfg cfg;
 };
 
+/**
+ * kgsl_set_smmu_aperture - set SMMU Aperture for user context
+ * @device: A GPU device handle
+ *
+ * Return: 0 on success or negative on failure.
+ */
+int kgsl_set_smmu_aperture(struct kgsl_device *device,
+		struct kgsl_iommu_context *context);
+
 #endif

@@ -307,6 +307,16 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 		gmu_core_regwrite(device, gen7_core->ao_hwcg[i].offset,
 			on ? gen7_core->ao_hwcg[i].val : 0);
 
+	if (!gen7_core->hwcg) {
+		kgsl_regread(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, &value);
+
+		if (value != on)
+			kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD,
+				      on ? 1 : 0);
+
+		return;
+	}
+
 	kgsl_regread(device, GEN7_RBBM_CLOCK_CNTL, &value);
 
 	if (value == RBBM_CLOCK_CNTL_ON && on)
@@ -443,7 +453,14 @@ int gen7_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
-	u32 bank_bit, mal;
+	u32 mal, mode = 0, rgb565_predicator = 0;
+	/*
+	 * HBB values 13 to 16 can represented LSB of HBB from 0 to 3.
+	 * Any HBB value beyond 16 needs programming MSB of HBB.
+	 * By default highest bank bit is 14, Hence set default HBB LSB
+	 * to "1" and MSB to "0".
+	 */
+	u32 hbb_lo = 1, hbb_hi = 0;
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 
 	/* Set up GBIF registers from the GPU core definition */
@@ -507,26 +524,43 @@ int gen7_start(struct adreno_device *adreno_dev)
 		"qcom,min-access-length", &mal))
 		mal = 32;
 
-	if (!WARN_ON(!adreno_dev->highest_bank_bit))
-		bank_bit = (adreno_dev->highest_bank_bit - 13) & 3;
-	else
-		bank_bit = 1;
+	of_property_read_u32(device->pdev->dev.of_node,
+			"qcom,ubwc-mode", &mode);
 
-	kgsl_regwrite(device, GEN7_RB_NC_MODE_CNTL, BIT(11) | BIT(4) |
+	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
+		hbb_lo = (adreno_dev->highest_bank_bit - 13) & 3;
+		hbb_hi = ((adreno_dev->highest_bank_bit - 13) >> 2) & 1;
+	}
+
+	if (mode == KGSL_UBWC_4_0)
+		rgb565_predicator = 1;
+
+	kgsl_regwrite(device, GEN7_RB_NC_MODE_CNTL,
+			((rgb565_predicator == 1) ? BIT(11) : 0) |
+			((hbb_hi == 1) ? BIT(10) : 0) |
+			BIT(4) | /*AMSBC is enabled on UBWC 3.0 and 4.0 */
 			((mal == 64) ? BIT(3) : 0) |
-			FIELD_PREP(GENMASK(2, 1), bank_bit));
+			FIELD_PREP(GENMASK(2, 1), hbb_lo));
+
 	kgsl_regwrite(device, GEN7_TPL1_NC_MODE_CNTL,
+			((hbb_hi == 1) ? BIT(4) : 0) |
 			((mal == 64) ? BIT(3) : 0) |
-			FIELD_PREP(GENMASK(2, 1), bank_bit));
+			FIELD_PREP(GENMASK(2, 1), hbb_lo));
+
 	kgsl_regwrite(device, GEN7_SP_NC_MODE_CNTL,
-			((mal == 64) ? BIT(3) : 0) |
+			FIELD_PREP(GENMASK(11, 10), hbb_hi) |
 			FIELD_PREP(GENMASK(5, 4), 2) |
-			FIELD_PREP(GENMASK(2, 1), bank_bit));
+			((mal == 64) ? BIT(3) : 0) |
+			FIELD_PREP(GENMASK(2, 1), hbb_lo));
+
 	kgsl_regwrite(device, GEN7_GRAS_NC_MODE_CNTL,
-			FIELD_PREP(GENMASK(8, 5), bank_bit));
+			FIELD_PREP(GENMASK(8, 5),
+				(adreno_dev->highest_bank_bit - 13)));
 
 	kgsl_regwrite(device, GEN7_UCHE_MODE_CNTL,
-			FIELD_PREP(GENMASK(22, 21), bank_bit));
+			((mal == 64) ? BIT(23) : 0) |
+			FIELD_PREP(GENMASK(22, 21), hbb_lo));
+
 	kgsl_regwrite(device, GEN7_RBBM_INTERFACE_HANG_INT_CNTL, BIT(30) |
 			FIELD_PREP(GENMASK(27, 0),
 				gen7_core->hang_detect_cycles));
@@ -539,7 +573,8 @@ int gen7_start(struct adreno_device *adreno_dev)
 			0x1);
 
 	/* Disable non-ubwc read reqs from passing write reqs */
-	kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, 0x800, 0x800);
+	if (!adreno_is_gen7_9_0(adreno_dev))
+		kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, 0x800, 0x800);
 
 	/* Enable GMU power counter 0 to count GPU busy */
 	kgsl_regwrite(device, GEN7_GPU_GMU_AO_GPU_CX_BUSY_MASK, 0xff000000);
@@ -1125,6 +1160,43 @@ static void gen7_gpc_err_int_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_dispatcher_fault(adreno_dev, ADRENO_SOFT_FAULT);
 }
 
+/*
+ * gen7_swfuse_violation_callback() - ISR for software fuse violation interrupt
+ * @adreno_dev: Pointer to device
+ * @bit: Interrupt bit
+ */
+static void gen7_swfuse_violation_callback(struct adreno_device *adreno_dev, int bit)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 status;
+
+	/*
+	 * SWFUSEVIOLATION error is typically the result of enabling software
+	 * feature which is not supported by the hardware. Following are the
+	 * Feature violation will be reported
+	 * 1) FASTBLEND (BIT:0): NO Fault, RB will send the workload to legacy
+	 * blender HW pipeline.
+	 * 2) LPAC (BIT:1): Fault
+	 * 3) RAYTRACING (BIT:2): Fault
+	 */
+	kgsl_regread(device, GEN7_RBBM_SW_FUSE_INT_STATUS, &status);
+
+	/*
+	 * RBBM_INT_CLEAR_CMD will not clear SWFUSEVIOLATION interrupt. Hence
+	 * do explicit swfuse irq clear.
+	 */
+	kgsl_regwrite(device, GEN7_RBBM_SW_FUSE_INT_MASK, 0);
+
+	dev_crit_ratelimited(device->dev,
+		"RBBM: SW Feature Fuse violation status=0x%8.8x\n", status);
+
+	/* Trigger a fault in the dispatcher for LPAC and RAYTRACING violation */
+	if (status & GENMASK(GEN7_RAYTRACING_SW_FUSE, GEN7_LPAC_SW_FUSE)) {
+		adreno_irqctrl(adreno_dev, 0);
+		adreno_dispatcher_fault(adreno_dev, ADRENO_HARD_FAULT);
+	}
+}
+
 static const struct adreno_irq_funcs gen7_irq_funcs[32] = {
 	ADRENO_IRQ_CALLBACK(NULL), /* 0 - RBBM_GPU_IDLE */
 	ADRENO_IRQ_CALLBACK(gen7_err_callback), /* 1 - RBBM_AHB_ERROR */
@@ -1155,7 +1227,7 @@ static const struct adreno_irq_funcs gen7_irq_funcs[32] = {
 	ADRENO_IRQ_CALLBACK(NULL), /* 26 - DEBBUS_INTR_0 */
 	ADRENO_IRQ_CALLBACK(NULL), /* 27 - DEBBUS_INTR_1 */
 	ADRENO_IRQ_CALLBACK(gen7_err_callback), /* 28 - TSBWRITEERROR */
-	ADRENO_IRQ_CALLBACK(NULL), /* 29 - UNUSED */
+	ADRENO_IRQ_CALLBACK(gen7_swfuse_violation_callback), /* 29 - SWFUSEVIOLATION */
 	ADRENO_IRQ_CALLBACK(NULL), /* 30 - ISDB_CPU_IRQ */
 	ADRENO_IRQ_CALLBACK(NULL), /* 31 - ISDB_UNDER_DEBUG */
 };
@@ -1644,6 +1716,13 @@ err:
 	device->force_panic = false;
 }
 
+static void gen7_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
+{
+	if (adreno_is_gen7_9_0(adreno_dev))
+		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN7_RBBM_SW_FUSE_INT_MASK,
+			state ? GEN7_SW_FUSE_INT_MASK : 0);
+}
+
 const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen7_register_offsets,
@@ -1694,6 +1773,7 @@ const struct gen7_gpudev adreno_gen7_gmu_gpudev = {
 		.gx_is_on = gen7_gmu_gx_is_on,
 		.perfcounter_remove = gen7_perfcounter_remove,
 		.set_isdb_breakpoint_registers = gen7_set_isdb_breakpoint_registers,
+		.swfuse_irqctrl = gen7_swfuse_irqctrl,
 	},
 	.hfi_probe = gen7_gmu_hfi_probe,
 	.handle_watchdog = gen7_gmu_handle_watchdog,

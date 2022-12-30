@@ -277,6 +277,8 @@ __get_rbbm_clock_cntl_on(struct adreno_device *adreno_dev)
 		return 0x8AA8AA02;
 	else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev))
 		return 0xAAA8AA82;
+	else if (adreno_is_a702(adreno_dev))
+		return 0xAAAAAA82;
 	else
 		return 0x8AA8AA82;
 }
@@ -376,7 +378,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 */
 
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev))
+		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 1, 0);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -396,7 +398,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Hence skip GMU_GX registers for A612.
 	 */
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev))
+		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 0, 1);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -559,6 +561,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	unsigned int uavflagprd_inv;
 	unsigned int amsbc = 0;
 	unsigned int rgb565_predicator = 0;
+	unsigned int level2_swizzling_dis = 0;
 
 	/* Enable 64 bit addressing */
 	kgsl_regwrite(device, A6XX_CP_ADDR_MODE_CNTL, 0x1);
@@ -614,10 +617,12 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, A6XX_UCHE_CACHE_WAYS, 0x4);
 
 	/* ROQ sizes are twice as big on a640/a680 than on a630 */
-	if (ADRENO_GPUREV(adreno_dev) >= ADRENO_REV_A640) {
+	if ((ADRENO_GPUREV(adreno_dev) >= ADRENO_REV_A640) &&
+		       !adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
-	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev)) {
+	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev) ||
+			adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x00800060);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x40201b16);
 	} else {
@@ -628,10 +633,19 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	if (adreno_is_a660(adreno_dev))
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 
+	if (adreno_is_a663(adreno_dev)) {
+		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
+		kgsl_regwrite(device, A6XX_RBBM_LPAC_GBIF_CLIENT_QOS_CNTL, 0x0);
+		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
+	}
+
 	if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev)) {
 		/* For A612 and A610 Mem pool size is reduced to 48 */
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 48);
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 47);
+	} else if (adreno_is_a702(adreno_dev)) {
+		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 64);
+		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 63);
 	} else {
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 128);
 	}
@@ -681,6 +695,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		mode = 0;
 		rgb565_predicator = 1;
 		amsbc = 1;
+		if (adreno_is_a663(adreno_dev))
+			level2_swizzling_dis = 1;
 		break;
 	default:
 		break;
@@ -689,7 +705,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* macrotilingmode 0: 4 channels (default)
 	 * overwrite to 1: 8 channels for A680
 	 */
-	if (adreno_is_a680(adreno_dev))
+	if (adreno_is_a680(adreno_dev) ||
+			adreno_is_a663(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_NC_MODE_CNTL, 1);
 
 	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
@@ -701,14 +718,17 @@ void a6xx_start(struct adreno_device *adreno_dev)
 
 	uavflagprd_inv = (adreno_is_a650_family(adreno_dev)) ? 2 : 0;
 
-	kgsl_regwrite(device, A6XX_RB_NC_MODE_CNTL, (rgb565_predicator << 11)|
+	kgsl_regwrite(device, A6XX_RB_NC_MODE_CNTL,
+				(level2_swizzling_dis << 12) | (rgb565_predicator << 11)|
 				(hbb_hi << 10) | (amsbc << 4) | (mal << 3) |
 				(hbb_lo << 1) | mode);
 
-	kgsl_regwrite(device, A6XX_TPL1_NC_MODE_CNTL, (hbb_hi << 4) |
+	kgsl_regwrite(device, A6XX_TPL1_NC_MODE_CNTL,
+				(level2_swizzling_dis << 6) | (hbb_hi << 4) |
 				(mal << 3) | (hbb_lo << 1) | mode);
 
-	kgsl_regwrite(device, A6XX_SP_NC_MODE_CNTL, (hbb_hi << 10) |
+	kgsl_regwrite(device, A6XX_SP_NC_MODE_CNTL,
+				(level2_swizzling_dis << 12) | (hbb_hi << 10) |
 				(mal << 3) | (uavflagprd_inv << 4) |
 				(hbb_lo << 1) | mode);
 
@@ -741,6 +761,10 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	/* Set the bit vccCacheSkipDis=1 to get rid of TSEskip logic */
 	if (a6xx_core->disable_tseskip)
 		kgsl_regrmw(device, A6XX_PC_DBG_ECO_CNTL, 0, (1 << 9));
+
+	/* Set the bit in HLSQ Cluster for A702 */
+	if (adreno_is_a702(adreno_dev))
+		kgsl_regwrite(device, A6XX_CP_CHICKEN_DBG, (1 << 24));
 
 	/* Enable the GMEM save/restore feature for preemption */
 	if (adreno_is_preemption_enabled(adreno_dev))
@@ -1555,7 +1579,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 	 * GFO ENABLE BIT(8) : LLC uses a 64 byte cache line size enabling
 	 * GFO allows it allocate partial cache lines
 	 */
-	if (adreno_is_a660(adreno_dev))
+	if (adreno_is_a660(adreno_dev) ||
+			adreno_is_a663(adreno_dev))
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL0, (0x1f << 10) |
 				BIT(8), (gpu_scid << 10) | BIT(8));
 }

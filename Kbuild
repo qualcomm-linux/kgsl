@@ -17,6 +17,9 @@ endif
 ifeq ($(CONFIG_ARCH_KALAMA), y)
 	include $(KGSL_PATH)/config/gki_kalama.conf
 endif
+ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
+	include $(KGSL_PATH)/config/gki_pineapple.conf
+endif
 ifeq ($(CONFIG_ARCH_SA8155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
@@ -25,6 +28,12 @@ ifeq ($(CONFIG_ARCH_KHAJE), y)
 endif
 ifeq ($(CONFIG_ARCH_SA8195), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
+endif
+ifeq ($(CONFIG_ARCH_MONACO), y)
+	include $(KGSL_PATH)/config/gki_monaco.conf
+endif
+ifeq ($(CONFIG_ARCH_LEMANS), y)
+	include $(KGSL_PATH)/config/gki_lemans.conf
 endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
