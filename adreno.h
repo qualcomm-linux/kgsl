@@ -595,6 +595,8 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
+	/** @preempt_override: True if command line param enables preemption */
+	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
 	unsigned int profile_index;
 	struct kgsl_memdesc *pwrup_reglist;
@@ -1490,6 +1492,17 @@ static inline bool adreno_is_preemption_enabled(
 				struct adreno_device *adreno_dev)
 {
 	return test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
+}
+
+
+/**
+ * adreno_preemption_feature_set() - Check whether adreno preemption feature is statically enabled
+ * either via adreno feature bit, or via the cmdline override
+ * @adreno_dev: Device whose preemption state is checked
+ */
+static inline bool adreno_preemption_feature_set(struct adreno_device *adreno_dev)
+{
+	return ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION) || adreno_dev->preempt_override;
 }
 
 /*

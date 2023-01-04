@@ -7,6 +7,7 @@
 #include <linux/dma-fence-array.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
+#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -1708,6 +1709,10 @@ static void gen7_add_profile_events(struct adreno_device *adreno_dev,
 
 	cmdobj->submit_ticks = time->ticks;
 
+	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_SUBMIT,
+		pid_nr(context->proc_priv->pid),
+		context->id, drawobj->timestamp,
+		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
 	trace_adreno_cmdbatch_submitted(drawobj, &info, time->ticks,
 		(unsigned long) time_in_s, time_in_ns / 1000, 0);
 
@@ -1929,30 +1934,28 @@ int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 {
 	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
 	u32 *queue = drawctxt->gmu_context_queue.hostptr + sizeof(*hdr);
-	u32 i, write, empty_space;
+	u32 i, empty_space, write_idx = hdr->write_index, read_idx = hdr->read_index;
 	u32 size = MSG_HDR_GET_SIZE(*msg);
 	u32 align_size = ALIGN(size, SZ_4);
 	u32 id = MSG_HDR_GET_ID(*msg);
 	struct kgsl_drawobj_cmd *cmdobj = NULL;
 
-	empty_space = (hdr->write_index >= hdr->read_index) ?
-			(hdr->queue_size - (hdr->write_index - hdr->read_index))
-			: (hdr->read_index - hdr->write_index);
+	empty_space = (write_idx >= read_idx) ?
+			(hdr->queue_size - (write_idx - read_idx))
+			: (read_idx - write_idx);
 
 	if (empty_space <= align_size)
 		return -ENOSPC;
 
-	write = hdr->write_index;
-
 	for (i = 0; i < size; i++) {
-		queue[write] = msg[i];
-		write = (write + 1) % hdr->queue_size;
+		queue[write_idx] = msg[i];
+		write_idx = (write_idx + 1) % hdr->queue_size;
 	}
 
 	/* Cookify any non used data at the end of the write buffer */
 	for (; i < align_size; i++) {
-		queue[write] = 0xfafafafa;
-		write = (write + 1) % hdr->queue_size;
+		queue[write_idx] = 0xfafafafa;
+		write_idx = (write_idx + 1) % hdr->queue_size;
 	}
 
 	/* Ensure packet is written out before proceeding */
@@ -1981,7 +1984,7 @@ int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 done:
 	trace_kgsl_hfi_send(id, size, MSG_HDR_GET_SEQNUM(*msg));
 
-	hfi_update_write_idx(&hdr->write_index, write);
+	hfi_update_write_idx(&hdr->write_index, write_idx);
 
 	return 0;
 }
@@ -2091,6 +2094,9 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
 					return ret;
 				}
+
+				if (test_bit(MSM_HW_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags))
+					obj->flags |= GMU_SYNCOBJ_RETIRED;
 
 				obj->ctxt_id = fences[j]->context;
 				obj->seq_no =  fences[j]->seqno;

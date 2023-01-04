@@ -696,7 +696,7 @@ static u64 global_get_offset(struct kgsl_device *device, u64 size,
 	if (priv & KGSL_MEMDESC_RANDOM) {
 		u32 offset = KGSL_GLOBAL_MEM_PAGES - (size >> PAGE_SHIFT);
 
-		start = get_random_int() % offset;
+		start = get_random_u32() % offset;
 	}
 
 	while (start >= 0) {

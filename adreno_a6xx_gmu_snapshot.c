@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "a6xx_reg.h"
@@ -72,6 +73,17 @@ static const unsigned int a662_gmu_gpucc_registers[] = {
 	0x264a0, 0x264a3, 0x264b3, 0x264b5, 0x264c5, 0x264c7, 0x264d6, 0x264d8,
 	0x264e8, 0x264e9, 0x264f9, 0x264fc, 0x2650b, 0x2650c, 0x2651c, 0x2651e,
 	0x26540, 0x26570, 0x26600, 0x26616, 0x26620, 0x2662d,
+};
+
+static const unsigned int a663_gmu_gpucc_registers[] = {
+	/* GPU CC */
+	0x24000, 0x2400e, 0x24400, 0x2440e, 0x25800, 0x25804, 0x25c00, 0x25c04,
+	0x26000, 0x26004, 0x26400, 0x26405, 0x26414, 0x2641d, 0x2642a, 0x26430,
+	0x26432, 0x26432, 0x26441, 0x26455, 0x26466, 0x26468, 0x26478, 0x2647a,
+	0x26489, 0x2648a, 0x2649c, 0x2649e, 0x264a0, 0x264a3, 0x264b3, 0x264b5,
+	0x264c5, 0x264c7, 0x264d6, 0x264d8, 0x264e8, 0x264e9, 0x264f9, 0x264fc,
+	0x2650b, 0x2650c, 0x2651c, 0x2651e, 0x26540, 0x26570, 0x26600, 0x26616,
+	0x26620, 0x2662d,
 };
 
 static const unsigned int a630_rscc_snapshot_registers[] = {
@@ -417,6 +429,10 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 		adreno_snapshot_registers(device, snapshot,
 			a662_gmu_gpucc_registers,
 			ARRAY_SIZE(a662_gmu_gpucc_registers) / 2);
+	else if (adreno_is_a663(adreno_dev))
+		adreno_snapshot_registers(device, snapshot,
+			a663_gmu_gpucc_registers,
+			ARRAY_SIZE(a663_gmu_gpucc_registers) / 2);
 	else
 		adreno_snapshot_registers(device, snapshot,
 			a6xx_gmu_gpucc_registers,
