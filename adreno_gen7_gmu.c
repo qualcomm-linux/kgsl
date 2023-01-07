@@ -861,9 +861,6 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FAL_INTF, 0x1);
 
-	/* Turn on TCM retention */
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_TCM_RET_CNTL, 1);
-
 	/* Clear init result to make sure we are getting fresh value */
 	gmu_core_regwrite(device, GEN7_GMU_CM3_FW_INIT_RESULT, 0);
 	gmu_core_regwrite(device, GEN7_GMU_CM3_BOOT_CONFIG, 0x2);
@@ -1467,7 +1464,7 @@ void gen7_gmu_suspend(struct adreno_device *adreno_dev)
 
 	dev_err(&gmu->pdev->dev, "Suspended GMU\n");
 
-	device->state = KGSL_STATE_NONE;
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 }
 
 static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
@@ -2044,6 +2041,8 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
+	kgsl_icc_set_tag(pwr, buslevel);
+
 	if (buslevel != pwr->cur_buslevel) {
 		ret = gen7_gmu_dcvs_set(adreno_dev, INVALID_DCVS_IDX, buslevel);
 		if (ret)
@@ -2561,7 +2560,7 @@ static int gen7_gmu_power_off(struct adreno_device *adreno_dev)
 
 	gen7_rdpm_cx_freq_update(gmu, 0);
 
-	device->state = KGSL_STATE_NONE;
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 
 	return 0;
 
@@ -2879,7 +2878,7 @@ static void gmu_idle_check(struct work_struct *work)
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
 
-	if (atomic_read(&device->active_cnt)) {
+	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
 		goto done;
@@ -2897,7 +2896,7 @@ static void gmu_idle_check(struct work_struct *work)
 		goto done;
 	}
 
-	device->slumber = true;
+	device->skip_inline_submit = true;
 	spin_unlock(&device->submit_lock);
 
 	ret = gen7_power_off(adreno_dev);

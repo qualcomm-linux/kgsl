@@ -472,8 +472,8 @@ TRACE_EVENT(adreno_drawctxt_switch,
 TRACE_EVENT(adreno_gpu_fault,
 	TP_PROTO(unsigned int ctx, unsigned int ts,
 		unsigned int status, unsigned int rptr, unsigned int wptr,
-		unsigned int ib1base, unsigned int ib1size,
-		unsigned int ib2base, unsigned int ib2size, int rb_id),
+		u64 ib1base, unsigned int ib1size,
+		u64 ib2base, unsigned int ib2size, int rb_id),
 	TP_ARGS(ctx, ts, status, rptr, wptr, ib1base, ib1size, ib2base,
 		ib2size, rb_id),
 	TP_STRUCT__entry(
@@ -482,9 +482,9 @@ TRACE_EVENT(adreno_gpu_fault,
 		__field(unsigned int, status)
 		__field(unsigned int, rptr)
 		__field(unsigned int, wptr)
-		__field(unsigned int, ib1base)
+		__field(u64, ib1base)
 		__field(unsigned int, ib1size)
-		__field(unsigned int, ib2base)
+		__field(u64, ib2base)
 		__field(unsigned int, ib2size)
 		__field(int, rb_id)
 	),
@@ -501,7 +501,7 @@ TRACE_EVENT(adreno_gpu_fault,
 		__entry->rb_id = rb_id;
 	),
 	TP_printk(
-		"ctx=%d ts=%d rb_id=%d status=%X RB=%X/%X IB1=%X/%X IB2=%X/%X",
+		"ctx=%d ts=%d rb_id=%d status=%X RB=%X/%X IB1=%llX/%X IB2=%llX/%X",
 		__entry->ctx, __entry->ts, __entry->rb_id, __entry->status,
 		__entry->wptr, __entry->rptr, __entry->ib1base,
 		__entry->ib1size, __entry->ib2base, __entry->ib2size)

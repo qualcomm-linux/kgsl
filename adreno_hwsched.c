@@ -6,6 +6,7 @@
 
 #include <dt-bindings/soc/qcom,ipcc.h>
 #include <linux/soc/qcom/msm_hw_fence.h>
+#include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
 #include "adreno_hfi.h"
@@ -144,6 +145,11 @@ static void _retire_timestamp_only(struct kgsl_drawobj *drawobj)
 	kgsl_sharedmem_writel(device->memstore,
 		KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp),
 		drawobj->timestamp);
+
+	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_RETIRED,
+		pid_nr(context->proc_priv->pid),
+		context->id, drawobj->timestamp,
+		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
 
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
@@ -765,6 +771,13 @@ void adreno_hwsched_trigger(struct adreno_device *adreno_dev)
 	kthread_queue_work(hwsched->worker, &hwsched->work);
 }
 
+static inline void _decrement_submit_now(struct kgsl_device *device)
+{
+	spin_lock(&device->submit_lock);
+	device->submit_now--;
+	spin_unlock(&device->submit_lock);
+}
+
 /**
  * adreno_hwsched_issuecmds() - Issue commmands from pending contexts
  * @adreno_dev: Pointer to the adreno device struct
@@ -776,29 +789,25 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	/*
-	 * Skip the inline submission path if GPU is not active.
-	 * Otherwise, the submitting thread will be blocked until wakeup is complete.
-	 * This is done without any locking to keep the submit path lightweight at the
-	 * acceptable risk of a wrong guess which would result in an inline submit when
-	 * the device goes into slumber soon after the check.
-	 */
-	if (device->state != KGSL_STATE_ACTIVE) {
-		adreno_hwsched_trigger(adreno_dev);
-		return;
+	spin_lock(&device->submit_lock);
+	/* If GPU state is not ACTIVE, schedule the work for later */
+	if (device->skip_inline_submit) {
+		spin_unlock(&device->submit_lock);
+		goto done;
 	}
+	device->submit_now++;
+	spin_unlock(&device->submit_lock);
 
 	/* If the dispatcher is busy then schedule the work for later */
 	if (!mutex_trylock(&hwsched->mutex)) {
-		adreno_hwsched_trigger(adreno_dev);
-		return;
+		_decrement_submit_now(device);
+		goto done;
 	}
 
 	if (!hwsched_in_fault(hwsched))
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
-
 		mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
@@ -806,6 +815,11 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 	}
 
 	mutex_unlock(&hwsched->mutex);
+	_decrement_submit_now(device);
+	return;
+
+done:
+	adreno_hwsched_trigger(adreno_dev);
 }
 
 /**
@@ -889,11 +903,17 @@ static unsigned int _check_context_state_to_queue_cmds(
 static void _queue_drawobj(struct adreno_context *drawctxt,
 	struct kgsl_drawobj *drawobj)
 {
+	struct kgsl_context *context = drawobj->context;
+
 	/* Put the command into the queue */
 	drawctxt->drawqueue[drawctxt->drawqueue_tail] = drawobj;
 	drawctxt->drawqueue_tail = (drawctxt->drawqueue_tail + 1) %
 			ADRENO_CONTEXT_DRAWQUEUE_SIZE;
 	drawctxt->queued++;
+	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_QUEUE,
+		pid_nr(context->proc_priv->pid),
+		context->id, drawobj->timestamp,
+		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
 	trace_adreno_cmdbatch_queued(drawobj, drawctxt->queued);
 }
 
@@ -1127,11 +1147,16 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj)
 {
-	struct kgsl_drawobj *drawobj;
+	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
 	struct kgsl_mem_entry *entry;
 	struct kgsl_drawobj_profiling_buffer *profile_buffer;
+	struct kgsl_context *context = drawobj->context;
 
-	drawobj = DRAWOBJ(cmdobj);
+	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_RETIRED,
+		pid_nr(context->proc_priv->pid),
+		context->id, drawobj->timestamp,
+		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
+
 	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&drawobj->context->proc_priv->frame_count);
 		atomic_inc(&drawobj->context->proc_priv->period->frames);
@@ -1250,9 +1275,8 @@ static void change_preemption(struct adreno_device *adreno_dev, void *priv)
 
 static int _preemption_store(struct adreno_device *adreno_dev, bool val)
 {
-	if (!(ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION)) ||
-		(test_bit(ADRENO_DEVICE_PREEMPTION,
-		&adreno_dev->priv) == val))
+	if (!adreno_preemption_feature_set(adreno_dev) ||
+		(test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv) == val))
 		return 0;
 
 	return adreno_power_cycle(adreno_dev, change_preemption, NULL);
@@ -1938,10 +1962,12 @@ static bool is_tx_slot_available(struct adreno_device *adreno_dev)
 		(ptr + sizeof(struct msm_hw_fence_hfi_queue_table_header));
 	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
 	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
-	u32 free_dwords = hdr->read_index <= hdr->write_index ?
-		queue_size_dwords - (hdr->write_index - hdr->read_index) :
-		hdr->read_index - hdr->write_index;
+	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
 	u32 reserved_dwords = adreno_dev->hwsched.hw_fence_count * payload_size_dwords;
+
+	free_dwords = read_idx <= write_idx ?
+		queue_size_dwords - (write_idx - read_idx) :
+		read_idx - write_idx;
 
 	if (free_dwords - reserved_dwords <= payload_size_dwords)
 		return false;

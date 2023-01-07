@@ -45,6 +45,7 @@ static struct device_node *
 	adreno_get_gpu_model_node(struct platform_device *pdev);
 
 static struct adreno_device device_3d0;
+static bool adreno_preemption_enable;
 
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
@@ -1269,6 +1270,9 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IOCOHERENT))
 		kgsl_mmu_set_feature(device, KGSL_MMU_IO_COHERENT);
+
+	if (adreno_preemption_enable)
+		adreno_dev->preempt_override = true;
 
 	device->pwrctrl.bus_width = adreno_dev->gpucore->bus_width;
 
@@ -3610,6 +3614,9 @@ static void __exit kgsl_3d_exit(void)
 	gmu_core_unregister();
 	kgsl_core_exit();
 }
+
+module_param_named(enable, adreno_preemption_enable, bool, 0600);
+MODULE_PARM_DESC(enable, "Enable GPU HW Preemption");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);

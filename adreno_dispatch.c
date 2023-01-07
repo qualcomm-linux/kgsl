@@ -966,8 +966,8 @@ static void adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	spin_lock(&device->submit_lock);
-	/* If state transition to SLUMBER, schedule the work for later */
-	if (device->slumber) {
+	/* If state is not ACTIVE, schedule the work for later */
+	if (device->skip_inline_submit) {
 		spin_unlock(&device->submit_lock);
 		goto done;
 	}
@@ -2573,9 +2573,8 @@ static void change_preemption(struct adreno_device *adreno_dev, void *priv)
 
 static int _preemption_store(struct adreno_device *adreno_dev, bool val)
 {
-	if (!(ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION)) ||
-		(test_bit(ADRENO_DEVICE_PREEMPTION,
-		&adreno_dev->priv) == val))
+	if (!adreno_preemption_feature_set(adreno_dev) ||
+		(test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv) == val))
 		return 0;
 
 	return adreno_power_cycle(adreno_dev, change_preemption, NULL);
