@@ -1485,6 +1485,7 @@ static void _iommu_context_set_prr(struct kgsl_mmu *mmu,
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
 	struct page *page = kgsl_vbo_zero_page;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(ctx->kgsldev);
 	u32 val;
 
 	if (ctx->cb_num < 0)
@@ -1497,14 +1498,20 @@ static void _iommu_context_set_prr(struct kgsl_mmu *mmu,
 	if (!page)
 		return;
 
-	writel_relaxed(lower_32_bits(page_to_phys(page)),
-		iommu->regbase + KGSL_IOMMU_PRR_CFG_LADDR);
+	if (!adreno_is_a650(adreno_dev)) {
+		writel_relaxed(lower_32_bits(page_to_phys(page)),
+			iommu->regbase + KGSL_IOMMU_PRR_CFG_LADDR);
 
-	writel_relaxed(upper_32_bits(page_to_phys(page)),
-		iommu->regbase + KGSL_IOMMU_PRR_CFG_UADDR);
+		writel_relaxed(upper_32_bits(page_to_phys(page)),
+			iommu->regbase + KGSL_IOMMU_PRR_CFG_UADDR);
+	}
 
 	val = KGSL_IOMMU_GET_CTX_REG(ctx, KGSL_IOMMU_CTX_ACTLR);
-	val |= FIELD_PREP(KGSL_IOMMU_ACTLR_PRR_ENABLE, 1);
+
+	if (!adreno_is_a650(adreno_dev)) {
+		val |= FIELD_PREP(KGSL_IOMMU_ACTLR_PRR_ENABLE, 1);
+	}
+
 	KGSL_IOMMU_SET_CTX_REG(ctx, KGSL_IOMMU_CTX_ACTLR, val);
 
 	/* Make sure all of the preceding writes have posted */
