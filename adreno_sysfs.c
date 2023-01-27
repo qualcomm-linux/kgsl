@@ -257,12 +257,12 @@ static bool _lpac_show(struct adreno_device *adreno_dev)
 
 static int _lpac_store(struct adreno_device *adreno_dev, bool val)
 {
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_LPAC) ||
-				adreno_dev->lpac_enabled == val)
-		return 0;
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
-
-	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->lpac_enabled, val);
+	if (gpudev->lpac_store)
+		return gpudev->lpac_store(adreno_dev, val);
+	else
+		return -EINVAL;
 }
 
 ssize_t adreno_sysfs_store_u32(struct device *dev,

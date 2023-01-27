@@ -6,9 +6,11 @@ ifeq ($(KGSL_PATH),)
 KGSL_PATH=$(src)
 endif
 
-# If we're not in an Android tree, select KGSL config
-ifeq ($(ANDROID_BUILD_TOP),)
-CONFIG_QCOM_KGSL = m
+# If we're not GVM and not in an Android tree, select KGSL config
+ifeq ($(CONFIG_QTI_QUIN_GVM),)
+	ifeq ($(ANDROID_BUILD_TOP),)
+		CONFIG_QCOM_KGSL = m
+	endif
 endif
 
 ifeq ($(CONFIG_ARCH_WAIPIO), y)
@@ -34,6 +36,9 @@ ifeq ($(CONFIG_ARCH_MONACO), y)
 endif
 ifeq ($(CONFIG_ARCH_LEMANS), y)
 	include $(KGSL_PATH)/config/gki_lemans.conf
+endif
+ifeq ($(CONFIG_ARCH_KONA), y)
+        include $(KGSL_PATH)/config/gki_kona.conf
 endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu -I$(KERNEL_SRC)/include/linux

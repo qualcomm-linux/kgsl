@@ -939,7 +939,7 @@ static void adreno_snapshot_iommu(struct kgsl_device *device,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
 		snapshot, adreno_snapshot_global, iommu->setstate);
 
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION))
+	if (adreno_is_preemption_enabled(adreno_dev))
 		kgsl_snapshot_add_section(device,
 			KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
 			snapshot, adreno_snapshot_global, iommu->smmu_info);
