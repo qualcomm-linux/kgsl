@@ -250,6 +250,35 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	return 0;
 }
 
+/* Snapshot AQE buffer */
+static size_t snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
+	size_t remain, void *priv)
+{
+	struct kgsl_memdesc *memdesc = priv;
+
+	struct kgsl_snapshot_gpu_object_v2 *header =
+		(struct kgsl_snapshot_gpu_object_v2 *)buf;
+
+	u8 *ptr = buf + sizeof(*header);
+
+	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
+		return 0;
+
+	if (remain < (memdesc->size + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE BUFFER");
+		return 0;
+	}
+
+	header->size = memdesc->size >> 2;
+	header->gpuaddr = memdesc->gpuaddr;
+	header->ptbase = MMU_DEFAULT_TTBR0(device);
+	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
+
+	memcpy(ptr, memdesc->hostptr, memdesc->size);
+
+	return memdesc->size + sizeof(*header);
+}
+
 void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -319,6 +348,12 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
 				snapshot, adreno_snapshot_global,
+				entry->md);
+
+		if (entry->desc.mem_kind == HFI_MEMKIND_AQE_BUFFER)
+			kgsl_snapshot_add_section(device,
+				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
+				snapshot, snapshot_aqe_buffer,
 				entry->md);
 	}
 
@@ -756,6 +791,17 @@ static int gen7_hwsched_boot(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static int gen7_aqe_microcode_read(struct adreno_device *adreno_dev)
+{
+	struct adreno_firmware *aqe_fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+		return 0;
+
+	return adreno_get_firmware(adreno_dev, gen7_core->aqefw_name, aqe_fw);
+}
+
 static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -768,6 +814,10 @@ static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 	adreno_hwsched_start(adreno_dev);
 
 	ret = gen7_microcode_read(adreno_dev);
+	if (ret)
+		return ret;
+
+	ret = gen7_aqe_microcode_read(adreno_dev);
 	if (ret)
 		return ret;
 

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN7_REG_H
@@ -157,6 +157,12 @@
 #define GEN7_CP_LPAC_ROQ_DBG_DATA        0xb35
 #define GEN7_CP_LPAC_FIFO_DBG_DATA       0xb36
 #define GEN7_CP_LPAC_FIFO_DBG_ADDR       0xb40
+#define GEN7_CP_AQE_INSTR_BASE_LO_0      0xb70
+#define GEN7_CP_AQE_INSTR_BASE_HI_0      0xb71
+#define GEN7_CP_AQE_INSTR_BASE_LO_1      0xb72
+#define GEN7_CP_AQE_INSTR_BASE_HI_1      0xb73
+#define GEN7_CP_AQE_APRIV_CNTL           0xb78
+
 #define GEN7_CP_AQE_ROQ_DBG_ADDR_0       0xba8
 #define GEN7_CP_AQE_ROQ_DBG_ADDR_1       0xba9
 #define GEN7_CP_AQE_ROQ_DBG_DATA_0       0xbac
@@ -1208,6 +1214,9 @@
 
 /* FENCE control registers */
 #define GEN7_GMU_AHB_FENCE_RANGE_0		0x23b11
+
+/* GMU countables */
+#define GEN7_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541

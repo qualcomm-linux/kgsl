@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -122,6 +122,94 @@ ATTRIBUTE_GROUPS(log);
 static struct kobj_type log_kobj_type = {
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = log_groups,
+};
+
+static ssize_t stats_enable_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	bool val;
+	int ret;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_enable = val;
+	return count;
+}
+
+static ssize_t stats_enable_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", gmu->stats_enable);
+}
+
+static ssize_t stats_mask_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	u32 val;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_mask = val;
+	return count;
+}
+
+static ssize_t stats_mask_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%x\n", gmu->stats_mask);
+}
+
+static ssize_t stats_interval_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	u32 val;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_interval = val;
+	return count;
+}
+
+static ssize_t stats_interval_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%x\n", gmu->stats_interval);
+}
+
+static struct kobj_attribute stats_enable_attr =
+	__ATTR(stats_enable, 0644, stats_enable_show, stats_enable_store);
+
+static struct kobj_attribute stats_mask_attr =
+	__ATTR(stats_mask, 0644, stats_mask_show, stats_mask_store);
+
+static struct kobj_attribute stats_interval_attr =
+	__ATTR(stats_interval, 0644, stats_interval_show, stats_interval_store);
+
+static struct attribute *stats_attrs[] = {
+	&stats_enable_attr.attr,
+	&stats_mask_attr.attr,
+	&stats_interval_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(stats);
+
+static struct kobj_type stats_kobj_type = {
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = stats_groups,
 };
 
 static int gen7_timed_poll_check_rscc(struct gen7_gmu_device *gmu,
@@ -2324,6 +2412,7 @@ void gen7_gmu_remove(struct kgsl_device *device)
 
 	vfree(gmu->itcm_shadow);
 	kobject_put(&gmu->log_kobj);
+	kobject_put(&gmu->stats_kobj);
 }
 
 static int gen7_gmu_iommu_fault_handler(struct iommu_domain *domain,
@@ -2457,8 +2546,16 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	gmu->log_stream_enable = false;
 	gmu->log_group_mask = 0x3;
 
+	/* Disabled by default */
+	gmu->stats_enable = false;
+	/* Set default to CM3 busy cycles countable */
+	gmu->stats_mask = BIT(GEN7_GMU_CM3_BUSY_CYCLES);
+	/* Interval is in 50 us units. Set default sampling frequency to 4x50 us */
+	gmu->stats_interval = HFI_FEATURE_GMU_STATS_INTERVAL;
+
 	/* GMU sysfs nodes setup */
 	(void) kobject_init_and_add(&gmu->log_kobj, &log_kobj_type, &dev->kobj, "log");
+	(void) kobject_init_and_add(&gmu->stats_kobj, &stats_kobj_type, &dev->kobj, "stats");
 
 	of_property_read_u32(gmu->pdev->dev.of_node, "qcom,gmu-perf-ddr-bw",
 		&gmu->perf_ddr_bw);
@@ -2598,6 +2695,7 @@ void gen7_disable_gpu_irq(struct adreno_device *adreno_dev)
 
 static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
@@ -2622,6 +2720,10 @@ static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 	memset(&adreno_dev->busy_data, 0, sizeof(adreno_dev->busy_data));
 
 	gen7_start(adreno_dev);
+
+	if (gen7_core->qos_value && adreno_is_preemption_enabled(adreno_dev))
+		kgsl_regwrite(device, GEN7_RBBM_GBIF_CLIENT_QOS_CNTL,
+			gen7_core->qos_value[adreno_dev->cur_rb->id]);
 
 	/* Re-initialize the coresight registers if applicable */
 	adreno_coresight_start(adreno_dev);

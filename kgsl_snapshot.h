@@ -278,6 +278,7 @@ struct kgsl_snapshot_istore {
 #define SNAPSHOT_DEBUG_GMU_PWR_VERSION 17
 #define SNAPSHOT_DEBUG_GMU_PWR_DEV_VERSION 18
 #define SNAPSHOT_DEBUG_GMU_HFI_VERSION 19
+#define SNAPSHOT_DEBUG_AQE_VERSION 20
 
 struct kgsl_snapshot_debug {
 	int type;    /* Type identifier for the attached tata */

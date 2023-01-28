@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
@@ -350,6 +350,38 @@ static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
 			gen7_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
 				KEY_SWFUSE_VIOLATION_FAULT));
 		break;
+	case GMU_GPU_AQE0_OPCODE_ERRROR:
+		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
+		break;
+	case GMU_GPU_AQE0_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 ucode error interrupt\n");
+		break;
+	case GMU_GPU_AQE0_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 HW fault | status=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE0_HW_FAULT));
+		break;
+	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
+		break;
+	case GMU_GPU_AQE1_OPCODE_ERRROR:
+		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
+		break;
+	case GMU_GPU_AQE1_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 ucode error interrupt\n");
+		break;
+	case GMU_GPU_AQE1_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 HW fault | status=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE1_HW_FAULT));
+		break;
+	case GMU_GPU_AQE1_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 Illegal instruction error\n");
+		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
 	default:
@@ -546,6 +578,38 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 			gen7_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
 				KEY_SWFUSE_VIOLATION_FAULT));
 		break;
+	case GMU_GPU_AQE0_OPCODE_ERRROR:
+		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
+		break;
+	case GMU_GPU_AQE0_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 ucode error interrupt\n");
+		break;
+	case GMU_GPU_AQE0_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 HW fault | status=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE0_HW_FAULT));
+		break;
+	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
+		break;
+	case GMU_GPU_AQE1_OPCODE_ERRROR:
+		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
+		break;
+	case GMU_GPU_AQE1_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 ucode error interrupt\n");
+		break;
+	case GMU_GPU_AQE1_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 HW fault | status=0x%8.8x\n",
+			gen7_hwsched_lookup_key_value(adreno_dev,
+				PAYLOAD_FAULT_REGS, KEY_AQE1_HW_FAULT));
+		break;
+	case GMU_GPU_AQE1_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "AQE1 Illegal instruction error\n");
+		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
 	default:
@@ -619,6 +683,12 @@ static void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_TS_RETIRE) {
 			log_profiling_info(adreno_dev, rcvd);
 			adreno_hwsched_trigger(adreno_dev);
+		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_RELEASE) {
+			struct hfi_gmu_cntr_release_cmd *cmd =
+				(struct hfi_gmu_cntr_release_cmd *) rcvd;
+
+			adreno_perfcounter_put(adreno_dev,
+				cmd->group_id, cmd->countable, PERFCOUNTER_FLAG_KERNEL);
 		}
 	}
 	mutex_unlock(&hw_hfi->msgq_mutex);
@@ -1067,6 +1137,30 @@ static int mem_alloc_reply(struct adreno_device *adreno_dev, void *rcvd)
 	return gen7_hfi_cmdq_write(adreno_dev, (u32 *)&out);
 }
 
+static int gmu_cntr_register_reply(struct adreno_device *adreno_dev, void *rcvd)
+{
+	struct hfi_gmu_cntr_register_cmd *in = (struct hfi_gmu_cntr_register_cmd *)rcvd;
+	struct hfi_gmu_cntr_register_reply_cmd out = {0};
+	u32 lo = 0, hi = 0;
+
+	/*
+	 * Failure to allocate counter is not fatal. Sending lo = 0, hi = 0
+	 * indicates to GMU that counter allocation failed.
+	 */
+	adreno_perfcounter_get(adreno_dev,
+		in->group_id, in->countable, &lo, &hi, PERFCOUNTER_FLAG_KERNEL);
+
+	out.hdr = ACK_MSG_HDR(F2H_MSG_GMU_CNTR_REGISTER, sizeof(out));
+	out.req_hdr = in->hdr;
+	out.group_id = in->group_id;
+	out.countable = in->countable;
+	/* Fill in byte offset of counter */
+	out.cntr_lo = lo << 2;
+	out.cntr_hi = hi << 2;
+
+	return gen7_hfi_cmdq_write(adreno_dev, (u32 *)&out);
+}
+
 static int send_start_msg(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
@@ -1124,6 +1218,13 @@ poll:
 		if (rc)
 			return rc;
 
+		goto poll;
+	}
+
+	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_REGISTER) {
+		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
+		if (rc)
+			return rc;
 		goto poll;
 	}
 
@@ -1223,6 +1324,7 @@ static void enable_async_hfi(struct adreno_device *adreno_dev)
 
 static int enable_preemption(struct adreno_device *adreno_dev)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	u32 data;
 	int ret;
 
@@ -1243,6 +1345,19 @@ static int enable_preemption(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	if (gen7_core->qos_value) {
+		int i;
+
+		for (i = 0; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
+			if (!gen7_core->qos_value[i])
+				continue;
+
+			gen7_hfi_send_set_value(adreno_dev,
+				HFI_VALUE_RB_GPU_QOS, i,
+				gen7_core->qos_value[i]);
+		}
+	}
+
 	/*
 	 * Bits[3:0] contain the preemption timeout enable bit per ringbuffer
 	 * Bits[31:4] contain the timeout in ms
@@ -1251,6 +1366,24 @@ static int enable_preemption(struct adreno_device *adreno_dev)
 		FIELD_PREP(GENMASK(31, 4), ADRENO_PREEMPT_TIMEOUT) |
 		FIELD_PREP(GENMASK(3, 0), 0xf));
 
+}
+
+static int enable_gmu_stats(struct adreno_device *adreno_dev)
+{
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	u32 data;
+
+	if (!gmu->stats_enable)
+		return 0;
+
+	/*
+	 * Bits [23:0] contains the countables mask
+	 * Bits [31:24] is the sampling interval
+	 */
+	data = FIELD_PREP(GENMASK(23, 0), gmu->stats_mask) |
+		FIELD_PREP(GENMASK(31, 24), gmu->stats_interval);
+
+	return gen7_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_GMU_STATS, 1, data);
 }
 
 static int gen7_hfi_send_perfcounter_feature_ctrl(struct adreno_device *adreno_dev)
@@ -1406,6 +1539,8 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 			goto err;
 	}
 
+	enable_gmu_stats(adreno_dev);
+
 	if (gmu->log_stream_enable)
 		gen7_hfi_send_set_value(adreno_dev,
 			HFI_VALUE_LOG_STREAM_ENABLE, 0, 1);
@@ -1425,6 +1560,12 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	ret = gen7_hfi_send_lpac_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE)) {
+		ret = gen7_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_AQE, 1, 0);
+		if (ret)
+			goto err;
+	}
 
 	ret = send_start_msg(adreno_dev);
 	if (ret)
@@ -1559,6 +1700,24 @@ int gen7_hwsched_cp_init(struct adreno_device *adreno_dev)
 		lower_32_bits(fw->memdesc->gpuaddr));
 	kgsl_regwrite(device, GEN7_CP_SQE_INSTR_BASE_HI,
 		upper_32_bits(fw->memdesc->gpuaddr));
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE)) {
+		fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+
+		/* Program the ucode base for AQE0 (BV coprocessor) */
+		kgsl_regwrite(device, GEN7_CP_AQE_INSTR_BASE_LO_0,
+			lower_32_bits(fw->memdesc->gpuaddr));
+		kgsl_regwrite(device, GEN7_CP_AQE_INSTR_BASE_HI_0,
+			upper_32_bits(fw->memdesc->gpuaddr));
+
+		/* Program the ucode base for AQE1 (LPAC coprocessor) */
+		if (adreno_dev->lpac_enabled) {
+			kgsl_regwrite(device, GEN7_CP_AQE_INSTR_BASE_LO_1,
+				      lower_32_bits(fw->memdesc->gpuaddr));
+			kgsl_regwrite(device, GEN7_CP_AQE_INSTR_BASE_HI_1,
+				      upper_32_bits(fw->memdesc->gpuaddr));
+		}
+	}
 
 	ret = cp_init(adreno_dev);
 	if (ret)

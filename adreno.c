@@ -2199,6 +2199,8 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val =  adreno_dev->raytracing_enabled ? 1 : 0;
 	else if (param->type == KGSL_PROP_IS_FASTBLEND_ENABLED)
 		val = adreno_dev->fastblend_enabled ? 1 : 0;
+	else if (param->type == KGSL_PROP_IS_AQE_ENABLED)
+		val = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ? 1 : 0;
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -2243,6 +2245,7 @@ static const struct {
 	{ KGSL_PROP_IS_RAYTRACING_ENABLED, adreno_prop_u32},
 	{ KGSL_PROP_IS_FASTBLEND_ENABLED, adreno_prop_u32},
 	{ KGSL_PROP_UCHE_TRAP_BASE, adreno_prop_uche_trap_base },
+	{ KGSL_PROP_IS_AQE_ENABLED, adreno_prop_u32 },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,
