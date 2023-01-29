@@ -37,8 +37,11 @@ endif
 ifeq ($(CONFIG_ARCH_LEMANS), y)
 	include $(KGSL_PATH)/config/gki_lemans.conf
 endif
+ifeq ($(CONFIG_ARCH_KONA), y)
+        include $(KGSL_PATH)/config/gki_kona.conf
+endif
 
-ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
+ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu -I$(KERNEL_SRC)/include/linux
 
 obj-$(CONFIG_QCOM_KGSL) += msm_kgsl.o
 

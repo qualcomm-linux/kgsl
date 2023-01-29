@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -189,11 +189,12 @@ int gen7_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 		u32 value, u32 mask)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	unsigned int status, i;
 	u64 ts1, ts2;
 
 	kgsl_regwrite(device, offset, value);
-	ts1 = gen7_read_alwayson(adreno_dev);
+	ts1 = gpudev->read_alwayson(adreno_dev);
 	for (i = 0; i < GMU_CORE_LONG_WAKEUP_RETRY_LIMIT; i++) {
 		/*
 		 * Make sure the previous register write is posted before
@@ -221,7 +222,7 @@ int gen7_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 		return 0;
 
 	if (i == GMU_CORE_LONG_WAKEUP_RETRY_LIMIT) {
-		ts2 = gen7_read_alwayson(adreno_dev);
+		ts2 = gpudev->read_alwayson(adreno_dev);
 		dev_err(device->dev,
 				"Timed out waiting %d usecs to write fenced register 0x%x, timestamps: %llx %llx\n",
 				i * GMU_CORE_WAKEUP_DELAY_US, offset, ts1, ts2);
@@ -257,6 +258,28 @@ int gen7_init(struct adreno_device *adreno_dev)
 	return adreno_allocate_global(device, &adreno_dev->pwrup_reglist,
 		PAGE_SIZE, 0, 0, KGSL_MEMDESC_PRIVILEGED,
 		"powerup_register_list");
+}
+
+void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
+{
+	u32 feature_fuse = 0;
+
+	/* Only Gen7_9_0 has the HW feature information */
+	if (!adreno_is_gen7_9_0(adreno_dev))
+		return;
+
+	/* Get HW feature soft fuse value */
+	adreno_cx_misc_regread(adreno_dev, GEN7_GPU_CX_MISC_SW_FUSE_VALUE,
+			       &feature_fuse);
+
+	adreno_dev->fastblend_enabled = feature_fuse & BIT(GEN7_FASTBLEND_SW_FUSE);
+	adreno_dev->raytracing_enabled = feature_fuse & BIT(GEN7_RAYTRACING_SW_FUSE);
+
+	/* If software enables LPAC without HW support, disable it */
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+		adreno_dev->lpac_enabled = feature_fuse & BIT(GEN7_LPAC_SW_FUSE);
+
+	adreno_dev->feature_fuse = feature_fuse;
 }
 
 static void gen7_protect_init(struct adreno_device *adreno_dev)
@@ -432,6 +455,14 @@ static void _set_secvid(struct kgsl_device *device)
 		(KGSL_IOMMU_SECURE_SIZE(&device->mmu) / SZ_4K)));
 }
 
+/* Set UCHE_TRAP_BASE to a page below the top of the memory space */
+#define GEN7_UCHE_TRAP_BASE 0x1FFFFFFFFF000ULL
+
+static u64 gen7_get_uche_trap_base(void)
+{
+	return GEN7_UCHE_TRAP_BASE;
+}
+
 /*
  * All Gen7 targets support marking certain transactions as always privileged
  * which allows us to mark more memory as privileged without having to
@@ -462,6 +493,7 @@ int gen7_start(struct adreno_device *adreno_dev)
 	 */
 	u32 hbb_lo = 1, hbb_hi = 0;
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
+	u64 uche_trap_base = gen7_get_uche_trap_base();
 
 	/* Set up GBIF registers from the GPU core definition */
 	kgsl_regmap_multi_write(&device->regmap, gen7_core->gbif,
@@ -476,10 +508,10 @@ int gen7_start(struct adreno_device *adreno_dev)
 	 * Set UCHE_WRITE_THRU_BASE to the UCHE_TRAP_BASE effectively
 	 * disabling L2 bypass
 	 */
-	kgsl_regwrite(device, GEN7_UCHE_TRAP_BASE_LO, 0xfffff000);
-	kgsl_regwrite(device, GEN7_UCHE_TRAP_BASE_HI, 0x0001ffff);
-	kgsl_regwrite(device, GEN7_UCHE_WRITE_THRU_BASE_LO, 0xfffff000);
-	kgsl_regwrite(device, GEN7_UCHE_WRITE_THRU_BASE_HI, 0x0001ffff);
+	kgsl_regwrite(device, GEN7_UCHE_TRAP_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN7_UCHE_TRAP_BASE_HI, upper_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN7_UCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN7_UCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
 
 	/*
 	 * Some gen7 targets don't use a programmed UCHE GMEM base address,
@@ -592,6 +624,10 @@ int gen7_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN7_CP_BV_APRIV_CNTL, GEN7_APRIV_DEFAULT);
 	kgsl_regwrite(device, GEN7_CP_LPAC_APRIV_CNTL, GEN7_APRIV_DEFAULT);
 
+	/* Marking AQE Instruction cache fetches as privileged */
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+		kgsl_regwrite(device, GEN7_CP_AQE_APRIV_CNTL, BIT(0));
+
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
 	 * the prefetch granularity size.
@@ -653,6 +689,35 @@ void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq)
 		 */
 		wmb();
 	}
+}
+
+int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 gpu_req = GPU_ALWAYS_EN_REQ;
+	int ret;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
+		gpu_req |= GPU_BCL_EN_REQ;
+
+	if (adreno_is_gen7_9_0(adreno_dev))
+		gpu_req |= GPU_TSENSE_EN_REQ;
+
+	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
+
+	/*
+	 * For targets that support this scm call to program BCL id , enable BCL.
+	 * For other targets, BCL is enabled after first GMU boot.
+	 */
+	if (!ret && ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
+		adreno_dev->bcl_enabled = true;
+
+	/*
+	 * If scm call returned EOPNOTSUPP, either we are on a kernel version
+	 * lesser than 6.1 where scm call is not supported or we are sending an
+	 * empty request. Ignore the error in such cases.
+	 */
+	return (ret == -EOPNOTSUPP) ? 0 : ret;
 }
 
 void gen7_spin_idle_debug(struct adreno_device *adreno_dev,
@@ -721,29 +786,42 @@ static int gen7_post_start(struct adreno_device *adreno_dev)
 	int ret;
 	unsigned int *cmds;
 	struct adreno_ringbuffer *rb = adreno_dev->cur_rb;
+	struct adreno_preemption *preempt = &adreno_dev->preempt;
+	u64 kmd_postamble_addr;
 
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return 0;
 
-	cmds = adreno_ringbuffer_allocspace(rb, 12);
+	kmd_postamble_addr = PREEMPT_SCRATCH_ADDR(adreno_dev, KMD_POSTAMBLE_IDX);
+	gen7_preemption_prepare_postamble(adreno_dev);
+
+	cmds = adreno_ringbuffer_allocspace(rb, (preempt->postamble_bootup_len ? 16 : 12));
 	if (IS_ERR(cmds))
 		return PTR_ERR(cmds);
 
-	cmds[0] = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 6);
-	cmds[1] = SET_PSEUDO_PRIV_NON_SECURE_SAVE_ADDR;
-	cmds[2] = lower_32_bits(rb->preemption_desc->gpuaddr);
-	cmds[3] = upper_32_bits(rb->preemption_desc->gpuaddr);
+	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 6);
+	*cmds++ = SET_PSEUDO_PRIV_NON_SECURE_SAVE_ADDR;
+	*cmds++ = lower_32_bits(rb->preemption_desc->gpuaddr);
+	*cmds++ = upper_32_bits(rb->preemption_desc->gpuaddr);
 
-	cmds[4] = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
-	cmds[5] = lower_32_bits(rb->secure_preemption_desc->gpuaddr);
-	cmds[6] = upper_32_bits(rb->secure_preemption_desc->gpuaddr);
+	*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
+	*cmds++ = lower_32_bits(rb->secure_preemption_desc->gpuaddr);
+	*cmds++ = upper_32_bits(rb->secure_preemption_desc->gpuaddr);
 
-	cmds[7] = cp_type7_packet(CP_CONTEXT_SWITCH_YIELD, 4);
-	cmds[8] = 0;
-	cmds[9] = 0;
-	cmds[10] = 0;
+	if (preempt->postamble_bootup_len) {
+		*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
+		*cmds++ = lower_32_bits(kmd_postamble_addr);
+		*cmds++ = upper_32_bits(kmd_postamble_addr);
+		*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
+			| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_bootup_len));
+	}
+
+	*cmds++ = cp_type7_packet(CP_CONTEXT_SWITCH_YIELD, 4);
+	*cmds++ = 0;
+	*cmds++ = 0;
+	*cmds++ = 0;
 	/* generate interrupt on preemption completion */
-	cmds[11] = 0;
+	*cmds++ = 0;
 
 	ret = gen7_ringbuffer_submit(rb, NULL);
 	if (!ret) {
@@ -981,8 +1059,16 @@ static void gen7_err_callback(struct adreno_device *adreno_dev, int bit)
 
 	switch (bit) {
 	case GEN7_INT_AHBERROR:
-		dev_crit_ratelimited(dev, "CP: AHB bus error\n");
+		{
+		u32 err_details_0, err_details_1;
+
+		kgsl_regread(device, GEN7_CP_RL_ERROR_DETAILS_0, &err_details_0);
+		kgsl_regread(device, GEN7_CP_RL_ERROR_DETAILS_1, &err_details_1);
+		dev_crit_ratelimited(dev,
+			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
+			err_details_0, err_details_1);
 		break;
+		}
 	case GEN7_INT_ATBASYNCFIFOOVERFLOW:
 		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
 		break;
@@ -1019,13 +1105,18 @@ static const char *const uche_client[] = {
 	"BV_HLSQ", "BV_PC", "BV_LRZ", "BV_TP"
 };
 
+static const char *const uche_lpac_client[] = {
+	"-", "SP_LPAC", "-", "-", "HLSQ_LPAC", "-", "-", "TP_LPAC"
+};
+
 #define SCOOBYDOO 0x5c00bd00
 
 static const char *gen7_fault_block_uche(struct kgsl_device *device,
-		unsigned int mid)
+		char *str, int size, bool lpac)
 {
-	unsigned int uche_client_id;
-	static char str[20];
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	unsigned int uche_client_id = adreno_dev->uche_client_pf;
+	const char *uche_client_str, *fault_block;
 
 	/*
 	 * Smmu driver takes a vote on CX gdsc before calling the kgsl
@@ -1035,71 +1126,44 @@ static const char *gen7_fault_block_uche(struct kgsl_device *device,
 	 * here, try to lock device mutex and return if it fails.
 	 */
 	if (!mutex_trylock(&device->mutex))
-		return "UCHE: unknown";
+		goto regread_fail;
 
 	if (!kgsl_state_is_awake(device)) {
 		mutex_unlock(&device->mutex);
-		return "UCHE: unknown";
+		goto regread_fail;
 	}
 
 	kgsl_regread(device, GEN7_UCHE_CLIENT_PF, &uche_client_id);
 	mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
-	if (uche_client_id == SCOOBYDOO)
-		return "UCHE: unknown";
+	if (uche_client_id == SCOOBYDOO) {
+		uche_client_id = adreno_dev->uche_client_pf;
+		goto regread_fail;
+	}
 
 	/* UCHE client id mask is bits [6:0] */
 	uche_client_id &= GENMASK(6, 0);
-	if (uche_client_id >= ARRAY_SIZE(uche_client))
-		return "UCHE: Unknown";
 
-	snprintf(str, sizeof(str), "UCHE: %s",
-			uche_client[uche_client_id]);
+regread_fail:
+	if (lpac) {
+		fault_block = "UCHE_LPAC";
+		if (uche_client_id >= ARRAY_SIZE(uche_lpac_client))
+			goto fail;
+		uche_client_str = uche_lpac_client[uche_client_id];
+	} else {
+		fault_block = "UCHE";
+		if (uche_client_id >= ARRAY_SIZE(uche_client))
+			goto fail;
+		uche_client_str = uche_client[uche_client_id];
+	}
 
+	snprintf(str, size, "%s: %s", fault_block, uche_client_str);
 	return str;
-}
 
-static const char *gen7_fault_block_uche_lpac(struct kgsl_device *device,
-		unsigned int mid)
-{
-	unsigned int uche_client_id;
-	static char str[20];
-
-	/*
-	 * Smmu driver takes a vote on CX gdsc before calling the kgsl
-	 * pagefault handler. If there is contention for device mutex in this
-	 * path and the dispatcher fault handler is holding this lock, trying
-	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
-	 * here, try to lock device mutex and return if it fails.
-	 */
-	if (!mutex_trylock(&device->mutex))
-		return "UCHE LPAC: unknown";
-
-	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
-		return "UCHE LPAC: unknown";
-	}
-
-	kgsl_regread(device, GEN7_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
-
-	/* Ignore the value if the gpu is in IFPC */
-	if (uche_client_id == SCOOBYDOO)
-		return "UCHE LPAC: unknown";
-
-	/* UCHE client id mask is bits [6:0] */
-	uche_client_id &= GENMASK(6, 0);
-	if (uche_client_id >= ARRAY_SIZE(uche_client))
-		return "UCHE LPAC: unknown";
-
-	if ((uche_client_id != 1) && (uche_client_id != 4) &&
-			 (uche_client_id != 7))
-		return "UCHE LPAC: Invalid";
-
-	snprintf(str, sizeof(str), "UCHE LPAC: %s",
-			uche_client[uche_client_id]);
-
+fail:
+	snprintf(str, size, "%s: Unknown (client_id: %u)",
+			fault_block, uche_client_id);
 	return str;
 }
 
@@ -1107,25 +1171,31 @@ static const char *gen7_iommu_fault_block(struct kgsl_device *device,
 		unsigned int fsynr1)
 {
 	unsigned int mid = fsynr1 & 0xff;
+	static char str[36];
 
 	switch (mid) {
 	case 0x0:
 		return "CP";
+	case 0x1:
+		return "UCHE: Unknown";
 	case 0x2:
-		return "UCHE_LPAC";
+		return "UCHE_LPAC: Unknown";
 	case 0x3:
-		return gen7_fault_block_uche(device, mid);
+		return gen7_fault_block_uche(device, str, sizeof(str), false);
 	case 0x4:
 		return "CCU";
-	case 0x6:
+	case 0x5:
 		return "Flag cache";
+	case 0x6:
+		return "PREFETCH";
 	case 0x7:
 		return "GMU";
 	case 0x8:
-		return gen7_fault_block_uche_lpac(device, mid);
+		return gen7_fault_block_uche(device, str, sizeof(str), true);
 	}
 
-	return "Unknown";
+	snprintf(str, sizeof(str), "Unknown (mid: %u)", mid);
+	return str;
 }
 
 static void gen7_cp_callback(struct adreno_device *adreno_dev, int bit)
@@ -1242,22 +1312,23 @@ static const struct adreno_irq_funcs gen7_irq_funcs[32] = {
 static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	u32 status, fence, fence_retries = 0;
 	u64 a, b, c;
 
-	a = gen7_read_alwayson(adreno_dev);
+	a = gpudev->read_alwayson(adreno_dev);
 
 	kgsl_regread(device, GEN7_GMU_AO_AHB_FENCE_CTRL, &fence);
 
 	while (fence != 0) {
-		b = gen7_read_alwayson(adreno_dev);
+		b = gpudev->read_alwayson(adreno_dev);
 
 		/* Wait for small time before trying again */
 		udelay(1);
 		kgsl_regread(device, GEN7_GMU_AO_AHB_FENCE_CTRL, &fence);
 
 		if (fence_retries == 100 && fence != 0) {
-			c = gen7_read_alwayson(adreno_dev);
+			c = gpudev->read_alwayson(adreno_dev);
 
 			kgsl_regread(device, GEN7_GMU_RBBM_INT_UNMASKED_STATUS,
 				&status);
@@ -1325,7 +1396,11 @@ int gen7_probe_common(struct platform_device *pdev,
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
 
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION)) {
+	ret = adreno_device_probe(pdev, adreno_dev);
+	if (ret)
+		return ret;
+
+	if (adreno_preemption_feature_set(adreno_dev)) {
 		const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 
 		adreno_dev->preempt.preempt_level = gen7_core->preempt_level;
@@ -1333,10 +1408,6 @@ int gen7_probe_common(struct platform_device *pdev,
 		adreno_dev->preempt.usesgmem = true;
 		set_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
 	}
-
-	ret = adreno_device_probe(pdev, adreno_dev);
-	if (ret)
-		return ret;
 
 	/* debugfs node for ACD calibration */
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
@@ -1392,7 +1463,7 @@ int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 	int offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
 	int i, second_last_offset, last_offset;
 	bool remove_counter = false;
-	u32 pipe = _get_pipeid(groupid);
+	u32 pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 
 	if (kgsl_hwlock(lock)) {
 		kgsl_hwunlock(lock);
@@ -1513,7 +1584,28 @@ update:
 	return 0;
 }
 
-u64 gen7_read_alwayson(struct adreno_device *adreno_dev)
+static u64 gen7_9_0_read_alwayson(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 lo = 0, hi = 0, tmp = 0;
+
+	/* Always use the GMU AO counter when doing a AHB read */
+	gmu_core_regread(device, GEN7_GMU_CX_AO_COUNTER_HI, &hi);
+	gmu_core_regread(device, GEN7_GMU_CX_AO_COUNTER_LO, &lo);
+
+	/* Check for overflow */
+	gmu_core_regread(device, GEN7_GMU_CX_AO_COUNTER_HI, &tmp);
+
+	if (hi != tmp) {
+		gmu_core_regread(device, GEN7_GMU_CX_AO_COUNTER_LO,
+				&lo);
+		hi = tmp;
+	}
+
+	return (((u64) hi) << 32) | lo;
+}
+
+static u64 gen7_read_alwayson(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 lo = 0, hi = 0, tmp = 0;
@@ -1534,9 +1626,36 @@ u64 gen7_read_alwayson(struct adreno_device *adreno_dev)
 	return (((u64) hi) << 32) | lo;
 }
 
+static int gen7_9_0_lpac_store(struct adreno_device *adreno_dev, bool enable)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+		return -EINVAL;
+
+	if (!(adreno_dev->feature_fuse & BIT(GEN7_LPAC_SW_FUSE)) ||
+		(adreno_dev->lpac_enabled == enable))
+		return 0;
+
+	/* Power down the GPU before changing the lpac setting */
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->lpac_enabled,
+				       enable);
+}
+
+static int gen7_lpac_store(struct adreno_device *adreno_dev, bool enable)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+		return -EINVAL;
+
+	if (adreno_dev->lpac_enabled == enable)
+		return 0;
+
+	/* Power down the GPU before changing the lpac setting */
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->lpac_enabled,
+				       enable);
+}
+
 static void gen7_remove(struct adreno_device *adreno_dev)
 {
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION))
+	if (adreno_preemption_feature_set(adreno_dev))
 		del_timer(&adreno_dev->preempt.timer);
 }
 
@@ -1723,6 +1842,35 @@ static void gen7_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
 			state ? GEN7_SW_FUSE_INT_MASK : 0);
 }
 
+const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
+	.base = {
+		.reg_offsets = gen7_register_offsets,
+		.probe = gen7_hwsched_probe,
+		.snapshot = gen7_hwsched_snapshot,
+		.irq_handler = gen7_irq_handler,
+		.iommu_fault_block = gen7_iommu_fault_block,
+		.preemption_context_init = gen7_preemption_context_init,
+		.context_detach = gen7_hwsched_context_detach,
+		.read_alwayson = gen7_9_0_read_alwayson,
+		.reset = gen7_hwsched_reset,
+		.power_ops = &gen7_hwsched_power_ops,
+		.power_stats = gen7_power_stats,
+		.setproperty = gen7_setproperty,
+		.hw_isidle = gen7_hw_isidle,
+		.add_to_va_minidump = gen7_hwsched_add_to_minidump,
+		.gx_is_on = gen7_gmu_gx_is_on,
+		.send_recurring_cmdobj = gen7_hwsched_send_recurring_cmdobj,
+		.perfcounter_remove = gen7_perfcounter_remove,
+		.set_isdb_breakpoint_registers = gen7_set_isdb_breakpoint_registers,
+		.context_destroy = gen7_hwsched_context_destroy,
+		.lpac_store = gen7_9_0_lpac_store,
+		.get_uche_trap_base = gen7_get_uche_trap_base,
+	},
+	.hfi_probe = gen7_hwsched_hfi_probe,
+	.hfi_remove = gen7_hwsched_hfi_remove,
+	.handle_watchdog = gen7_hwsched_handle_watchdog,
+};
+
 const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen7_register_offsets,
@@ -1744,6 +1892,8 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.perfcounter_remove = gen7_perfcounter_remove,
 		.set_isdb_breakpoint_registers = gen7_set_isdb_breakpoint_registers,
 		.context_destroy = gen7_hwsched_context_destroy,
+		.lpac_store = gen7_lpac_store,
+		.get_uche_trap_base = gen7_get_uche_trap_base,
 	},
 	.hfi_probe = gen7_hwsched_hfi_probe,
 	.hfi_remove = gen7_hwsched_hfi_remove,
@@ -1774,6 +1924,7 @@ const struct gen7_gpudev adreno_gen7_gmu_gpudev = {
 		.perfcounter_remove = gen7_perfcounter_remove,
 		.set_isdb_breakpoint_registers = gen7_set_isdb_breakpoint_registers,
 		.swfuse_irqctrl = gen7_swfuse_irqctrl,
+		.get_uche_trap_base = gen7_get_uche_trap_base,
 	},
 	.hfi_probe = gen7_gmu_hfi_probe,
 	.handle_watchdog = gen7_gmu_handle_watchdog,

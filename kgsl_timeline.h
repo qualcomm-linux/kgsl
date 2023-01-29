@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __KGSL_TIMELINE_H
@@ -24,11 +25,37 @@ struct kgsl_timeline {
 	struct kref ref;
 	/** @fences: sorted list of active fences */
 	struct list_head fences;
+	/** @events: sorted list of events to be retired */
+	struct list_head events;
 	/** @name: Name of the timeline for debugging */
 	const char name[32];
 	/** @dev_priv: pointer to the owning device instance */
 	struct kgsl_device_private *dev_priv;
 };
+
+/**
+ * struct kgsl_timeline_event - Contains data to signal a timeline
+ */
+struct kgsl_timeline_event {
+	/** @timeline: Pointer to the timeline to signal */
+	struct kgsl_timeline *timeline;
+	/** @seqno: seqno of the timeline to signal */
+	u64 seqno;
+	/** @context: context this event is waiting for */
+	struct kgsl_context *context;
+	/** @timestamp: context timestamp this event is waiting for */
+	unsigned int timestamp;
+	/** @node: list node */
+	struct list_head node;
+};
+
+/**
+ * kgsl_timeline_add_signal - Notify a timeline of an upcoming signal
+ * @signal: Pointer to a kgsl_timeline_event
+ *
+ * Notify the timeline that a GPU AUX command is expected to signal.
+ */
+void kgsl_timeline_add_signal(struct kgsl_timeline_event *signal);
 
 /**
  * kgsl_timeline_signal - Signal the timeline

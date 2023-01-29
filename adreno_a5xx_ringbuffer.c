@@ -111,7 +111,7 @@ int a5xx_ringbuffer_init(struct adreno_device *adreno_dev)
 
 	adreno_dev->cur_rb = &(adreno_dev->ringbuffers[0]);
 
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION)) {
+	if (!adreno_preemption_feature_set(adreno_dev)) {
 		adreno_dev->num_ringbuffers = 1;
 		return adreno_ringbuffer_setup(adreno_dev,
 			&adreno_dev->ringbuffers[0], 0);

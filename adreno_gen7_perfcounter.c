@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -184,8 +185,9 @@ static u64 gen7_counter_alwayson_read(struct adreno_device *adreno_dev,
 		unsigned int counter)
 {
 	struct adreno_perfcount_register *reg = &group->regs[counter];
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
-	return gen7_read_alwayson(adreno_dev) + reg->value;
+	return gpudev->read_alwayson(adreno_dev) + reg->value;
 }
 
 static void gen7_write_gmu_counter_enable(struct kgsl_device *device,

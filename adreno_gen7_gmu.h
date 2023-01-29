@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_GMU_H
 #define __ADRENO_GEN7_GMU_H
@@ -102,6 +102,14 @@ struct gen7_gmu_device {
 	struct notifier_block gdsc_nb;
 	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
 	struct completion gdsc_gate;
+	/** @stats_enable: GMU stats feature enable */
+	bool stats_enable;
+	/** @stats_mask: GMU performance countables to enable */
+	u32 stats_mask;
+	/** @stats_interval: GMU performance counters sampling interval */
+	u32 stats_interval;
+	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
+	struct kobject stats_kobj;
 };
 
 struct gmu_mem_type_desc {

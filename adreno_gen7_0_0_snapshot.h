@@ -171,7 +171,7 @@ static const u32 gen7_0_0_pre_crashdumper_gpu_registers[] = {
 static_assert(IS_ALIGNED(sizeof(gen7_0_0_pre_crashdumper_gpu_registers), 8));
 
 static const u32 gen7_0_0_post_crashdumper_registers[] = {
-	0x00535, 0x00535,
+	0x00535, 0x00535, 0x0f400, 0x0f400, 0x0f800, 0x0f803,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen7_0_0_post_crashdumper_registers), 8));
