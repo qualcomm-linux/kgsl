@@ -2254,9 +2254,8 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_context *context;
 	struct kgsl_drawobj **drawobjs;
-	struct kgsl_drawobj_sync *tsobj;
 	void __user *cmdlist;
-	u32 queued, count;
+	u32 count;
 	int i, index = 0;
 	long ret;
 	struct kgsl_gpu_aux_command_generic generic;
@@ -2310,22 +2309,6 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 			goto err;
 	}
 
-	kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_QUEUED, &queued);
-
-	/*
-	 * Make an implicit sync object for the last queued timestamp on this
-	 * context
-	 */
-	tsobj = kgsl_drawobj_create_timestamp_syncobj(device,
-		context, queued);
-
-	if (IS_ERR(tsobj)) {
-		ret = PTR_ERR(tsobj);
-		goto err;
-	}
-
-	drawobjs[index++] = DRAWOBJ(tsobj);
-
 	cmdlist = u64_to_user_ptr(param->cmdlist);
 
 	/*
@@ -2339,7 +2322,25 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 	}
 
 	if (generic.type == KGSL_GPU_AUX_COMMAND_BIND) {
+		struct kgsl_drawobj_sync *tsobj;
 		struct kgsl_drawobj_bind *bindobj;
+		u32 queued;
+
+		kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_QUEUED,
+				&queued);
+		/*
+		 * Make an implicit sync object for the last queued timestamp
+		 * on this context
+		 */
+		tsobj = kgsl_drawobj_create_timestamp_syncobj(device,
+			context, queued);
+
+		if (IS_ERR(tsobj)) {
+			ret = PTR_ERR(tsobj);
+			goto err;
+		}
+
+		drawobjs[index++] = DRAWOBJ(tsobj);
 
 		bindobj = kgsl_drawobj_bind_create(device, context);
 
@@ -2356,6 +2357,7 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 			goto err;
 	} else if (generic.type == KGSL_GPU_AUX_COMMAND_TIMELINE) {
 		struct kgsl_drawobj_timeline *timelineobj;
+		struct kgsl_drawobj_cmd *markerobj;
 
 		timelineobj = kgsl_drawobj_timeline_create(device,
 			context);
@@ -2372,6 +2374,20 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 		if (ret)
 			goto err;
 
+		/*
+		 * Userspace needs a timestamp to associate with this
+		 * submisssion. Use a marker to keep the timestamp
+		 * bookkeeping correct.
+		 */
+		markerobj = kgsl_drawobj_cmd_create(device, context,
+			KGSL_DRAWOBJ_MARKER, MARKEROBJ_TYPE);
+
+		if (IS_ERR(markerobj)) {
+			ret = PTR_ERR(markerobj);
+			goto err;
+		}
+
+		drawobjs[index++] = DRAWOBJ(markerobj);
 	} else {
 		ret = -EINVAL;
 		goto err;

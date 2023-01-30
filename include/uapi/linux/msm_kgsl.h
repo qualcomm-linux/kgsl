@@ -355,6 +355,7 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_IS_RAYTRACING_ENABLED	0x2D
 #define KGSL_PROP_IS_FASTBLEND_ENABLED		0x2E
 #define KGSL_PROP_UCHE_TRAP_BASE	0x2F
+#define KGSL_PROP_IS_AQE_ENABLED	0x30
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.
