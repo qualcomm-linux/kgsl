@@ -1971,15 +1971,16 @@ static const struct gen7_protected_regs gen7_0_0_protected_regs[] = {
 	{ GEN7_CP_PROTECT_REG + 32, 0x0b604, 0x0b607, 1 },
 	{ GEN7_CP_PROTECT_REG + 33, 0x0ec00, 0x0fbff, 1 },
 	{ GEN7_CP_PROTECT_REG + 34, 0x0fc00, 0x11bff, 0 },
-	{ GEN7_CP_PROTECT_REG + 35, 0x18400, 0x18453, 1 },
-	{ GEN7_CP_PROTECT_REG + 36, 0x18454, 0x18458, 0 },
-	{ GEN7_CP_PROTECT_REG + 37, 0x18459, 0x1a458, 1 },
-	{ GEN7_CP_PROTECT_REG + 38, 0x1a459, 0x1c458, 1 },
-	{ GEN7_CP_PROTECT_REG + 39, 0x1c459, 0x1e458, 1 },
-	{ GEN7_CP_PROTECT_REG + 40, 0x1f400, 0x1f843, 1 },
-	{ GEN7_CP_PROTECT_REG + 41, 0x1f844, 0x1f8bf, 0 },
-	{ GEN7_CP_PROTECT_REG + 42, 0x1f860, 0x1f860, 1 },
-	{ GEN7_CP_PROTECT_REG + 43, 0x1f878, 0x1f8a2, 1 },
+	{ GEN7_CP_PROTECT_REG + 35, 0x18400, 0x1844a, 1 },
+	{ GEN7_CP_PROTECT_REG + 36, 0x1844b, 0x1857f, 0 },
+	{ GEN7_CP_PROTECT_REG + 37, 0x1844c, 0x18453, 1 },
+	{ GEN7_CP_PROTECT_REG + 38, 0x18580, 0x1a57f, 1 },
+	{ GEN7_CP_PROTECT_REG + 39, 0x1a580, 0x1c57f, 1 },
+	{ GEN7_CP_PROTECT_REG + 40, 0x1c580, 0x1e57f, 1 },
+	{ GEN7_CP_PROTECT_REG + 41, 0x1f400, 0x1f843, 1 },
+	{ GEN7_CP_PROTECT_REG + 42, 0x1f844, 0x1f8bf, 0 },
+	{ GEN7_CP_PROTECT_REG + 43, 0x1f860, 0x1f860, 1 },
+	{ GEN7_CP_PROTECT_REG + 44, 0x1f87f, 0x1f8a2, 1 },
 	{ GEN7_CP_PROTECT_REG + 47, 0x1f8c0, 0x1f8c0, 1 },
 	{ 0 },
 };
@@ -2016,6 +2017,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_0 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.ctxt_record_size = (2860 * SZ_1K),
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
@@ -2050,6 +2052,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.ctxt_record_size = (2860 * SZ_1K),
 };
 
 extern const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list;
@@ -2159,6 +2162,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_0 = {
 	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
 	.bcl_data = 1,
 	.preempt_level = 1,
+	.ctxt_record_size = (4192 * SZ_1K),
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
@@ -2194,6 +2198,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
 	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
 	.bcl_data = 1,
 	.preempt_level = 1,
+	.ctxt_record_size = (4192 * SZ_1K),
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
@@ -2228,6 +2233,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.ctxt_record_size = (2860 * SZ_1K),
 };
 
 extern const struct gen7_snapshot_block_list gen7_9_0_snapshot_block_list;
@@ -2291,13 +2297,14 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-9-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
-			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC,
-		.gpudev = &adreno_gen7_hwsched_gpudev.base,
+			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
+			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_ACD,
+		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
-		.snapshot_size = SZ_4M,
+		.snapshot_size = SZ_8M,
 	},
 	.sqefw_name = "gen70900_sqe.fw",
 	.gmufw_name = "gmu_gen70900.bin",

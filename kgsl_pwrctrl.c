@@ -1674,7 +1674,7 @@ void kgsl_idle_check(struct work_struct *work)
 			}
 			/* Don't allow GPU inline submission in SLUMBER */
 			if (requested_state == KGSL_STATE_SLUMBER)
-				device->slumber = true;
+				device->skip_inline_submit = true;
 			spin_unlock(&device->submit_lock);
 
 			ret = kgsl_pwrctrl_change_state(device,
@@ -1682,7 +1682,7 @@ void kgsl_idle_check(struct work_struct *work)
 			if (ret == -EBUSY) {
 				if (requested_state == KGSL_STATE_SLUMBER) {
 					spin_lock(&device->submit_lock);
-					device->slumber = false;
+					device->skip_inline_submit = false;
 					spin_unlock(&device->submit_lock);
 				}
 				/*
@@ -2171,10 +2171,10 @@ void kgsl_pwrctrl_set_state(struct kgsl_device *device,
 	device->requested_state = KGSL_STATE_NONE;
 
 	spin_lock(&device->submit_lock);
-	if (state == KGSL_STATE_SLUMBER || state == KGSL_STATE_SUSPEND)
-		device->slumber = true;
+	if (state == KGSL_STATE_ACTIVE)
+		device->skip_inline_submit = false;
 	else
-		device->slumber = false;
+		device->skip_inline_submit = true;
 	spin_unlock(&device->submit_lock);
 }
 

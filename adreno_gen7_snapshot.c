@@ -650,11 +650,11 @@ static void gen7_snapshot_mempool(struct kgsl_device *device,
 
 	kgsl_snapshot_indexed_registers(device, snapshot,
 		GEN7_CP_MEM_POOL_DBG_ADDR, GEN7_CP_MEM_POOL_DBG_DATA,
-		0, 0x2100);
+		0, 0x2200);
 
 	kgsl_snapshot_indexed_registers(device, snapshot,
 		GEN7_CP_BV_MEM_POOL_DBG_ADDR, GEN7_CP_BV_MEM_POOL_DBG_DATA,
-		0, 0x2100);
+		0, 0x2200);
 
 	kgsl_regrmw(device, GEN7_CP_CHICKEN_DBG, 0x4, 0x0);
 	kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x0);
@@ -1291,6 +1291,31 @@ static size_t gen7_snapshot_sqe(struct kgsl_device *device, u8 *buf,
 	return DEBUG_SECTION_SZ(1);
 }
 
+/* gen7_snapshot_aqe() - Dump AQE data in snapshot */
+static size_t gen7_snapshot_aqe(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (unsigned int *)(buf + sizeof(*header));
+	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+		return 0;
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE VERSION DEBUG");
+		return 0;
+	}
+
+	/* Dump the AQE firmware version */
+	header->type = SNAPSHOT_DEBUG_AQE_VERSION;
+	header->size = 1;
+	*data = fw->version;
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 /* Snapshot the preemption related buffers */
 static size_t snapshot_preemption_record(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv)
@@ -1581,6 +1606,10 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	/* SQE Firmware */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen7_snapshot_sqe, NULL);
+
+	/* AQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen7_snapshot_aqe, NULL);
 
 	/* Mempool debug data */
 	gen7_snapshot_mempool(device, snapshot);
