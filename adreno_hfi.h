@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -75,7 +75,7 @@
 #define HFI_FEATURE_HW_FENCE	25
 #define HFI_FEATURE_PERF_NORETAIN	26
 #define HFI_FEATURE_DMS		27
-
+#define HFI_FEATURE_AQE		29
 
 /* A6xx uses a different value for KPROF */
 #define HFI_FEATURE_A6XX_KPROF	14
@@ -101,7 +101,8 @@
 #define HFI_VALUE_LOG_STREAM_ENABLE	119
 #define HFI_VALUE_PREEMPT_COUNT		120
 #define HFI_VALUE_CONTEXT_QUEUE		121
-
+#define HFI_VALUE_GMU_AB_VOTE		122
+#define HFI_VALUE_RB_GPU_QOS		123
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -125,7 +126,9 @@
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_ANY		0
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_RB		1
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_FG		2
-#define CMDBATCH_INDIRECT			0x00000200
+
+/* Default sampling interval in units of 50 us */
+#define HFI_FEATURE_GMU_STATS_INTERVAL		4
 
 enum hfi_mem_kind {
 	/** @HFI_MEMKIND_GENERIC: Used for requesting generic memory */
@@ -216,6 +219,11 @@ enum hfi_mem_kind {
 	HFI_MEMKIND_HW_FENCE,
 	/** @HFI_MEMKIND_PREEMPT_SCRATCH: Used for Preemption scratch memory */
 	HFI_MEMKIND_PREEMPT_SCRATCH,
+	/**
+	 * @HFI_MEMKIND_AQE_BUFFER: Sandbox memory used by AQE to switch
+	 * between LPAC and GC
+	 */
+	HFI_MEMKIND_AQE_BUFFER,
 	HFI_MEMKIND_MAX,
 };
 
@@ -245,6 +253,7 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_MEMSTORE] = "GMU MEMSTORE",
 	[HFI_MEMKIND_HW_FENCE] = "GMU HW FENCE",
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
+	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -679,7 +688,8 @@ struct hfi_gmu_cntr_register_reply_cmd {
 	u32 req_hdr;
 	u32 group_id;
 	u32 countable;
-	u64 counter_addr;
+	u32 cntr_lo;
+	u32 cntr_hi;
 } __packed;
 
 /* F2H */
@@ -738,7 +748,9 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_ERROR		2
 #define CMDBATCH_SKIP		3
 
-#define CMDBATCH_PROFILING  BIT(4)
+#define CMDBATCH_PROFILING		BIT(4)
+#define CMDBATCH_EOF			BIT(8)
+#define CMDBATCH_INDIRECT		BIT(9)
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
 
@@ -933,6 +945,10 @@ struct payload_section {
 #define KEY_CP_LPAC_PROTECTED_ERROR 8
 #define KEY_CP_LPAC_HW_FAULT 9
 #define KEY_SWFUSE_VIOLATION_FAULT 10
+#define KEY_AQE0_OPCODE_ERROR 11
+#define KEY_AQE0_HW_FAULT 12
+#define KEY_AQE1_OPCODE_ERROR 13
+#define KEY_AQE1_HW_FAULT 14
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -994,6 +1010,16 @@ struct payload_section {
 #define GMU_GPU_LPAC_SW_HANG 620
 /* Fault due to software fuse violation interrupt */
 #define GMU_GPU_SW_FUSE_VIOLATION 621
+/* AQE related error codes */
+#define GMU_GPU_AQE0_OPCODE_ERRROR 622
+#define GMU_GPU_AQE0_UCODE_ERROR 623
+#define GMU_GPU_AQE0_HW_FAULT_ERROR 624
+#define GMU_GPU_AQE0_ILLEGAL_INST_ERROR 625
+#define GMU_GPU_AQE1_OPCODE_ERRROR 626
+#define GMU_GPU_AQE1_UCODE_ERROR 627
+#define GMU_GPU_AQE1_HW_FAULT_ERROR 628
+#define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
+
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 

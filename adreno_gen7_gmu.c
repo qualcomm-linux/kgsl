@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -124,6 +124,94 @@ static struct kobj_type log_kobj_type = {
 	.default_groups = log_groups,
 };
 
+static ssize_t stats_enable_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	bool val;
+	int ret;
+
+	ret = kstrtobool(buf, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_enable = val;
+	return count;
+}
+
+static ssize_t stats_enable_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", gmu->stats_enable);
+}
+
+static ssize_t stats_mask_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	u32 val;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_mask = val;
+	return count;
+}
+
+static ssize_t stats_mask_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%x\n", gmu->stats_mask);
+}
+
+static ssize_t stats_interval_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+	u32 val;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	gmu->stats_interval = val;
+	return count;
+}
+
+static ssize_t stats_interval_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct gen7_gmu_device *gmu = container_of(kobj, struct gen7_gmu_device, stats_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%x\n", gmu->stats_interval);
+}
+
+static struct kobj_attribute stats_enable_attr =
+	__ATTR(stats_enable, 0644, stats_enable_show, stats_enable_store);
+
+static struct kobj_attribute stats_mask_attr =
+	__ATTR(stats_mask, 0644, stats_mask_show, stats_mask_store);
+
+static struct kobj_attribute stats_interval_attr =
+	__ATTR(stats_interval, 0644, stats_interval_show, stats_interval_store);
+
+static struct attribute *stats_attrs[] = {
+	&stats_enable_attr.attr,
+	&stats_mask_attr.attr,
+	&stats_interval_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(stats);
+
+static struct kobj_type stats_kobj_type = {
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = stats_groups,
+};
+
 static int gen7_timed_poll_check_rscc(struct gen7_gmu_device *gmu,
 		unsigned int offset, unsigned int expected_ret,
 		unsigned int timeout, unsigned int mask)
@@ -233,6 +321,7 @@ static void gen7_gmu_power_config(struct adreno_device *adreno_dev)
 
 static void gmu_ao_sync_event(struct adreno_device *adreno_dev)
 {
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	unsigned long flags;
 	u64 ticks;
 
@@ -245,7 +334,7 @@ static void gmu_ao_sync_event(struct adreno_device *adreno_dev)
 
 	local_irq_save(flags);
 
-	ticks = gen7_read_alwayson(adreno_dev);
+	ticks = gpudev->read_alwayson(adreno_dev);
 
 	trace_gmu_ao_sync(ticks);
 
@@ -697,11 +786,12 @@ int gen7_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	unsigned int reg, reg1, reg2, reg3, reg4, reg5, reg6, reg7, reg8;
 	unsigned long t;
 	u64 ts1, ts2;
 
-	ts1 = gen7_read_alwayson(adreno_dev);
+	ts1 = gpudev->read_alwayson(adreno_dev);
 
 	t = jiffies + msecs_to_jiffies(100);
 	do {
@@ -733,7 +823,7 @@ int gen7_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 		if (!(gmu->idle_level == GPU_HW_IFPC && is_on(reg1)))
 			return 0;
 
-	ts2 = gen7_read_alwayson(adreno_dev);
+	ts2 = gpudev->read_alwayson(adreno_dev);
 
 	/* Collect abort data to help with debugging */
 	gmu_core_regread(device, GEN7_GPU_GMU_AO_GPU_CX_BUSY_STATUS, &reg2);
@@ -780,10 +870,11 @@ int gen7_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	u32 status2;
 	u64 ts1;
 
-	ts1 = gen7_read_alwayson(adreno_dev);
+	ts1 = gpudev->read_alwayson(adreno_dev);
 	if (gmu_core_timed_poll_check(device, GEN7_GPU_GMU_AO_GPU_CX_BUSY_STATUS,
 			0, 100, CXGXCPUBUSYIGNAHB)) {
 		gmu_core_regread(device,
@@ -791,7 +882,7 @@ int gen7_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 		dev_err(&gmu->pdev->dev,
 				"GMU not idling: status2=0x%x %llx %llx\n",
 				status2, ts1,
-				gen7_read_alwayson(ADRENO_DEVICE(device)));
+				gpudev->read_alwayson(adreno_dev));
 		gmu_core_fault_snapshot(device);
 		return -ETIMEDOUT;
 	}
@@ -860,9 +951,6 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 	/* Vote veto for FAL10 */
 	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
 	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FAL_INTF, 0x1);
-
-	/* Turn on TCM retention */
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_TCM_RET_CNTL, 1);
 
 	/* Clear init result to make sure we are getting fresh value */
 	gmu_core_regwrite(device, GEN7_GMU_CM3_FW_INIT_RESULT, 0);
@@ -1438,6 +1526,8 @@ static int gen7_gmu_notify_slumber(struct adreno_device *adreno_dev)
 	};
 	int ret;
 
+	req.bw |= gen7_bus_ab_quantize(adreno_dev, 0);
+
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
@@ -1471,7 +1561,7 @@ void gen7_gmu_suspend(struct adreno_device *adreno_dev)
 }
 
 static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
-		int gpu_pwrlevel, int bus_level)
+		int gpu_pwrlevel, int bus_level, u32 ab)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1498,11 +1588,11 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	if (bus_level < pwr->ddr_table_count && bus_level > 0)
 		req.bw = bus_level;
 
+	req.bw |=  gen7_bus_ab_quantize(adreno_dev, ab);
+
 	/* GMU will vote for slumber levels through the sleep sequence */
-	if ((req.freq == INVALID_DCVS_IDX) &&
-		(req.bw == INVALID_DCVS_IDX)) {
+	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_BW_VOTE))
 		return 0;
-	}
 
 	ret = CMD_MSG_HDR(req, H2F_MSG_GX_BW_PERF_VOTE);
 	if (ret)
@@ -1532,7 +1622,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 
 static int gen7_gmu_clock_set(struct adreno_device *adreno_dev, u32 pwrlevel)
 {
-	return gen7_gmu_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX);
+	return gen7_gmu_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX, INVALID_AB_VALUE);
 }
 
 static int gen7_gmu_ifpc_store(struct kgsl_device *device,
@@ -1818,6 +1908,10 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
+	ret = gen7_scm_gpu_init_cx_regs(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
 	gen7_gmu_register_config(adreno_dev);
 
 	gen7_gmu_irq_enable(adreno_dev);
@@ -1843,9 +1937,16 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	gen7_get_gpu_feature_info(adreno_dev);
+
 	ret = gen7_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
+
+	if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1) {
+		adreno_dev->gmu_ab = true;
+		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
+	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 
@@ -2046,22 +2147,74 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 
 	kgsl_icc_set_tag(pwr, buslevel);
 
-	if (buslevel != pwr->cur_buslevel) {
-		ret = gen7_gmu_dcvs_set(adreno_dev, INVALID_DCVS_IDX, buslevel);
-		if (ret)
-			return ret;
+	if (buslevel == pwr->cur_buslevel)
+		buslevel = INVALID_DCVS_IDX;
 
+	if ((ab == pwr->cur_ab) || (ab == 0))
+		ab = INVALID_AB_VALUE;
+
+	if ((ab == INVALID_AB_VALUE) && (buslevel == INVALID_DCVS_IDX))
+		return 0;
+
+	ret = gen7_gmu_dcvs_set(adreno_dev, INVALID_DCVS_IDX,
+			buslevel, ab);
+	if (ret)
+		return ret;
+
+	if (buslevel != INVALID_DCVS_IDX) {
 		pwr->cur_buslevel = buslevel;
-
 		trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel);
 	}
 
-	if (ab != pwr->cur_ab) {
-		icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
+	if (ab != INVALID_AB_VALUE) {
+		if (!adreno_dev->gmu_ab)
+			icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
 		pwr->cur_ab = ab;
 	}
 
 	return ret;
+}
+
+#define NUM_CHANNELS 4
+
+u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
+{
+	u16 vote = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!adreno_dev->gmu_ab || (ab == INVALID_AB_VALUE))
+		return (FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE));
+
+	if (pwr->ddr_table[pwr->ddr_table_count - 1]) {
+		/*
+		 * if ab is calculated as higher than theoretical max bandwidth, set ab as
+		 * theoretical max to prevent truncation during quantization.
+		 *
+		 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
+		 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
+		 */
+		u32 max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+		u32 max_ab = max_bw / 1000;
+
+		ab = min_t(u32, ab, max_ab);
+
+		/*
+		 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
+		 * range to a 16 bit space and the quantized value can be used to vote for AB though
+		 * GMU. Quantization can be performed as below.
+		 *
+		 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
+		 */
+		vote = (u16)(((u64)ab * 1000 * (1 << 16)) / max_bw);
+	}
+
+	/*
+	 * Set ab enable mask and valid AB vote. req.bw is 32 bit value 0xABABENIB
+	 * and with this return we want to set the upper 16 bits and EN field specifies
+	 * if the AB vote is valid or not.
+	 */
+	return (FIELD_PREP(GENMASK(31, 16), vote) | FIELD_PREP(GENMASK(15, 8), 1));
 }
 
 static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
@@ -2320,6 +2473,7 @@ void gen7_gmu_remove(struct kgsl_device *device)
 
 	vfree(gmu->itcm_shadow);
 	kobject_put(&gmu->log_kobj);
+	kobject_put(&gmu->stats_kobj);
 }
 
 static int gen7_gmu_iommu_fault_handler(struct iommu_domain *domain,
@@ -2453,8 +2607,16 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	gmu->log_stream_enable = false;
 	gmu->log_group_mask = 0x3;
 
+	/* Disabled by default */
+	gmu->stats_enable = false;
+	/* Set default to CM3 busy cycles countable */
+	gmu->stats_mask = BIT(GEN7_GMU_CM3_BUSY_CYCLES);
+	/* Interval is in 50 us units. Set default sampling frequency to 4x50 us */
+	gmu->stats_interval = HFI_FEATURE_GMU_STATS_INTERVAL;
+
 	/* GMU sysfs nodes setup */
 	(void) kobject_init_and_add(&gmu->log_kobj, &log_kobj_type, &dev->kobj, "log");
+	(void) kobject_init_and_add(&gmu->stats_kobj, &stats_kobj_type, &dev->kobj, "stats");
 
 	of_property_read_u32(gmu->pdev->dev.of_node, "qcom,gmu-perf-ddr-bw",
 		&gmu->perf_ddr_bw);
@@ -2594,6 +2756,7 @@ void gen7_disable_gpu_irq(struct adreno_device *adreno_dev)
 
 static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
@@ -2618,6 +2781,10 @@ static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 	memset(&adreno_dev->busy_data, 0, sizeof(adreno_dev->busy_data));
 
 	gen7_start(adreno_dev);
+
+	if (gen7_core->qos_value && adreno_is_preemption_enabled(adreno_dev))
+		kgsl_regwrite(device, GEN7_RBBM_GBIF_CLIENT_QOS_CNTL,
+			gen7_core->qos_value[adreno_dev->cur_rb->id]);
 
 	/* Re-initialize the coresight registers if applicable */
 	adreno_coresight_start(adreno_dev);
@@ -2751,10 +2918,10 @@ static int gen7_first_boot(struct adreno_device *adreno_dev)
 
 	/*
 	 * BCL needs respective Central Broadcast register to
-	 * be programed from TZ. This programing happens only
-	 * when zap shader firmware load is successful. Zap firmware
-	 * load can fail in boot up path hence enable BCL only after we
-	 * successfully complete first boot to ensure that Central
+	 * be programed from TZ. For kernel version prior to 6.1, this
+	 * programing happens only when zap shader firmware load is successful.
+	 * Zap firmware load can fail in boot up path hence enable BCL only
+	 * after we successfully complete first boot to ensure that Central
 	 * Broadcast register was programed before enabling BCL.
 	 */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL))

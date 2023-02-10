@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -250,6 +250,35 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	return 0;
 }
 
+/* Snapshot AQE buffer */
+static size_t snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
+	size_t remain, void *priv)
+{
+	struct kgsl_memdesc *memdesc = priv;
+
+	struct kgsl_snapshot_gpu_object_v2 *header =
+		(struct kgsl_snapshot_gpu_object_v2 *)buf;
+
+	u8 *ptr = buf + sizeof(*header);
+
+	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
+		return 0;
+
+	if (remain < (memdesc->size + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE BUFFER");
+		return 0;
+	}
+
+	header->size = memdesc->size >> 2;
+	header->gpuaddr = memdesc->gpuaddr;
+	header->ptbase = MMU_DEFAULT_TTBR0(device);
+	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
+
+	memcpy(ptr, memdesc->hostptr, memdesc->size);
+
+	return memdesc->size + sizeof(*header);
+}
+
 void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -320,6 +349,12 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
 				snapshot, adreno_snapshot_global,
 				entry->md);
+
+		if (entry->desc.mem_kind == HFI_MEMKIND_AQE_BUFFER)
+			kgsl_snapshot_add_section(device,
+				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
+				snapshot, snapshot_aqe_buffer,
+				entry->md);
 	}
 
 	adreno_hwsched_parse_fault_cmdobj(adreno_dev, snapshot);
@@ -368,6 +403,10 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
 	}
 
+	ret = gen7_scm_gpu_init_cx_regs(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
 	gen7_gmu_register_config(adreno_dev);
 
 	ret = gen7_gmu_version_info(adreno_dev);
@@ -388,6 +427,8 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	gen7_get_gpu_feature_info(adreno_dev);
+
 	ret = gen7_hwsched_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -398,6 +439,11 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	}
 
 	adreno_hwsched_register_hw_fence(adreno_dev);
+
+	if (gen7_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1) {
+		adreno_dev->gmu_ab = true;
+		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
+	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 
@@ -534,6 +580,7 @@ static int gen7_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 			pwr->default_pwrlevel - 1;
 	req.bw = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
 
+	req.bw |= gen7_bus_ab_quantize(adreno_dev, 0);
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
@@ -752,6 +799,17 @@ static int gen7_hwsched_boot(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static int gen7_aqe_microcode_read(struct adreno_device *adreno_dev)
+{
+	struct adreno_firmware *aqe_fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+		return 0;
+
+	return adreno_get_firmware(adreno_dev, gen7_core->aqefw_name, aqe_fw);
+}
+
 static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -764,6 +822,10 @@ static int gen7_hwsched_first_boot(struct adreno_device *adreno_dev)
 	adreno_hwsched_start(adreno_dev);
 
 	ret = gen7_microcode_read(adreno_dev);
+	if (ret)
+		return ret;
+
+	ret = gen7_aqe_microcode_read(adreno_dev);
 	if (ret)
 		return ret;
 
@@ -1025,7 +1087,7 @@ int gen7_hwsched_active_count_get(struct adreno_device *adreno_dev)
 }
 
 static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
-		int gpu_pwrlevel, int bus_level)
+		int gpu_pwrlevel, int bus_level, u32 ab)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1055,8 +1117,10 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	if (bus_level < pwr->ddr_table_count && bus_level > 0)
 		req.bw = bus_level;
 
+	req.bw |=  gen7_bus_ab_quantize(adreno_dev, ab);
+
 	/* GMU will vote for slumber levels through the sleep sequence */
-	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_DCVS_IDX))
+	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_BW_VOTE))
 		return 0;
 
 	ret = CMD_MSG_HDR(req, H2F_MSG_GX_BW_PERF_VOTE);
@@ -1088,7 +1152,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 static int gen7_hwsched_clock_set(struct adreno_device *adreno_dev,
 	u32 pwrlevel)
 {
-	return gen7_hwsched_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX);
+	return gen7_hwsched_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX, INVALID_AB_VALUE);
 }
 
 static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
@@ -1134,12 +1198,21 @@ static int gen7_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 
 	kgsl_icc_set_tag(pwr, buslevel);
 
-	if (buslevel != pwr->cur_buslevel) {
-		ret = gen7_hwsched_dcvs_set(adreno_dev, INVALID_DCVS_IDX,
-				buslevel);
-		if (ret)
-			return ret;
+	if (buslevel == pwr->cur_buslevel)
+		buslevel = INVALID_DCVS_IDX;
 
+	if ((ab == pwr->cur_ab) || (ab == 0))
+		ab = INVALID_AB_VALUE;
+
+	if ((ab == INVALID_AB_VALUE) && (buslevel == INVALID_DCVS_IDX))
+		return 0;
+
+	ret = gen7_hwsched_dcvs_set(adreno_dev, INVALID_DCVS_IDX,
+			buslevel, ab);
+	if (ret)
+		return ret;
+
+	if (buslevel != INVALID_DCVS_IDX) {
 		scale_gmu_frequency(adreno_dev, buslevel);
 
 		pwr->cur_buslevel = buslevel;
@@ -1147,8 +1220,9 @@ static int gen7_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel);
 	}
 
-	if (ab != pwr->cur_ab) {
-		icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
+	if (ab != INVALID_AB_VALUE) {
+		if (!adreno_dev->gmu_ab)
+			icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
 		pwr->cur_ab = ab;
 	}
 

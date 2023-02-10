@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence.h>
@@ -100,6 +101,7 @@ void kgsl_timeline_destroy(struct kref *kref)
 		struct kgsl_timeline, ref);
 
 	WARN_ON(!list_empty(&timeline->fences));
+	WARN_ON(!list_empty(&timeline->events));
 
 	trace_kgsl_timeline_destroy(timeline->id);
 
@@ -142,6 +144,7 @@ static struct kgsl_timeline *kgsl_timeline_alloc(struct kgsl_device_private *dev
 	timeline->context = dma_fence_context_alloc(1);
 	timeline->id = id;
 	INIT_LIST_HEAD(&timeline->fences);
+	INIT_LIST_HEAD(&timeline->events);
 	timeline->value = initial;
 	timeline->dev_priv = dev_priv;
 
@@ -255,9 +258,32 @@ static void kgsl_timeline_add_fence(struct kgsl_timeline *timeline,
 	spin_unlock_irqrestore(&timeline->fence_lock, flags);
 }
 
+void kgsl_timeline_add_signal(struct kgsl_timeline_event *signal)
+{
+	struct kgsl_timeline *timeline = signal->timeline;
+	struct kgsl_timeline_event *event;
+	unsigned long flags;
+
+	spin_lock_irqsave(&timeline->lock, flags);
+
+	/* If we already signaled this seqno don't add it to the list */
+	if (timeline->value >= signal->seqno)
+		goto done;
+
+	/* Keep the list sorted by seqno */
+	list_for_each_entry_reverse(event, &timeline->events, node) {
+		if (event->seqno <= signal->seqno)
+			break;
+	}
+	list_add(&signal->node, &event->node);
+done:
+	spin_unlock_irqrestore(&timeline->lock, flags);
+}
+
 void kgsl_timeline_signal(struct kgsl_timeline *timeline, u64 seqno)
 {
 	struct kgsl_timeline_fence *fence, *tmp;
+	struct kgsl_timeline_event *event, *tmp_event;
 	struct list_head temp;
 
 	INIT_LIST_HEAD(&temp);
@@ -270,6 +296,14 @@ void kgsl_timeline_signal(struct kgsl_timeline *timeline, u64 seqno)
 	trace_kgsl_timeline_signal(timeline->id, seqno);
 
 	timeline->value = seqno;
+	list_for_each_entry_safe(event, tmp_event, &timeline->events, node) {
+		/* List is sorted by seqno */
+		if (event->seqno > seqno)
+			break;
+
+		/* Remove retired nodes */
+		list_del(&event->node);
+	}
 
 	spin_lock(&timeline->fence_lock);
 	list_for_each_entry_safe(fence, tmp, &timeline->fences, node)
@@ -414,6 +448,8 @@ long kgsl_ioctl_timeline_query(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_timeline_val *param = data;
 	struct kgsl_timeline *timeline;
+	struct kgsl_timeline_event *event;
+	u64 seqno;
 
 	if (param->padding)
 		return -EINVAL;
@@ -422,7 +458,24 @@ long kgsl_ioctl_timeline_query(struct kgsl_device_private *dev_priv,
 	if (!timeline)
 		return -ENODEV;
 
-	param->seqno = timeline->value;
+	/*
+	 * Start from the end of the list to find the last retired signal event
+	 * that was not yet processed. Leave the entry in the list until the
+	 * timeline signal actually advances the timeline's value. This ensures
+	 * subsequent query ioctls return a monotonically increasing seqno.
+	 */
+	spin_lock_irq(&timeline->lock);
+	seqno = timeline->value;
+	list_for_each_entry_reverse(event, &timeline->events, node) {
+		if (kgsl_check_timestamp(event->context->device,
+			event->context, event->timestamp)) {
+			seqno = event->seqno;
+			break;
+		}
+	}
+	spin_unlock_irq(&timeline->lock);
+
+	param->seqno = seqno;
 	kgsl_timeline_put(timeline);
 
 	return 0;

@@ -1131,6 +1131,7 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 	struct page **local = kvcalloc(npages, sizeof(*local), GFP_KERNEL);
 	u32 page_size, align;
 	u64 len = size;
+	bool memwq_flush_done = false;
 
 	if (!local)
 		return -ENOMEM;
@@ -1154,6 +1155,13 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 			continue;
 		else if (ret <= 0) {
 			int i;
+
+			/* if OOM, retry once after flushing lockless_workqueue */
+			if (ret == -ENOMEM && !memwq_flush_done) {
+				flush_workqueue(kgsl_driver.lockless_workqueue);
+				memwq_flush_done = true;
+				continue;
+			}
 
 			for (i = 0; i < count; ) {
 				int n = 1 << compound_order(local[i]);
