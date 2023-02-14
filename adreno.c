@@ -1271,6 +1271,13 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IOCOHERENT))
 		kgsl_mmu_set_feature(device, KGSL_MMU_IO_COHERENT);
 
+	/*
+	 * Support VBOs on hardware where HLOS has access to PRR registers
+	 * configuration.
+	 */
+	if (!adreno_is_a650(adreno_dev))
+		kgsl_mmu_set_feature(device, KGSL_MMU_SUPPORT_VBO);
+
 	if (adreno_preemption_enable)
 		adreno_dev->preempt_override = true;
 
