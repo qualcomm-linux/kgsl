@@ -2539,7 +2539,8 @@ int kgsl_iommu_probe(struct kgsl_device *device)
 	 * Only support VBOs on MMU500 hardware that supports the PRR
 	 * marker register to ignore writes to the zero page
 	 */
-	if (mmu->subtype == KGSL_IOMMU_SMMU_V500) {
+	if ((mmu->subtype == KGSL_IOMMU_SMMU_V500) &&
+			test_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features)) {
 		/*
 		 * We need to allocate a page because we need a known physical
 		 * address to program in the PRR register but the hardware
@@ -2548,9 +2549,9 @@ int kgsl_iommu_probe(struct kgsl_device *device)
 		 */
 		kgsl_vbo_zero_page = alloc_page(GFP_KERNEL | __GFP_ZERO |
 			__GFP_NORETRY | __GFP_HIGHMEM);
-		if (kgsl_vbo_zero_page)
-			set_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features);
 	}
+	if (!kgsl_vbo_zero_page)
+		clear_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features);
 
 	return 0;
 
