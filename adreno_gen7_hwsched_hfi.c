@@ -2553,6 +2553,9 @@ int gen7_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_dr
 
 	cmd->ctxt_id = drawobj->context->id;
 	cmd->flags = HFI_CTXT_FLAG_NOTIFY;
+	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME)
+		cmd->flags |= CMDBATCH_EOF;
+
 	cmd->ts = drawobj->timestamp;
 
 	if (test_bit(CMDOBJ_SKIP, &cmdobj->priv))

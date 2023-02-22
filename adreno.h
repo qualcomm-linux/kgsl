@@ -712,6 +712,8 @@ struct adreno_device {
 	bool raytracing_enabled;
 	/* @feature_fuse: feature fuse value read from HW */
 	u32 feature_fuse;
+	/** @gmu_ab: Track if GMU supports ab vote */
+	bool gmu_ab;
 };
 
 /**
@@ -747,6 +749,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_CACHE_FLUSH_TS_SUSPENDED = 13,
 	/** @ADRENO_DEVICE_DMS: Set if DMS is enabled */
 	ADRENO_DEVICE_DMS = 14,
+	/** @ADRENO_DEVICE_GMU_AB: Set if AB vote via GMU is enabled */
+	ADRENO_DEVICE_GMU_AB = 15,
 };
 
 /**
