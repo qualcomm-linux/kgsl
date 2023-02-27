@@ -331,12 +331,27 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 			on ? gen7_core->ao_hwcg[i].val : 0);
 
 	if (!gen7_core->hwcg) {
-		kgsl_regread(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, &value);
+		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 1);
+		kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, on ? 1 : 0);
 
-		if (value != on)
-			kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD,
-				      on ? 1 : 0);
+		if (on) {
+			u32 retry = 3;
 
+			kgsl_regwrite(device, GEN7_RBBM_CGC_P2S_TRIG_CMD, 1);
+			/* Poll for the TXDONE:BIT(0) status */
+			do {
+				/* Wait for small amount of time for TXDONE status*/
+				udelay(1);
+				kgsl_regread(device, GEN7_RBBM_CGC_P2S_STATUS, &value);
+			} while (!(value & BIT(0)) && --retry);
+
+			if (!(value & BIT(0))) {
+				dev_err(device->dev, "RBBM_CGC_P2S_STATUS:TXDONE Poll failed\n");
+				kgsl_device_snapshot(device, NULL, NULL, false);
+				return;
+			}
+			kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 0);
+		}
 		return;
 	}
 
@@ -528,6 +543,13 @@ int gen7_start(struct adreno_device *adreno_dev)
 	}
 
 	kgsl_regwrite(device, GEN7_UCHE_CACHE_WAYS, 0x800000);
+
+	/*
+	 * Disable LPAC hard sync event to fix lock up issue when BR/BV event
+	 * fifo is full.
+	 */
+	if (adreno_dev->lpac_enabled)
+		kgsl_regrmw(device, GEN7_UCHE_DBG_CNTL_1, BIT(30), BIT(30));
 
 	kgsl_regwrite(device, GEN7_UCHE_CMDQ_CONFIG,
 			FIELD_PREP(GENMASK(19, 16), 6) |

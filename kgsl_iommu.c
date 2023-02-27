@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitfield.h>
@@ -83,6 +83,9 @@ static struct kgsl_iommu_pt *to_iommu_pt(struct kgsl_pagetable *pagetable)
 
 static u32 get_llcc_flags(struct kgsl_mmu *mmu)
 {
+	if (!test_bit(KGSL_MMU_LLCC_ENABLE, &mmu->features))
+		return 0;
+
 	if (mmu->subtype == KGSL_IOMMU_SMMU_V500)
 		return IOMMU_USE_LLC_NWA;
 	else

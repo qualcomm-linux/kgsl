@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_H
 #define __KGSL_H
@@ -232,10 +232,8 @@ struct kgsl_memdesc_ops {
 #define KGSL_MEMDESC_RECLAIMED BIT(11)
 /* Skip reclaim of the memdesc pages */
 #define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
-/* The memdesc is mapped as iomem */
-#define KGSL_MEMDESC_IOMEM BIT(13)
 /* The memdesc is hypassigned to HLOS*/
-#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(14)
+#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(13)
 
 /**
  * struct kgsl_memdesc - GPU memory object descriptor

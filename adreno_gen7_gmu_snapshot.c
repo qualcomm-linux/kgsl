@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "gen7_reg.h"
@@ -37,7 +37,11 @@ size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
 	mem_hdr->gmuaddr = desc->memdesc->gmuaddr;
 	mem_hdr->gpuaddr = 0;
 
-	memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
+	/* The hw fence queues are mapped as iomem in the kernel */
+	if (desc->type == SNAPSHOT_GMU_MEM_HW_FENCE)
+		memcpy_fromio(data, desc->memdesc->hostptr, desc->memdesc->size);
+	else
+		memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
 
 	return desc->memdesc->size + sizeof(*mem_hdr);
 }
