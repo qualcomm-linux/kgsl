@@ -365,14 +365,9 @@ static int drawqueue_retire_timelineobj(struct kgsl_drawobj *drawobj,
 		struct adreno_context *drawctxt)
 {
 	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
-	int i;
-
-	for (i = 0; i < timelineobj->count; i++)
-		kgsl_timeline_signal(timelineobj->timelines[i].timeline,
-			timelineobj->timelines[i].seqno);
 
 	_pop_drawobj(drawctxt);
-	_retire_timestamp(drawobj);
+	kgsl_drawobj_timelineobj_retire(timelineobj);
 
 	return 0;
 }
@@ -1159,9 +1154,8 @@ static void _queue_drawobj(struct adreno_context *drawctxt,
 	trace_adreno_cmdbatch_queued(drawobj, drawctxt->queued);
 }
 
-static int drawctxt_queue_auxobj(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt, struct kgsl_drawobj *drawobj,
-		u32 *timestamp, u32 user_ts)
+static int drawctxt_queue_bindobj(struct adreno_context *drawctxt,
+	struct kgsl_drawobj *drawobj, u32 *timestamp, u32 user_ts)
 {
 	int ret;
 
@@ -1173,6 +1167,19 @@ static int drawctxt_queue_auxobj(struct adreno_device *adreno_dev,
 	_queue_drawobj(drawctxt, drawobj);
 
 	return 0;
+}
+
+static void drawctxt_queue_timelineobj(struct adreno_context *drawctxt,
+	struct kgsl_drawobj *drawobj)
+{
+	/*
+	 * This drawobj is not submitted to the GPU so use a timestamp of 0.
+	 * Update the timestamp through a subsequent marker to keep userspace
+	 * happy.
+	 */
+	drawobj->timestamp = 0;
+
+	_queue_drawobj(drawctxt, drawobj);
 }
 
 static int drawctxt_queue_markerobj(struct adreno_device *adreno_dev,
@@ -1359,14 +1366,16 @@ static int adreno_dispatcher_queue_cmds(struct kgsl_device_private *dev_priv,
 			drawctxt_queue_syncobj(drawctxt, drawobj[i], timestamp);
 			break;
 		case BINDOBJ_TYPE:
-		case TIMELINEOBJ_TYPE:
-			ret = drawctxt_queue_auxobj(adreno_dev,
-				drawctxt, drawobj[i], timestamp, user_ts);
+			ret = drawctxt_queue_bindobj(drawctxt, drawobj[i],
+				timestamp, user_ts);
 			if (ret) {
 				spin_unlock(&drawctxt->lock);
 				kmem_cache_free(jobs_cache, job);
 				return ret;
 			}
+			break;
+		case TIMELINEOBJ_TYPE:
+			drawctxt_queue_timelineobj(drawctxt, drawobj[i]);
 			break;
 		default:
 			spin_unlock(&drawctxt->lock);

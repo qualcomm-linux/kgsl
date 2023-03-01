@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
+
+#include "kgsl_util.h"
 
 #define HW_FENCE_QUEUE_SIZE		SZ_4K
 #define HFI_QUEUE_SIZE			SZ_4K /* bytes, must be base 4dw */
@@ -75,7 +77,7 @@
 #define HFI_FEATURE_HW_FENCE	25
 #define HFI_FEATURE_PERF_NORETAIN	26
 #define HFI_FEATURE_DMS		27
-
+#define HFI_FEATURE_AQE		29
 
 /* A6xx uses a different value for KPROF */
 #define HFI_FEATURE_A6XX_KPROF	14
@@ -101,7 +103,8 @@
 #define HFI_VALUE_LOG_STREAM_ENABLE	119
 #define HFI_VALUE_PREEMPT_COUNT		120
 #define HFI_VALUE_CONTEXT_QUEUE		121
-
+#define HFI_VALUE_GMU_AB_VOTE		122
+#define HFI_VALUE_RB_GPU_QOS		123
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -125,7 +128,9 @@
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_ANY		0
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_RB		1
 #define HFI_CTXT_FLAG_PREEMPT_STYLE_FG		2
-#define CMDBATCH_INDIRECT			0x00000200
+
+/* Default sampling interval in units of 50 us */
+#define HFI_FEATURE_GMU_STATS_INTERVAL		4
 
 enum hfi_mem_kind {
 	/** @HFI_MEMKIND_GENERIC: Used for requesting generic memory */
@@ -216,6 +221,11 @@ enum hfi_mem_kind {
 	HFI_MEMKIND_HW_FENCE,
 	/** @HFI_MEMKIND_PREEMPT_SCRATCH: Used for Preemption scratch memory */
 	HFI_MEMKIND_PREEMPT_SCRATCH,
+	/**
+	 * @HFI_MEMKIND_AQE_BUFFER: Sandbox memory used by AQE to switch
+	 * between LPAC and GC
+	 */
+	HFI_MEMKIND_AQE_BUFFER,
 	HFI_MEMKIND_MAX,
 };
 
@@ -245,6 +255,7 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_MEMSTORE] = "GMU MEMSTORE",
 	[HFI_MEMKIND_HW_FENCE] = "GMU HW FENCE",
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
+	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -599,10 +610,11 @@ struct hfi_mem_alloc_desc {
 	u32 gmu_addr;
 	u32 size; /* Bytes */
 	/**
-	 * @va_align: Alignment requirement of the GMU VA specified as a power of two. For example,
-	 * a decimal value of 20 = (1 << 20) = 1 MB alignemnt
+	 * @align: bits[0:7] specify alignment requirement of the GMU VA specified as a power of
+	 * two. bits[8:15] specify alignment requirement for the size of the GMU mapping. For
+	 * example, a decimal value of 20 = (1 << 20) = 1 MB alignment
 	 */
-	u32 va_align;
+	u32 align;
 } __packed;
 
 struct hfi_mem_alloc_entry {
@@ -679,7 +691,8 @@ struct hfi_gmu_cntr_register_reply_cmd {
 	u32 req_hdr;
 	u32 group_id;
 	u32 countable;
-	u64 counter_addr;
+	u32 cntr_lo;
+	u32 cntr_hi;
 } __packed;
 
 /* F2H */
@@ -738,7 +751,9 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_ERROR		2
 #define CMDBATCH_SKIP		3
 
-#define CMDBATCH_PROFILING  BIT(4)
+#define CMDBATCH_PROFILING		BIT(4)
+#define CMDBATCH_EOF			BIT(8)
+#define CMDBATCH_INDIRECT		BIT(9)
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
 
@@ -933,6 +948,10 @@ struct payload_section {
 #define KEY_CP_LPAC_PROTECTED_ERROR 8
 #define KEY_CP_LPAC_HW_FAULT 9
 #define KEY_SWFUSE_VIOLATION_FAULT 10
+#define KEY_AQE0_OPCODE_ERROR 11
+#define KEY_AQE0_HW_FAULT 12
+#define KEY_AQE1_OPCODE_ERROR 13
+#define KEY_AQE1_HW_FAULT 14
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -994,6 +1013,16 @@ struct payload_section {
 #define GMU_GPU_LPAC_SW_HANG 620
 /* Fault due to software fuse violation interrupt */
 #define GMU_GPU_SW_FUSE_VIOLATION 621
+/* AQE related error codes */
+#define GMU_GPU_AQE0_OPCODE_ERRROR 622
+#define GMU_GPU_AQE0_UCODE_ERROR 623
+#define GMU_GPU_AQE0_HW_FAULT_ERROR 624
+#define GMU_GPU_AQE0_ILLEGAL_INST_ERROR 625
+#define GMU_GPU_AQE1_OPCODE_ERRROR 626
+#define GMU_GPU_AQE1_UCODE_ERROR 627
+#define GMU_GPU_AQE1_HW_FAULT_ERROR 628
+#define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
+
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 
@@ -1066,17 +1095,35 @@ static inline void hfi_get_mem_alloc_desc(void *rcvd, struct hfi_mem_alloc_desc 
 }
 
 /**
- * hfi_get_gmu_va_alignment - Get the alignment(in bytes) for a GMU VA
- * va_align: Alignment specified as a power of two(2^n)
+ * hfi_get_gmu_va_alignment - Get the alignment (in bytes) for a GMU VA
+ * align: Alignment specified as a power of two (2^n) in bits[0:7]
  *
- * This function derives the GMU VA alignment in bytes from the passed in value, which is specified
- * in terms of power of two(2^n). For example, va_align = 20 means (1 << 20) = 1MB alignment. The
- * minimum alignment(in bytes) is SZ_4K i.e. anything less than(or equal to) a va_align value of
- * ilog2(SZ_4K) will default to SZ_4K alignment.
+ * This function derives the GMU VA alignment in bytes from bits[0:7] in the passed in value, which
+ * is specified in terms of power of two (2^n). For example, va_align = 20 means (1 << 20) = 1MB
+ * alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less than (or equal to) a
+ * va_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
  */
-static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
+static inline u32 hfi_get_gmu_va_alignment(u32 align)
 {
+	u32 va_align = FIELD_GET(GENMASK(7, 0), align);
+
 	return (va_align > ilog2(SZ_4K)) ? (1 << va_align) : SZ_4K;
+}
+
+/**
+ * hfi_get_gmu_sz_alignment - Get the alignment (in bytes) for GMU mapping size
+ * align: Alignment specified as a power of two (2^n) in bits[8:15]
+ *
+ * This function derives the GMU VA size alignment in bytes from bits[8:15] in the passed in value,
+ * which is specified in terms of power of two (2^n). For example, sz_align = 20 means
+ * (1 << 20) = 1MB alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less
+ * than (or equal to) a sz_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
+ */
+static inline u32 hfi_get_gmu_sz_alignment(u32 align)
+{
+	u32 sz_align = FIELD_GET(GENMASK(15, 8), align);
+
+	return (sz_align > ilog2(SZ_4K)) ? (1 << sz_align) : SZ_4K;
 }
 
 /**
@@ -1095,4 +1142,41 @@ static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
 int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	struct device *dev, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
+
+/**
+ * hfi_get_minidump_string - Get the va-minidump string from entry
+ * mem_kind: mem_kind type
+ * hfi_minidump_str: Pointer to the output string
+ * size: Max size of the hfi_minidump_str
+ * rb_id: Pointer to the rb_id count
+ *
+ * This function return 0 on valid mem_kind and copies the VA-MINIDUMP string to
+ * hfi_minidump_str else return error
+ */
+static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
+					   size_t size, u32 *rb_id)
+{
+	/* Extend this if the VA mindump need more hfi alloc entries */
+	switch (mem_kind) {
+	case HFI_MEMKIND_RB:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_RB_ENTRY"_%d", (*rb_id)++);
+		break;
+	case HFI_MEMKIND_SCRATCH:
+		snprintf(hfi_minidump_str, size, KGSL_SCRATCH_ENTRY);
+		break;
+	case HFI_MEMKIND_PROFILE:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_KERNEL_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_USER_PROFILE_IBS:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_USER_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_CMD_BUFFER:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_CMD_BUFFER_ENTRY);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
 #endif

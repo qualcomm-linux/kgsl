@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_A6XX_GMU_H
 #define __ADRENO_A6XX_GMU_H
@@ -105,6 +105,14 @@ struct a6xx_gmu_device {
 	void __iomem *pdc_cfg_base;
 	/** @pdc_seq_base: Base address of PDC seq registers */
 	void __iomem *pdc_seq_base;
+	/** @stats_enable: GMU stats feature enable */
+	bool stats_enable;
+	/** @stats_mask: GMU performance countables to enable */
+	u32 stats_mask;
+	/** @stats_interval: GMU performance counters sampling interval */
+	u32 stats_interval;
+	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
+	struct kobject stats_kobj;
 };
 
 /* Helper function to get to a6xx gmu device from adreno device */

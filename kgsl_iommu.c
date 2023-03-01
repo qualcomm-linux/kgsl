@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitfield.h>
@@ -83,6 +83,9 @@ static struct kgsl_iommu_pt *to_iommu_pt(struct kgsl_pagetable *pagetable)
 
 static u32 get_llcc_flags(struct kgsl_mmu *mmu)
 {
+	if (!test_bit(KGSL_MMU_LLCC_ENABLE, &mmu->features))
+		return 0;
+
 	if (mmu->subtype == KGSL_IOMMU_SMMU_V500)
 		return IOMMU_USE_LLC_NWA;
 	else
@@ -2015,13 +2018,36 @@ out:
 	return ret;
 }
 
+static int get_gpuaddr(struct kgsl_pagetable *pagetable,
+		struct kgsl_memdesc *memdesc, u64 start, u64 end,
+		u64 size, u64 align)
+{
+	u64 addr;
+	int ret;
+
+	spin_lock(&pagetable->lock);
+	addr = _get_unmapped_area(pagetable, start, end, size, align);
+	if (addr == (u64) -ENOMEM) {
+		spin_unlock(&pagetable->lock);
+		return -ENOMEM;
+	}
+
+	ret = _insert_gpuaddr(pagetable, addr, size);
+	spin_unlock(&pagetable->lock);
+
+	if (ret == 0) {
+		memdesc->gpuaddr = addr;
+		memdesc->pagetable = pagetable;
+	}
+
+	return ret;
+}
 
 static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 		struct kgsl_memdesc *memdesc)
 {
 	int ret = 0;
-	uint64_t addr, start, end, size;
-	unsigned int align;
+	u64 start, end, size, align;
 
 	if (WARN_ON(kgsl_memdesc_use_cpu_map(memdesc)))
 		return -EINVAL;
@@ -2043,28 +2069,13 @@ static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 		end = pagetable->va_end;
 	}
 
-	spin_lock(&pagetable->lock);
-
-	addr = _get_unmapped_area(pagetable, start, end, size, align);
-
-	if (addr == (uint64_t) -ENOMEM) {
-		ret = -ENOMEM;
-		goto out;
+	ret = get_gpuaddr(pagetable, memdesc, start, end, size, align);
+	/* if OOM, retry once after flushing lockless_workqueue */
+	if (ret == -ENOMEM) {
+		flush_workqueue(kgsl_driver.lockless_workqueue);
+		ret = get_gpuaddr(pagetable, memdesc, start, end, size, align);
 	}
 
-	/*
-	 * This path is only called in a non-SVM path with locks so we can be
-	 * sure we aren't racing with anybody so we don't need to worry about
-	 * taking the lock
-	 */
-	ret = _insert_gpuaddr(pagetable, addr, size);
-	if (ret == 0) {
-		memdesc->gpuaddr = addr;
-		memdesc->pagetable = pagetable;
-	}
-
-out:
-	spin_unlock(&pagetable->lock);
 	return ret;
 }
 

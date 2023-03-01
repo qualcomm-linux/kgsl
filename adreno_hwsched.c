@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
@@ -205,15 +205,9 @@ static int _retire_timelineobj(struct kgsl_drawobj *drawobj,
 		struct adreno_context *drawctxt)
 {
 	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
-	int i;
-
-	for (i = 0; i < timelineobj->count; i++)
-		kgsl_timeline_signal(timelineobj->timelines[i].timeline,
-			timelineobj->timelines[i].seqno);
 
 	_pop_drawobj(drawctxt);
-	_retire_timestamp(drawobj);
-
+	kgsl_drawobj_timelineobj_retire(timelineobj);
 	return 0;
 }
 
@@ -999,9 +993,8 @@ static int _queue_markerobj(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static int _queue_auxobj(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt, struct kgsl_drawobj *drawobj,
-		u32 *timestamp, u32 user_ts)
+static int _queue_bindobj(struct adreno_context *drawctxt,
+		struct kgsl_drawobj *drawobj, u32 *timestamp, u32 user_ts)
 {
 	int ret;
 
@@ -1013,6 +1006,19 @@ static int _queue_auxobj(struct adreno_device *adreno_dev,
 	_queue_drawobj(drawctxt, drawobj);
 
 	return 0;
+}
+
+static void _queue_timelineobj(struct adreno_context *drawctxt,
+		struct kgsl_drawobj *drawobj)
+{
+	/*
+	 * This drawobj is not submitted to the GPU so use a timestamp of 0.
+	 * Update the timestamp through a subsequent marker to keep userspace
+	 * happy.
+	 */
+	drawobj->timestamp = 0;
+
+	_queue_drawobj(drawctxt, drawobj);
 }
 
 static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
@@ -1081,6 +1087,23 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 
 	user_ts = *timestamp;
 
+	/*
+	 * If there is only one drawobj in the array and it is of
+	 * type SYNCOBJ_TYPE, skip comparing user_ts as it can be 0
+	 */
+	if (!(count == 1 && drawobj[0]->type == SYNCOBJ_TYPE) &&
+		(drawctxt->base.flags & KGSL_CONTEXT_USER_GENERATED_TS)) {
+		/*
+		 * User specified timestamps need to be greater than the last
+		 * issued timestamp in the context
+		 */
+		if (timestamp_cmp(drawctxt->timestamp, user_ts) >= 0) {
+			spin_unlock(&drawctxt->lock);
+			kmem_cache_free(jobs_cache, job);
+			return -ERANGE;
+		}
+	}
+
 	for (i = 0; i < count; i++) {
 
 		switch (drawobj[i]->type) {
@@ -1113,14 +1136,16 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 						timestamp);
 			break;
 		case BINDOBJ_TYPE:
-		case TIMELINEOBJ_TYPE:
-			ret = _queue_auxobj(adreno_dev, drawctxt, drawobj[i],
-				timestamp, user_ts);
+			ret = _queue_bindobj(drawctxt, drawobj[i], timestamp,
+						user_ts);
 			if (ret) {
 				spin_unlock(&drawctxt->lock);
 				kmem_cache_free(jobs_cache, job);
 				return ret;
 			}
+			break;
+		case TIMELINEOBJ_TYPE:
+			_queue_timelineobj(drawctxt, drawobj[i]);
 			break;
 		default:
 			spin_unlock(&drawctxt->lock);
@@ -1815,11 +1840,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj) {
 		force_retire_timestamp(device, drawobj);
-		if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context && ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context))
+			context_is_throttled(device, context)))
 			adreno_drawctxt_set_guilty(device, context);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -1830,11 +1855,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj_lpac) {
 		force_retire_timestamp(device, drawobj_lpac);
-		if ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context_lpac && ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context_lpac))
+			context_is_throttled(device, context_lpac)))
 			adreno_drawctxt_set_guilty(device, context_lpac);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -2090,7 +2115,9 @@ static void hwsched_lsr_check(struct work_struct *work)
 {
 	struct adreno_hwsched *hwsched = container_of(work,
 		struct adreno_hwsched, lsr_check_ws);
-	struct kgsl_device *device = kgsl_get_device(0);
+	struct adreno_device *adreno_dev = container_of(hwsched,
+		struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	mutex_lock(&device->mutex);
 	kgsl_pwrscale_update_stats(device);

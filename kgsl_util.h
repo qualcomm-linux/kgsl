@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_UTIL_H_
 #define _KGSL_UTIL_H_
+
+#include <linux/version.h>
 
 #define KGSL_DRIVER "kgsl_driver"
 #define KGSL_ADRENO_DEVICE "kgsl_adreno_device"
@@ -18,6 +20,39 @@
 #define KGSL_GMU_LOG_ENTRY "kgsl_gmu_log"
 #define KGSL_HFIMEM_ENTRY "kgsl_hfi_mem"
 #define KGSL_GMU_DUMPMEM_ENTRY "kgsl_gmu_dump_mem"
+#define KGSL_GMU_RB_ENTRY "kgsl_gmu_rb"
+#define KGSL_GMU_KERNEL_PROF_ENTRY "kgsl_gmu_kernel_profiling"
+#define KGSL_GMU_USER_PROF_ENTRY "kgsl_gmu_user_profiling"
+#define KGSL_GMU_CMD_BUFFER_ENTRY "kgsl_gmu_cmd_buffer"
+#define KGSL_HFI_BIG_IB_ENTRY "kgsl_hfi_big_ib"
+#define KGSL_HFI_BIG_IB_REC_ENTRY "kgsl_hfi_big_ib_rec"
+#define KGSL_ADRENO_CTX_ENTRY "kgsl_adreno_ctx"
+#define KGSL_PROC_PRIV_ENTRY "kgsl_proc_priv"
+#define KGSL_PGTABLE_ENTRY "kgsl_pgtable"
+
+#define MAX_VA_MINIDUMP_STR_LEN 32
+
+
+/**
+ * Request TZ to program set of access controlled registers that KGSL needs
+ * irrespective of any features
+ */
+#define GPU_ALWAYS_EN_REQ BIT(0)
+/**
+ * Request TZ to program BCL id to access controlled register when BCL is
+ * enabled
+ */
+#define GPU_BCL_EN_REQ BIT(1)
+/**
+ * Request TZ to program set of access controlled register for CLX feature
+ * when enabled
+ */
+#define GPU_CLX_EN_REQ BIT(2)
+/**
+ * Request TZ to program tsense ids to access controlled registers for reading
+ * gpu temperature sensors
+ */
+#define GPU_TSENSE_EN_REQ BIT(3)
 
 struct regulator;
 struct clk_bulk_data;
@@ -115,6 +150,23 @@ int kgsl_clk_set_rate(struct clk_bulk_data *clks, int num_clks,
 		const char *id, unsigned long rate);
 
 /**
+ * kgsl_scm_gpu_init_regs - Load secure registers through tz
+ * @dev: Pointer to the GPU platform device
+ * @gpu_req: Bit mask of requests to enable
+ *
+ * Return: 0 on success or negative on failure and EOPNOTSUPP if scm call
+ * not supported
+ */
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req);
+#else
+static inline int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
+/**
  * kgsl_zap_shader_load - Load a zap shader
  * @dev: Pointer to the struct device for the GPU platform device
  * @name: Basename of the zap shader to load (without the postfix)
@@ -169,6 +221,12 @@ int kgsl_add_va_to_minidump(struct device *dev, const char *name, void *ptr,
  * @device: Pointer to kgsl device
  */
 void kgsl_qcom_va_md_register(struct kgsl_device *device);
+
+/**
+ * kgsl_qcom_va_md_unregister - Unregister driver with va-minidump
+ * @device: Pointer to kgsl device
+ */
+void kgsl_qcom_va_md_unregister(struct kgsl_device *device);
 #else
 static inline void kgsl_add_to_minidump(char *name, u64 virt_addr, u64 phy_addr, size_t size)
 {
@@ -185,6 +243,10 @@ static inline int kgsl_add_va_to_minidump(struct device *dev, const char *name, 
 }
 
 static inline void kgsl_qcom_va_md_register(struct kgsl_device *device)
+{
+}
+
+static inline void kgsl_qcom_va_md_unregister(struct kgsl_device *device)
 {
 }
 #endif
