@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/utsname.h>
@@ -1065,7 +1065,7 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 	 * figure how often this really happens.
 	 */
 
-	if (-ENOENT == find_object(ib1base, process)) {
+	if (ib1base && (-ENOENT == find_object(ib1base, process))) {
 		struct kgsl_mem_entry *entry;
 		u64 ibsize;
 
@@ -1082,8 +1082,8 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 			kgsl_snapshot_push_object(device, process,
 				ib1base, ibsize >> 2);
 			dev_err(device->dev,
-				"CP_IB1_BASE is not found in the ringbuffer. Dumping %llx dwords of the buffer\n",
-				ibsize >> 2);
+				"CP_IB1_BASE %16llx is not found in the ringbuffer. Dumping %llx dwords of the buffer\n",
+				ib1base, ibsize >> 2);
 		}
 	}
 
@@ -1095,7 +1095,7 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 	 * correct size.
 	 */
 
-	if (-ENOENT == find_object(ib2base, process))
+	if (ib2base && (-ENOENT == find_object(ib2base, process)))
 		kgsl_snapshot_push_object(device, process, ib2base, ib2size);
 
 }

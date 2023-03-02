@@ -942,13 +942,13 @@ static int get_attrs(u32 flags)
 }
 
 static int gmu_import_buffer(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_entry *entry, u32 flags)
+	struct hfi_mem_alloc_entry *entry)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	u32 vma_id = (flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
 	struct hfi_mem_alloc_desc *desc = &entry->desc;
+	u32 vma_id = (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
 
-	return gen7_gmu_import_buffer(gmu, vma_id, entry->md, desc->size, get_attrs(flags));
+	return gen7_gmu_import_buffer(gmu, vma_id, entry->md, get_attrs(desc->flags), desc->align);
 }
 
 static struct hfi_mem_alloc_entry *lookup_mem_alloc_table(
@@ -1020,13 +1020,13 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL,
 					"qcom,ipc-core", get_attrs(desc->flags),
-					desc->va_align);
+					desc->align);
 		else
 			entry->md = gen7_reserve_gmu_kernel_block(gmu, 0,
 					desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					desc->va_align);
+					desc->align);
 
 		if (IS_ERR(entry->md)) {
 			int ret = PTR_ERR(entry->md);
@@ -1073,7 +1073,7 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	  * If gmu mapping fails, then we have to live with
 	  * leaking the gpu global buffer allocated above.
 	  */
-	ret = gmu_import_buffer(adreno_dev, entry, desc->flags);
+	ret = gmu_import_buffer(adreno_dev, entry);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
 			"gpuaddr: 0x%llx size: %lld bytes lost\n",
@@ -1832,6 +1832,9 @@ static void gen7_add_profile_events(struct adreno_device *adreno_dev,
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
+	if (!time)
+		return;
+
 	/*
 	 * Here we are attempting to create a mapping between the
 	 * GPU time domain (alwayson counter) and the CPU time domain
@@ -1985,7 +1988,7 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 	struct kgsl_context *context)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct hfi_context_pointers_cmd cmd;
+	struct hfi_context_pointers_cmd cmd = {0};
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 	int ret;
 
@@ -1999,8 +2002,6 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 	if (context->user_ctxt_record)
 		cmd.user_ctxt_record_addr =
 			context->user_ctxt_record->memdesc.gpuaddr;
-	else
-		cmd.user_ctxt_record_addr = 0;
 
 	if (adreno_hwsched_context_queue_enabled(adreno_dev))
 		cmd.gmu_context_queue_addr = drawctxt->gmu_context_queue.gmuaddr;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <uapi/linux/sched/types.h>
@@ -1857,6 +1857,36 @@ static long kgsl_get_gpu_va64_size(struct kgsl_device_private *dev_priv,
 	return 0;
 }
 
+static long kgsl_get_gpu_secure_va_size(struct kgsl_device_private *dev_priv,
+		struct kgsl_device_getproperty *param)
+{
+	u64 size = KGSL_IOMMU_SECURE_SIZE(&dev_priv->device->mmu);
+
+	if (param->sizebytes != sizeof(size))
+		return -EINVAL;
+
+	if (copy_to_user(param->value, &size, sizeof(size)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static long kgsl_get_gpu_secure_va_inuse(struct kgsl_device_private *dev_priv,
+		struct kgsl_device_getproperty *param)
+{
+	u64 val;
+
+	if (param->sizebytes != sizeof(val))
+		return -EINVAL;
+
+	val = atomic_long_read(&kgsl_driver.stats.secure);
+
+	if (copy_to_user(param->value, &val, sizeof(val)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static const struct {
 	int type;
 	long (*func)(struct kgsl_device_private *dev_priv,
@@ -1869,6 +1899,8 @@ static const struct {
 	{ KGSL_PROP_QUERY_CAPABILITIES, kgsl_prop_query_capabilities },
 	{ KGSL_PROP_CONTEXT_PROPERTY, kgsl_get_ctxt_properties },
 	{ KGSL_PROP_GPU_VA64_SIZE, kgsl_get_gpu_va64_size },
+	{ KGSL_PROP_GPU_SECURE_VA_SIZE, kgsl_get_gpu_secure_va_size },
+	{ KGSL_PROP_GPU_SECURE_VA_INUSE, kgsl_get_gpu_secure_va_inuse },
 };
 
 /*call all ioctl sub functions with driver locked*/

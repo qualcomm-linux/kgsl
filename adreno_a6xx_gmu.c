@@ -1565,12 +1565,13 @@ void a6xx_gmu_register_config(struct adreno_device *adreno_dev)
 }
 
 struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
+	u32 aligned_size = ALIGN(size, hfi_get_gmu_sz_alignment(align));
 
 	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
 		return ERR_PTR(-ENOMEM);
@@ -1584,7 +1585,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 	}
 
 	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(va_align));
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
@@ -1599,7 +1600,8 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 
 	md->gmuaddr = addr;
 
-	vma->next_va = md->gmuaddr + md->size;
+	/* Take into account the size alignment when reserving the GMU VA */
+	vma->next_va = md->gmuaddr + aligned_size;
 
 	gmu->global_entries++;
 
@@ -1607,12 +1609,13 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 }
 
 struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
+	u32 aligned_size = ALIGN(size, hfi_get_gmu_sz_alignment(align));
 
 	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
 		return ERR_PTR(-ENOMEM);
@@ -1624,12 +1627,12 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 		return ERR_PTR(ret);
 
 	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(va_align));
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
-	if ((vma->next_va + md->size) > (vma->start + vma->size)) {
+	if ((vma->next_va + aligned_size) > (vma->start + vma->size)) {
 		dev_err(&gmu->pdev->dev,
 			"GMU mapping too big. available: %d required: %d\n",
-			vma->next_va - vma->start, md->size);
+			vma->next_va - vma->start, aligned_size);
 			md =  ERR_PTR(-ENOMEM);
 			goto done;
 	}
@@ -1645,7 +1648,8 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 	}
 
 	md->gmuaddr = addr;
-	vma->next_va = md->gmuaddr + md->size;
+	/* Take into account the size alignment when reserving the GMU VA */
+	vma->next_va = md->gmuaddr + aligned_size;
 	gmu->global_entries++;
 done:
 	sg_free_table(md->sgt);

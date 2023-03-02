@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -356,6 +356,8 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_IS_FASTBLEND_ENABLED		0x2E
 #define KGSL_PROP_UCHE_TRAP_BASE	0x2F
 #define KGSL_PROP_IS_AQE_ENABLED	0x30
+#define KGSL_PROP_GPU_SECURE_VA_SIZE	0x31
+#define KGSL_PROP_GPU_SECURE_VA_INUSE	0x32
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.

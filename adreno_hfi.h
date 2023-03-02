@@ -6,6 +6,8 @@
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
 
+#include "kgsl_util.h"
+
 #define HW_FENCE_QUEUE_SIZE		SZ_4K
 #define HFI_QUEUE_SIZE			SZ_4K /* bytes, must be base 4dw */
 #define MAX_RCVD_PAYLOAD_SIZE		16 /* dwords */
@@ -608,10 +610,11 @@ struct hfi_mem_alloc_desc {
 	u32 gmu_addr;
 	u32 size; /* Bytes */
 	/**
-	 * @va_align: Alignment requirement of the GMU VA specified as a power of two. For example,
-	 * a decimal value of 20 = (1 << 20) = 1 MB alignemnt
+	 * @align: bits[0:7] specify alignment requirement of the GMU VA specified as a power of
+	 * two. bits[8:15] specify alignment requirement for the size of the GMU mapping. For
+	 * example, a decimal value of 20 = (1 << 20) = 1 MB alignment
 	 */
-	u32 va_align;
+	u32 align;
 } __packed;
 
 struct hfi_mem_alloc_entry {
@@ -1092,17 +1095,35 @@ static inline void hfi_get_mem_alloc_desc(void *rcvd, struct hfi_mem_alloc_desc 
 }
 
 /**
- * hfi_get_gmu_va_alignment - Get the alignment(in bytes) for a GMU VA
- * va_align: Alignment specified as a power of two(2^n)
+ * hfi_get_gmu_va_alignment - Get the alignment (in bytes) for a GMU VA
+ * align: Alignment specified as a power of two (2^n) in bits[0:7]
  *
- * This function derives the GMU VA alignment in bytes from the passed in value, which is specified
- * in terms of power of two(2^n). For example, va_align = 20 means (1 << 20) = 1MB alignment. The
- * minimum alignment(in bytes) is SZ_4K i.e. anything less than(or equal to) a va_align value of
- * ilog2(SZ_4K) will default to SZ_4K alignment.
+ * This function derives the GMU VA alignment in bytes from bits[0:7] in the passed in value, which
+ * is specified in terms of power of two (2^n). For example, va_align = 20 means (1 << 20) = 1MB
+ * alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less than (or equal to) a
+ * va_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
  */
-static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
+static inline u32 hfi_get_gmu_va_alignment(u32 align)
 {
+	u32 va_align = FIELD_GET(GENMASK(7, 0), align);
+
 	return (va_align > ilog2(SZ_4K)) ? (1 << va_align) : SZ_4K;
+}
+
+/**
+ * hfi_get_gmu_sz_alignment - Get the alignment (in bytes) for GMU mapping size
+ * align: Alignment specified as a power of two (2^n) in bits[8:15]
+ *
+ * This function derives the GMU VA size alignment in bytes from bits[8:15] in the passed in value,
+ * which is specified in terms of power of two (2^n). For example, sz_align = 20 means
+ * (1 << 20) = 1MB alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less
+ * than (or equal to) a sz_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
+ */
+static inline u32 hfi_get_gmu_sz_alignment(u32 align)
+{
+	u32 sz_align = FIELD_GET(GENMASK(15, 8), align);
+
+	return (sz_align > ilog2(SZ_4K)) ? (1 << sz_align) : SZ_4K;
 }
 
 /**
@@ -1121,4 +1142,41 @@ static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
 int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	struct device *dev, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
+
+/**
+ * hfi_get_minidump_string - Get the va-minidump string from entry
+ * mem_kind: mem_kind type
+ * hfi_minidump_str: Pointer to the output string
+ * size: Max size of the hfi_minidump_str
+ * rb_id: Pointer to the rb_id count
+ *
+ * This function return 0 on valid mem_kind and copies the VA-MINIDUMP string to
+ * hfi_minidump_str else return error
+ */
+static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
+					   size_t size, u32 *rb_id)
+{
+	/* Extend this if the VA mindump need more hfi alloc entries */
+	switch (mem_kind) {
+	case HFI_MEMKIND_RB:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_RB_ENTRY"_%d", (*rb_id)++);
+		break;
+	case HFI_MEMKIND_SCRATCH:
+		snprintf(hfi_minidump_str, size, KGSL_SCRATCH_ENTRY);
+		break;
+	case HFI_MEMKIND_PROFILE:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_KERNEL_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_USER_PROFILE_IBS:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_USER_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_CMD_BUFFER:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_CMD_BUFFER_ENTRY);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
 #endif

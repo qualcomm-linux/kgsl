@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
@@ -1087,6 +1087,23 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 
 	user_ts = *timestamp;
 
+	/*
+	 * If there is only one drawobj in the array and it is of
+	 * type SYNCOBJ_TYPE, skip comparing user_ts as it can be 0
+	 */
+	if (!(count == 1 && drawobj[0]->type == SYNCOBJ_TYPE) &&
+		(drawctxt->base.flags & KGSL_CONTEXT_USER_GENERATED_TS)) {
+		/*
+		 * User specified timestamps need to be greater than the last
+		 * issued timestamp in the context
+		 */
+		if (timestamp_cmp(drawctxt->timestamp, user_ts) >= 0) {
+			spin_unlock(&drawctxt->lock);
+			kmem_cache_free(jobs_cache, job);
+			return -ERANGE;
+		}
+	}
+
 	for (i = 0; i < count; i++) {
 
 		switch (drawobj[i]->type) {
@@ -1823,11 +1840,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj) {
 		force_retire_timestamp(device, drawobj);
-		if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context && ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context))
+			context_is_throttled(device, context)))
 			adreno_drawctxt_set_guilty(device, context);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -1838,11 +1855,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj_lpac) {
 		force_retire_timestamp(device, drawobj_lpac);
-		if ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context_lpac && ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context_lpac))
+			context_is_throttled(device, context_lpac)))
 			adreno_drawctxt_set_guilty(device, context_lpac);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -2098,7 +2115,9 @@ static void hwsched_lsr_check(struct work_struct *work)
 {
 	struct adreno_hwsched *hwsched = container_of(work,
 		struct adreno_hwsched, lsr_check_ws);
-	struct kgsl_device *device = kgsl_get_device(0);
+	struct adreno_device *adreno_dev = container_of(hwsched,
+		struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	mutex_lock(&device->mutex);
 	kgsl_pwrscale_update_stats(device);
