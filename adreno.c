@@ -944,6 +944,73 @@ static void adreno_isense_probe(struct kgsl_device *device)
 		dev_warn(device->dev, "isense ioremap failed\n");
 }
 
+static void __iomem *efuse_base;
+static size_t efuse_len;
+
+int adreno_efuse_map(struct platform_device *pdev)
+{
+	struct resource *res;
+
+	if (efuse_base != NULL)
+		return 0;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+			"qfprom_memory");
+
+	if (res == NULL)
+		return -ENODEV;
+
+	efuse_base = ioremap(res->start, resource_size(res));
+	if (efuse_base == NULL)
+		return -ENODEV;
+
+	efuse_len = resource_size(res);
+	return 0;
+}
+
+void adreno_efuse_unmap(void)
+{
+	if (efuse_base != NULL) {
+		iounmap(efuse_base);
+		efuse_base = NULL;
+		efuse_len = 0;
+	}
+}
+
+int adreno_efuse_read_u32(unsigned int offset, unsigned int *val)
+{
+	if (efuse_base == NULL)
+		return -ENODEV;
+
+	if (offset >= efuse_len)
+		return -ERANGE;
+
+	*val = readl_relaxed(efuse_base + offset);
+	/* Make sure memory is updated before returning */
+	rmb();
+
+	return 0;
+}
+
+/* Read the efuse through the legacy method */
+static int adreno_read_speed_bin_legacy(struct platform_device *pdev)
+{
+	u32 bin[3];
+	u32 val;
+
+	if (of_property_read_u32_array(pdev->dev.of_node,
+		"qcom,gpu-speed-bin", bin, 3))
+		return 0;
+
+	if (adreno_efuse_map(pdev))
+		return 0;
+
+	adreno_efuse_read_u32(bin[0], &val);
+	adreno_efuse_unmap();
+
+	return (val & bin[1]) >> bin[2];
+}
+
 /* Read the fuse through the new and fancy nvmem method */
 static int adreno_read_speed_bin(struct platform_device *pdev)
 {
@@ -954,8 +1021,9 @@ static int adreno_read_speed_bin(struct platform_device *pdev)
 	size_t len;
 
 	if (ret) {
+		/* If the nvmem node isn't there, try legacy */
 		if (ret == -ENOENT)
-			return 0;
+			return adreno_read_speed_bin_legacy(pdev);
 
 		return ret;
 	}
