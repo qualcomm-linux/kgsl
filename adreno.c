@@ -117,7 +117,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
 static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -731,7 +731,6 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	if (level < 0 || level >= pwr->num_pwrlevels || level < pwr->default_pwrlevel)
 		level = pwr->num_pwrlevels - 1;
 
-	pwr->min_render_pwrlevel = level;
 	pwr->min_pwrlevel = level;
 }
 
@@ -1307,9 +1306,6 @@ int adreno_device_probe(struct platform_device *pdev,
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
 
-	/* Add FUSA block to the regmap */
-	kgsl_regmap_add_region(&device->regmap, pdev, "fusa", NULL, NULL);
-
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);
 
@@ -1436,6 +1432,7 @@ static void adreno_unbind(struct device *dev)
 		input_unregister_handler(&adreno_input_handler);
 #endif
 
+	kgsl_qcom_va_md_unregister(device);
 	adreno_coresight_remove(adreno_dev);
 	adreno_profile_close(adreno_dev);
 
@@ -1494,7 +1491,8 @@ static int adreno_pm_resume(struct device *dev)
 
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
 	if (pm_suspend_via_firmware()) {
-		int status = kgsl_set_smmu_aperture(device);
+		struct kgsl_iommu *iommu = &device->mmu.iommu;
+		int status = kgsl_set_smmu_aperture(device, &iommu->user_context);
 
 		if (status)
 			return status;
@@ -3670,7 +3668,7 @@ module_exit(kgsl_3d_exit);
 
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SOFTDEP("pre: qcom-arm-smmu-mod nvmem_qfprom socinfo");
+MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo");
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
