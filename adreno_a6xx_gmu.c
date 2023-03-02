@@ -90,6 +90,26 @@ static struct gmu_vma_entry a6xx_gmu_vma[] = {
 		},
 };
 
+static void _regwrite(void __iomem *regbase, u32 offsetwords, u32 value)
+{
+	void __iomem *reg;
+
+	reg = regbase + (offsetwords << 2);
+	__raw_writel(value, reg);
+}
+
+static void _regrmw(void __iomem *regbase, u32 offsetwords, u32 mask, u32 or)
+{
+	void __iomem *reg;
+	u32 val;
+
+	reg = regbase + (offsetwords << 2);
+	val = __raw_readl(reg);
+	/* Make sure the read posted and all pending writes are done */
+	mb();
+	__raw_writel((val & ~mask) | or, reg);
+}
+
 static ssize_t log_stream_enable_store(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t count)
 {
@@ -276,15 +296,6 @@ struct adreno_device *a6xx_gmu_to_adreno(struct a6xx_gmu_device *gmu)
 #define RSC_CMD_OFFSET 2
 #define PDC_CMD_OFFSET 4
 #define PDC_ENABLE_REG_VALUE 0x80000001
-
-static void _regwrite(void __iomem *regbase,
-		unsigned int offsetwords, unsigned int value)
-{
-	void __iomem *reg;
-
-	reg = regbase + (offsetwords << 2);
-	__raw_writel(value, reg);
-}
 
 void a6xx_load_rsc_ucode(struct adreno_device *adreno_dev)
 {
@@ -1565,12 +1576,13 @@ void a6xx_gmu_register_config(struct adreno_device *adreno_dev)
 }
 
 struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
+	u32 aligned_size = ALIGN(size, hfi_get_gmu_sz_alignment(align));
 
 	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
 		return ERR_PTR(-ENOMEM);
@@ -1584,7 +1596,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 	}
 
 	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(va_align));
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
@@ -1599,7 +1611,8 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 
 	md->gmuaddr = addr;
 
-	vma->next_va = md->gmuaddr + md->size;
+	/* Take into account the size alignment when reserving the GMU VA */
+	vma->next_va = md->gmuaddr + aligned_size;
 
 	gmu->global_entries++;
 
@@ -1607,12 +1620,13 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 }
 
 struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
 	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
+	u32 aligned_size = ALIGN(size, hfi_get_gmu_sz_alignment(align));
 
 	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
 		return ERR_PTR(-ENOMEM);
@@ -1624,12 +1638,12 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 		return ERR_PTR(ret);
 
 	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(va_align));
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
-	if ((vma->next_va + md->size) > (vma->start + vma->size)) {
+	if ((vma->next_va + aligned_size) > (vma->start + vma->size)) {
 		dev_err(&gmu->pdev->dev,
 			"GMU mapping too big. available: %d required: %d\n",
-			vma->next_va - vma->start, md->size);
+			vma->next_va - vma->start, aligned_size);
 			md =  ERR_PTR(-ENOMEM);
 			goto done;
 	}
@@ -1645,7 +1659,8 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 	}
 
 	md->gmuaddr = addr;
-	vma->next_va = md->gmuaddr + md->size;
+	/* Take into account the size alignment when reserving the GMU VA */
+	vma->next_va = md->gmuaddr + aligned_size;
 	gmu->global_entries++;
 done:
 	sg_free_table(md->sgt);
@@ -1752,9 +1767,9 @@ int a6xx_gmu_parse_fw(struct adreno_device *adreno_dev)
 	}
 
 	/*
-	 * Zero payload fw blocks contain meta data and are
+	 * Zero payload fw blocks contain metadata and are
 	 * guaranteed to precede fw load data. Parse the
-	 * meta data blocks.
+	 * metadata blocks.
 	 */
 	while (offset < gmu->fw_image->size) {
 		blk = (struct gmu_block_header *)&gmu->fw_image->data[offset];
@@ -3156,17 +3171,32 @@ void a6xx_disable_gpu_irq(struct adreno_device *adreno_dev)
 
 }
 
-void a6xx_fusa_init(struct adreno_device *adreno_dev)
+static void a6xx_fusa_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	void __iomem *fusa_virt = NULL;
+	struct resource *res;
 
-	if (adreno_is_a663(adreno_dev)) {
-		/* disable fusa mode in bu stage */
-		kgsl_regrmw(device, A6XX_GPU_FUSA_REG_ECC_CTRL,
-				A6XX_GPU_FUSA_DISABLE_MASK, A6XX_GPU_FUSA_DISABLE_BITS);
-		kgsl_regrmw(device, A6XX_GPU_FUSA_REG_CSR_PRIY,
-				A6XX_GPU_FUSA_DISABLE_MASK, A6XX_GPU_FUSA_DISABLE_BITS);
+	if (!adreno_is_a663(adreno_dev))
+		return;
+
+	res = platform_get_resource_byname(device->pdev,
+			IORESOURCE_MEM, "fusa");
+	if (res)
+		fusa_virt = ioremap(res->start, resource_size(res));
+
+	if (!fusa_virt) {
+		dev_err(device->dev, "Failed to map fusa\n");
+		return;
 	}
+
+	/* Disable fusa mode in boot stage */
+	_regrmw(fusa_virt, A6XX_GPU_FUSA_REG_ECC_CTRL - A6XX_GPU_FUSA_REG_BASE,
+			A6XX_GPU_FUSA_DISABLE_MASK, A6XX_GPU_FUSA_DISABLE_BITS);
+	_regrmw(fusa_virt, A6XX_GPU_FUSA_REG_CSR_PRIY - A6XX_GPU_FUSA_REG_BASE,
+			A6XX_GPU_FUSA_DISABLE_MASK, A6XX_GPU_FUSA_DISABLE_BITS);
+
+	iounmap(fusa_virt);
 }
 
 static int a6xx_gpu_boot(struct adreno_device *adreno_dev)

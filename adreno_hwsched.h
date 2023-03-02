@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -10,6 +10,14 @@
 #include <linux/soc/qcom/msm_hw_fence.h>
 
 #include "kgsl_sync.h"
+
+/* This structure represents inflight command object */
+struct cmd_list_obj {
+	/** @drawobj: Handle to the draw object */
+	struct kgsl_drawobj *drawobj;
+	/** @node: List node to put it in the list of inflight commands */
+	struct list_head node;
+};
 
 /**
  * struct adreno_hw_fence_entry - A structure to store hardware fence and the context

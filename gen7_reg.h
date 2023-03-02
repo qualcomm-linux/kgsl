@@ -858,6 +858,7 @@
 #define GEN7_UCHE_GMEM_RANGE_MIN_HI         0xe0c
 #define GEN7_UCHE_GMEM_RANGE_MAX_LO         0xe0d
 #define GEN7_UCHE_GMEM_RANGE_MAX_HI         0xe0e
+#define GEN7_UCHE_DBG_CNTL_1                0xe12
 #define GEN7_UCHE_CACHE_WAYS                0xe17
 #define GEN7_UCHE_CLIENT_PF                 0xe19
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_0        0xe1c
