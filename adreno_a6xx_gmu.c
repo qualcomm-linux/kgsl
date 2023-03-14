@@ -22,7 +22,6 @@
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -3348,7 +3347,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 		return 0;
 	}
 
-	place_marker("M - DRIVER ADRENO Init");
+	KGSL_BOOT_MARKER("ADRENO Init");
 
 	ret = a6xx_ringbuffer_init(adreno_dev);
 	if (ret)
@@ -3417,7 +3416,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
-	place_marker("M - DRIVER ADRENO Ready");
+	KGSL_BOOT_MARKER("ADRENO Ready");
 
 	return 0;
 }

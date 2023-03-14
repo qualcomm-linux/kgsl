@@ -27,7 +27,6 @@
 #include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
@@ -5176,7 +5175,7 @@ int __init kgsl_core_init(void)
 {
 	int result = 0;
 
-	place_marker("M - DRIVER KGSL Init");
+	KGSL_BOOT_MARKER("KGSL Init");
 
 	/* alloc major and minor device numbers */
 	result = alloc_chrdev_region(&kgsl_driver.major, 0,
@@ -5280,7 +5279,7 @@ int __init kgsl_core_init(void)
 
 	sysstats_register_kgsl_stats_cb(kgsl_get_stats);
 
-	place_marker("M - DRIVER KGSL Ready");
+	KGSL_BOOT_MARKER("KGSL Ready");
 
 	return 0;
 
