@@ -796,7 +796,7 @@ static int gen7_post_start(struct adreno_device *adreno_dev)
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return 0;
 
-	kmd_postamble_addr = PREEMPT_SCRATCH_ADDR(adreno_dev, KMD_POSTAMBLE_IDX);
+	kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
 	gen7_preemption_prepare_postamble(adreno_dev);
 
 	cmds = adreno_ringbuffer_allocspace(rb, (preempt->postamble_bootup_len ? 16 : 12));
