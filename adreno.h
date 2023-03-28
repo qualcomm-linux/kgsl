@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -28,8 +28,6 @@
 /* Used to inform CP where to save preemption counter data at the time of switch out */
 #define SET_PSEUDO_COUNTER 4
 
-/* Index to preemption scratch buffer to store KMD postamble */
-#define KMD_POSTAMBLE_IDX 100
 /* Index to preemption scratch buffer to store current QOS value */
 #define QOS_VALUE_IDX KGSL_PRIORITY_MAX_RB_LEVELS
 
