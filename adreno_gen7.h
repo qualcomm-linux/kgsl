@@ -76,6 +76,8 @@ struct adreno_gen7_core {
 	u32 gmu_fw_version;
 	/** @sqefw_name: Name of the SQE microcode file */
 	const char *sqefw_name;
+	/** @aqefw_name: Name of the AQE microcode file */
+	const char *aqefw_name;
 	/** @gmufw_name: Name of the GMU firmware file */
 	const char *gmufw_name;
 	/** @gmufw_name: Name of the backup GMU firmware file */
@@ -114,6 +116,8 @@ struct adreno_gen7_core {
 	u32 bcl_data;
 	/** @preempt_level: Preemption level valid ranges [0 to 2] */
 	u32 preempt_level;
+	/** @qos_value: GPU qos value to set for each RB. */
+	const u32 *qos_value;
 };
 
 /**
@@ -261,6 +265,8 @@ int gen7_preemption_context_init(struct kgsl_context *context);
 
 void gen7_preemption_context_destroy(struct kgsl_context *context);
 
+void gen7_preemption_prepare_postamble(struct adreno_device *adreno_dev);
+
 void gen7_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot);
 void gen7_crashdump_init(struct adreno_device *adreno_dev);
@@ -274,14 +280,6 @@ void gen7_crashdump_init(struct adreno_device *adreno_dev);
  */
 void gen7_snapshot_external_core_regs(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot);
-
-/**
- * gen7_read_alwayson - Read the current always on clock value
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: The current value of the GMU always on counter
- */
-u64 gen7_read_alwayson(struct adreno_device *adreno_dev);
 
 /**
  * gen7_start - Program gen7 registers
@@ -305,6 +303,14 @@ int gen7_start(struct adreno_device *adreno_dev);
  * Return: Zero on success and negative error on failure
  */
 int gen7_init(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_get_gpu_feature_info - Get hardware supported feature info
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Get HW supported feature info and update sofware feature configuration
+ */
+void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev);
 
 /**
  * gen7_rb_start - Gen7 specific ringbuffer setup
@@ -479,6 +485,17 @@ void gen7_rdpm_mx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
  * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
  */
 void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
+
+/**
+ * gen7_scm_gpu_init_cx_regs - Program gpu regs for feature support
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Program gpu regs for feature support. Scm call for the same
+ * is added from kernel version 6.0 onwards.
+ *
+ * Return: 0 on success or negative on failure
+ */
+int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
 #ifdef CONFIG_QCOM_KGSL_CORESIGHT
 void gen7_coresight_init(struct adreno_device *device);

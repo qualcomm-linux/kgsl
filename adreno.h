@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -27,8 +27,11 @@
 #define SET_PSEUDO_NON_PRIV_SAVE_ADDR 3
 /* Used to inform CP where to save preemption counter data at the time of switch out */
 #define SET_PSEUDO_COUNTER 4
+
 /* Index to preemption scratch buffer to store KMD postamble */
 #define KMD_POSTAMBLE_IDX 100
+/* Index to preemption scratch buffer to store current QOS value */
+#define QOS_VALUE_IDX KGSL_PRIORITY_MAX_RB_LEVELS
 
 /* ADRENO_DEVICE - Given a kgsl_device return the adreno device struct */
 #define ADRENO_DEVICE(device) \
@@ -128,6 +131,8 @@
 #define ADRENO_HW_FENCE BIT(16)
 /* Dynamic Mode Switching supported on this target */
 #define ADRENO_DMS BIT(17)
+/* AQE supported on this target */
+#define ADRENO_AQE BIT(18)
 
 
 /*
@@ -175,6 +180,7 @@
 #define ADRENO_FW_PFP 0
 #define ADRENO_FW_SQE 0
 #define ADRENO_FW_PM4 1
+#define ADRENO_FW_AQE 1
 
 enum adreno_gpurev {
 	ADRENO_REV_UNKNOWN = 0,
@@ -246,8 +252,10 @@ struct adreno_gpudev;
 /* Time to allow preemption to complete (in ms) */
 #define ADRENO_PREEMPT_TIMEOUT 10000
 
+#define PREEMPT_SCRATCH_OFFSET(id) (id * sizeof(u64))
+
 #define PREEMPT_SCRATCH_ADDR(dev, id) \
-	((dev)->preempt.scratch->gpuaddr + (id * sizeof(u64)))
+	((dev)->preempt.scratch->gpuaddr + PREEMPT_SCRATCH_OFFSET(id))
 
 /**
  * enum adreno_preempt_states
@@ -298,7 +306,6 @@ struct adreno_protected_regs {
  * skipsaverestore: To skip saverestore during L1 preemption (for 6XX)
  * usesgmem: enable GMEM save/restore across preemption (for 6XX)
  * count: Track the number of preemptions triggered
- * @postamble_len: Number of dwords in KMD postamble pm4 packet
  */
 struct adreno_preemption {
 	atomic_t state;
@@ -309,7 +316,14 @@ struct adreno_preemption {
 	bool skipsaverestore;
 	bool usesgmem;
 	unsigned int count;
+	/* @postamble_len: Number of dwords in KMD postamble pm4 packet */
 	u32 postamble_len;
+	/*
+	 * @postamble_bootup_len: Number of dwords in KMD postamble pm4 packet
+	 * that needs to be sent before first submission to GPU.
+	 * Note: Postambles are not preserved across slumber.
+	 */
+	u32 postamble_bootup_len;
 };
 
 struct adreno_busy_data {
@@ -692,7 +706,18 @@ struct adreno_device {
 	struct dentry *preemption_debugfs_dir;
 	/* @hwsched_enabled: If true, hwsched is enabled */
 	bool hwsched_enabled;
-
+	/* @fastblend_enabled: True if fastblend feature is enabled */
+	bool fastblend_enabled;
+	/* @raytracing_enabled: True if raytracing feature is enabled */
+	bool raytracing_enabled;
+	/* @feature_fuse: feature fuse value read from HW */
+	u32 feature_fuse;
+	/** @gmu_ab: Track if GMU supports ab vote */
+	bool gmu_ab;
+	/** @ifpc_hyst: IFPC long hysteresis value */
+	u32 ifpc_hyst;
+	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
+	u32 ifpc_hyst_floor;
 };
 
 /**
@@ -728,6 +753,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_CACHE_FLUSH_TS_SUSPENDED = 13,
 	/** @ADRENO_DEVICE_DMS: Set if DMS is enabled */
 	ADRENO_DEVICE_DMS = 14,
+	/** @ADRENO_DEVICE_GMU_AB: Set if AB vote via GMU is enabled */
+	ADRENO_DEVICE_GMU_AB = 15,
 };
 
 /**
@@ -924,6 +951,14 @@ struct adreno_gpudev {
 	 * @swfuse_irqctrl: To enable/disable sw fuse violation interrupt
 	 */
 	void (*swfuse_irqctrl)(struct adreno_device *adreno_dev, bool state);
+	/**
+	 * @lpac_store: To enable/disable lpac at runtime
+	 */
+	int (*lpac_store)(struct adreno_device *adreno_dev, bool enable);
+	/*
+	 * @get_uche_trap_base: Return the UCHE_TRAP_BASE value
+	 */
+	u64 (*get_uche_trap_base)(void);
 };
 
 /**

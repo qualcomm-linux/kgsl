@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _A6XX_REG_H
@@ -1123,6 +1123,9 @@
 #define A6XX_GMU_AHB_FENCE_RANGE_0		0x23B11
 #define A6XX_GMU_AHB_FENCE_RANGE_1		0x23B12
 
+/* GMU countables */
+#define A6XX_GMU_CM3_BUSY_CYCLES		0
+
 /* GPUCC registers */
 #define A6XX_GPU_CC_GX_GDSCR                   0x24403
 #define A6XX_GPU_CC_GX_DOMAIN_MISC             0x24542
@@ -1222,6 +1225,7 @@
 	(((1 << A6XX_GPU_LLC_SCID_NUM_BITS) - 1) << A6XX_GPUHTW_LLC_SCID_SHIFT)
 
 /* FUSA registers */
+#define A6XX_GPU_FUSA_REG_BASE			0x3FC00
 #define A6XX_GPU_FUSA_REG_ECC_CTRL			0x3FC00
 #define A6XX_GPU_FUSA_REG_CSR_PRIY			0x3FC52
 #define A6XX_GPU_FUSA_DISABLE_NUM_BITS			4

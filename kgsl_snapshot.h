@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_SNAPSHOT_H_
@@ -59,6 +59,7 @@ struct kgsl_snapshot_section_header {
 #define KGSL_SNAPSHOT_SECTION_GMU_MEMORY   0x1701
 #define KGSL_SNAPSHOT_SECTION_SIDE_DEBUGBUS 0x1801
 #define KGSL_SNAPSHOT_SECTION_TRACE_BUFFER 0x1901
+#define KGSL_SNAPSHOT_SECTION_EVENTLOG     0x1A01
 
 #define KGSL_SNAPSHOT_SECTION_END          0xFFFF
 
@@ -213,6 +214,7 @@ struct kgsl_snapshot_ib_v2 {
 #define SNAPSHOT_GMU_MEM_DEBUG		0x04
 #define SNAPSHOT_GMU_MEM_BIN_BLOCK	0x05
 #define SNAPSHOT_GMU_MEM_CONTEXT_QUEUE	0x06
+#define SNAPSHOT_GMU_MEM_HW_FENCE	0x07
 
 /* GMU memory section data */
 struct kgsl_snapshot_gmu_mem {
@@ -278,6 +280,7 @@ struct kgsl_snapshot_istore {
 #define SNAPSHOT_DEBUG_GMU_PWR_VERSION 17
 #define SNAPSHOT_DEBUG_GMU_PWR_DEV_VERSION 18
 #define SNAPSHOT_DEBUG_GMU_HFI_VERSION 19
+#define SNAPSHOT_DEBUG_AQE_VERSION 20
 
 struct kgsl_snapshot_debug {
 	int type;    /* Type identifier for the attached tata */
@@ -358,6 +361,15 @@ struct kgsl_snapshot_gpu_object_v2 {
 	__u64 gpuaddr; /* GPU address of the the object */
 	__u64 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	__u64 size;    /* Size of the object (in dwords) */
+} __packed;
+
+struct kgsl_snapshot_eventlog {
+	/** @type: Type of the event log buffer */
+	__u16 type;
+	/** @version: Version of the event log buffer */
+	__u16 version;
+	/** @size: Size of the eventlog buffer in bytes */
+	u32 size;
 } __packed;
 
 struct kgsl_device;

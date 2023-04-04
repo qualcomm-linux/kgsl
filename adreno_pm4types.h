@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_PM4TYPES_H
 #define __ADRENO_PM4TYPES_H
@@ -64,6 +65,9 @@
 
 /* reads register in chip and writes to memory */
 #define CP_REG_TO_MEM		0x3e
+
+/* reads memory and writes to register in chip */
+#define CP_MEM_TO_REG		0x42
 
 /* write N 32-bit words to memory */
 #define CP_MEM_WRITE		0x3d

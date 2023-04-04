@@ -145,12 +145,10 @@ static inline struct kgsl_drawobj_bind *BINDOBJ(struct kgsl_drawobj *obj)
 struct kgsl_drawobj_timeline {
 	/** @base: &struct kgsl_drawobj container */
 	struct kgsl_drawobj base;
-	struct {
-		/** @timeline: Pointer to a &struct kgsl_timeline */
-		struct kgsl_timeline *timeline;
-		/** @seqno: Sequence number to signal */
-		u64 seqno;
-	} *timelines;
+	/** @sig_refcount: Refcount to trigger timeline signaling */
+	struct kref sig_refcount;
+	/* @timelines: Array of timeline events to signal */
+	struct kgsl_timeline_event *timelines;
 	/** @count: Number of items in timelines */
 	int count;
 };
@@ -346,5 +344,13 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
 		struct kgsl_drawobj_timeline *timelineobj,
 		void __user *src, u64 cmdsize);
+
+/**
+ * kgsl_drawobj_timelineobj_retire - Retire the timeline drawobj
+ * @timelineobj: Pointer to a timeline drawobject
+ *
+ * Retire the timelineobj when it is popped off the context queue.
+ */
+void kgsl_drawobj_timelineobj_retire(struct kgsl_drawobj_timeline *timelineobj);
 
 #endif /* __KGSL_DRAWOBJ_H */

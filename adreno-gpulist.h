@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define ANY_ID (~0)
@@ -2296,9 +2296,9 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_9_0,
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-9-0",
-		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_AQE |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
-			ADRENO_L3_VOTE | ADRENO_BCL,
+			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_ACD | ADRENO_DMS | ADRENO_HW_FENCE,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen7_2_0_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
@@ -2306,6 +2306,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
 	},
+	.aqefw_name = "gen70900_aqe.fw",
 	.sqefw_name = "gen70900_sqe.fw",
 	.gmufw_name = "gmu_gen70900.bin",
 	.zap_name = "gen70900_zap.mbn",

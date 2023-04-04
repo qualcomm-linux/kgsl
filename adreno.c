@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -22,6 +22,7 @@
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
 #include <soc/qcom/boot_stats.h>
+#include <linux/suspend.h>
 
 #include "adreno.h"
 #include "adreno_a3xx.h"
@@ -116,7 +117,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
 static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -730,7 +731,6 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	if (level < 0 || level >= pwr->num_pwrlevels || level < pwr->default_pwrlevel)
 		level = pwr->num_pwrlevels - 1;
 
-	pwr->min_render_pwrlevel = level;
 	pwr->min_pwrlevel = level;
 }
 
@@ -1271,6 +1271,13 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IOCOHERENT))
 		kgsl_mmu_set_feature(device, KGSL_MMU_IO_COHERENT);
 
+	/*
+	 * Support VBOs on hardware where HLOS has access to PRR registers
+	 * configuration.
+	 */
+	if (!adreno_is_a650(adreno_dev))
+		kgsl_mmu_set_feature(device, KGSL_MMU_SUPPORT_VBO);
+
 	if (adreno_preemption_enable)
 		adreno_dev->preempt_override = true;
 
@@ -1305,9 +1312,6 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
-
-	/* Add FUSA block to the regmap */
-	kgsl_regmap_add_region(&device->regmap, pdev, "fusa", NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);
@@ -1435,6 +1439,7 @@ static void adreno_unbind(struct device *dev)
 		input_unregister_handler(&adreno_input_handler);
 #endif
 
+	kgsl_qcom_va_md_unregister(device);
 	adreno_coresight_remove(adreno_dev);
 	adreno_profile_close(adreno_dev);
 
@@ -1491,6 +1496,16 @@ static int adreno_pm_resume(struct device *dev)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
+#if IS_ENABLED(CONFIG_DEEPSLEEP)
+	if (pm_suspend_via_firmware()) {
+		struct kgsl_iommu *iommu = &device->mmu.iommu;
+		int status = kgsl_set_smmu_aperture(device, &iommu->user_context);
+
+		if (status)
+			return status;
+	}
+#endif
+
 	mutex_lock(&device->mutex);
 	ops->pm_resume(adreno_dev);
 	mutex_unlock(&device->mutex);
@@ -1518,6 +1533,12 @@ static int adreno_pm_suspend(struct device *dev)
 
 	mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
+
+#if IS_ENABLED(CONFIG_DEEPSLEEP)
+	if (!status && pm_suspend_via_firmware())
+		adreno_zap_shader_unload(adreno_dev);
+#endif
+
 	mutex_unlock(&device->mutex);
 
 	return status;
@@ -2179,6 +2200,27 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val = adreno_get_vk_device_id(device);
 	else if (param->type == KGSL_PROP_IS_LPAC_ENABLED)
 		val = adreno_dev->lpac_enabled ? 1 : 0;
+	else if (param->type == KGSL_PROP_IS_RAYTRACING_ENABLED)
+		val =  adreno_dev->raytracing_enabled ? 1 : 0;
+	else if (param->type == KGSL_PROP_IS_FASTBLEND_ENABLED)
+		val = adreno_dev->fastblend_enabled ? 1 : 0;
+	else if (param->type == KGSL_PROP_IS_AQE_ENABLED)
+		val = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ? 1 : 0;
+
+	return copy_prop(param, &val, sizeof(val));
+}
+
+static int adreno_prop_uche_trap_base(struct kgsl_device *device,
+		struct kgsl_device_getproperty *param)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 val = 0;
+
+	if (!gpudev->get_uche_trap_base)
+		return -EINVAL;
+
+	val = gpudev->get_uche_trap_base();
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -2205,6 +2247,10 @@ static const struct {
 	{ KGSL_PROP_GPU_MODEL, adreno_prop_gpu_model},
 	{ KGSL_PROP_VK_DEVICE_ID, adreno_prop_u32},
 	{ KGSL_PROP_IS_LPAC_ENABLED, adreno_prop_u32 },
+	{ KGSL_PROP_IS_RAYTRACING_ENABLED, adreno_prop_u32},
+	{ KGSL_PROP_IS_FASTBLEND_ENABLED, adreno_prop_u32},
+	{ KGSL_PROP_UCHE_TRAP_BASE, adreno_prop_uche_trap_base },
+	{ KGSL_PROP_IS_AQE_ENABLED, adreno_prop_u32 },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,
@@ -2585,6 +2631,9 @@ void adreno_cx_misc_regread(struct adreno_device *adreno_dev,
 {
 	unsigned int cx_misc_offset;
 
+	WARN_ONCE(!adreno_dev->cx_misc_virt,
+		  "cx_misc region is not defined in device tree");
+
 	cx_misc_offset = (offsetwords << 2);
 	if (!adreno_dev->cx_misc_virt ||
 		(cx_misc_offset >= adreno_dev->cx_misc_len))
@@ -2629,6 +2678,9 @@ void adreno_cx_misc_regwrite(struct adreno_device *adreno_dev,
 	unsigned int offsetwords, unsigned int value)
 {
 	unsigned int cx_misc_offset;
+
+	WARN_ONCE(!adreno_dev->cx_misc_virt,
+		  "cx_misc region is not defined in device tree");
 
 	cx_misc_offset = (offsetwords << 2);
 	if (!adreno_dev->cx_misc_virt ||
@@ -3615,15 +3667,15 @@ static void __exit kgsl_3d_exit(void)
 	kgsl_core_exit();
 }
 
-module_param_named(enable, adreno_preemption_enable, bool, 0600);
-MODULE_PARM_DESC(enable, "Enable GPU HW Preemption");
+module_param_named(preempt_enable, adreno_preemption_enable, bool, 0600);
+MODULE_PARM_DESC(preempt_enable, "Enable GPU HW Preemption");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);
 
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SOFTDEP("pre: qcom-arm-smmu-mod nvmem_qfprom socinfo");
+MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo");
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

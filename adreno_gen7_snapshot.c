@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -235,6 +235,7 @@ static size_t gen7_snapshot_registers(struct kgsl_device *device, u8 *buf,
 static size_t gen7_legacy_snapshot_shader(struct kgsl_device *device,
 				u8 *buf, size_t remain, void *priv)
 {
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_snapshot_shader_v2 *header =
 		(struct kgsl_snapshot_shader_v2 *) buf;
 	struct gen7_shader_block_info *info = (struct gen7_shader_block_info *) priv;
@@ -246,6 +247,20 @@ static size_t gen7_legacy_snapshot_shader(struct kgsl_device *device,
 	if (remain < (sizeof(*header) + (block->size << 2))) {
 		SNAPSHOT_ERR_NOMEM(device, "SHADER MEMORY");
 		return 0;
+	}
+
+	/*
+	 * If crashdumper times out, accessing some readback states from
+	 * AHB path might fail. Hence, skip SP_INST_TAG and SP_INST_DATA*
+	 * state types during snapshot dump in legacy flow.
+	 */
+	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
+		adreno_is_gen7_4_0(adreno_dev)) {
+		if (block->statetype == SP_INST_TAG ||
+			block->statetype == SP_INST_DATA ||
+			block->statetype == SP_INST_DATA_1 ||
+			block->statetype == SP_INST_DATA_2)
+			return 0;
 	}
 
 	header->type = block->statetype;
@@ -1291,6 +1306,31 @@ static size_t gen7_snapshot_sqe(struct kgsl_device *device, u8 *buf,
 	return DEBUG_SECTION_SZ(1);
 }
 
+/* gen7_snapshot_aqe() - Dump AQE data in snapshot */
+static size_t gen7_snapshot_aqe(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (unsigned int *)(buf + sizeof(*header));
+	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+		return 0;
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE VERSION DEBUG");
+		return 0;
+	}
+
+	/* Dump the AQE firmware version */
+	header->type = SNAPSHOT_DEBUG_AQE_VERSION;
+	header->size = 1;
+	*data = fw->version;
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 /* Snapshot the preemption related buffers */
 static size_t snapshot_preemption_record(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv)
@@ -1581,6 +1621,10 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	/* SQE Firmware */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen7_snapshot_sqe, NULL);
+
+	/* AQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen7_snapshot_aqe, NULL);
 
 	/* Mempool debug data */
 	gen7_snapshot_mempool(device, snapshot);
