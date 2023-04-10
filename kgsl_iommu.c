@@ -1125,6 +1125,24 @@ static u64 kgsl_iommu_get_ttbr0(struct kgsl_pagetable *pagetable)
 	return pt->ttbr0;
 }
 
+/* Set TTBR0 for the given context with the specific configuration */
+static void kgsl_iommu_set_ttbr0(struct kgsl_iommu_context *context,
+		struct kgsl_mmu *mmu, const struct io_pgtable_cfg *pgtbl_cfg)
+{
+	struct adreno_smmu_priv *adreno_smmu;
+
+	/* Quietly return if the context doesn't have a domain */
+	if (!context->domain)
+		return;
+
+	adreno_smmu = dev_get_drvdata(&context->pdev->dev);
+
+	/* Enable CX and clocks before we call into SMMU to setup registers */
+	kgsl_iommu_enable_clk(mmu);
+	adreno_smmu->set_ttbr0_cfg(adreno_smmu->cookie, pgtbl_cfg);
+	kgsl_iommu_disable_clk(mmu);
+}
+
 static int kgsl_iommu_get_context_bank(struct kgsl_pagetable *pt, struct kgsl_context *context)
 {
 	struct kgsl_iommu *iommu = to_kgsl_iommu(pt);
@@ -1154,9 +1172,6 @@ static int kgsl_iommu_get_asid(struct kgsl_pagetable *pt, struct kgsl_context *c
 static void kgsl_iommu_destroy_default_pagetable(struct kgsl_pagetable *pagetable)
 {
 	struct kgsl_device *device = KGSL_MMU_DEVICE(pagetable->mmu);
-	struct kgsl_iommu *iommu = to_kgsl_iommu(pagetable);
-	struct kgsl_iommu_context *context = &iommu->user_context;
-	struct adreno_smmu_priv *adreno_smmu = dev_get_drvdata(&context->pdev->dev);
 	struct kgsl_iommu_pt *pt = to_iommu_pt(pagetable);
 	struct kgsl_global_memdesc *md;
 
@@ -1166,8 +1181,6 @@ static void kgsl_iommu_destroy_default_pagetable(struct kgsl_pagetable *pagetabl
 
 		kgsl_iommu_default_unmap(pagetable, &md->memdesc);
 	}
-
-	adreno_smmu->set_ttbr0_cfg(adreno_smmu->cookie, NULL);
 
 	kfree(pt);
 }
@@ -1254,25 +1267,6 @@ static int kgsl_iopgtbl_alloc(struct kgsl_iommu_context *ctx, struct kgsl_iommu_
 	pt->ttbr0 = pt->cfg.arm_lpae_s1_cfg.ttbr;
 
 	return 0;
-}
-
-/* Enable TTBR0 for the given context with the specific configuration */
-static void kgsl_iommu_enable_ttbr0(struct kgsl_iommu_context *context,
-		struct kgsl_iommu_pt *pt)
-{
-	struct adreno_smmu_priv *adreno_smmu;
-	struct kgsl_mmu *mmu = pt->base.mmu;
-
-	/* Quietly return if the context doesn't have a domain */
-	if (!context->domain)
-		return;
-
-	adreno_smmu = dev_get_drvdata(&context->pdev->dev);
-
-	/* Enable CX and clocks before we call into SMMU to setup registers */
-	kgsl_iommu_enable_clk(mmu);
-	adreno_smmu->set_ttbr0_cfg(adreno_smmu->cookie, &pt->cfg);
-	kgsl_iommu_disable_clk(mmu);
 }
 
 static struct kgsl_pagetable *kgsl_iommu_default_pagetable(struct kgsl_mmu *mmu)
@@ -1457,10 +1451,20 @@ static void kgsl_iommu_close(struct kgsl_mmu *mmu)
 
 	/* First put away the default pagetables */
 	kgsl_mmu_putpagetable(mmu->defaultpagetable);
-	mmu->defaultpagetable = NULL;
 
 	kgsl_mmu_putpagetable(mmu->securepagetable);
+
+	/*
+	 * Flush the workqueue to ensure pagetables are
+	 * destroyed before proceeding further
+	 */
+	flush_workqueue(kgsl_driver.workqueue);
+
+	mmu->defaultpagetable = NULL;
 	mmu->securepagetable = NULL;
+
+	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, NULL);
+	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, NULL);
 
 	/* Next, detach the context banks */
 	kgsl_iommu_detach_context(&iommu->user_context);
@@ -2195,6 +2199,7 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_mmu *mmu = &device->mmu;
+	struct kgsl_iommu_pt *pt;
 	int ret;
 
 	ret = kgsl_iommu_setup_context(mmu, node, &iommu->user_context,
@@ -2236,14 +2241,14 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	if (!test_bit(KGSL_MMU_IOPGTABLE, &mmu->features))
 		return 0;
 
+	pt = to_iommu_pt(mmu->defaultpagetable);
+
 	/* Enable TTBR0 on the default and LPAC contexts */
-	kgsl_iommu_enable_ttbr0(&iommu->user_context,
-		to_iommu_pt(mmu->defaultpagetable));
+	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->cfg);
 
 	kgsl_set_smmu_aperture(device, &iommu->user_context);
 
-	kgsl_iommu_enable_ttbr0(&iommu->lpac_context,
-		to_iommu_pt(mmu->defaultpagetable));
+	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->cfg);
 
 	ret = set_smmu_lpac_aperture(device, &iommu->lpac_context);
 	/* LPAC is optional, ignore setup failures in absence of LPAC feature */
@@ -2490,7 +2495,8 @@ int kgsl_iommu_probe(struct kgsl_device *device)
 	 * Only support VBOs on MMU500 hardware that supports the PRR
 	 * marker register to ignore writes to the zero page
 	 */
-	if (mmu->subtype == KGSL_IOMMU_SMMU_V500) {
+	if ((mmu->subtype == KGSL_IOMMU_SMMU_V500) &&
+			test_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features)) {
 		/*
 		 * We need to allocate a page because we need a known physical
 		 * address to program in the PRR register but the hardware
@@ -2499,9 +2505,9 @@ int kgsl_iommu_probe(struct kgsl_device *device)
 		 */
 		kgsl_vbo_zero_page = alloc_page(GFP_KERNEL | __GFP_ZERO |
 			__GFP_NORETRY | __GFP_HIGHMEM);
-		if (kgsl_vbo_zero_page)
-			set_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features);
 	}
+	if (!kgsl_vbo_zero_page)
+		clear_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features);
 
 	return 0;
 

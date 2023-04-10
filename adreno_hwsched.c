@@ -5,6 +5,7 @@
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
+#include <linux/dma-fence-array.h>
 #include <linux/soc/qcom/msm_hw_fence.h>
 #include <soc/qcom/msm_performance.h>
 
@@ -15,14 +16,6 @@
 #include "adreno_trace.h"
 #include "kgsl_timeline.h"
 #include <linux/msm_kgsl.h>
-
-/* This structure represents inflight command object */
-struct cmd_list_obj {
-	/** @drawobj: Handle to the draw object */
-	struct kgsl_drawobj *drawobj;
-	/** @node: List node to put it in the list of inflight commands */
-	struct list_head node;
-};
 
 /*
  * Number of commands that can be queued in a context before it sleeps
@@ -1707,6 +1700,62 @@ static bool context_is_throttled(struct kgsl_device *device,
 	return false;
 }
 
+static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
+{
+	int i, j, fence_index = 0;
+	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	for (i = 0; i < syncobj->numsyncs; i++) {
+		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
+		struct kgsl_sync_fence_cb *kcb = event->handle;
+		struct dma_fence **fences;
+		struct dma_fence_array *array;
+		u32 num_fences;
+
+		array = to_dma_fence_array(kcb->fence);
+		if (array != NULL) {
+			num_fences = array->num_fences;
+			fences = array->fences;
+		} else {
+			num_fences = 1;
+			fences = &kcb->fence;
+		}
+
+		for (j = 0; j < num_fences; j++, fence_index++) {
+			bool kgsl = is_kgsl_fence(fences[j]);
+			bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags);
+			char value[32] = "unknown";
+
+			if (fences[j]->ops->timeline_value_str)
+				fences[j]->ops->timeline_value_str(fences[j], value, sizeof(value));
+
+			dev_err(device->dev,
+				"dma fence[%d] signaled:%d kgsl:%d ctx:%lu seqno:%lu value:%s\n",
+				fence_index, signaled, kgsl, fences[j]->context, fences[j]->seqno,
+				value);
+		}
+	}
+
+}
+
+static void print_fault_syncobj(struct adreno_device *adreno_dev,
+				u32 ctxt_id, u32 ts)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct cmd_list_obj *obj;
+
+	list_for_each_entry(obj, &hwsched->cmd_list, node) {
+		struct kgsl_drawobj *drawobj = obj->drawobj;
+
+		if (drawobj->type == SYNCOBJ_TYPE) {
+			if ((ctxt_id == drawobj->context->id) &&
+			(ts == drawobj->timestamp))
+				_print_syncobj(adreno_dev, drawobj);
+		}
+	}
+}
+
 static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
 {
 	struct kgsl_drawobj *drawobj = NULL;
@@ -1722,6 +1771,12 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
+
+	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
+		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
+		kgsl_device_snapshot(device, NULL, NULL, true);
+		goto done;
+	}
 
 	/*
 	 * First, try to see if the faulted command object is marked
@@ -1794,6 +1849,12 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
+
+	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
+		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
+		kgsl_device_snapshot(device, NULL, NULL, true);
+		goto done;
+	}
 
 	/*
 	 * First, try to see if the faulted command object is marked
@@ -2378,7 +2439,6 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	hw_fence->memdesc.physaddr = hw_fence->mem_descriptor.device_addr;
 	hw_fence->memdesc.size = hw_fence->mem_descriptor.size;
 	hw_fence->memdesc.hostptr = hw_fence->mem_descriptor.virtual_addr;
-	hw_fence->memdesc.priv |= KGSL_MEMDESC_IOMEM;
 
 	ret = kgsl_memdesc_sg_dma(&hw_fence->memdesc, hw_fence->memdesc.physaddr,
 		hw_fence->memdesc.size);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -582,7 +582,7 @@ int gen7_hfi_send_ifpc_feature_ctrl(struct adreno_device *adreno_dev)
 
 	if (gmu->idle_level == GPU_HW_IFPC)
 		return gen7_hfi_send_feature_ctrl(adreno_dev,
-				HFI_FEATURE_IFPC, 1, 0x1680);
+				HFI_FEATURE_IFPC, 1, adreno_dev->ifpc_hyst);
 	return 0;
 }
 

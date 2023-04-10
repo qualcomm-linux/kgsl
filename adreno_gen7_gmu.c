@@ -1359,9 +1359,9 @@ int gen7_gmu_parse_fw(struct adreno_device *adreno_dev)
 	}
 
 	/*
-	 * Zero payload fw blocks contain meta data and are
+	 * Zero payload fw blocks contain metadata and are
 	 * guaranteed to precede fw load data. Parse the
-	 * meta data blocks.
+	 * metadata blocks.
 	 */
 	while (offset < gmu->fw_image->size) {
 		blk = (struct gmu_block_header *)&gmu->fw_image->data[offset];
@@ -1656,7 +1656,7 @@ static int gen7_gmu_ifpc_store(struct kgsl_device *device,
 		requested_idle_level);
 }
 
-static unsigned int gen7_gmu_ifpc_show(struct kgsl_device *device)
+static unsigned int gen7_gmu_ifpc_isenabled(struct kgsl_device *device)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(ADRENO_DEVICE(device));
 
@@ -2137,7 +2137,7 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.oob_set = gen7_gmu_oob_set,
 	.oob_clear = gen7_gmu_oob_clear,
 	.ifpc_store = gen7_gmu_ifpc_store,
-	.ifpc_show = gen7_gmu_ifpc_show,
+	.ifpc_isenabled = gen7_gmu_ifpc_isenabled,
 	.cooperative_reset = gen7_gmu_cooperative_reset,
 	.wait_for_active_transition = gen7_gmu_wait_for_active_transition,
 	.scales_bandwidth = gen7_gmu_scales_bandwidth,
@@ -2538,6 +2538,12 @@ static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
 	return ret;
 }
 
+/* Default IFPC timer (300usec) value */
+#define GEN7_GMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
+
+/* Minimum IFPC timer (200usec) allowed to override default value */
+#define GEN7_GMU_LONG_IFPC_HYST_FLOOR	FIELD_PREP(GENMASK(15, 0), 0x0F00)
+
 int gen7_gmu_probe(struct kgsl_device *device,
 		struct platform_device *pdev)
 {
@@ -2600,10 +2606,13 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	/* Set up GMU idle state */
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
 		gmu->idle_level = GPU_HW_IFPC;
-	else
+		adreno_dev->ifpc_hyst = GEN7_GMU_LONG_IFPC_HYST;
+		adreno_dev->ifpc_hyst_floor = GEN7_GMU_LONG_IFPC_HYST_FLOOR;
+	} else {
 		gmu->idle_level = GPU_HW_ACTIVE;
+	}
 
 	gen7_gmu_acd_probe(device, gmu, pdev->dev.of_node);
 
