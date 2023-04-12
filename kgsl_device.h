@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -336,6 +336,8 @@ struct kgsl_device {
 	} gpu_period;
 	/** @idle_jiffies: Latest idle jiffies */
 	unsigned long idle_jiffies;
+	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
+	bool dump_all_ibs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -528,6 +530,10 @@ struct kgsl_process_private {
 	 * @private_mutex: Mutex lock to protect kgsl_process_private
 	 */
 	struct mutex private_mutex;
+	/**
+	 * @cmdline: Cmdline string of the process
+	 */
+	char *cmdline;
 };
 
 struct kgsl_device_private {

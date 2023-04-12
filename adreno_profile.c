@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/ctype.h>
@@ -692,10 +693,7 @@ static ssize_t profile_assignments_write(struct file *filep,
 	 * all it's work.  This helps to synchronize the work flow to the
 	 * GPU and avoid racey conditions.
 	 */
-	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->idle)
-		ret = adreno_dev->dispatch_ops->idle(adreno_dev);
-	else
-		ret = adreno_idle(device);
+	ret = adreno_idle(device);
 	if (ret) {
 		size = -ETIMEDOUT;
 		goto error_put;
@@ -1003,6 +1001,9 @@ void adreno_profile_init(struct adreno_device *adreno_dev)
 
 	profile->enabled = false;
 
+	if (adreno_dev->hwsched_enabled)
+		return;
+
 	/* allocate shared_buffer, which includes pre_ib and post_ib */
 	profile->shared_size = ADRENO_PROFILE_SHARED_BUF_SIZE_DWORDS;
 	profile->shared_buffer =  kgsl_allocate_global(device,
@@ -1035,6 +1036,9 @@ void adreno_profile_close(struct adreno_device *adreno_dev)
 	struct adreno_profile *profile = &adreno_dev->profile;
 	struct adreno_profile_assigns_list *entry, *tmp;
 
+	if (adreno_dev->hwsched_enabled)
+		return;
+
 	profile->enabled = false;
 	vfree(profile->log_buffer);
 	profile->log_buffer = NULL;
@@ -1057,6 +1061,9 @@ int adreno_profile_process_results(struct adreno_device *adreno_dev)
 	struct adreno_profile *profile = &adreno_dev->profile;
 	unsigned int shared_buf_tail = profile->shared_tail;
 
+	if (adreno_dev->hwsched_enabled)
+		return 0;
+
 	if (!results_available(adreno_dev, profile, &shared_buf_tail))
 		return 0;
 
@@ -1077,6 +1084,9 @@ u64 adreno_profile_preib_processing(struct adreno_device *adreno_dev,
 	unsigned int entry_head = profile->shared_head;
 	unsigned int *shared_ptr;
 	struct adreno_ringbuffer *rb = ADRENO_CURRENT_RINGBUFFER(adreno_dev);
+
+	if (adreno_dev->hwsched_enabled)
+		return 0;
 
 	if (!drawctxt || !adreno_profile_assignments_ready(profile))
 		return 0;
@@ -1121,6 +1131,9 @@ u64 adreno_profile_postib_processing(struct adreno_device *adreno_dev,
 	int count = profile->assignment_count;
 	unsigned int entry_head = profile->shared_head -
 		SIZE_SHARED_ENTRY(count);
+
+	if (adreno_dev->hwsched_enabled)
+		return 0;
 
 	if (!drawctxt || !adreno_profile_assignments_ready(profile))
 		return 0;

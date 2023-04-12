@@ -263,7 +263,7 @@ extern struct platform_driver gen7_hwsched_driver;
 /* GMU core functions */
 
 void __init gmu_core_register(void);
-void __exit gmu_core_unregister(void);
+void gmu_core_unregister(void);
 
 bool gmu_core_gpmu_isenabled(struct kgsl_device *device);
 bool gmu_core_scales_bandwidth(struct kgsl_device *device);

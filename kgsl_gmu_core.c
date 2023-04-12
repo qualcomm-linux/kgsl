@@ -34,7 +34,7 @@ void __init gmu_core_register(void)
 	of_node_put(node);
 }
 
-void __exit gmu_core_unregister(void)
+void gmu_core_unregister(void)
 {
 	const struct of_device_id *match;
 	struct device_node *node;
