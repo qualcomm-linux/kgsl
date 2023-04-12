@@ -536,7 +536,11 @@ done:
  * the number of XO clock cycles for short hysteresis. This happens
  * after main hysteresis. Here we set it to 0xA cycles, or 0.5 us.
  */
-#define GMU_PWR_COL_HYST 0x000A1680
+#define A6X_GMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
+#define A6X_GMU_SHORT_IFPC_HYST	FIELD_PREP(GENMASK(31, 16), 0xA)
+
+/* Minimum IFPC timer (200usec) allowed to override default value */
+#define A6X_GMU_LONG_IFPC_HYST_FLOOR	FIELD_PREP(GENMASK(15, 0), 0x0F00)
 
 /*
  * a6xx_gmu_power_config() - Configure and enable GMU's low power mode
@@ -560,12 +564,12 @@ static void a6xx_gmu_power_config(struct adreno_device *adreno_dev)
 
 	if (gmu->idle_level == GPU_HW_IFPC) {
 		gmu_core_regwrite(device, A6XX_GMU_PWR_COL_INTER_FRAME_HYST,
-				GMU_PWR_COL_HYST);
+				A6X_GMU_SHORT_IFPC_HYST | adreno_dev->ifpc_hyst);
 		gmu_core_regrmw(device, A6XX_GMU_PWR_COL_INTER_FRAME_CTRL,
 				IFPC_ENABLE_MASK, IFPC_ENABLE_MASK);
 
 		gmu_core_regwrite(device, A6XX_GMU_PWR_COL_SPTPRAC_HYST,
-				GMU_PWR_COL_HYST);
+				A6X_GMU_SHORT_IFPC_HYST | adreno_dev->ifpc_hyst);
 		gmu_core_regrmw(device, A6XX_GMU_PWR_COL_INTER_FRAME_CTRL,
 				SPTP_ENABLE_MASK, SPTP_ENABLE_MASK);
 	}
@@ -2098,7 +2102,7 @@ static int a6xx_gmu_ifpc_store(struct kgsl_device *device,
 		requested_idle_level);
 }
 
-static unsigned int a6xx_gmu_ifpc_show(struct kgsl_device *device)
+static unsigned int a6xx_gmu_ifpc_isenabled(struct kgsl_device *device)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(ADRENO_DEVICE(device));
 
@@ -2597,7 +2601,7 @@ static const struct gmu_dev_ops a6xx_gmudev = {
 	.oob_set = a6xx_gmu_oob_set,
 	.oob_clear = a6xx_gmu_oob_clear,
 	.ifpc_store = a6xx_gmu_ifpc_store,
-	.ifpc_show = a6xx_gmu_ifpc_show,
+	.ifpc_isenabled = a6xx_gmu_ifpc_isenabled,
 	.cooperative_reset = a6xx_gmu_cooperative_reset,
 	.wait_for_active_transition = a6xx_gmu_wait_for_active_transition,
 	.scales_bandwidth = a6xx_gmu_scales_bandwidth,
@@ -3009,10 +3013,13 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	/* Set up GMU idle state */
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
 		gmu->idle_level = GPU_HW_IFPC;
-	else
+		adreno_dev->ifpc_hyst = A6X_GMU_LONG_IFPC_HYST;
+		adreno_dev->ifpc_hyst_floor = A6X_GMU_LONG_IFPC_HYST_FLOOR;
+	} else {
 		gmu->idle_level = GPU_HW_ACTIVE;
+	}
 
 	a6xx_gmu_acd_probe(device, gmu, pdev->dev.of_node);
 

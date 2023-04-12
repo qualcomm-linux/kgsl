@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -132,12 +132,12 @@ void gmu_core_dev_cooperative_reset(struct kgsl_device *device)
 		ops->cooperative_reset(device);
 }
 
-int gmu_core_dev_ifpc_show(struct kgsl_device *device)
+int gmu_core_dev_ifpc_isenabled(struct kgsl_device *device)
 {
 	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
 
-	if (ops && ops->ifpc_show)
-		return ops->ifpc_show(device);
+	if (ops && ops->ifpc_isenabled)
+		return ops->ifpc_isenabled(device);
 
 	return 0;
 }

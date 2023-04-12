@@ -332,6 +332,7 @@ static void kgsl_destroy_ion(struct kgsl_memdesc *memdesc)
 
 	if (metadata != NULL) {
 		remove_dmabuf_list(metadata);
+		dma_buf_unmap_attachment(metadata->attach, memdesc->sgt, DMA_BIDIRECTIONAL);
 		dma_buf_detach(metadata->dmabuf, metadata->attach);
 		dma_buf_put(metadata->dmabuf);
 		kfree(metadata);
@@ -3289,7 +3290,7 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 {
 	int ret = 0;
 	struct scatterlist *s;
-	struct sg_table *sg_table;
+	struct sg_table *sg_table = NULL;
 	struct dma_buf_attachment *attach = NULL;
 	struct kgsl_dma_buf_meta *metadata;
 
@@ -3331,8 +3332,6 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 		goto out;
 	}
 
-	dma_buf_unmap_attachment(attach, sg_table, DMA_BIDIRECTIONAL);
-
 	metadata->table = sg_table;
 	entry->priv_data = metadata;
 	entry->memdesc.sgt = sg_table;
@@ -3355,6 +3354,9 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 
 out:
 	if (ret) {
+		if (!IS_ERR_OR_NULL(sg_table))
+			dma_buf_unmap_attachment(attach, sg_table, DMA_BIDIRECTIONAL);
+
 		if (!IS_ERR_OR_NULL(attach))
 			dma_buf_detach(dmabuf, attach);
 
@@ -4042,9 +4044,10 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 
 	/* Quietly ignore the other flags that aren't this list */
 	flags &= KGSL_MEMFLAGS_SECURE |
-		KGSL_MEMFLAGS_VBO    |
-		KGSL_MEMTYPE_MASK   |
-		KGSL_MEMALIGN_MASK  |
+		KGSL_MEMFLAGS_VBO |
+		KGSL_MEMFLAGS_VBO_NO_MAP_ZERO |
+		KGSL_MEMTYPE_MASK |
+		KGSL_MEMALIGN_MASK |
 		KGSL_MEMFLAGS_FORCE_32BIT;
 
 	if ((flags & KGSL_MEMFLAGS_SECURE) && !check_and_warn_secured(device))
@@ -4071,8 +4074,11 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 	if (ret)
 		goto out;
 
-	ret = kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
-		memdesc, 0, memdesc->size);
+	/* Map the zero page unless explicitly asked not to */
+	if (!(flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
+		ret = kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
+			memdesc, 0, memdesc->size);
+
 	if (!ret) {
 		trace_kgsl_mem_alloc(entry);
 		kgsl_mem_entry_commit_process(entry);

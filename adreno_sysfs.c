@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/sysfs.h>
@@ -178,7 +178,7 @@ static int _ifpc_store(struct adreno_device *adreno_dev, bool val)
 
 static bool _ifpc_show(struct adreno_device *adreno_dev)
 {
-	return gmu_core_dev_ifpc_show(KGSL_DEVICE(adreno_dev));
+	return gmu_core_dev_ifpc_isenabled(KGSL_DEVICE(adreno_dev));
 }
 
 static int _touch_wake_store(struct adreno_device *adreno_dev, bool val)

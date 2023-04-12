@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -712,6 +712,10 @@ struct adreno_device {
 	u32 feature_fuse;
 	/** @gmu_ab: Track if GMU supports ab vote */
 	bool gmu_ab;
+	/** @ifpc_hyst: IFPC long hysteresis value */
+	u32 ifpc_hyst;
+	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
+	u32 ifpc_hyst_floor;
 };
 
 /**
