@@ -24,6 +24,7 @@
 #include <linux/qcom_dma_heap.h>
 #include <linux/security.h>
 #include <linux/sort.h>
+#include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
 #include <soc/qcom/boot_stats.h>
@@ -949,6 +950,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);
 	idr_destroy(&private->syncsource_idr);
@@ -1167,6 +1169,7 @@ static struct kgsl_process_private *kgsl_process_private_new(
 	private->fd_count = 1;
 	private->pid = cur_pid;
 	get_task_comm(private->comm, current->group_leader);
+	private->cmdline = kstrdup_quotable_cmdline(current, GFP_KERNEL);
 
 	spin_lock_init(&private->mem_lock);
 	spin_lock_init(&private->syncsource_lock);
@@ -5064,11 +5067,6 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 
 	sched_set_fifo(device->events_worker->task);
 
-	/* This can return -EPROBE_DEFER */
-	status = kgsl_mmu_probe(device);
-	if (status != 0)
-		goto error_pwrctrl_close;
-
 	status = kgsl_reclaim_init();
 	if (status)
 		goto error_pwrctrl_close;
@@ -5121,12 +5119,6 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 
 	kgsl_device_events_remove(device);
 
-	kgsl_mmu_close(device);
-
-	/*
-	 * This needs to come after the MMU close so we can be sure all the
-	 * pagetables have been freed
-	 */
 	kgsl_free_globals(device);
 
 	kgsl_pwrctrl_close(device);

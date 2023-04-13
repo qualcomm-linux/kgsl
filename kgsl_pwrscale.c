@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/devfreq_cooling.h>
@@ -517,6 +517,10 @@ int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq)
 	return 0;
 }
 
+static void busmon_dev_release(struct device *dev)
+{
+}
+
 static void pwrscale_busmon_create(struct kgsl_device *device,
 		struct platform_device *pdev, unsigned long *table)
 {
@@ -538,6 +542,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	bus_profile->profile.freq_table = table;
 
 	dev->parent = &pdev->dev;
+	dev->release = busmon_dev_release;
 
 	dev_set_name(dev, "kgsl-busmon");
 	dev_set_drvdata(dev, device);
