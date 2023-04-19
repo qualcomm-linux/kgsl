@@ -1422,6 +1422,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
 
+	device->pwrscale.avoid_ddr_stall = true;
+
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
 		return ret;

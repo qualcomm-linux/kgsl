@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -561,6 +561,35 @@ static int _preempt_level_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level_store, "%llu\n");
 
+static int _ifpc_hyst_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	u32 hyst;
+
+	if (!gmu_core_dev_ifpc_isenabled(KGSL_DEVICE(adreno_dev)))
+		return -EINVAL;
+
+	/* IFPC hysteresis timer is 16 bits */
+	hyst = max_t(u32, (u32) (FIELD_GET(GENMASK(15, 0), val)),
+		     adreno_dev->ifpc_hyst_floor);
+
+	if (hyst == adreno_dev->ifpc_hyst)
+		return 0;
+
+	return adreno_power_cycle_u32(adreno_dev,
+			&adreno_dev->ifpc_hyst, hyst);
+}
+
+static int _ifpc_hyst_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) adreno_dev->ifpc_hyst;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(ifpc_hyst_fops, _ifpc_hyst_show, _ifpc_hyst_store, "%llu\n");
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -589,6 +618,10 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 	if (adreno_is_a5xx(adreno_dev))
 		debugfs_create_file("isdb", 0644, device->d_debugfs,
 			device, &_isdb_fops);
+
+	if (gmu_core_isenabled(device))
+		debugfs_create_file("ifpc_hyst", 0644, device->d_debugfs,
+			device, &ifpc_hyst_fops);
 
 	debugfs_create_file("ctxt_record_size", 0644, snapshot_dir,
 		device, &_ctxt_record_size_fops);

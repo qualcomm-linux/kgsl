@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -359,7 +359,7 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	/* Check for errors before trying to initialize */
 
 	/* If preemption is not supported, ignore preemption request */
-	if (!test_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv))
+	if (!adreno_preemption_feature_set(adreno_dev))
 		local &= ~KGSL_CONTEXT_PREEMPT_STYLE_MASK;
 
 	/* We no longer support legacy context switching */
