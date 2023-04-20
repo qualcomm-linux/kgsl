@@ -1199,7 +1199,9 @@ static int gen7_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
-	kgsl_icc_set_tag(pwr, buslevel);
+	/* Target gen7_9_0 votes for perfmode through ACV. Skip icc path for same */
+	if (!adreno_is_gen7_9_0(adreno_dev))
+		kgsl_icc_set_tag(pwr, buslevel);
 
 	if (buslevel == pwr->cur_buslevel)
 		buslevel = INVALID_DCVS_IDX;

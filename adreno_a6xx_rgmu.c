@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk-provider.h>
@@ -281,7 +281,7 @@ static int a6xx_rgmu_ifpc_store(struct kgsl_device *device,
 		requested_idle_level);
 }
 
-static unsigned int a6xx_rgmu_ifpc_show(struct kgsl_device *device)
+static unsigned int a6xx_rgmu_ifpc_isenabled(struct kgsl_device *device)
 {
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(ADRENO_DEVICE(device));
 
@@ -382,7 +382,11 @@ static int a6xx_rgmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
  * the number of XO clock cycles for short hysteresis. This happens
  * after main hysteresis. Here we set it to 0xA cycles, or 0.5 us.
  */
-#define RGMU_PWR_COL_HYST 0x000A1680
+#define A6X_RGMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
+#define A6X_RGMU_SHORT_IFPC_HYST	FIELD_PREP(GENMASK(31, 16), 0xA)
+
+/* Minimum IFPC timer (200usec) allowed to override default value */
+#define A6X_RGMU_LONG_IFPC_HYST_FLOOR	FIELD_PREP(GENMASK(15, 0), 0x0F00)
 
 /* HOSTTOGMU and TIMER0/1 interrupt mask: 0x20060 */
 #define RGMU_INTR_EN_MASK  (BIT(5) | BIT(6) | BIT(17))
@@ -414,7 +418,7 @@ static int a6xx_rgmu_fw_start(struct adreno_device *adreno_dev,
 	/* IFPC Feature Enable */
 	if (rgmu->idle_level == GPU_HW_IFPC) {
 		gmu_core_regwrite(device, A6XX_GMU_PWR_COL_INTER_FRAME_HYST,
-				RGMU_PWR_COL_HYST);
+				A6X_RGMU_SHORT_IFPC_HYST | adreno_dev->ifpc_hyst);
 		gmu_core_regwrite(device, A6XX_GMU_PWR_COL_INTER_FRAME_CTRL,
 				BIT(0));
 	}
@@ -1241,7 +1245,7 @@ static const struct gmu_dev_ops a6xx_rgmudev = {
 	.oob_set = a6xx_rgmu_oob_set,
 	.oob_clear = a6xx_rgmu_oob_clear,
 	.ifpc_store = a6xx_rgmu_ifpc_store,
-	.ifpc_show = a6xx_rgmu_ifpc_show,
+	.ifpc_isenabled = a6xx_rgmu_ifpc_isenabled,
 };
 
 static int a6xx_rgmu_irq_probe(struct kgsl_device *device)
@@ -1415,10 +1419,13 @@ static int a6xx_rgmu_probe(struct kgsl_device *device,
 		return ret;
 
 	/* Set up RGMU idle states */
-	if (ADRENO_FEATURE(ADRENO_DEVICE(device), ADRENO_IFPC))
+	if (ADRENO_FEATURE(ADRENO_DEVICE(device), ADRENO_IFPC)) {
 		rgmu->idle_level = GPU_HW_IFPC;
-	else
+		adreno_dev->ifpc_hyst = A6X_RGMU_LONG_IFPC_HYST;
+		adreno_dev->ifpc_hyst_floor = A6X_RGMU_LONG_IFPC_HYST_FLOOR;
+	} else {
 		rgmu->idle_level = GPU_HW_ACTIVE;
+	}
 
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 	device->gmu_core.dev_ops = &a6xx_rgmudev;

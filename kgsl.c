@@ -24,6 +24,7 @@
 #include <linux/qcom_dma_heap.h>
 #include <linux/security.h>
 #include <linux/sort.h>
+#include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
 #include <soc/qcom/boot_stats.h>
@@ -332,6 +333,7 @@ static void kgsl_destroy_ion(struct kgsl_memdesc *memdesc)
 
 	if (metadata != NULL) {
 		remove_dmabuf_list(metadata);
+		dma_buf_unmap_attachment(metadata->attach, memdesc->sgt, DMA_BIDIRECTIONAL);
 		dma_buf_detach(metadata->dmabuf, metadata->attach);
 		dma_buf_put(metadata->dmabuf);
 		kfree(metadata);
@@ -948,6 +950,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);
 	idr_destroy(&private->syncsource_idr);
@@ -1166,6 +1169,7 @@ static struct kgsl_process_private *kgsl_process_private_new(
 	private->fd_count = 1;
 	private->pid = cur_pid;
 	get_task_comm(private->comm, current->group_leader);
+	private->cmdline = kstrdup_quotable_cmdline(current, GFP_KERNEL);
 
 	spin_lock_init(&private->mem_lock);
 	spin_lock_init(&private->syncsource_lock);
@@ -3289,7 +3293,7 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 {
 	int ret = 0;
 	struct scatterlist *s;
-	struct sg_table *sg_table;
+	struct sg_table *sg_table = NULL;
 	struct dma_buf_attachment *attach = NULL;
 	struct kgsl_dma_buf_meta *metadata;
 
@@ -3331,8 +3335,6 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 		goto out;
 	}
 
-	dma_buf_unmap_attachment(attach, sg_table, DMA_BIDIRECTIONAL);
-
 	metadata->table = sg_table;
 	entry->priv_data = metadata;
 	entry->memdesc.sgt = sg_table;
@@ -3355,6 +3357,9 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 
 out:
 	if (ret) {
+		if (!IS_ERR_OR_NULL(sg_table))
+			dma_buf_unmap_attachment(attach, sg_table, DMA_BIDIRECTIONAL);
+
 		if (!IS_ERR_OR_NULL(attach))
 			dma_buf_detach(dmabuf, attach);
 
@@ -4042,9 +4047,10 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 
 	/* Quietly ignore the other flags that aren't this list */
 	flags &= KGSL_MEMFLAGS_SECURE |
-		KGSL_MEMFLAGS_VBO    |
-		KGSL_MEMTYPE_MASK   |
-		KGSL_MEMALIGN_MASK  |
+		KGSL_MEMFLAGS_VBO |
+		KGSL_MEMFLAGS_VBO_NO_MAP_ZERO |
+		KGSL_MEMTYPE_MASK |
+		KGSL_MEMALIGN_MASK |
 		KGSL_MEMFLAGS_FORCE_32BIT;
 
 	if ((flags & KGSL_MEMFLAGS_SECURE) && !check_and_warn_secured(device))
@@ -4071,8 +4077,11 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 	if (ret)
 		goto out;
 
-	ret = kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
-		memdesc, 0, memdesc->size);
+	/* Map the zero page unless explicitly asked not to */
+	if (!(flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
+		ret = kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
+			memdesc, 0, memdesc->size);
+
 	if (!ret) {
 		trace_kgsl_mem_alloc(entry);
 		kgsl_mem_entry_commit_process(entry);
@@ -5058,11 +5067,6 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 
 	sched_set_fifo(device->events_worker->task);
 
-	/* This can return -EPROBE_DEFER */
-	status = kgsl_mmu_probe(device);
-	if (status != 0)
-		goto error_pwrctrl_close;
-
 	status = kgsl_reclaim_init();
 	if (status)
 		goto error_pwrctrl_close;
@@ -5115,12 +5119,6 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 
 	kgsl_device_events_remove(device);
 
-	kgsl_mmu_close(device);
-
-	/*
-	 * This needs to come after the MMU close so we can be sure all the
-	 * pagetables have been freed
-	 */
 	kgsl_free_globals(device);
 
 	kgsl_pwrctrl_close(device);
