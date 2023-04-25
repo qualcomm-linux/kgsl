@@ -1074,8 +1074,6 @@ static u32 find_unmapped_va(struct gmu_vma_entry *vma, u32 size, u32 va_align)
 	u32 cur = vma->start;
 	bool found = false;
 
-	va_align = hfi_get_gmu_va_alignment(va_align);
-
 	cur = ALIGN(cur, va_align);
 
 	while (node) {
@@ -1098,16 +1096,20 @@ static u32 find_unmapped_va(struct gmu_vma_entry *vma, u32 size, u32 va_align)
 
 static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 va_align)
+	u32 addr, u32 vma_id, int attrs, u32 align)
 {
 	int ret;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
 	struct gmu_vma_node *vma_node = NULL;
-	u32 size = md->size;
+	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
 
 	spin_lock(&vma->lock);
 	if (!addr) {
-		addr = find_unmapped_va(vma, size, va_align);
+		/*
+		 * We will end up with a hole (GMU VA range not backed by physical mapping) if
+		 * the aligned size is greater than the size of the physical mapping
+		 */
+		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
 		if (addr == 0) {
 			spin_unlock(&vma->lock);
 			dev_err(&gmu->pdev->dev,
@@ -1136,8 +1138,9 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 		addr, md->size, ret);
 
 	spin_lock(&vma->lock);
-	vma_node = find_va(vma, md->gmuaddr, md->size);
-	rb_erase(&vma_node->node, &vma->vma_root);
+	vma_node = find_va(vma, md->gmuaddr, size);
+	if (vma_node)
+		rb_erase(&vma_node->node, &vma->vma_root);
 	spin_unlock(&vma->lock);
 	kfree(vma_node);
 
@@ -1146,13 +1149,14 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 
 static int _map_gmu_static(struct gen7_gmu_device *gmu,
 	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 va_align)
+	u32 addr, u32 vma_id, int attrs, u32 align)
 {
 	int ret;
 	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
+	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
 
 	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(va_align));
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
@@ -1162,27 +1166,31 @@ static int _map_gmu_static(struct gen7_gmu_device *gmu,
 		return ret;
 	}
 	md->gmuaddr = addr;
-	vma->next_va = md->gmuaddr + md->size;
+	/*
+	 * We will end up with a hole (GMU VA range not backed by physical mapping) if the aligned
+	 * size is greater than the size of the physical mapping
+	 */
+	vma->next_va = md->gmuaddr + size;
 	return 0;
 }
 
 static int _map_gmu(struct gen7_gmu_device *gmu,
 	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 va_align)
+	u32 addr, u32 vma_id, int attrs, u32 align)
 {
 	return vma_is_dynamic(vma_id) ?
-			_map_gmu_dynamic(gmu, md, addr, vma_id, attrs, va_align) :
-			_map_gmu_static(gmu, md, addr, vma_id, attrs, va_align);
+			_map_gmu_dynamic(gmu, md, addr, vma_id, attrs, align) :
+			_map_gmu_static(gmu, md, addr, vma_id, attrs, align);
 }
 
 int gen7_gmu_import_buffer(struct gen7_gmu_device *gmu, u32 vma_id,
-				struct kgsl_memdesc *md, u32 size, u32 attrs)
+				struct kgsl_memdesc *md, u32 attrs, u32 align)
 {
-	return _map_gmu(gmu, md, 0, vma_id, attrs, 0);
+	return _map_gmu(gmu, md, 0, vma_id, attrs, align);
 }
 
 struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
@@ -1200,7 +1208,7 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	ret = _map_gmu(gmu, md, addr, vma_id, attrs, va_align);
+	ret = _map_gmu(gmu, md, addr, vma_id, attrs, align);
 	if (ret) {
 		kgsl_sharedmem_free(md);
 		memset(md, 0x0, sizeof(*md));
@@ -1213,7 +1221,7 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
 }
 
 struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 va_align)
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align)
 {
 	int ret;
 	struct kgsl_memdesc *md;
@@ -1228,7 +1236,7 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device 
 	if (ret)
 		return ERR_PTR(ret);
 
-	ret = _map_gmu(gmu, md, addr, vma_id, attrs, va_align);
+	ret = _map_gmu(gmu, md, addr, vma_id, attrs, align);
 
 	sg_free_table(md->sgt);
 	kfree(md->sgt);
@@ -1327,33 +1335,41 @@ int gen7_gmu_parse_fw(struct adreno_device *adreno_dev)
 	int ret, offset = 0;
 	const char *gmufw_name = gen7_core->gmufw_name;
 
-	/* GMU fw already saved and verified so do nothing new */
-	if (gmu->fw_image)
-		return 0;
+	/*
+	 * If GMU fw already saved and verified, do nothing new.
+	 * Skip only request_firmware and allow preallocation to
+	 * ensure in scenario where GMU request firmware succeeded
+	 * but preallocation fails, we don't return early without
+	 * successful preallocations on next open call.
+	 */
+	if (!gmu->fw_image) {
 
-	if (gen7_core->gmufw_name == NULL)
-		return -EINVAL;
+		if (gen7_core->gmufw_name == NULL)
+			return -EINVAL;
 
-	ret = request_firmware(&gmu->fw_image, gmufw_name, &gmu->pdev->dev);
-	if (ret) {
-		if (gen7_core->gmufw_bak_name) {
-			gmufw_name = gen7_core->gmufw_bak_name;
-			ret = request_firmware(&gmu->fw_image, gmufw_name,
+		ret = request_firmware(&gmu->fw_image, gmufw_name,
 				&gmu->pdev->dev);
-		}
 		if (ret) {
-			dev_err(&gmu->pdev->dev,
-				"request_firmware (%s) failed: %d\n",
-				gmufw_name, ret);
+			if (gen7_core->gmufw_bak_name) {
+				gmufw_name = gen7_core->gmufw_bak_name;
+				ret = request_firmware(&gmu->fw_image, gmufw_name,
+					&gmu->pdev->dev);
+			}
 
-			return ret;
+			if (ret) {
+				dev_err(&gmu->pdev->dev,
+					"request_firmware (%s) failed: %d\n",
+					gmufw_name, ret);
+
+				return ret;
+			}
 		}
 	}
 
 	/*
-	 * Zero payload fw blocks contain meta data and are
+	 * Zero payload fw blocks contain metadata and are
 	 * guaranteed to precede fw load data. Parse the
-	 * meta data blocks.
+	 * metadata blocks.
 	 */
 	while (offset < gmu->fw_image->size) {
 		blk = (struct gmu_block_header *)&gmu->fw_image->data[offset];
@@ -1526,6 +1542,8 @@ static int gen7_gmu_notify_slumber(struct adreno_device *adreno_dev)
 	};
 	int ret;
 
+	req.bw |= gen7_bus_ab_quantize(adreno_dev, 0);
+
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
@@ -1559,7 +1577,7 @@ void gen7_gmu_suspend(struct adreno_device *adreno_dev)
 }
 
 static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
-		int gpu_pwrlevel, int bus_level)
+		int gpu_pwrlevel, int bus_level, u32 ab)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1586,11 +1604,11 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	if (bus_level < pwr->ddr_table_count && bus_level > 0)
 		req.bw = bus_level;
 
+	req.bw |=  gen7_bus_ab_quantize(adreno_dev, ab);
+
 	/* GMU will vote for slumber levels through the sleep sequence */
-	if ((req.freq == INVALID_DCVS_IDX) &&
-		(req.bw == INVALID_DCVS_IDX)) {
+	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_BW_VOTE))
 		return 0;
-	}
 
 	ret = CMD_MSG_HDR(req, H2F_MSG_GX_BW_PERF_VOTE);
 	if (ret)
@@ -1620,7 +1638,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 
 static int gen7_gmu_clock_set(struct adreno_device *adreno_dev, u32 pwrlevel)
 {
-	return gen7_gmu_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX);
+	return gen7_gmu_dcvs_set(adreno_dev, pwrlevel, INVALID_DCVS_IDX, INVALID_AB_VALUE);
 }
 
 static int gen7_gmu_ifpc_store(struct kgsl_device *device,
@@ -1646,7 +1664,7 @@ static int gen7_gmu_ifpc_store(struct kgsl_device *device,
 		requested_idle_level);
 }
 
-static unsigned int gen7_gmu_ifpc_show(struct kgsl_device *device)
+static unsigned int gen7_gmu_ifpc_isenabled(struct kgsl_device *device)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(ADRENO_DEVICE(device));
 
@@ -1935,9 +1953,16 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	gen7_get_gpu_feature_info(adreno_dev);
+
 	ret = gen7_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
+
+	if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1) {
+		adreno_dev->gmu_ab = true;
+		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
+	}
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 
@@ -2120,7 +2145,7 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.oob_set = gen7_gmu_oob_set,
 	.oob_clear = gen7_gmu_oob_clear,
 	.ifpc_store = gen7_gmu_ifpc_store,
-	.ifpc_show = gen7_gmu_ifpc_show,
+	.ifpc_isenabled = gen7_gmu_ifpc_isenabled,
 	.cooperative_reset = gen7_gmu_cooperative_reset,
 	.wait_for_active_transition = gen7_gmu_wait_for_active_transition,
 	.scales_bandwidth = gen7_gmu_scales_bandwidth,
@@ -2136,24 +2161,78 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
-	kgsl_icc_set_tag(pwr, buslevel);
+	/* Target gen7_9_0 votes for perfmode through ACV. Skip icc path for same */
+	if (!adreno_is_gen7_9_0(adreno_dev))
+		kgsl_icc_set_tag(pwr, buslevel);
 
-	if (buslevel != pwr->cur_buslevel) {
-		ret = gen7_gmu_dcvs_set(adreno_dev, INVALID_DCVS_IDX, buslevel);
-		if (ret)
-			return ret;
+	if (buslevel == pwr->cur_buslevel)
+		buslevel = INVALID_DCVS_IDX;
 
+	if ((ab == pwr->cur_ab) || (ab == 0))
+		ab = INVALID_AB_VALUE;
+
+	if ((ab == INVALID_AB_VALUE) && (buslevel == INVALID_DCVS_IDX))
+		return 0;
+
+	ret = gen7_gmu_dcvs_set(adreno_dev, INVALID_DCVS_IDX,
+			buslevel, ab);
+	if (ret)
+		return ret;
+
+	if (buslevel != INVALID_DCVS_IDX) {
 		pwr->cur_buslevel = buslevel;
-
 		trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel);
 	}
 
-	if (ab != pwr->cur_ab) {
-		icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
+	if (ab != INVALID_AB_VALUE) {
+		if (!adreno_dev->gmu_ab)
+			icc_set_bw(pwr->icc_path, MBps_to_icc(ab), 0);
 		pwr->cur_ab = ab;
 	}
 
 	return ret;
+}
+
+#define NUM_CHANNELS 4
+
+u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
+{
+	u16 vote = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!adreno_dev->gmu_ab || (ab == INVALID_AB_VALUE))
+		return (FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE));
+
+	if (pwr->ddr_table[pwr->ddr_table_count - 1]) {
+		/*
+		 * if ab is calculated as higher than theoretical max bandwidth, set ab as
+		 * theoretical max to prevent truncation during quantization.
+		 *
+		 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
+		 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
+		 */
+		u32 max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+		u32 max_ab = max_bw / 1000;
+
+		ab = min_t(u32, ab, max_ab);
+
+		/*
+		 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
+		 * range to a 16 bit space and the quantized value can be used to vote for AB though
+		 * GMU. Quantization can be performed as below.
+		 *
+		 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
+		 */
+		vote = (u16)(((u64)ab * 1000 * (1 << 16)) / max_bw);
+	}
+
+	/*
+	 * Set ab enable mask and valid AB vote. req.bw is 32 bit value 0xABABENIB
+	 * and with this return we want to set the upper 16 bits and EN field specifies
+	 * if the AB vote is valid or not.
+	 */
+	return (FIELD_PREP(GENMASK(31, 16), vote) | FIELD_PREP(GENMASK(15, 8), 1));
 }
 
 static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
@@ -2469,6 +2548,12 @@ static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
 	return ret;
 }
 
+/* Default IFPC timer (300usec) value */
+#define GEN7_GMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
+
+/* Minimum IFPC timer (200usec) allowed to override default value */
+#define GEN7_GMU_LONG_IFPC_HYST_FLOOR	FIELD_PREP(GENMASK(15, 0), 0x0F00)
+
 int gen7_gmu_probe(struct kgsl_device *device,
 		struct platform_device *pdev)
 {
@@ -2531,10 +2616,13 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	/* Set up GMU idle state */
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC))
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
 		gmu->idle_level = GPU_HW_IFPC;
-	else
+		adreno_dev->ifpc_hyst = GEN7_GMU_LONG_IFPC_HYST;
+		adreno_dev->ifpc_hyst_floor = GEN7_GMU_LONG_IFPC_HYST_FLOOR;
+	} else {
 		gmu->idle_level = GPU_HW_ACTIVE;
+	}
 
 	gen7_gmu_acd_probe(device, gmu, pdev->dev.of_node);
 
@@ -2844,8 +2932,6 @@ static int gen7_first_boot(struct adreno_device *adreno_dev)
 	ret = gen7_gpu_boot(adreno_dev);
 	if (ret)
 		return ret;
-
-	gen7_get_gpu_feature_info(adreno_dev);
 
 	adreno_get_bus_counters(adreno_dev);
 

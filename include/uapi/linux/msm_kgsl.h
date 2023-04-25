@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -152,12 +152,13 @@
 #define KGSL_CACHEMODE_WRITETHROUGH 2
 #define KGSL_CACHEMODE_WRITEBACK 3
 
-#define KGSL_MEMFLAGS_USE_CPU_MAP (1ULL << 28)
-#define KGSL_MEMFLAGS_SPARSE_PHYS (1ULL << 29)
-#define KGSL_MEMFLAGS_SPARSE_VIRT (1ULL << 30)
-#define KGSL_MEMFLAGS_IOCOHERENT  (1ULL << 31)
-#define KGSL_MEMFLAGS_GUARD_PAGE  (1ULL << 33)
-#define KGSL_MEMFLAGS_VBO         (1ULL << 34)
+#define KGSL_MEMFLAGS_USE_CPU_MAP     (1ULL << 28)
+#define KGSL_MEMFLAGS_SPARSE_PHYS     (1ULL << 29)
+#define KGSL_MEMFLAGS_SPARSE_VIRT     (1ULL << 30)
+#define KGSL_MEMFLAGS_IOCOHERENT      (1ULL << 31)
+#define KGSL_MEMFLAGS_GUARD_PAGE      (1ULL << 33)
+#define KGSL_MEMFLAGS_VBO             (1ULL << 34)
+#define KGSL_MEMFLAGS_VBO_NO_MAP_ZERO (1ULL << 35)
 
 /* Memory types for which allocations are made */
 #define KGSL_MEMTYPE_MASK		0x0000FF00
@@ -356,6 +357,8 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_IS_FASTBLEND_ENABLED		0x2E
 #define KGSL_PROP_UCHE_TRAP_BASE	0x2F
 #define KGSL_PROP_IS_AQE_ENABLED	0x30
+#define KGSL_PROP_GPU_SECURE_VA_SIZE	0x31
+#define KGSL_PROP_GPU_SECURE_VA_INUSE	0x32
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.

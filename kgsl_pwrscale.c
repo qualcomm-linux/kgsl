@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/devfreq_cooling.h>
@@ -204,18 +204,6 @@ void kgsl_pwrscale_enable(struct kgsl_device *device)
 	}
 }
 
-#ifdef DEVFREQ_FLAG_WAKEUP_MAXFREQ
-static inline bool _check_maxfreq(u32 flags)
-{
-	return (flags & DEVFREQ_FLAG_WAKEUP_MAXFREQ);
-}
-#else
-static inline bool _check_maxfreq(u32 flags)
-{
-	return false;
-}
-#endif
-
 /*
  * kgsl_devfreq_target - devfreq_dev_profile.target callback
  * @dev: see devfreq.h
@@ -256,15 +244,6 @@ int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
 		return -EPROTO;
 	}
 	pwr = &device->pwrctrl;
-
-	if (_check_maxfreq(flags)) {
-		/*
-		 * The GPU is about to get suspended,
-		 * but it needs to be at the max power level when waking up
-		 */
-		pwr->wakeup_maxpwrlevel = 1;
-		return 0;
-	}
 
 	rec_freq = *freq;
 
@@ -351,7 +330,13 @@ int kgsl_devfreq_get_dev_status(struct device *dev,
 		last_b->ram_time = device->pwrscale.accum_stats.ram_time;
 		last_b->ram_wait = device->pwrscale.accum_stats.ram_wait;
 		last_b->buslevel = device->pwrctrl.cur_buslevel;
-		last_b->gpu_minfreq = pwrctrl->pwrlevels[pwrctrl->min_pwrlevel].gpu_freq;
+
+		if (pwrscale->avoid_ddr_stall) {
+			struct kgsl_pwrlevel *pwrlevel;
+
+			pwrlevel = &pwrctrl->pwrlevels[pwrctrl->min_pwrlevel];
+			last_b->gpu_minfreq = pwrlevel->gpu_freq;
+		}
 	}
 
 	kgsl_pwrctrl_busy_time(device, stat->total_time, stat->busy_time);
@@ -436,29 +421,19 @@ int kgsl_busmon_get_dev_status(struct device *dev,
 	return 0;
 }
 
-#ifdef DEVFREQ_FLAG_FAST_HINT
-static inline bool _check_fast_hint(u32 flags)
+static int _read_hint(u32 flags)
 {
-	return (flags & DEVFREQ_FLAG_FAST_HINT);
+	switch (flags) {
+	case BUSMON_FLAG_FAST_HINT:
+		return 1;
+	case BUSMON_FLAG_SUPER_FAST_HINT:
+		return 2;
+	case BUSMON_FLAG_SLOW_HINT:
+		return -1;
+	default:
+		return 0;
+	}
 }
-#else
-static inline bool _check_fast_hint(u32 flags)
-{
-	return false;
-}
-#endif
-
-#ifdef DEVFREQ_FLAG_SLOW_HINT
-static inline bool _check_slow_hint(u32 flags)
-{
-	return (flags & DEVFREQ_FLAG_SLOW_HINT);
-}
-#else
-static inline bool _check_slow_hint(u32 flags)
-{
-	return false;
-}
-#endif
 
 /*
  * kgsl_busmon_target - devfreq_dev_profile.target callback
@@ -510,10 +485,7 @@ int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 	}
 
 	b = pwr->bus_mod;
-	if (_check_fast_hint(bus_flag))
-		pwr->bus_mod++;
-	else if (_check_slow_hint(bus_flag))
-		pwr->bus_mod--;
+	pwr->bus_mod += _read_hint(bus_flag);
 
 	/* trim calculated change to fit range */
 	if (pwr_level->bus_freq + pwr->bus_mod < pwr_level->bus_min)
@@ -524,7 +496,6 @@ int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 	/* Update bus vote if AB or IB is modified */
 	if ((pwr->bus_mod != b) || (pwr->bus_ab_mbytes != ab_mbytes)) {
 		pwr->bus_percent_ab = device->pwrscale.bus_profile.percent_ab;
-		pwr->ddr_stall_percent = device->pwrscale.bus_profile.wait_active_percent;
 		/*
 		 * When gpu is thermally throttled to its lowest power level,
 		 * drop GPU's AB vote as a last resort to lower CX voltage and
@@ -544,6 +515,10 @@ int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq)
 {
 	return 0;
+}
+
+static void busmon_dev_release(struct device *dev)
+{
 }
 
 static void pwrscale_busmon_create(struct kgsl_device *device,
@@ -567,6 +542,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	bus_profile->profile.freq_table = table;
 
 	dev->parent = &pdev->dev;
+	dev->release = busmon_dev_release;
 
 	dev_set_name(dev, "kgsl-busmon");
 	dev_set_drvdata(dev, device);
@@ -584,6 +560,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	ret = devfreq_gpubw_init();
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add busmon governor: %d\n", ret);
+		dev_pm_opp_remove_all_dynamic(dev);
 		put_device(dev);
 		return;
 	}
@@ -594,6 +571,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	if (IS_ERR_OR_NULL(bus_devfreq)) {
 		dev_err(&pdev->dev, "Bus scaling not enabled\n");
 		devfreq_gpubw_exit();
+		dev_pm_opp_remove_all_dynamic(dev);
 		put_device(dev);
 		return;
 	}
@@ -707,6 +685,8 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	struct devfreq *devfreq;
 	struct msm_adreno_extended_profile *gpu_profile;
 	int i, ret;
+
+	adreno_tz_data.avoid_ddr_stall = pwrscale->avoid_ddr_stall;
 
 	gpu_profile = &pwrscale->gpu_profile;
 	gpu_profile->private_data = &adreno_tz_data;
@@ -837,8 +817,9 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 	if (pwrscale->bus_devfreq) {
 		devfreq_remove_device(pwrscale->bus_devfreq);
 		pwrscale->bus_devfreq = NULL;
-		put_device(&pwrscale->busmondev);
 		devfreq_gpubw_exit();
+		dev_pm_opp_remove_all_dynamic(&pwrscale->busmondev);
+		put_device(&pwrscale->busmondev);
 	}
 
 	if (!pwrscale->devfreqptr)

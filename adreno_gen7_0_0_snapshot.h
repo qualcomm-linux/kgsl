@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_0_0_SNAPSHOT_H
 #define __ADRENO_GEN7_0_0_SNAPSHOT_H
@@ -171,7 +171,7 @@ static const u32 gen7_0_0_pre_crashdumper_gpu_registers[] = {
 static_assert(IS_ALIGNED(sizeof(gen7_0_0_pre_crashdumper_gpu_registers), 8));
 
 static const u32 gen7_0_0_post_crashdumper_registers[] = {
-	0x00535, 0x00535, 0x0f400, 0x0f400, 0x0f800, 0x0f803,
+	0x00535, 0x00535, 0x0f400, 0x0f400, 0x0f800, 0x0f803, 0x0fc00, 0x0fc01,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen7_0_0_post_crashdumper_registers), 8));

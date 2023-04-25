@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_ADRENO_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -56,6 +56,33 @@ TRACE_EVENT(adreno_cmdbatch_queued,
 	)
 );
 
+TRACE_EVENT(adreno_hw_fence_query,
+	TP_PROTO(u64 context, u64 seqno, u32 flags, const char *name, const char *val),
+	TP_ARGS(context, seqno, flags, name, val),
+	TP_STRUCT__entry(
+		__field(u64, context)
+		__field(u64, seqno)
+		__field(u32, flags)
+		__string(fence_name, name)
+		__string(val, val)
+	),
+	TP_fast_assign(
+		__entry->context = context;
+		__entry->seqno = seqno;
+		__entry->flags = flags;
+		__assign_str(fence_name, name);
+		__assign_str(val, val);
+	),
+	TP_printk(
+		"id=%lld seqno=%lld sw_status=%s name=%s val=%s",
+			__entry->context, __entry->seqno,
+			__entry->flags ? __print_flags(__entry->flags, "|",
+				{ ADRENO_HW_FENCE_SW_STATUS_PENDING, "PENDING" },
+				{ ADRENO_HW_FENCE_SW_STATUS_SIGNALED, "SIGNALED" }) : "none",
+			__get_str(fence_name),
+			__get_str(val))
+);
+
 TRACE_EVENT(adreno_input_hw_fence,
 	TP_PROTO(u32 id, u64 context, u64 seqno, u64 flags, const char *name),
 	TP_ARGS(id, context, seqno, flags, name),
@@ -77,9 +104,44 @@ TRACE_EVENT(adreno_input_hw_fence,
 		"ctx=%u id=%lld seqno=%lld flags=%s name=%s",
 			__entry->id,  __entry->context, __entry->seqno,
 			__entry->flags ? __print_flags(__entry->flags, "|",
-				{ GMU_SYNCOBJ_KGSL_FENCE, "KGSL_FENCE" },
-				{ GMU_SYNCOBJ_RETIRED, "RETIRED" }) : "none",
+				GMU_SYNCOBJ_FLAGS) : "none",
 			__get_str(fence_name))
+);
+
+TRACE_EVENT(adreno_syncobj_query_reply,
+	TP_PROTO(u32 id, u32 timestamp, uint64_t ticks),
+	TP_ARGS(id, timestamp, ticks),
+	TP_STRUCT__entry(
+		__field(u32, id)
+		__field(u32, timestamp)
+		__field(uint64_t, ticks)
+	),
+	TP_fast_assign(
+		__entry->id = id;
+		__entry->timestamp = timestamp;
+		__entry->ticks = ticks;
+	),
+	TP_printk(
+		"ctx=%u ts=%u ticks=%lld",
+			__entry->id, __entry->timestamp, __entry->ticks)
+);
+
+TRACE_EVENT(adreno_syncobj_query,
+	TP_PROTO(u32 id, u32 timestamp, uint64_t ticks),
+	TP_ARGS(id, timestamp, ticks),
+	TP_STRUCT__entry(
+		__field(u32, id)
+		__field(u32, timestamp)
+		__field(uint64_t, ticks)
+	),
+	TP_fast_assign(
+		__entry->id = id;
+		__entry->timestamp = timestamp;
+		__entry->ticks = ticks;
+	),
+	TP_printk(
+		"ctx=%u ts=%u ticks=%lld",
+			__entry->id, __entry->timestamp, __entry->ticks)
 );
 
 TRACE_EVENT(adreno_syncobj_submitted,

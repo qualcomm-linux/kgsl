@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -510,7 +511,14 @@ int adreno_perfcounter_put(struct adreno_device *adreno_dev,
 			/* mark available if not used anymore */
 			if (group->regs[i].kernelcount == 0 &&
 					group->regs[i].usercount == 0) {
-				if (gpudev->perfcounter_remove)
+				/*
+				 * Perfcounter register is added to the power
+				 * up reglist only if group_restore flag is set.
+				 * Hence check the flag before removing the entry
+				 * from the reglist.
+				 */
+				if ((group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) &&
+						gpudev->perfcounter_remove)
 					ret = gpudev->perfcounter_remove(adreno_dev,
 							&group->regs[i], groupid);
 				if (!ret)

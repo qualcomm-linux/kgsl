@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/io.h>
@@ -68,11 +68,11 @@ int kgsl_regmap_add_region(struct kgsl_regmap *regmap, struct platform_device *p
 	struct resource *res;
 	int ret;
 
-	if (WARN_ON(regmap->count >= ARRAY_SIZE(regmap->region)))
-		return -ENODEV;
-
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, name);
 	if (!res)
+		return -ENODEV;
+
+	if (WARN_ON(regmap->count >= ARRAY_SIZE(regmap->region)))
 		return -ENODEV;
 
 	region = &regmap->region[regmap->count];

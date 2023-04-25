@@ -137,6 +137,8 @@
 #define GEN7_CP_BV_CHICKEN_DBG           0xada
 
 /* LPAC registers */
+#define GEN7_CP_LPAC_RB_BASE             0xb00
+#define GEN7_CP_LPAC_RB_BASE_HI          0xb01
 #define GEN7_CP_LPAC_RB_RPTR             0xb06
 #define GEN7_CP_LPAC_RB_WPTR             0xb07
 #define GEN7_CP_LPAC_DRAW_STATE_ADDR     0xb0a
@@ -630,6 +632,7 @@
 #define GEN7_RBBM_SP_HYST_CNT            0x00042
 #define GEN7_RBBM_SW_RESET_CMD           0x00043
 #define GEN7_RBBM_RAC_THRESHOLD_CNT      0x00044
+#define GEN7_RBBM_CLOCK_CNTL_GLOBAL      0x000ad
 #define GEN7_RBBM_CLOCK_CNTL             0x000ae
 #define GEN7_RBBM_CLOCK_CNTL_SP0         0x000b0
 #define GEN7_RBBM_CLOCK_CNTL2_SP0        0x000b4
@@ -676,6 +679,8 @@
 #define GEN7_RBBM_CLOCK_DELAY_HLSQ       0x0011c
 #define GEN7_RBBM_CLOCK_HYST_HLSQ        0x0011d
 #define GEN7_RBBM_CGC_GLOBAL_LOAD_CMD    0x0011e
+#define GEN7_RBBM_CGC_P2S_TRIG_CMD       0x0011f
+#define GEN7_RBBM_CGC_P2S_STATUS         0x00122
 #define GEN7_RBBM_CLOCK_HYST2_VFD        0x0012f
 #define GEN7_RBBM_CLOCK_MODE_CP          0x00260
 #define GEN7_RBBM_CLOCK_MODE_BV_LRZ      0x00284
@@ -855,6 +860,7 @@
 #define GEN7_UCHE_GMEM_RANGE_MIN_HI         0xe0c
 #define GEN7_UCHE_GMEM_RANGE_MAX_LO         0xe0d
 #define GEN7_UCHE_GMEM_RANGE_MAX_HI         0xe0e
+#define GEN7_UCHE_DBG_CNTL_1                0xe12
 #define GEN7_UCHE_CACHE_WAYS                0xe17
 #define GEN7_UCHE_CLIENT_PF                 0xe19
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_0        0xe1c
