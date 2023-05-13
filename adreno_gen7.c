@@ -264,8 +264,8 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
 	u32 feature_fuse = 0;
 
-	/* Only Gen7_9_0 has the HW feature information */
-	if (!adreno_is_gen7_9_0(adreno_dev))
+	/* Only Gen7_9_x has the HW feature information */
+	if (!adreno_is_gen7_9_x(adreno_dev))
 		return;
 
 	/* Get HW feature soft fuse value */
@@ -627,7 +627,7 @@ int gen7_start(struct adreno_device *adreno_dev)
 			0x1);
 
 	/* Disable ubwc merged UFC request feature */
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, BIT(19), BIT(19));
 	/* Disable non-ubwc read reqs from passing write reqs */
 	else
@@ -726,7 +726,7 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		gpu_req |= GPU_BCL_EN_REQ;
 
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		gpu_req |= GPU_TSENSE_EN_REQ;
 
 	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
@@ -818,7 +818,7 @@ static int gen7_post_start(struct adreno_device *adreno_dev)
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return 0;
 
-	kmd_postamble_addr = PREEMPT_SCRATCH_ADDR(adreno_dev, KMD_POSTAMBLE_IDX);
+	kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
 	gen7_preemption_prepare_postamble(adreno_dev);
 
 	cmds = adreno_ringbuffer_allocspace(rb, (preempt->postamble_bootup_len ? 16 : 12));
@@ -1870,7 +1870,7 @@ err:
 
 static void gen7_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
 {
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN7_RBBM_SW_FUSE_INT_MASK,
 			state ? GEN7_SW_FUSE_INT_MASK : 0);
 }

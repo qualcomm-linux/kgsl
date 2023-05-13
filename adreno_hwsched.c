@@ -2313,6 +2313,19 @@ static int unregister_context(int id, void *ptr, void *data)
 	 */
 	context->gmu_registered = false;
 
+	/*
+	 * Consider the scenario where non-recurring submissions were made
+	 * by a context. Here internal_timestamp of context would be non
+	 * zero. After slumber, last retired timestamp is not held by GMU.
+	 * If this context submits a recurring workload, the context is
+	 * registered again, but the internal timestamp is not updated. When
+	 * the context is unregistered in send_context_unregister_hfi(),
+	 * we could be waiting on old internal_timestamp which is not held by
+	 * GMU. This can result in GMU errors. Hence set internal_timestamp
+	 * to zero when entering slumber.
+	 */
+	drawctxt->internal_timestamp = 0;
+
 	return 0;
 }
 

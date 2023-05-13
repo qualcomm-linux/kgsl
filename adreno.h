@@ -28,8 +28,6 @@
 /* Used to inform CP where to save preemption counter data at the time of switch out */
 #define SET_PSEUDO_COUNTER 4
 
-/* Index to preemption scratch buffer to store KMD postamble */
-#define KMD_POSTAMBLE_IDX 100
 /* Index to preemption scratch buffer to store current QOS value */
 #define QOS_VALUE_IDX KGSL_PRIORITY_MAX_RB_LEVELS
 
@@ -233,6 +231,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_2_1 = 0x070201,
 	ADRENO_REV_GEN7_4_0 = 0x070400,
 	ADRENO_REV_GEN7_9_0 = 0x070900,
+	ADRENO_REV_GEN7_9_1 = 0x070901,
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -1244,12 +1243,17 @@ ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
 ADRENO_TARGET(gen7_2_1, ADRENO_REV_GEN7_2_1)
 ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
+ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 
+static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen7_9_0(adreno_dev) || adreno_is_gen7_9_1(adreno_dev);
+}
 
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
-		adreno_is_gen7_9_0(adreno_dev);
+		adreno_is_gen7_9_x(adreno_dev);
 }
 
 /*
