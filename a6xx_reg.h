@@ -1159,6 +1159,12 @@
 #define A6XX_RSCC_TCS1_DRV0_STATUS                      0x003EE
 #define A6XX_RSCC_TCS2_DRV0_STATUS                      0x00496
 #define A6XX_RSCC_TCS3_DRV0_STATUS                      0x0053E
+#define A6XX_RSCC_TCS4_DRV0_STATUS                      0x005E6
+#define A6XX_RSCC_TCS5_DRV0_STATUS                      0x0068E
+#define A6XX_RSCC_TCS6_DRV0_STATUS                      0x00736
+#define A6XX_RSCC_TCS7_DRV0_STATUS                      0x007DE
+#define A6XX_RSCC_TCS8_DRV0_STATUS                      0x00886
+#define A6XX_RSCC_TCS9_DRV0_STATUS                      0x0092E
 
 /* GPU PDC sequencer registers in AOSS.RPMh domain */
 #define PDC_GPU_ENABLE_PDC			0x1140
@@ -1225,6 +1231,7 @@
 	(((1 << A6XX_GPU_LLC_SCID_NUM_BITS) - 1) << A6XX_GPUHTW_LLC_SCID_SHIFT)
 
 /* FUSA registers */
+#define A6XX_GPU_FUSA_REG_BASE			0x3FC00
 #define A6XX_GPU_FUSA_REG_ECC_CTRL			0x3FC00
 #define A6XX_GPU_FUSA_REG_CSR_PRIY			0x3FC52
 #define A6XX_GPU_FUSA_DISABLE_NUM_BITS			4

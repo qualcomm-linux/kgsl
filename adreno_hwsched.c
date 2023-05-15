@@ -5,6 +5,7 @@
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
+#include <linux/dma-fence-array.h>
 #include <linux/soc/qcom/msm_hw_fence.h>
 #include <soc/qcom/msm_performance.h>
 
@@ -15,14 +16,6 @@
 #include "adreno_trace.h"
 #include "kgsl_timeline.h"
 #include <linux/msm_kgsl.h>
-
-/* This structure represents inflight command object */
-struct cmd_list_obj {
-	/** @drawobj: Handle to the draw object */
-	struct kgsl_drawobj *drawobj;
-	/** @node: List node to put it in the list of inflight commands */
-	struct list_head node;
-};
 
 /*
  * Number of commands that can be queued in a context before it sleeps
@@ -1513,6 +1506,9 @@ static void do_fault_header_lpac(struct adreno_device *adreno_dev,
 		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
 		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
 
+	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
+			drawctxt_lpac->base.proc_priv->cmdline);
+
 	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
 		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
 		adreno_get_level(drawobj_lpac->context));
@@ -1547,6 +1543,9 @@ static void do_fault_header(struct adreno_device *adreno_dev,
 		drawobj->timestamp, status,
 		drawobj->context->gmu_dispatch_queue, rptr, wptr,
 		ib1base, ib1sz, ib2base, ib2sz);
+
+	pr_context(device, drawobj->context, "cmdline: %s\n",
+			drawctxt->base.proc_priv->cmdline);
 
 	trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
 		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,
@@ -1707,6 +1706,62 @@ static bool context_is_throttled(struct kgsl_device *device,
 	return false;
 }
 
+static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
+{
+	int i, j, fence_index = 0;
+	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	for (i = 0; i < syncobj->numsyncs; i++) {
+		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
+		struct kgsl_sync_fence_cb *kcb = event->handle;
+		struct dma_fence **fences;
+		struct dma_fence_array *array;
+		u32 num_fences;
+
+		array = to_dma_fence_array(kcb->fence);
+		if (array != NULL) {
+			num_fences = array->num_fences;
+			fences = array->fences;
+		} else {
+			num_fences = 1;
+			fences = &kcb->fence;
+		}
+
+		for (j = 0; j < num_fences; j++, fence_index++) {
+			bool kgsl = is_kgsl_fence(fences[j]);
+			bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags);
+			char value[32] = "unknown";
+
+			if (fences[j]->ops->timeline_value_str)
+				fences[j]->ops->timeline_value_str(fences[j], value, sizeof(value));
+
+			dev_err(device->dev,
+				"dma fence[%d] signaled:%d kgsl:%d ctx:%lu seqno:%lu value:%s\n",
+				fence_index, signaled, kgsl, fences[j]->context, fences[j]->seqno,
+				value);
+		}
+	}
+
+}
+
+static void print_fault_syncobj(struct adreno_device *adreno_dev,
+				u32 ctxt_id, u32 ts)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct cmd_list_obj *obj;
+
+	list_for_each_entry(obj, &hwsched->cmd_list, node) {
+		struct kgsl_drawobj *drawobj = obj->drawobj;
+
+		if (drawobj->type == SYNCOBJ_TYPE) {
+			if ((ctxt_id == drawobj->context->id) &&
+			(ts == drawobj->timestamp))
+				_print_syncobj(adreno_dev, drawobj);
+		}
+	}
+}
+
 static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adreno_dev, int fault)
 {
 	struct kgsl_drawobj *drawobj = NULL;
@@ -1722,6 +1777,12 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
+
+	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
+		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
+		kgsl_device_snapshot(device, NULL, NULL, true);
+		goto done;
+	}
 
 	/*
 	 * First, try to see if the faulted command object is marked
@@ -1795,6 +1856,12 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
+	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
+		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
+		kgsl_device_snapshot(device, NULL, NULL, true);
+		goto done;
+	}
+
 	/*
 	 * First, try to see if the faulted command object is marked
 	 * in case there was a context bad hfi. But, with stall-on-fault,
@@ -1840,11 +1907,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj) {
 		force_retire_timestamp(device, drawobj);
-		if ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context && ((context->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context))
+			context_is_throttled(device, context)))
 			adreno_drawctxt_set_guilty(device, context);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -1855,11 +1922,11 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (drawobj_lpac) {
 		force_retire_timestamp(device, drawobj_lpac);
-		if ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
+		if (context_lpac && ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context_lpac))
+			context_is_throttled(device, context_lpac)))
 			adreno_drawctxt_set_guilty(device, context_lpac);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -2107,7 +2174,6 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_cmds = adreno_hwsched_queue_cmds,
 	.queue_context = adreno_hwsched_queue_context,
 	.fault = adreno_hwsched_fault,
-	.idle = adreno_hwsched_idle,
 	.create_hw_fence = adreno_hwsched_create_hw_fence,
 };
 
@@ -2115,7 +2181,9 @@ static void hwsched_lsr_check(struct work_struct *work)
 {
 	struct adreno_hwsched *hwsched = container_of(work,
 		struct adreno_hwsched, lsr_check_ws);
-	struct kgsl_device *device = kgsl_get_device(0);
+	struct adreno_device *adreno_dev = container_of(hwsched,
+		struct adreno_device, hwsched);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	mutex_lock(&device->mutex);
 	kgsl_pwrscale_update_stats(device);
@@ -2244,6 +2312,19 @@ static int unregister_context(int id, void *ptr, void *data)
 	 * registers with gmu on its first submission post slumber.
 	 */
 	context->gmu_registered = false;
+
+	/*
+	 * Consider the scenario where non-recurring submissions were made
+	 * by a context. Here internal_timestamp of context would be non
+	 * zero. After slumber, last retired timestamp is not held by GMU.
+	 * If this context submits a recurring workload, the context is
+	 * registered again, but the internal timestamp is not updated. When
+	 * the context is unregistered in send_context_unregister_hfi(),
+	 * we could be waiting on old internal_timestamp which is not held by
+	 * GMU. This can result in GMU errors. Hence set internal_timestamp
+	 * to zero when entering slumber.
+	 */
+	drawctxt->internal_timestamp = 0;
 
 	return 0;
 }
@@ -2376,7 +2457,6 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	hw_fence->memdesc.physaddr = hw_fence->mem_descriptor.device_addr;
 	hw_fence->memdesc.size = hw_fence->mem_descriptor.size;
 	hw_fence->memdesc.hostptr = hw_fence->mem_descriptor.virtual_addr;
-	hw_fence->memdesc.priv |= KGSL_MEMDESC_IOMEM;
 
 	ret = kgsl_memdesc_sg_dma(&hw_fence->memdesc, hw_fence->memdesc.physaddr,
 		hw_fence->memdesc.size);

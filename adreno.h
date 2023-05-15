@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -231,6 +231,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_2_1 = 0x070201,
 	ADRENO_REV_GEN7_4_0 = 0x070400,
 	ADRENO_REV_GEN7_9_0 = 0x070900,
+	ADRENO_REV_GEN7_9_1 = 0x070901,
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -472,8 +473,6 @@ struct adreno_dispatch_ops {
 	void (*setup_context)(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt);
 	void (*fault)(struct adreno_device *adreno_dev, u32 fault);
-	/* @idle: Wait for dipatcher to become idle */
-	int (*idle)(struct adreno_device *adreno_dev);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
 };
@@ -712,6 +711,10 @@ struct adreno_device {
 	u32 feature_fuse;
 	/** @gmu_ab: Track if GMU supports ab vote */
 	bool gmu_ab;
+	/** @ifpc_hyst: IFPC long hysteresis value */
+	u32 ifpc_hyst;
+	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
+	u32 ifpc_hyst_floor;
 };
 
 /**
@@ -1240,12 +1243,17 @@ ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
 ADRENO_TARGET(gen7_2_1, ADRENO_REV_GEN7_2_1)
 ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
+ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 
+static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen7_9_0(adreno_dev) || adreno_is_gen7_9_1(adreno_dev);
+}
 
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
-		adreno_is_gen7_9_0(adreno_dev);
+		adreno_is_gen7_9_x(adreno_dev);
 }
 
 /*

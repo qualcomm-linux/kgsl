@@ -264,8 +264,8 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
 	u32 feature_fuse = 0;
 
-	/* Only Gen7_9_0 has the HW feature information */
-	if (!adreno_is_gen7_9_0(adreno_dev))
+	/* Only Gen7_9_x has the HW feature information */
+	if (!adreno_is_gen7_9_x(adreno_dev))
 		return;
 
 	/* Get HW feature soft fuse value */
@@ -331,12 +331,27 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 			on ? gen7_core->ao_hwcg[i].val : 0);
 
 	if (!gen7_core->hwcg) {
-		kgsl_regread(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, &value);
+		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 1);
+		kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, on ? 1 : 0);
 
-		if (value != on)
-			kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD,
-				      on ? 1 : 0);
+		if (on) {
+			u32 retry = 3;
 
+			kgsl_regwrite(device, GEN7_RBBM_CGC_P2S_TRIG_CMD, 1);
+			/* Poll for the TXDONE:BIT(0) status */
+			do {
+				/* Wait for small amount of time for TXDONE status*/
+				udelay(1);
+				kgsl_regread(device, GEN7_RBBM_CGC_P2S_STATUS, &value);
+			} while (!(value & BIT(0)) && --retry);
+
+			if (!(value & BIT(0))) {
+				dev_err(device->dev, "RBBM_CGC_P2S_STATUS:TXDONE Poll failed\n");
+				kgsl_device_snapshot(device, NULL, NULL, false);
+				return;
+			}
+			kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 0);
+		}
 		return;
 	}
 
@@ -529,6 +544,13 @@ int gen7_start(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN7_UCHE_CACHE_WAYS, 0x800000);
 
+	/*
+	 * Disable LPAC hard sync event to fix lock up issue when BR/BV event
+	 * fifo is full.
+	 */
+	if (adreno_dev->lpac_enabled)
+		kgsl_regrmw(device, GEN7_UCHE_DBG_CNTL_1, BIT(30), BIT(30));
+
 	kgsl_regwrite(device, GEN7_UCHE_CMDQ_CONFIG,
 			FIELD_PREP(GENMASK(19, 16), 6) |
 			FIELD_PREP(GENMASK(15, 12), 6) |
@@ -605,7 +627,7 @@ int gen7_start(struct adreno_device *adreno_dev)
 			0x1);
 
 	/* Disable ubwc merged UFC request feature */
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regrmw(device, GEN7_RB_CMP_DBG_ECO_CNTL, BIT(19), BIT(19));
 	/* Disable non-ubwc read reqs from passing write reqs */
 	else
@@ -704,7 +726,7 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		gpu_req |= GPU_BCL_EN_REQ;
 
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		gpu_req |= GPU_TSENSE_EN_REQ;
 
 	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
@@ -1400,6 +1422,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
 
+	device->pwrscale.avoid_ddr_stall = true;
+
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
 		return ret;
@@ -1417,6 +1441,11 @@ int gen7_probe_common(struct platform_device *pdev,
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
 
 	gen7_coresight_init(adreno_dev);
+
+	/* Dump additional AQE 16KB data on top of default 96KB(48(BR)+48(BV)) */
+	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
+					112 * SZ_1K : 96 * SZ_1K;
+
 	return 0;
 }
 
@@ -1841,7 +1870,7 @@ err:
 
 static void gen7_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
 {
-	if (adreno_is_gen7_9_0(adreno_dev))
+	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN7_RBBM_SW_FUSE_INT_MASK,
 			state ? GEN7_SW_FUSE_INT_MASK : 0);
 }

@@ -6,6 +6,8 @@
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
 
+#include "kgsl_util.h"
+
 #define HW_FENCE_QUEUE_SIZE		SZ_4K
 #define HFI_QUEUE_SIZE			SZ_4K /* bytes, must be base 4dw */
 #define MAX_RCVD_PAYLOAD_SIZE		16 /* dwords */
@@ -451,6 +453,7 @@ struct hfi_queue_table {
 #define F2H_MSG_CONTEXT_BAD		150
 #define H2F_MSG_HW_FENCE_INFO		151
 #define H2F_MSG_ISSUE_SYNCOBJ		152
+#define F2H_MSG_SYNCOBJ_QUERY		153
 
 enum gmu_ret_type {
 	GMU_SUCCESS = 0,
@@ -608,10 +611,11 @@ struct hfi_mem_alloc_desc {
 	u32 gmu_addr;
 	u32 size; /* Bytes */
 	/**
-	 * @va_align: Alignment requirement of the GMU VA specified as a power of two. For example,
-	 * a decimal value of 20 = (1 << 20) = 1 MB alignemnt
+	 * @align: bits[0:7] specify alignment requirement of the GMU VA specified as a power of
+	 * two. bits[8:15] specify alignment requirement for the size of the GMU mapping. For
+	 * example, a decimal value of 20 = (1 << 20) = 1 MB alignment
 	 */
-	u32 va_align;
+	u32 align;
 } __packed;
 
 struct hfi_mem_alloc_entry {
@@ -756,9 +760,22 @@ struct hfi_ts_notify_cmd {
 
 
 /* This indicates that the SYNCOBJ is kgsl output fence */
-#define GMU_SYNCOBJ_KGSL_FENCE  BIT(0)
-/* This indicates that the SYNCOBJ is already retired */
-#define GMU_SYNCOBJ_RETIRED     BIT(1)
+#define GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT		0
+/* This indicates that the SYNCOBJ is signaled */
+#define GMU_SYNCOBJ_FLAG_SIGNALED_BIT		1
+/* This indicates that the SYNCOBJ's software status is queried */
+#define GMU_SYNCOBJ_FLAG_QUERY_SW_STATUS_BIT	2
+/* This indicates that the SYNCOBJ's software status is signaled */
+#define GMU_SYNCOBJ_FLAG_SW_STATUS_SIGNALED_BIT	3
+/* This indicates that the SYNCOBJ's software status is pending */
+#define GMU_SYNCOBJ_FLAG_SW_STATUS_PENDING_BIT	4
+
+#define GMU_SYNCOBJ_FLAGS  \
+	{ BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT), "KGSL"}, \
+	{ BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT), "SIGNALED"}, \
+	{ BIT(GMU_SYNCOBJ_FLAG_QUERY_SW_STATUS_BIT), "QUERIED"}, \
+	{ BIT(GMU_SYNCOBJ_FLAG_SW_STATUS_SIGNALED_BIT), "SW_SIGNALED"}, \
+	{ BIT(GMU_SYNCOBJ_FLAG_SW_STATUS_PENDING_BIT), "SW_PENDING"}
 
 /* F2H */
 struct hfi_ts_retire_cmd {
@@ -878,6 +895,37 @@ struct hfi_hw_fence_info {
 	u64 flags;
 	/** @hash_index: Index of the hw fence in hw fence table */
 	u64 hash_index;
+} __packed;
+
+/* The software fence corresponding to the queried hardware fence has not signaled */
+#define ADRENO_HW_FENCE_SW_STATUS_PENDING  BIT(0)
+/* The software fence corresponding to the queried hardware fence has signaled */
+#define ADRENO_HW_FENCE_SW_STATUS_SIGNALED BIT(1)
+
+struct hfi_syncobj_query {
+	/**
+	 * @query_bitmask: Bitmask representing the sync object descriptors to be queried. For
+	 * example, to query the second sync object descriptor(index=1) in a sync object,
+	 * bit(1) should be set in this bitmask.
+	 */
+	u32 query_bitmask;
+} __packed;
+
+#define MAX_SYNCOBJ_QUERY_BITS	128
+#define BITS_PER_SYNCOBJ_QUERY	32
+#define MAX_SYNCOBJ_QUERY_DWORDS (MAX_SYNCOBJ_QUERY_BITS / BITS_PER_SYNCOBJ_QUERY)
+
+struct hfi_syncobj_query_cmd {
+	/** @hdr: Header for the fence info packet */
+	u32 hdr;
+	/** @version: Version of the fence info packet */
+	u32 version;
+	/** @gmu_ctxt_id: GMU Context id to which this SYNC object belongs */
+	u32 gmu_ctxt_id;
+	/** @sync_obj_ts: Timestamp of this SYNC object */
+	u32 sync_obj_ts;
+	/** @queries: Array of query bitmasks */
+	struct hfi_syncobj_query queries[MAX_SYNCOBJ_QUERY_DWORDS];
 } __packed;
 
 /**
@@ -1019,7 +1067,8 @@ struct payload_section {
 #define GMU_GPU_AQE1_UCODE_ERROR 627
 #define GMU_GPU_AQE1_HW_FAULT_ERROR 628
 #define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
-
+/* GMU encountered a sync object which is signaled via software but not via hardware */
+#define GMU_SYNCOBJ_TIMEOUT_ERROR 630
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 
@@ -1092,17 +1141,35 @@ static inline void hfi_get_mem_alloc_desc(void *rcvd, struct hfi_mem_alloc_desc 
 }
 
 /**
- * hfi_get_gmu_va_alignment - Get the alignment(in bytes) for a GMU VA
- * va_align: Alignment specified as a power of two(2^n)
+ * hfi_get_gmu_va_alignment - Get the alignment (in bytes) for a GMU VA
+ * align: Alignment specified as a power of two (2^n) in bits[0:7]
  *
- * This function derives the GMU VA alignment in bytes from the passed in value, which is specified
- * in terms of power of two(2^n). For example, va_align = 20 means (1 << 20) = 1MB alignment. The
- * minimum alignment(in bytes) is SZ_4K i.e. anything less than(or equal to) a va_align value of
- * ilog2(SZ_4K) will default to SZ_4K alignment.
+ * This function derives the GMU VA alignment in bytes from bits[0:7] in the passed in value, which
+ * is specified in terms of power of two (2^n). For example, va_align = 20 means (1 << 20) = 1MB
+ * alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less than (or equal to) a
+ * va_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
  */
-static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
+static inline u32 hfi_get_gmu_va_alignment(u32 align)
 {
+	u32 va_align = FIELD_GET(GENMASK(7, 0), align);
+
 	return (va_align > ilog2(SZ_4K)) ? (1 << va_align) : SZ_4K;
+}
+
+/**
+ * hfi_get_gmu_sz_alignment - Get the alignment (in bytes) for GMU mapping size
+ * align: Alignment specified as a power of two (2^n) in bits[8:15]
+ *
+ * This function derives the GMU VA size alignment in bytes from bits[8:15] in the passed in value,
+ * which is specified in terms of power of two (2^n). For example, sz_align = 20 means
+ * (1 << 20) = 1MB alignment. The minimum alignment (in bytes) is SZ_4K i.e. anything less
+ * than (or equal to) a sz_align value of ilog2(SZ_4K) will default to SZ_4K alignment.
+ */
+static inline u32 hfi_get_gmu_sz_alignment(u32 align)
+{
+	u32 sz_align = FIELD_GET(GENMASK(15, 8), align);
+
+	return (sz_align > ilog2(SZ_4K)) ? (1 << sz_align) : SZ_4K;
 }
 
 /**
@@ -1121,4 +1188,41 @@ static inline u32 hfi_get_gmu_va_alignment(u32 va_align)
 int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	struct device *dev, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
+
+/**
+ * hfi_get_minidump_string - Get the va-minidump string from entry
+ * mem_kind: mem_kind type
+ * hfi_minidump_str: Pointer to the output string
+ * size: Max size of the hfi_minidump_str
+ * rb_id: Pointer to the rb_id count
+ *
+ * This function return 0 on valid mem_kind and copies the VA-MINIDUMP string to
+ * hfi_minidump_str else return error
+ */
+static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
+					   size_t size, u32 *rb_id)
+{
+	/* Extend this if the VA mindump need more hfi alloc entries */
+	switch (mem_kind) {
+	case HFI_MEMKIND_RB:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_RB_ENTRY"_%d", (*rb_id)++);
+		break;
+	case HFI_MEMKIND_SCRATCH:
+		snprintf(hfi_minidump_str, size, KGSL_SCRATCH_ENTRY);
+		break;
+	case HFI_MEMKIND_PROFILE:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_KERNEL_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_USER_PROFILE_IBS:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_USER_PROF_ENTRY);
+		break;
+	case HFI_MEMKIND_CMD_BUFFER:
+		snprintf(hfi_minidump_str, size, KGSL_GMU_CMD_BUFFER_ENTRY);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
 #endif
