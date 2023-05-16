@@ -1420,7 +1420,8 @@ void a6xx_hwsched_hfi_remove(struct adreno_device *adreno_dev)
 {
 	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
 
-	kthread_stop(hw_hfi->f2h_task);
+	if (hw_hfi->f2h_task)
+		kthread_stop(hw_hfi->f2h_task);
 }
 
 static void a6xx_add_profile_events(struct adreno_device *adreno_dev,
