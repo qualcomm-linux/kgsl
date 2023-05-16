@@ -1106,20 +1106,31 @@ static int a6xx_gmu_dcvs_nohfi(struct kgsl_device *device,
 	return ret;
 }
 
+static u32 a6xx_rscc_tcsm_drv0_status_reglist[] = {
+	A6XX_RSCC_TCS0_DRV0_STATUS,
+	A6XX_RSCC_TCS1_DRV0_STATUS,
+	A6XX_RSCC_TCS2_DRV0_STATUS,
+	A6XX_RSCC_TCS3_DRV0_STATUS,
+	A6XX_RSCC_TCS4_DRV0_STATUS,
+	A6XX_RSCC_TCS5_DRV0_STATUS,
+	A6XX_RSCC_TCS6_DRV0_STATUS,
+	A6XX_RSCC_TCS7_DRV0_STATUS,
+	A6XX_RSCC_TCS8_DRV0_STATUS,
+	A6XX_RSCC_TCS9_DRV0_STATUS,
+};
+
 static int a6xx_complete_rpmh_votes(struct adreno_device *adreno_dev,
 		unsigned int timeout)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = 0;
+	/* Number of TCS commands are increased to 10 from A650 family onwards */
+	int count = adreno_is_a650_family(adreno_dev) ?
+				ARRAY_SIZE(a6xx_rscc_tcsm_drv0_status_reglist) : 4;
+	int i, ret = 0;
 
-	ret |= timed_poll_check_rscc(device, A6XX_RSCC_TCS0_DRV0_STATUS,
-			BIT(0), timeout, BIT(0));
-	ret |= timed_poll_check_rscc(device, A6XX_RSCC_TCS1_DRV0_STATUS,
-			BIT(0), timeout, BIT(0));
-	ret |= timed_poll_check_rscc(device, A6XX_RSCC_TCS2_DRV0_STATUS,
-			BIT(0), timeout, BIT(0));
-	ret |= timed_poll_check_rscc(device, A6XX_RSCC_TCS3_DRV0_STATUS,
-			BIT(0), timeout, BIT(0));
+	for (i = 0; i < count; i++)
+		ret |= timed_poll_check_rscc(device, a6xx_rscc_tcsm_drv0_status_reglist[i],
+				BIT(0), timeout, BIT(0));
 
 	if (ret)
 		dev_err(device->dev, "RPMH votes timedout: %d\n", ret);
@@ -2110,9 +2121,9 @@ static unsigned int a6xx_gmu_ifpc_isenabled(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void a6xx_gmu_send_nmi(struct adreno_device *adreno_dev, bool force)
+void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	u32 val;
 
@@ -2194,7 +2205,7 @@ static void a6xx_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	a6xx_gmu_send_nmi(adreno_dev, true);
+	a6xx_gmu_send_nmi(device, true);
 
 	gmu_core_regread(device, A6XX_GMU_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -2243,7 +2254,7 @@ void a6xx_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, A6XX_GMU_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	a6xx_gmu_send_nmi(adreno_dev, false);
+	a6xx_gmu_send_nmi(device, false);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -2288,10 +2299,6 @@ void a6xx_gmu_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	/* Send nmi only if it was a gmu fault */
-	if (device->gmu_fault)
-		a6xx_gmu_send_nmi(adreno_dev, false);
 
 	a6xx_gmu_device_snapshot(device, snapshot);
 
@@ -2395,7 +2402,7 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int level, ret;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_AWARE);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
 	a6xx_gmu_aop_send_acd_state(gmu, adreno_dev->acd_enabled);
 
@@ -2493,7 +2500,7 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret = 0;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_AWARE);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
 	ret = a6xx_gmu_enable_gdsc(adreno_dev);
 	if (ret)
@@ -2607,6 +2614,7 @@ static const struct gmu_dev_ops a6xx_gmudev = {
 	.scales_bandwidth = a6xx_gmu_scales_bandwidth,
 	.acd_set = a6xx_gmu_acd_set,
 	.force_first_boot = a6xx_gmu_force_first_boot,
+	.send_nmi = a6xx_gmu_send_nmi,
 };
 
 static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
@@ -2624,8 +2632,6 @@ static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 			return ret;
 
 		pwr->cur_buslevel = buslevel;
-
-		trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel);
 	}
 
 	if (ab != pwr->cur_ab) {
@@ -2633,6 +2639,7 @@ static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel, ab);
 	return ret;
 }
 
@@ -3301,7 +3308,7 @@ static int a6xx_boot(struct adreno_device *adreno_dev)
 	if (WARN_ON(test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags)))
 		return 0;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_ACTIVE);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
 	if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) &&
 		!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags))
@@ -3359,7 +3366,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_ACTIVE);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
 	ret = a6xx_gmu_first_boot(adreno_dev);
 	if (ret)
@@ -3448,7 +3455,7 @@ static int a6xx_power_off(struct adreno_device *adreno_dev)
 	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
 		return 0;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_SLUMBER);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
 	ret = a6xx_gmu_oob_set(device, oob_gpu);
 	if (ret) {
@@ -3622,7 +3629,7 @@ static int a6xx_gmu_pm_suspend(struct adreno_device *adreno_dev)
 	if (test_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags))
 		return 0;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_SUSPEND);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
 	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
@@ -3687,7 +3694,7 @@ static void a6xx_gmu_touch_wakeup(struct adreno_device *adreno_dev)
 	if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
 		goto done;
 
-	trace_kgsl_pwr_request_state(device, KGSL_STATE_ACTIVE);
+	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
 	ret = a6xx_gmu_boot(adreno_dev);
 	if (ret)

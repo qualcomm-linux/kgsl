@@ -94,6 +94,8 @@ struct kgsl_pagetable {
 	 * forced 32 bit allocations
 	 */
 	u64 compat_va_end;
+	/** @va_hint: Virtual address hint for 64-bit non-SVM allocations */
+	u64 va_hint;
 	u64 global_base;
 };
 

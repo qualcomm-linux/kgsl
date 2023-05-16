@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_RECLAIM_H
 #define __KGSL_RECLAIM_H
@@ -15,6 +16,7 @@
 /* Process foreground/background state. Set if process is in foreground */
 #define KGSL_PROC_STATE 1
 
+int kgsl_reclaim_start(void);
 int kgsl_reclaim_init(void);
 void kgsl_reclaim_close(void);
 int kgsl_reclaim_to_pinned_state(struct kgsl_process_private *priv);
@@ -29,6 +31,11 @@ ssize_t kgsl_nr_to_scan_store(struct device *dev,
 ssize_t kgsl_nr_to_scan_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 #else
+static inline int kgsl_reclaim_start(void)
+{
+	return 0;
+}
+
 static inline int kgsl_reclaim_init(void)
 {
 	return 0;
