@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -545,7 +545,7 @@ static vm_fault_t kgsl_paged_vmfault(struct kgsl_memdesc *memdesc,
 			kgsl_gfp_mask(0));
 		if (IS_ERR(page))
 			return VM_FAULT_SIGBUS;
-		kgsl_page_sync_for_device(memdesc->dev, page, PAGE_SIZE);
+		kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
 		spin_lock(&memdesc->lock);
 		/*
@@ -806,7 +806,13 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		memdesc->priv |= KGSL_MEMDESC_SECURE;
 
 	memdesc->flags = flags;
-	memdesc->dev = &device->pdev->dev;
+
+	/*
+	 * For io-coherent buffers don't set memdesc->dev, so that we skip DMA
+	 * cache operations at allocation time
+	 */
+	if (!(flags & KGSL_MEMFLAGS_IOCOHERENT))
+		memdesc->dev = &device->pdev->dev;
 
 	align = max_t(unsigned int,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
@@ -1030,6 +1036,8 @@ static int kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc, uint64_t size)
 		return ret;
 	}
 
+	mapping_set_unevictable(memdesc->shmem_filp->f_mapping);
+
 	return 0;
 }
 
@@ -1077,8 +1085,8 @@ static void _kgsl_free_pages(struct kgsl_memdesc *memdesc, unsigned int pcount)
 }
 #endif
 
-void kgsl_page_sync_for_device(struct device *dev, struct page *page,
-		size_t size)
+void kgsl_page_sync(struct device *dev, struct page *page,
+		size_t size, enum dma_data_direction dir)
 {
 	struct scatterlist sg;
 
@@ -1090,7 +1098,7 @@ void kgsl_page_sync_for_device(struct device *dev, struct page *page,
 	sg_set_page(&sg, page, size, 0);
 	sg_dma_address(&sg) = page_to_phys(page);
 
-	dma_sync_sg_for_device(dev, &sg, 1, DMA_BIDIRECTIONAL);
+	dma_sync_sg_for_device(dev, &sg, 1, dir);
 }
 
 void kgsl_zero_page(struct page *p, unsigned int order,
@@ -1104,7 +1112,7 @@ void kgsl_zero_page(struct page *p, unsigned int order,
 		clear_highpage(page);
 	}
 
-	kgsl_page_sync_for_device(dev, p, PAGE_SIZE << order);
+	kgsl_page_sync(dev, p, PAGE_SIZE << order, DMA_TO_DEVICE);
 }
 
 gfp_t kgsl_gfp_mask(int page_order)
@@ -1434,7 +1442,6 @@ static const struct kgsl_memdesc_ops kgsl_system_ops = {
 static int kgsl_system_alloc_pages(u64 size, struct page ***pages,
 		struct device *dev)
 {
-	struct scatterlist sg;
 	struct page **local;
 	int i, npages = size >> PAGE_SHIFT;
 
@@ -1459,11 +1466,7 @@ static int kgsl_system_alloc_pages(u64 size, struct page ***pages,
 		}
 
 		/* Make sure the cache is clean */
-		sg_init_table(&sg, 1);
-		sg_set_page(&sg, local[i], PAGE_SIZE, 0);
-		sg_dma_address(&sg) = page_to_phys(local[i]);
-
-		dma_sync_sg_for_device(dev, &sg, 1, DMA_BIDIRECTIONAL);
+		kgsl_page_sync(dev, local[i], PAGE_SIZE, DMA_TO_DEVICE);
 	}
 
 	*pages = local;

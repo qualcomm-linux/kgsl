@@ -560,6 +560,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	ret = devfreq_gpubw_init();
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add busmon governor: %d\n", ret);
+		dev_pm_opp_remove_all_dynamic(dev);
 		put_device(dev);
 		return;
 	}
@@ -570,6 +571,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	if (IS_ERR_OR_NULL(bus_devfreq)) {
 		dev_err(&pdev->dev, "Bus scaling not enabled\n");
 		devfreq_gpubw_exit();
+		dev_pm_opp_remove_all_dynamic(dev);
 		put_device(dev);
 		return;
 	}
@@ -815,8 +817,9 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 	if (pwrscale->bus_devfreq) {
 		devfreq_remove_device(pwrscale->bus_devfreq);
 		pwrscale->bus_devfreq = NULL;
-		put_device(&pwrscale->busmondev);
 		devfreq_gpubw_exit();
+		dev_pm_opp_remove_all_dynamic(&pwrscale->busmondev);
+		put_device(&pwrscale->busmondev);
 	}
 
 	if (!pwrscale->devfreqptr)

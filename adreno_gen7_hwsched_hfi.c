@@ -1541,7 +1541,6 @@ static void reset_hfi_mem_records(struct adreno_device *adreno_dev)
 static void reset_hfi_queues(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct hfi_queue_table *tbl = gmu->hfi.hfi_mem->hostptr;
 	u32 i;
 
@@ -1552,17 +1551,7 @@ static void reset_hfi_queues(struct adreno_device *adreno_dev)
 		if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
 			continue;
 
-		if (hdr->read_index != hdr->write_index) {
-			/* Don't capture snapshot again in reset path */
-			if (!device->snapshot || device->snapshot->recovered) {
-				dev_err(&gmu->pdev->dev,
-				"HFI queue[%d] is not empty before close: rd=%d,wt=%d\n",
-					i, hdr->read_index, hdr->write_index);
-
-				gmu_core_fault_snapshot(device);
-			}
-			hdr->read_index = hdr->write_index;
-		}
+		hdr->read_index = hdr->write_index;
 	}
 }
 
@@ -1582,8 +1571,6 @@ void gen7_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 
 	/* Drain the debug queue before we reset HFI queues */
 	gen7_hwsched_process_dbgq(adreno_dev, false);
-
-	reset_hfi_queues(adreno_dev);
 
 	kgsl_pwrctrl_axi(KGSL_DEVICE(adreno_dev), false);
 
@@ -1763,6 +1750,8 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
+
+	reset_hfi_queues(adreno_dev);
 
 	ret = gen7_gmu_hfi_start(adreno_dev);
 	if (ret)
@@ -2058,10 +2047,10 @@ static int hfi_f2h_main(void *arg)
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 
 	while (!kthread_should_stop()) {
-		wait_event_interruptible(hfi->f2h_wq, !kthread_should_stop() &&
-			!(is_queue_empty(adreno_dev, HFI_MSG_ID) &&
+		wait_event_interruptible(hfi->f2h_wq, kthread_should_stop() ||
+			(!(is_queue_empty(adreno_dev, HFI_MSG_ID) &&
 			is_queue_empty(adreno_dev, HFI_DBG_ID)) &&
-			(hfi->irq_mask & HFI_IRQ_MSGQ_MASK));
+			(hfi->irq_mask & HFI_IRQ_MSGQ_MASK)));
 
 		if (kthread_should_stop())
 			break;
@@ -2885,6 +2874,8 @@ skipib:
 	/* Send interrupt to GMU to receive the message */
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
 		DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+
+	drawctxt->internal_timestamp = drawobj->timestamp;
 
 	return process_hw_fence_queue(adreno_dev, drawctxt, drawobj->timestamp);
 }
