@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -1577,13 +1577,15 @@ static void adreno_fault_header(struct kgsl_device *device,
 	const char *type = fault & ADRENO_GMU_FAULT ? "gmu" : "gpu";
 
 	if (!gx_on) {
-		if (drawobj != NULL)
+		if (drawobj != NULL) {
 			pr_fault(device, drawobj,
 				"%s fault ctx %u ctx_type %s ts %u and GX is OFF\n",
 				type, drawobj->context->id,
 				kgsl_context_type(drawctxt->type),
 				drawobj->timestamp);
-		else
+			pr_fault(device, drawobj, "cmdline: %s\n",
+					drawctxt->base.proc_priv->cmdline);
+		} else
 			dev_err(device->dev, "RB[%d] : %s fault and GX is OFF\n",
 				id, type);
 
@@ -1615,6 +1617,9 @@ static void adreno_fault_header(struct kgsl_device *device,
 			kgsl_context_type(drawctxt->type),
 			drawobj->timestamp, status,
 			rptr, wptr, ib1base, ib1sz, ib2base, ib2sz);
+
+		pr_fault(device, drawobj, "cmdline: %s\n",
+				drawctxt->base.proc_priv->cmdline);
 
 		if (rb != NULL)
 			pr_fault(device, drawobj,
@@ -1943,7 +1948,12 @@ static void do_header_and_snapshot(struct kgsl_device *device, int fault,
 	/* Always dump the snapshot on a non-drawobj failure */
 	if (cmdobj == NULL) {
 		adreno_fault_header(device, rb, NULL, fault);
-		kgsl_device_snapshot(device, NULL, NULL, fault & ADRENO_GMU_FAULT);
+
+		/* GMU snapshot will also pull a full device snapshot */
+		if (fault & ADRENO_GMU_FAULT)
+			gmu_core_fault_snapshot(device);
+		else
+			kgsl_device_snapshot(device, NULL, NULL, false);
 		return;
 	}
 

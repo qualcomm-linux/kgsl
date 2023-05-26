@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -1032,11 +1033,11 @@ void a5xx_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a5xx_snapshot_cp_pm4, NULL);
 
-	/* Shader memory */
-	a5xx_snapshot_shader(device, snapshot);
-
 	/* Debug bus */
 	a5xx_snapshot_debugbus(device, snapshot);
+
+	/* Shader memory */
+	a5xx_snapshot_shader(device, snapshot);
 
 	/* Preemption record */
 	if (adreno_is_preemption_enabled(adreno_dev)) {
