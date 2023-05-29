@@ -803,13 +803,25 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 		int tbl_size;
 		u32 bin = 0;
 
+		/* Check if the bin has a speed-bin requirement */
 		if (!of_property_read_u32(child, "qcom,speed-bin", &bin))
-			match = bin == device->speed_bin;
-		else if (of_get_property(child, "qcom,sku-codes", &tbl_size)) {
+			match = (bin == device->speed_bin);
+
+		/* Check if the bin has a sku-code requirement */
+		if (of_get_property(child, "qcom,sku-codes", &tbl_size)) {
 			int num_codes = tbl_size / sizeof(u32);
 			int i;
 			u32 sku_code;
 
+			/*
+			 * If we have a speed-bin requirement that did not match
+			 * keep searching.
+			 */
+			if (bin && !match)
+				continue;
+
+			/* Check if the soc_code matches any of the sku codes */
+			match = false;
 			for (i = 0; i < num_codes; i++) {
 				if (!of_property_read_u32_index(child, "qcom,sku-codes",
 								i, &sku_code) &&
@@ -844,7 +856,7 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 	}
 
 	dev_err(&device->pdev->dev,
-		"No match for speed_bin:%d or soc_code:0x%x\n",
+		"No match for speed_bin:%d and soc_code:0x%x\n",
 		device->speed_bin, soc_code);
 	return -ENODEV;
 }
@@ -3291,7 +3303,7 @@ static int adreno_interconnect_bus_set(struct adreno_device *adreno_dev,
 	icc_set_bw(pwr->icc_path, MBps_to_icc(ab),
 		kBps_to_icc(pwr->ddr_table[level]));
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, level);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, level, ab);
 
 	return 0;
 }

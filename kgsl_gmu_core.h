@@ -233,13 +233,13 @@ struct gmu_dev_ops {
 	int (*ifpc_store)(struct kgsl_device *device, unsigned int val);
 	unsigned int (*ifpc_isenabled)(struct kgsl_device *device);
 	void (*cooperative_reset)(struct kgsl_device *device);
-	void (*halt_execution)(struct kgsl_device *device);
 	int (*wait_for_active_transition)(struct kgsl_device *device);
 	bool (*scales_bandwidth)(struct kgsl_device *device);
 	int (*acd_set)(struct kgsl_device *device, bool val);
 	int (*bcl_sid_set)(struct kgsl_device *device, u32 sid_id, u64 sid_val);
 	u64 (*bcl_sid_get)(struct kgsl_device *device, u32 sid_id);
 	void (*force_first_boot)(struct kgsl_device *device);
+	void (*send_nmi)(struct kgsl_device *device, bool force);
 };
 
 /**
