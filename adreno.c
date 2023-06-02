@@ -1219,11 +1219,12 @@ int adreno_device_probe(struct platform_device *pdev,
 	 * Bind the GMU components (if applicable) before doing the KGSL
 	 * platform probe
 	 */
-	status = component_bind_all(dev, NULL);
-	if (status) {
-		kgsl_bus_close(device);
-		dev_err(device->dev, "component_bind_all failed %s \n", __func__);
-		return status;
+	if (of_find_matching_node(dev->of_node, adreno_gmu_match)) {
+		status = component_bind_all(dev, NULL);
+		if (status) {
+			kgsl_bus_close(device);
+			return status;
+		}
 	}
 
 	/*
@@ -1352,7 +1353,8 @@ int adreno_device_probe(struct platform_device *pdev,
 err:
 	device->pdev = NULL;
 
-	component_unbind_all(dev, NULL);
+	if (of_find_matching_node(dev->of_node, adreno_gmu_match))
+		component_unbind_all(dev, NULL);
 
 	kgsl_bus_close(device);
 
@@ -1425,7 +1427,8 @@ static void adreno_unbind(struct device *dev)
 
 	kgsl_device_platform_remove(device);
 
-	component_unbind_all(dev, NULL);
+	if (of_find_matching_node(dev->of_node, adreno_gmu_match))
+		component_unbind_all(dev, NULL);
 
 	kgsl_bus_close(device);
 
@@ -3320,10 +3323,8 @@ static void adreno_add_gmu_components(struct device *dev,
 	struct device_node *node;
 
 	node = of_find_matching_node(NULL, adreno_gmu_match);
-	if (!node) {
-		dev_err(dev, "node NULL %s \n", __func__);
+	if (!node)
 		return;
-	}
 
 	if (!of_device_is_available(node)) {
 		of_node_put(node);
