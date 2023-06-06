@@ -638,30 +638,48 @@ static int gen7_gmu_hfi_start_msg(struct adreno_device *adreno_dev)
 	return gen7_hfi_send_generic_req(adreno_dev, &req);
 }
 
+static u32 gen7_rscc_tcsm_drv0_status_reglist[] = {
+	GEN7_RSCC_TCS0_DRV0_STATUS,
+	GEN7_RSCC_TCS1_DRV0_STATUS,
+	GEN7_RSCC_TCS2_DRV0_STATUS,
+	GEN7_RSCC_TCS3_DRV0_STATUS,
+	GEN7_RSCC_TCS4_DRV0_STATUS,
+	GEN7_RSCC_TCS5_DRV0_STATUS,
+	GEN7_RSCC_TCS6_DRV0_STATUS,
+	GEN7_RSCC_TCS7_DRV0_STATUS,
+	GEN7_RSCC_TCS8_DRV0_STATUS,
+	GEN7_RSCC_TCS9_DRV0_STATUS,
+};
+
+static u32 gen7_2_0_rscc_tcsm_drv0_status_reglist[] = {
+	GEN7_2_0_RSCC_TCS0_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS1_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS2_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS3_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS4_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS5_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS6_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS7_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS8_DRV0_STATUS,
+	GEN7_2_0_RSCC_TCS9_DRV0_STATUS,
+};
+
 static int gen7_complete_rpmh_votes(struct gen7_gmu_device *gmu,
 		u32 timeout)
 {
 	struct adreno_device *adreno_dev = gen7_gmu_to_adreno(gmu);
-	int ret = 0;
+	int i, ret = 0;
 
 	if (adreno_is_gen7_2_x_family(adreno_dev)) {
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_2_0_RSCC_TCS0_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_2_0_RSCC_TCS1_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_2_0_RSCC_TCS2_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_2_0_RSCC_TCS3_DRV0_STATUS, BIT(0), 1, BIT(0));
+		for (i = 0; i < ARRAY_SIZE(gen7_2_0_rscc_tcsm_drv0_status_reglist); i++)
+			ret |= gen7_timed_poll_check_rscc(gmu,
+				gen7_2_0_rscc_tcsm_drv0_status_reglist[i], BIT(0), timeout,
+				BIT(0));
 	} else {
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_RSCC_TCS0_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_RSCC_TCS1_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_RSCC_TCS2_DRV0_STATUS, BIT(0), 1, BIT(0));
-		ret |= gen7_timed_poll_check_rscc(gmu,
-			GEN7_RSCC_TCS3_DRV0_STATUS, BIT(0), 1, BIT(0));
+		for (i = 0; i < ARRAY_SIZE(gen7_rscc_tcsm_drv0_status_reglist); i++)
+			ret |= gen7_timed_poll_check_rscc(gmu,
+				gen7_rscc_tcsm_drv0_status_reglist[i], BIT(0), timeout,
+				BIT(0));
 	}
 
 	if (ret)
@@ -1575,9 +1593,9 @@ static unsigned int gen7_gmu_ifpc_show(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void gen7_gmu_send_nmi(struct adreno_device *adreno_dev, bool force)
+void gen7_gmu_send_nmi(struct kgsl_device *device, bool force)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	u32 result;
 
@@ -1654,7 +1672,7 @@ static void gen7_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	gen7_gmu_send_nmi(adreno_dev, true);
+	gen7_gmu_send_nmi(device, true);
 
 	gmu_core_regread(device, GEN7_GMU_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -1696,7 +1714,7 @@ void gen7_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN7_GMU_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen7_gmu_send_nmi(adreno_dev, false);
+	gen7_gmu_send_nmi(device, false);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -2044,6 +2062,7 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.acd_set = gen7_gmu_acd_set,
 	.bcl_sid_set = gen7_bcl_sid_set,
 	.bcl_sid_get = gen7_bcl_sid_get,
+	.send_nmi = gen7_gmu_send_nmi,
 };
 
 static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
