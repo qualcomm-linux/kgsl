@@ -34,6 +34,9 @@ endif
 ifeq ($(CONFIG_ARCH_SA8195), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
+ifeq ($(CONFIG_ARCH_SA6155), y)
+	include $(KGSL_PATH)/config/gki_sa8155.conf
+endif
 ifeq ($(CONFIG_ARCH_MONACO), y)
 	include $(KGSL_PATH)/config/gki_monaco.conf
 endif
