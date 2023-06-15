@@ -1,0 +1,3 @@
+load(":build/kgsl_defs.bzl", "define_target_module")
+
+define_target_module("pineapple")

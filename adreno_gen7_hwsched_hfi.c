@@ -2875,6 +2875,8 @@ skipib:
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
 		DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
 
+	drawctxt->internal_timestamp = drawobj->timestamp;
+
 	return process_hw_fence_queue(adreno_dev, drawctxt, drawobj->timestamp);
 }
 

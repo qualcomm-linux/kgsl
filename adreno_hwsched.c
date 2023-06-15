@@ -481,7 +481,6 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_context *context = drawobj->context;
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	int ret;
 	struct cmd_list_obj *obj;
 
@@ -553,7 +552,6 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 			hwsched->big_cmdobj = cmdobj;
 			kref_get(&drawobj->refcount);
 		}
-		drawctxt->internal_timestamp = drawobj->timestamp;
 	}
 
 	obj->drawobj = drawobj;

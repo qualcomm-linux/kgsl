@@ -42,10 +42,85 @@ static const u32 gen7_pwrup_reglist[] = {
 	GEN7_TPL1_DBG_ECO_CNTL1,
 };
 
+static const u32 gen7_0_0_pwrup_reglist[] = {
+	GEN7_UCHE_TRAP_BASE_LO,
+	GEN7_UCHE_TRAP_BASE_HI,
+	GEN7_UCHE_WRITE_THRU_BASE_LO,
+	GEN7_UCHE_WRITE_THRU_BASE_HI,
+	GEN7_UCHE_GMEM_RANGE_MIN_LO,
+	GEN7_UCHE_GMEM_RANGE_MIN_HI,
+	GEN7_UCHE_GMEM_RANGE_MAX_LO,
+	GEN7_UCHE_GMEM_RANGE_MAX_HI,
+	GEN7_UCHE_CACHE_WAYS,
+	GEN7_UCHE_MODE_CNTL,
+	GEN7_RB_NC_MODE_CNTL,
+	GEN7_RB_CMP_DBG_ECO_CNTL,
+	GEN7_SP_NC_MODE_CNTL,
+	GEN7_GRAS_NC_MODE_CNTL,
+	GEN7_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE,
+	GEN7_UCHE_GBIF_GX_CONFIG,
+	GEN7_UCHE_CLIENT_PF,
+};
+
 /* IFPC only static powerup restore list */
 static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_NC_MODE_CNTL,
 	GEN7_SP_NC_MODE_CNTL,
+	GEN7_CP_DBG_ECO_CNTL,
+	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_PROTECT_REG,
+	GEN7_CP_PROTECT_REG+1,
+	GEN7_CP_PROTECT_REG+2,
+	GEN7_CP_PROTECT_REG+3,
+	GEN7_CP_PROTECT_REG+4,
+	GEN7_CP_PROTECT_REG+5,
+	GEN7_CP_PROTECT_REG+6,
+	GEN7_CP_PROTECT_REG+7,
+	GEN7_CP_PROTECT_REG+8,
+	GEN7_CP_PROTECT_REG+9,
+	GEN7_CP_PROTECT_REG+10,
+	GEN7_CP_PROTECT_REG+11,
+	GEN7_CP_PROTECT_REG+12,
+	GEN7_CP_PROTECT_REG+13,
+	GEN7_CP_PROTECT_REG+14,
+	GEN7_CP_PROTECT_REG+15,
+	GEN7_CP_PROTECT_REG+16,
+	GEN7_CP_PROTECT_REG+17,
+	GEN7_CP_PROTECT_REG+18,
+	GEN7_CP_PROTECT_REG+19,
+	GEN7_CP_PROTECT_REG+20,
+	GEN7_CP_PROTECT_REG+21,
+	GEN7_CP_PROTECT_REG+22,
+	GEN7_CP_PROTECT_REG+23,
+	GEN7_CP_PROTECT_REG+24,
+	GEN7_CP_PROTECT_REG+25,
+	GEN7_CP_PROTECT_REG+26,
+	GEN7_CP_PROTECT_REG+27,
+	GEN7_CP_PROTECT_REG+28,
+	GEN7_CP_PROTECT_REG+29,
+	GEN7_CP_PROTECT_REG+30,
+	GEN7_CP_PROTECT_REG+31,
+	GEN7_CP_PROTECT_REG+32,
+	GEN7_CP_PROTECT_REG+33,
+	GEN7_CP_PROTECT_REG+34,
+	GEN7_CP_PROTECT_REG+35,
+	GEN7_CP_PROTECT_REG+36,
+	GEN7_CP_PROTECT_REG+37,
+	GEN7_CP_PROTECT_REG+38,
+	GEN7_CP_PROTECT_REG+39,
+	GEN7_CP_PROTECT_REG+40,
+	GEN7_CP_PROTECT_REG+41,
+	GEN7_CP_PROTECT_REG+42,
+	GEN7_CP_PROTECT_REG+43,
+	GEN7_CP_PROTECT_REG+44,
+	GEN7_CP_PROTECT_REG+45,
+	GEN7_CP_PROTECT_REG+46,
+	GEN7_CP_PROTECT_REG+47,
+	GEN7_CP_AHB_CNTL,
+};
+
+static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
+	GEN7_TPL1_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
@@ -390,8 +465,13 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 *dest = ptr + sizeof(*lock);
 
 	/* Static IFPC-only registers */
-	reglist[items].regs = gen7_ifpc_pwrup_reglist;
-	reglist[items].count = ARRAY_SIZE(gen7_ifpc_pwrup_reglist);
+	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+		reglist[items].regs = gen7_0_0_ifpc_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen7_0_0_ifpc_pwrup_reglist);
+	} else {
+		reglist[items].regs = gen7_ifpc_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen7_ifpc_pwrup_reglist);
+	}
 	lock->ifpc_list_len = reglist[items].count;
 	items++;
 
@@ -403,8 +483,13 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	}
 
 	/* Static IFPC + preemption registers */
-	reglist[items].regs = gen7_pwrup_reglist;
-	reglist[items].count = ARRAY_SIZE(gen7_pwrup_reglist);
+	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+		reglist[items].regs = gen7_0_0_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen7_0_0_pwrup_reglist);
+	} else {
+		reglist[items].regs = gen7_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen7_pwrup_reglist);
+	}
 	lock->preemption_list_len = reglist[items].count;
 	items++;
 

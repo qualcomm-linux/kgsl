@@ -1757,6 +1757,7 @@ int a6xx_hwsched_submit_drawobj(struct adreno_device *adreno_dev,
 	struct hfi_submit_cmd *cmd;
 	struct adreno_submit_time time = {0};
 	static void *cmdbuf;
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 
 	if (cmdbuf == NULL) {
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1829,6 +1830,8 @@ skipib:
 	/* Send interrupt to GMU to receive the message */
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), A6XX_GMU_HOST2GMU_INTR_SET,
 		DISPQ_IRQ_BIT(drawobj->context->gmu_dispatch_queue));
+
+	drawctxt->internal_timestamp = drawobj->timestamp;
 
 	return ret;
 }
