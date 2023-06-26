@@ -833,7 +833,10 @@
 #define GEN7_VFD_PERFCTR_VFD_SEL_13         0xa61d
 #define GEN7_VFD_PERFCTR_VFD_SEL_14         0xa61e
 #define GEN7_VFD_PERFCTR_VFD_SEL_15         0xa61f
+
+/* SP registers */
 #define GEN7_SP_READ_SEL                    0xae6d
+#define GEN7_SP_DBG_CNTL                    0xae71
 #define GEN7_SP_AHB_READ_APERTURE           0xc000
 
 /* VPC registers */
@@ -936,7 +939,12 @@
 #define GEN7_SP_PERFCTR_SP_SEL_35           0xaea3
 
 /* TP registers */
+#define GEN7_TPL1_DBG_ECO_CNTL1             0xb602
 #define GEN7_TPL1_NC_MODE_CNTL              0xb604
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_1   0xb609
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_2   0xb60a
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_3   0xb60b
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4   0xb60c
 #define GEN7_TPL1_PERFCTR_TP_SEL_0          0xb610
 #define GEN7_TPL1_PERFCTR_TP_SEL_1          0xb611
 #define GEN7_TPL1_PERFCTR_TP_SEL_2          0xb612

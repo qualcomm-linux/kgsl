@@ -1881,14 +1881,14 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		a6xx_snapshot_mempool(device, snapshot);
 
 	if (sptprac_on) {
-		/* Shader memory */
-		a6xx_snapshot_shader(device, snapshot);
-
 		/* MVC register section */
 		a6xx_snapshot_mvc_regs(device, snapshot);
 
 		/* registers dumped through DBG AHB */
 		a6xx_snapshot_dbgahb_regs(device, snapshot);
+
+		/* Shader memory */
+		a6xx_snapshot_shader(device, snapshot);
 
 		if (!a6xx_is_smmu_stalled(device))
 			memset(a6xx_crashdump_registers->hostptr, 0xaa,

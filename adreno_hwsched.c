@@ -481,7 +481,6 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct kgsl_context *context = drawobj->context;
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	int ret;
 	struct cmd_list_obj *obj;
 
@@ -553,7 +552,6 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 			hwsched->big_cmdobj = cmdobj;
 			kref_get(&drawobj->refcount);
 		}
-		drawctxt->internal_timestamp = drawobj->timestamp;
 	}
 
 	obj->drawobj = drawobj;
@@ -1780,7 +1778,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		kgsl_device_snapshot(device, NULL, NULL, true);
+		gmu_core_fault_snapshot(device);
 		goto done;
 	}
 
@@ -1807,7 +1805,10 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	}
 
 	if (!drawobj) {
-		kgsl_device_snapshot(device, NULL, NULL, fault & ADRENO_GMU_FAULT);
+		if (fault & ADRENO_GMU_FAULT)
+			gmu_core_fault_snapshot(device);
+		else
+			kgsl_device_snapshot(device, NULL, NULL, false);
 		goto done;
 	}
 
@@ -1858,7 +1859,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
-		kgsl_device_snapshot(device, NULL, NULL, true);
+		gmu_core_fault_snapshot(device);
 		goto done;
 	}
 
@@ -1888,7 +1889,10 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		obj_lpac = get_active_cmdobj_lpac(adreno_dev);
 
 	if (!obj && !obj_lpac) {
-		kgsl_device_snapshot(device, NULL, NULL, fault & ADRENO_GMU_FAULT);
+		if (fault & ADRENO_GMU_FAULT)
+			gmu_core_fault_snapshot(device);
+		else
+			kgsl_device_snapshot(device, NULL, NULL, false);
 		goto done;
 	}
 
