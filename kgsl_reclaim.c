@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/kthread.h>
 #include <linux/notifier.h>
+#include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
+#include <linux/swap.h>
 
 #include "kgsl_reclaim.h"
 #include "kgsl_sharedmem.h"
@@ -208,6 +210,12 @@ ssize_t kgsl_nr_to_scan_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", kgsl_nr_to_scan);
 }
 
+static void kgsl_release_page_vec(struct pagevec *pvec)
+{
+	check_move_unevictable_pages(pvec);
+	__pagevec_release(pvec);
+}
+
 static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 		u32 pages_to_reclaim)
 {
@@ -273,18 +281,36 @@ static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 
 		if (!kgsl_mmu_unmap(memdesc->pagetable, memdesc)) {
 			int i;
+			struct pagevec pvec;
 
+			/*
+			 * Pages that are first allocated are by default added to
+			 * unevictable list. To reclaim them, we first clear the
+			 * AS_UNEVICTABLE flag of the shmem file address space thus
+			 * check_move_unevictable_pages() places them on the
+			 * evictable list.
+			 *
+			 * Once reclaim is done, hint that further shmem allocations
+			 * will have to be on the unevictable list.
+			 */
+			mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
+			pagevec_init(&pvec);
 			for (i = 0; i < memdesc->page_count; i++) {
 				set_page_dirty_lock(memdesc->pages[i]);
 				spin_lock(&memdesc->lock);
-				put_page(memdesc->pages[i]);
+				pagevec_add(&pvec, memdesc->pages[i]);
 				memdesc->pages[i] = NULL;
 				atomic_inc(&process->unpinned_page_count);
 				spin_unlock(&memdesc->lock);
+				if (pagevec_count(&pvec) == PAGEVEC_SIZE)
+					kgsl_release_page_vec(&pvec);
 				remaining--;
 			}
+			if (pagevec_count(&pvec))
+				kgsl_release_page_vec(&pvec);
 
 			reclaim_shmem_address_space(memdesc->shmem_filp->f_mapping);
+			mapping_set_unevictable(memdesc->shmem_filp->f_mapping);
 			memdesc->priv |= KGSL_MEMDESC_RECLAIMED;
 			trace_kgsl_reclaim_memdesc(entry, true);
 		}
@@ -359,6 +385,9 @@ kgsl_reclaim_shrink_count_objects(struct shrinker *shrinker,
 	struct kgsl_process_private *process;
 	unsigned long count_reclaimable = 0;
 
+	if (!current_is_kswapd())
+		return 0;
+
 	read_lock(&kgsl_driver.proclist_lock);
 	list_for_each_entry(process, &kgsl_driver.process_list, list) {
 		if (!test_bit(KGSL_PROC_STATE, &process->state))
@@ -367,7 +396,7 @@ kgsl_reclaim_shrink_count_objects(struct shrinker *shrinker,
 	}
 	read_unlock(&kgsl_driver.proclist_lock);
 
-	return (count_reclaimable << PAGE_SHIFT);
+	return count_reclaimable;
 }
 
 /* Shrinker callback data*/
