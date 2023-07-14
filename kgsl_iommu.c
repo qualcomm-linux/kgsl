@@ -1394,6 +1394,17 @@ static struct kgsl_pagetable *kgsl_iopgtbl_pagetable(struct kgsl_mmu *mmu, u32 n
 		pt->base.svm_end = KGSL_IOMMU_SVM_END32(mmu);
 	}
 
+	/*
+	 * We expect the 64-bit SVM and non-SVM ranges not to overlap so that
+	 * va_hint points to VA space at the top of the 64-bit non-SVM range.
+	 */
+	BUILD_BUG_ON_MSG(!((KGSL_IOMMU_VA_BASE64 >= KGSL_IOMMU_SVM_END64) ||
+			(KGSL_IOMMU_SVM_BASE64 >= KGSL_IOMMU_VA_END64)),
+			"64-bit SVM and non-SVM ranges should not overlap");
+
+	/* Set up the hint for 64-bit non-SVM VA on per-process pagetables */
+	pt->base.va_hint = pt->base.va_start;
+
 	ret = kgsl_iopgtbl_alloc(&iommu->user_context, pt);
 	if (ret) {
 		kfree(pt);
@@ -1784,6 +1795,21 @@ static int _remove_gpuaddr(struct kgsl_pagetable *pagetable,
 	if (WARN(!entry, "GPU address %llx doesn't exist\n", gpuaddr))
 		return -ENOMEM;
 
+	/*
+	 * If the hint was based on this entry, adjust it to the end of the
+	 * previous entry.
+	 */
+	if (pagetable->va_hint == (entry->base + entry->size)) {
+		struct kgsl_iommu_addr_entry *prev =
+			rb_entry_safe(rb_prev(&entry->node),
+				struct kgsl_iommu_addr_entry, node);
+
+		pagetable->va_hint = pagetable->va_start;
+		if (prev)
+			pagetable->va_hint = max_t(u64, prev->base + prev->size,
+							pagetable->va_start);
+	}
+
 	rb_erase(&entry->node, &pagetable->rbtree);
 	kmem_cache_free(addr_entry_cache, entry);
 	return 0;
@@ -1828,13 +1854,49 @@ static int _insert_gpuaddr(struct kgsl_pagetable *pagetable,
 	return 0;
 }
 
+static u64 _get_unmapped_area_hint(struct kgsl_pagetable *pagetable,
+		u64 bottom, u64 top, u64 size, u64 align)
+{
+	u64 hint;
+
+	/*
+	 * VA fragmentation can be a problem on global and secure pagetables
+	 * that are common to all processes, or if we're constrained to a 32-bit
+	 * range. Don't use the va_hint in these cases.
+	 */
+	if (!pagetable->va_hint || !upper_32_bits(top))
+		return (u64) -EINVAL;
+
+	/* Satisfy requested alignment */
+	hint = ALIGN(pagetable->va_hint, align);
+
+	/*
+	 * The va_hint is the highest VA that was allocated in the non-SVM
+	 * region. The 64-bit SVM and non-SVM regions do not overlap. So, we
+	 * know there is no VA allocated at this gpuaddr. Therefore, we only
+	 * need to check whether we have enough space for this allocation.
+	 */
+	if ((hint + size) > top)
+		return (u64) -ENOMEM;
+
+	pagetable->va_hint = hint + size;
+	return hint;
+}
+
 static uint64_t _get_unmapped_area(struct kgsl_pagetable *pagetable,
 		uint64_t bottom, uint64_t top, uint64_t size,
 		uint64_t align)
 {
-	struct rb_node *node = rb_first(&pagetable->rbtree);
+	struct rb_node *node;
 	uint64_t start;
 
+	/* Check if we can assign a gpuaddr based on the last allocation */
+	start = _get_unmapped_area_hint(pagetable, bottom, top, size, align);
+	if (!IS_ERR_VALUE(start))
+		return start;
+
+	/* Fall back to searching through the range. */
+	node = rb_first(&pagetable->rbtree);
 	bottom = ALIGN(bottom, align);
 	start = bottom;
 

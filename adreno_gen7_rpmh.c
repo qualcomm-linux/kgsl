@@ -469,7 +469,7 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct rpmh_bw_votes *ddr, *cnoc = NULL;
 	u32 perfmode_vote = gen7_core->acv_perfmode_vote;
-	u32 perfmode_lvl = adreno_is_gen7_9_0(adreno_dev) ? GEN7_9_0_DDR_NOM_IDX : 1;
+	u32 perfmode_lvl = adreno_is_gen7_9_x(adreno_dev) ? GEN7_9_0_DDR_NOM_IDX : 1;
 	u32 *cnoc_table;
 	u32 count;
 	int ret;
