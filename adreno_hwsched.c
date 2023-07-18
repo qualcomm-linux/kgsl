@@ -1506,6 +1506,9 @@ static void do_fault_header_lpac(struct adreno_device *adreno_dev,
 		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
 		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
 
+	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
+			drawctxt_lpac->base.proc_priv->cmdline);
+
 	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
 		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
 		adreno_get_level(drawobj_lpac->context));
@@ -1540,6 +1543,9 @@ static void do_fault_header(struct adreno_device *adreno_dev,
 		drawobj->timestamp, status,
 		drawobj->context->gmu_dispatch_queue, rptr, wptr,
 		ib1base, ib1sz, ib2base, ib2sz);
+
+	pr_context(device, drawobj->context, "cmdline: %s\n",
+			drawctxt->base.proc_priv->cmdline);
 
 	trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
 		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,
@@ -2168,7 +2174,6 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_cmds = adreno_hwsched_queue_cmds,
 	.queue_context = adreno_hwsched_queue_context,
 	.fault = adreno_hwsched_fault,
-	.idle = adreno_hwsched_idle,
 	.create_hw_fence = adreno_hwsched_create_hw_fence,
 };
 
@@ -2307,6 +2312,19 @@ static int unregister_context(int id, void *ptr, void *data)
 	 * registers with gmu on its first submission post slumber.
 	 */
 	context->gmu_registered = false;
+
+	/*
+	 * Consider the scenario where non-recurring submissions were made
+	 * by a context. Here internal_timestamp of context would be non
+	 * zero. After slumber, last retired timestamp is not held by GMU.
+	 * If this context submits a recurring workload, the context is
+	 * registered again, but the internal timestamp is not updated. When
+	 * the context is unregistered in send_context_unregister_hfi(),
+	 * we could be waiting on old internal_timestamp which is not held by
+	 * GMU. This can result in GMU errors. Hence set internal_timestamp
+	 * to zero when entering slumber.
+	 */
+	drawctxt->internal_timestamp = 0;
 
 	return 0;
 }

@@ -1441,6 +1441,11 @@ int gen7_probe_common(struct platform_device *pdev,
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
 
 	gen7_coresight_init(adreno_dev);
+
+	/* Dump additional AQE 16KB data on top of default 96KB(48(BR)+48(BV)) */
+	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
+					112 * SZ_1K : 96 * SZ_1K;
+
 	return 0;
 }
 

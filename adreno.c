@@ -1195,10 +1195,12 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 				adreno_dev->gpucore->uche_gmem_alignment);
 }
 
-static const struct of_device_id adreno_gmu_match[] = {
+static const struct of_device_id adreno_component_match[] = {
 	{ .compatible = "qcom,gen7-gmu" },
 	{ .compatible = "qcom,gpu-gmu" },
 	{ .compatible = "qcom,gpu-rgmu" },
+	{ .compatible = "qcom,kgsl-smmu-v2" },
+	{ .compatible = "qcom,smmu-kgsl-cb" },
 	{},
 };
 
@@ -1240,18 +1242,6 @@ int adreno_device_probe(struct platform_device *pdev,
 		&adreno_regmap_ops, device);
 	if (status)
 		goto err;
-
-	/*
-	 * Bind the GMU components (if applicable) before doing the KGSL
-	 * platform probe
-	 */
-	if (of_find_matching_node(dev->of_node, adreno_gmu_match)) {
-		status = component_bind_all(dev, NULL);
-		if (status) {
-			kgsl_bus_close(device);
-			return status;
-		}
-	}
 
 	/*
 	 * The SMMU APIs use unsigned long for virtual addresses which means
@@ -1297,6 +1287,11 @@ int adreno_device_probe(struct platform_device *pdev,
 	 */
 	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		kgsl_mmu_set_feature(device, KGSL_MMU_LLCC_ENABLE);
+
+	 /* Bind the components before doing the KGSL platform probe. */
+	status = component_bind_all(dev, NULL);
+	if (status)
+		goto err;
 
 	status = kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, device);
 	if (status < 0)
@@ -1382,8 +1377,7 @@ int adreno_device_probe(struct platform_device *pdev,
 err:
 	device->pdev = NULL;
 
-	if (of_find_matching_node(dev->of_node, adreno_gmu_match))
-		component_unbind_all(dev, NULL);
+	component_unbind_all(dev, NULL);
 
 	kgsl_bus_close(device);
 
@@ -1457,8 +1451,7 @@ static void adreno_unbind(struct device *dev)
 
 	kgsl_device_platform_remove(device);
 
-	if (of_find_matching_node(dev->of_node, adreno_gmu_match))
-		component_unbind_all(dev, NULL);
+	component_unbind_all(dev, NULL);
 
 	kgsl_bus_close(device);
 
@@ -3394,43 +3387,40 @@ static void _release_of(struct device *dev, void *data)
 	of_node_put(data);
 }
 
-static void adreno_add_gmu_components(struct device *dev,
+static void adreno_add_components(struct device *dev,
 		struct component_match **match)
 {
 	struct device_node *node;
 
-	node = of_find_matching_node(NULL, adreno_gmu_match);
-	if (!node)
-		return;
+	/*
+	 * Add kgsl-smmu, context banks and gmu as components, if supported.
+	 * Master bind (adreno_bind) will be called only once all added
+	 * components are available.
+	 */
+	for_each_matching_node(node, adreno_component_match) {
+		if (!of_device_is_available(node))
+			continue;
 
-	if (!of_device_is_available(node)) {
-		of_node_put(node);
-		return;
+		component_match_add_release(dev, match, _release_of, _compare_of, node);
 	}
-
-	component_match_add_release(dev, match, _release_of,
-		_compare_of, node);
 }
 
 static int adreno_probe(struct platform_device *pdev)
 {
 	struct component_match *match = NULL;
 
-	adreno_add_gmu_components(&pdev->dev, &match);
+	adreno_add_components(&pdev->dev, &match);
 
-	if (match)
-		return component_master_add_with_match(&pdev->dev,
-				&adreno_ops, match);
-	else
-		return adreno_bind(&pdev->dev);
+	if (!match)
+		return -ENODEV;
+
+	return component_master_add_with_match(&pdev->dev,
+			&adreno_ops, match);
 }
 
 static int adreno_remove(struct platform_device *pdev)
 {
-	if (of_find_matching_node(NULL, adreno_gmu_match))
-		component_master_del(&pdev->dev, &adreno_ops);
-	else
-		adreno_unbind(&pdev->dev);
+	component_master_del(&pdev->dev, &adreno_ops);
 
 	return 0;
 }
@@ -3652,10 +3642,19 @@ static int __init kgsl_3d_init(void)
 	if (ret)
 		return ret;
 
+	ret = kgsl_mmu_init();
+	if (ret) {
+		kgsl_core_exit();
+		return ret;
+	}
+
 	gmu_core_register();
 	ret = platform_driver_register(&adreno_platform_driver);
-	if (ret)
+	if (ret) {
+		gmu_core_unregister();
+		kgsl_mmu_exit();
 		kgsl_core_exit();
+	}
 
 	return ret;
 }
@@ -3664,6 +3663,7 @@ static void __exit kgsl_3d_exit(void)
 {
 	platform_driver_unregister(&adreno_platform_driver);
 	gmu_core_unregister();
+	kgsl_mmu_exit();
 	kgsl_core_exit();
 }
 
