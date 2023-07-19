@@ -3570,7 +3570,7 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	 * If this ts hasn't been submitted yet, then store it in the drawctxt hardware fence
 	 * list and return. This fence will be sent to GMU when this ts is dispatched to GMU.
 	 */
-	if (timestamp_cmp(kfence->timestamp, drawctxt->internal_timestamp) > 0) {
+	if (timestamp_cmp(kfence->timestamp, drawctxt->gmu_hw_fence_ready_ts) > 0) {
 		drawctxt_queue_hw_fence(drawctxt, entry);
 		destroy_hw_fence = false;
 		goto done;
@@ -3843,13 +3843,16 @@ skipib:
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
 		DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
 
+	drawctxt->internal_timestamp = drawobj->timestamp;
+
 	spin_lock(&drawctxt->lock);
 	process_hw_fence_queue(adreno_dev, drawctxt, drawobj->timestamp);
 	/*
-	 * We need to update the internal timestamp while holding the drawctxt lock since we have to
-	 * check it in the hardware fence creation path, where we are not taking the device mutex.
+	 * We need to update the gmu_hw_fence_ready_ts while holding the drawctxt lock since we
+	 * have to check it in the hardware fence creation path, where we are not taking the device
+	 * mutex.
 	 */
-	drawctxt->internal_timestamp = drawobj->timestamp;
+	drawctxt->gmu_hw_fence_ready_ts = drawobj->timestamp;
 	spin_unlock(&drawctxt->lock);
 
 	return 0;
