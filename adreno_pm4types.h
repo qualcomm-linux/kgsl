@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_PM4TYPES_H
 #define __ADRENO_PM4TYPES_H
@@ -138,10 +138,6 @@
 #define CP_SET_SECURE_MODE 0x66
 
 #define CP_BOOTSTRAP_UCODE  0x6f /* bootstraps microcode */
-
-/*
- * for a3xx
- */
 
 #define CP_LOAD_STATE 0x30 /* load high level sequencer command */
 

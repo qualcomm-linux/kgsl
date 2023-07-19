@@ -15,7 +15,6 @@
 #define TRACE_INCLUDE_FILE adreno_trace
 
 #include <linux/tracepoint.h>
-#include "adreno_a3xx.h"
 #include "adreno_a5xx.h"
 #include "adreno_gen7.h"
 #include "adreno_hfi.h"
@@ -585,64 +584,6 @@ TRACE_EVENT(adreno_sp_tp,
 
 	TP_printk(
 		"func=%pS", (void *) __entry->ip
-	)
-);
-
-/*
- * Tracepoint for a3xx irq. Includes status info
- */
-TRACE_EVENT(kgsl_a3xx_irq_status,
-
-	TP_PROTO(struct adreno_device *adreno_dev, unsigned int status),
-
-	TP_ARGS(adreno_dev, status),
-
-	TP_STRUCT__entry(
-		__string(device_name, adreno_dev->dev.name)
-		__field(unsigned int, status)
-	),
-
-	TP_fast_assign(
-		__assign_str(device_name, adreno_dev->dev.name);
-		__entry->status = status;
-	),
-
-	TP_printk(
-		"d_name=%s status=%s",
-		__get_str(device_name),
-		__entry->status ? __print_flags(__entry->status, "|",
-			{ BIT(A3XX_INT_RBBM_GPU_IDLE), "RBBM_GPU_IDLE" },
-			{ BIT(A3XX_INT_RBBM_AHB_ERROR), "RBBM_AHB_ERR" },
-			{ BIT(A3XX_INT_RBBM_REG_TIMEOUT), "RBBM_REG_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_ME_MS_TIMEOUT),
-				"RBBM_ME_MS_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_PFP_MS_TIMEOUT),
-				"RBBM_PFP_MS_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_ATB_BUS_OVERFLOW),
-				"RBBM_ATB_BUS_OVERFLOW" },
-			{ BIT(A3XX_INT_VFD_ERROR), "RBBM_VFD_ERROR" },
-			{ BIT(A3XX_INT_CP_SW_INT), "CP_SW" },
-			{ BIT(A3XX_INT_CP_T0_PACKET_IN_IB),
-				"CP_T0_PACKET_IN_IB" },
-			{ BIT(A3XX_INT_CP_OPCODE_ERROR), "CP_OPCODE_ERROR" },
-			{ BIT(A3XX_INT_CP_RESERVED_BIT_ERROR),
-				"CP_RESERVED_BIT_ERROR" },
-			{ BIT(A3XX_INT_CP_HW_FAULT), "CP_HW_FAULT" },
-			{ BIT(A3XX_INT_CP_DMA), "CP_DMA" },
-			{ BIT(A3XX_INT_CP_IB2_INT), "CP_IB2_INT" },
-			{ BIT(A3XX_INT_CP_IB1_INT), "CP_IB1_INT" },
-			{ BIT(A3XX_INT_CP_RB_INT), "CP_RB_INT" },
-			{ BIT(A3XX_INT_CP_REG_PROTECT_FAULT),
-				"CP_REG_PROTECT_FAULT" },
-			{ BIT(A3XX_INT_CP_RB_DONE_TS), "CP_RB_DONE_TS" },
-			{ BIT(A3XX_INT_CP_VS_DONE_TS), "CP_VS_DONE_TS" },
-			{ BIT(A3XX_INT_CP_PS_DONE_TS), "CP_PS_DONE_TS" },
-			{ BIT(A3XX_INT_CACHE_FLUSH_TS), "CACHE_FLUSH_TS" },
-			{ BIT(A3XX_INT_CP_AHB_ERROR_HALT),
-				"CP_AHB_ERROR_HALT" },
-			{ BIT(A3XX_INT_MISC_HANG_DETECT), "MISC_HANG_DETECT" },
-			{ BIT(A3XX_INT_UCHE_OOB_ACCESS), "UCHE_OOB_ACCESS" })
-			: "None"
 	)
 );
 

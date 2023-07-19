@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2014-2016,2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _A5XX_REG_H
@@ -884,6 +885,9 @@
 #define A5XX_GDPM_INT_EN			0xB80F
 #define A5XX_GDPM_INT_MASK			0xB811
 #define A5XX_GPMU_BEC_ENABLE			0xB9A0
+
+/* VBIF countables */
+#define VBIF_AXI_TOTAL_BEATS 85
 
 /* ISENSE registers */
 #define A5XX_GPU_CS_DECIMAL_ALIGN		0xC16A

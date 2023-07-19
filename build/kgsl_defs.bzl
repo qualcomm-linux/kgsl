@@ -10,10 +10,6 @@ msm_kgsl_includes = [
 def kgsl_get_srcs():
     srcs = [
         "adreno.c",
-        "adreno_a3xx.c",
-        "adreno_a3xx_perfcounter.c",
-        "adreno_a3xx_ringbuffer.c",
-        "adreno_a3xx_snapshot.c",
         "adreno_a5xx.c",
         "adreno_a5xx_perfcounter.c",
         "adreno_a5xx_preempt.c",
@@ -120,7 +116,6 @@ def define_target_variant_module(target, variant):
             "CONFIG_DEBUG_FS": { True: [ "kgsl_debugfs.c", "adreno_debugfs.c", "adreno_profile.c" ] },
             "CONFIG_QCOM_KGSL_CORESIGHT": { True: [
                 "adreno_coresight.c",
-                "adreno_a3xx_coresight.c",
                 "adreno_a5xx_coresight.c",
                 "adreno_a6xx_coresight.c",
                 "adreno_gen7_coresight.c"] },

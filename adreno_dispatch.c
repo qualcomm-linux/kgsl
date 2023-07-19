@@ -94,50 +94,6 @@ _drawqueue_inflight(struct adreno_dispatcher_drawqueue *drawqueue)
 		? _dispatcher_q_inflight_lo : _dispatcher_q_inflight_hi;
 }
 
-static void fault_detect_read(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int i;
-
-	if (!test_bit(ADRENO_DEVICE_SOFT_FAULT_DETECT, &adreno_dev->priv))
-		return;
-
-	for (i = 0; i < adreno_dev->num_ringbuffers; i++) {
-		struct adreno_ringbuffer *rb = &(adreno_dev->ringbuffers[i]);
-
-		adreno_rb_readtimestamp(adreno_dev, rb,
-			KGSL_TIMESTAMP_RETIRED, &(rb->fault_detect_ts));
-	}
-
-	for (i = 0; i < adreno_dev->soft_ft_count; i++) {
-		if (adreno_dev->soft_ft_regs[i])
-			kgsl_regread(device, adreno_dev->soft_ft_regs[i],
-				&adreno_dev->soft_ft_vals[i]);
-	}
-}
-
-void adreno_dispatcher_start_fault_timer(struct adreno_device *adreno_dev)
-{
-	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
-
-	if (adreno_soft_fault_detect(adreno_dev))
-		mod_timer(&dispatcher->fault_timer,
-			jiffies + msecs_to_jiffies(_fault_timer_interval));
-}
-
-/*
- * This takes a kgsl_device pointer so that it can be used for the function
- * hook in adreno.c too
- */
-void adreno_dispatcher_stop_fault_timer(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_SOFT_FAULT_DETECT))
-		del_timer_sync(&dispatcher->fault_timer);
-}
-
 /**
  * _retire_timestamp() - Retire object without sending it
  * to the hardware
@@ -188,20 +144,10 @@ static void _retire_timestamp(struct kgsl_drawobj *drawobj)
 		atomic_inc(&context->proc_priv->period->frames);
 	}
 
-	/*
-	 * For A3xx we still get the rptr from the CP_RB_RPTR instead of
-	 * rptr scratch out address. At this point GPU clocks turned off.
-	 * So avoid reading GPU register directly for A3xx.
-	 */
-	if (adreno_is_a3xx(ADRENO_DEVICE(device))) {
-		trace_adreno_cmdbatch_retired(context, &info,
-			drawobj->flags, rb->dispatch_q.inflight, 0);
-	} else {
-		info.rptr = adreno_get_rptr(rb);
+	info.rptr = adreno_get_rptr(rb);
 
-		trace_adreno_cmdbatch_retired(context, &info,
-			drawobj->flags, rb->dispatch_q.inflight, 0);
-	}
+	trace_adreno_cmdbatch_retired(context, &info,
+		drawobj->flags, rb->dispatch_q.inflight, 0);
 
 	log_kgsl_cmdbatch_retired_event(context->id, drawobj->timestamp,
 		context->priority, drawobj->flags, 0, 0);
@@ -562,15 +508,6 @@ static int sendcmd(struct adreno_device *adreno_dev,
 
 	if (dispatcher->inflight == 1) {
 		if (ret == 0) {
-
-			/* Stop fault timer before reading fault registers */
-			adreno_dispatcher_stop_fault_timer(device);
-
-			fault_detect_read(adreno_dev);
-
-			/* Start the fault timer on first submission */
-			adreno_dispatcher_start_fault_timer(adreno_dev);
-
 			if (!test_and_set_bit(ADRENO_DISPATCHER_ACTIVE,
 				&dispatcher->priv))
 				reinit_completion(&dispatcher->idle_gate);
@@ -1976,13 +1913,12 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	gx_on = adreno_gx_is_on(adreno_dev);
 
 	/*
-	 * On non-A3xx, read RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24)
-	 * to tell if this function was entered after a pagefault. If so, only
-	 * proceed if the fault handler has already run in the IRQ thread,
-	 * else return early to give the fault handler a chance to run.
+	 * Read RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24) to tell if this
+	 * function was entered after a pagefault. If so, only proceed if the
+	 * fault handler has already run in the IRQ thread, else return early
+	 * to give the fault handler a chance to run.
 	 */
-	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) &&
-		!adreno_is_a3xx(adreno_dev) && gx_on) {
+	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) && gx_on) {
 		unsigned int val;
 
 		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
@@ -1996,8 +1932,6 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 
 	/* Turn off all the timers */
 	del_timer_sync(&dispatcher->timer);
-
-	adreno_dispatcher_stop_fault_timer(device);
 
 	/*
 	 * Deleting uninitialized timer will block for ever on kernel debug
@@ -2016,12 +1950,12 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	 */
 	if (!(fault & ADRENO_HARD_FAULT) && gx_on) {
 		adreno_readreg(adreno_dev, ADRENO_REG_CP_ME_CNTL, &reg);
-		if (adreno_is_a3xx(adreno_dev))
-			reg |= (1 << 27) | (1 << 28);
-		else if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev))
+
+		if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev))
 			reg |= 1 | (1 << 1);
 		else
 			reg = 0x0;
+
 		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, reg);
 	}
 	/*
@@ -2221,21 +2155,10 @@ static void retire_cmdobj(struct adreno_device *adreno_dev,
 		atomic_inc(&context->proc_priv->period->frames);
 	}
 
-	/*
-	 * For A3xx we still get the rptr from the CP_RB_RPTR instead of
-	 * rptr scratch out address. At this point GPU clocks turned off.
-	 * So avoid reading GPU register directly for A3xx.
-	 */
-	if (adreno_is_a3xx(adreno_dev)) {
-		trace_adreno_cmdbatch_retired(drawobj->context, &info,
-			drawobj->flags, rb->dispatch_q.inflight,
-			cmdobj->fault_recovery);
-	} else {
-		info.rptr = adreno_get_rptr(rb);
-		trace_adreno_cmdbatch_retired(drawobj->context, &info,
-			drawobj->flags, rb->dispatch_q.inflight,
-			cmdobj->fault_recovery);
-	}
+	info.rptr = adreno_get_rptr(rb);
+	trace_adreno_cmdbatch_retired(drawobj->context, &info,
+		drawobj->flags, rb->dispatch_q.inflight,
+		cmdobj->fault_recovery);
 
 	log_kgsl_cmdbatch_retired_event(context->id, drawobj->timestamp,
 		context->priority, drawobj->flags, start, end);
@@ -2358,7 +2281,6 @@ static void _dispatcher_power_down(struct adreno_device *adreno_dev)
 	if (test_and_clear_bit(ADRENO_DISPATCHER_ACTIVE, &dispatcher->priv))
 		complete_all(&dispatcher->idle_gate);
 
-	adreno_dispatcher_stop_fault_timer(device);
 	process_rt_bus_hint(device, false);
 
 	if (test_bit(ADRENO_DISPATCHER_POWER, &dispatcher->priv)) {
@@ -2488,8 +2410,6 @@ void adreno_dispatcher_stop(struct adreno_device *adreno_dev)
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 
 	del_timer_sync(&dispatcher->timer);
-
-	adreno_dispatcher_stop_fault_timer(KGSL_DEVICE(adreno_dev));
 }
 
 /* Return the ringbuffer that matches the draw context priority */
@@ -2608,8 +2528,6 @@ static void adreno_dispatcher_close(struct adreno_device *adreno_dev)
 
 	mutex_lock(&dispatcher->mutex);
 	del_timer_sync(&dispatcher->timer);
-
-	adreno_dispatcher_stop_fault_timer(KGSL_DEVICE(adreno_dev));
 
 	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
 		struct adreno_dispatcher_drawqueue *dispatch_q =

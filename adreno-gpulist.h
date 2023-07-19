@@ -16,73 +16,9 @@ static const struct adreno_gpu_core adreno_gpu_core_##_name = { \
 	.features = ADRENO_DEPRECATED, \
 }
 
-static const struct kgsl_regmap_list a306_vbif_regs[] = {
-	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0003 },
-	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x0000000A },
-	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x0000000A },
-};
-
-static const struct adreno_a3xx_core adreno_gpu_core_a306 = {
-	.base = {
-		DEFINE_ADRENO_REV(ADRENO_REV_A306, 3, 0, 6, 0),
-		.features = ADRENO_SOFT_FAULT_DETECT,
-		.gpudev = &adreno_a3xx_gpudev,
-		.perfcounters = &adreno_a3xx_perfcounters,
-		.uche_gmem_alignment = 0,
-		.gmem_size = SZ_128K,
-		.bus_width = 0,
-		.snapshot_size = 600 * SZ_1K,
-	},
-	.pm4fw_name = "a300_pm4.fw",
-	.pfpfw_name = "a300_pfp.fw",
-	.vbif = a306_vbif_regs,
-	.vbif_count = ARRAY_SIZE(a306_vbif_regs),
-};
-
-static const struct kgsl_regmap_list a306a_vbif_regs[] = {
-	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0003 },
-	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x00000010 },
-	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x00000010 },
-};
-
-static const struct adreno_a3xx_core adreno_gpu_core_a306a = {
-	.base = {
-		DEFINE_ADRENO_REV(ADRENO_REV_A306A, 3, 0, 6, 0x20),
-		.features = ADRENO_SOFT_FAULT_DETECT,
-		.gpudev = &adreno_a3xx_gpudev,
-		.perfcounters = &adreno_a3xx_perfcounters,
-		.uche_gmem_alignment = 0,
-		.gmem_size = SZ_128K,
-		.bus_width = 16,
-		.snapshot_size = 600 * SZ_1K,
-	},
-	.pm4fw_name = "a300_pm4.fw",
-	.pfpfw_name = "a300_pfp.fw",
-	.vbif = a306a_vbif_regs,
-	.vbif_count = ARRAY_SIZE(a306a_vbif_regs),
-};
-
-static const struct kgsl_regmap_list a304_vbif_regs[] = {
-	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0003 },
-};
-
-static const struct adreno_a3xx_core adreno_gpu_core_a304 = {
-	.base = {
-		DEFINE_ADRENO_REV(ADRENO_REV_A304, 3, 0, 4, 0),
-		.features = ADRENO_SOFT_FAULT_DETECT,
-		.gpudev = &adreno_a3xx_gpudev,
-		.perfcounters = &adreno_a3xx_perfcounters,
-		.uche_gmem_alignment = 0,
-		.gmem_size = (SZ_64K + SZ_32K),
-		.bus_width = 0,
-		.snapshot_size = 600 * SZ_1K,
-	},
-	.pm4fw_name = "a300_pm4.fw",
-	.pfpfw_name = "a300_pfp.fw",
-	.vbif = a304_vbif_regs,
-	.vbif_count = ARRAY_SIZE(a304_vbif_regs),
-};
-
+DEFINE_DEPRECATED_CORE(a304, ADRENO_REV_A304, 4, 0, 5, ANY_ID);
+DEFINE_DEPRECATED_CORE(a306, ADRENO_REV_A306, 4, 0, 5, ANY_ID);
+DEFINE_DEPRECATED_CORE(a306a, ADRENO_REV_A306A, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a405, ADRENO_REV_A405, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a418, ADRENO_REV_A418, 4, 1, 8, ANY_ID);
 DEFINE_DEPRECATED_CORE(a420, ADRENO_REV_A420, 4, 2, 0, ANY_ID);
@@ -2558,9 +2494,9 @@ static const struct adreno_a6xx_core adreno_gpu_core_a663 = {
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
-	&adreno_gpu_core_a306.base,
-	&adreno_gpu_core_a306a.base,
-	&adreno_gpu_core_a304.base,
+	&adreno_gpu_core_a306,		/* Deprecated */
+	&adreno_gpu_core_a306a,		/* Deprecated */
+	&adreno_gpu_core_a304,		/* Deprecated */
 	&adreno_gpu_core_a405,		/* Deprecated */
 	&adreno_gpu_core_a418,		/* Deprecated */
 	&adreno_gpu_core_a420,		/* Deprecated */

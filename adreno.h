@@ -507,7 +507,6 @@ struct adreno_dispatch_ops {
  * @cur_rb: Pointer to the current ringbuffer
  * @next_rb: Ringbuffer we are switching to during preemption
  * @prev_rb: Ringbuffer we are switching from during preemption
- * @fast_hang_detect: Software fault detection availability
  * @ft_policy: Defines the fault tolerance policy
  * @long_ib_detect: Long IB detection availability
  * @cooperative_reset: Indicates if graceful death handshake is enabled
@@ -575,7 +574,6 @@ struct adreno_device {
 	struct adreno_ringbuffer *cur_rb;
 	struct adreno_ringbuffer *next_rb;
 	struct adreno_ringbuffer *prev_rb;
-	unsigned int fast_hang_detect;
 	unsigned long ft_policy;
 	bool long_ib_detect;
 	bool cooperative_reset;
@@ -662,20 +660,6 @@ struct adreno_device {
 	struct kgsl_memdesc *critpkts_secure;
 	/** @irq_mask: The current interrupt mask for the GPU device */
 	u32 irq_mask;
-	/*
-	 * @soft_ft_regs: an array of registers for soft fault detection on a3xx
-	 * targets
-	 */
-	u32 *soft_ft_regs;
-	/*
-	 * @soft_ft_vals: an array of register values for soft fault detection
-	 * on a3xx targets
-	 */
-	u32 *soft_ft_vals;
-	/*
-	 * @soft_ft_vals: number of elements in @soft_ft_regs and @soft_ft_vals
-	 */
-	int soft_ft_count;
 	/** @wake_on_touch: If true our last wakeup was due to a touch event */
 	bool wake_on_touch;
 	/* @dispatch_ops: A pointer to a set of adreno dispatch ops */
@@ -1014,7 +998,6 @@ enum kgsl_ft_policy_bits {
 
 extern const struct adreno_power_ops adreno_power_operations;
 
-extern const struct adreno_gpudev adreno_a3xx_gpudev;
 extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
@@ -1103,16 +1086,6 @@ static inline int adreno_is_##_name(struct adreno_device *adreno_dev) \
 { \
 	return (ADRENO_GPUREV(adreno_dev) == (_id)); \
 }
-
-static inline int adreno_is_a3xx(struct adreno_device *adreno_dev)
-{
-	return ((ADRENO_GPUREV(adreno_dev) >= 300) &&
-		(ADRENO_GPUREV(adreno_dev) < 400));
-}
-
-ADRENO_TARGET(a304, ADRENO_REV_A304)
-ADRENO_TARGET(a306, ADRENO_REV_A306)
-ADRENO_TARGET(a306a, ADRENO_REV_A306A)
 
 static inline int adreno_is_a5xx(struct adreno_device *adreno_dev)
 {
@@ -1293,7 +1266,7 @@ static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 	 * programming needs to be skipped for certain GPU cores.
 	 * Example: Certain registers on a5xx like IB1_BASE are 64 bit.
 	 * Common programming programs 64bit register but upper 32 bits
-	 * are skipped in a3xx using ADRENO_REG_SKIP.
+	 * are skipped in a5xx using ADRENO_REG_SKIP.
 	 */
 	if (gpudev->reg_offsets[offset_name] == ADRENO_REG_SKIP)
 		return false;
@@ -1585,12 +1558,6 @@ void adreno_touch_wake(struct kgsl_device *device);
 static inline bool adreno_rb_empty(struct adreno_ringbuffer *rb)
 {
 	return (adreno_get_rptr(rb) == rb->wptr);
-}
-
-static inline bool adreno_soft_fault_detect(struct adreno_device *adreno_dev)
-{
-	return adreno_dev->fast_hang_detect &&
-		!test_bit(ADRENO_DEVICE_ISDB_ENABLED, &adreno_dev->priv);
 }
 
 static inline bool adreno_long_ib_detect(struct adreno_device *adreno_dev)

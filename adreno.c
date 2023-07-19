@@ -25,7 +25,6 @@
 #include <linux/suspend.h>
 
 #include "adreno.h"
-#include "adreno_a3xx.h"
 #include "adreno_a5xx.h"
 #include "adreno_a6xx.h"
 #include "adreno_compat.h"
@@ -168,11 +167,8 @@ unsigned int adreno_get_rptr(struct adreno_ringbuffer *rb)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 rptr = 0;
 
-	if (adreno_is_a3xx(adreno_dev))
-		kgsl_regread(device, A3XX_CP_RB_RPTR, &rptr);
-	else
-		kgsl_sharedmem_readl(device->scratch, &rptr,
-				SCRATCH_RB_OFFSET(rb->id, rptr));
+	kgsl_sharedmem_readl(device->scratch, &rptr,
+			     SCRATCH_RB_OFFSET(rb->id, rptr));
 
 	return rptr;
 }
@@ -1298,11 +1294,10 @@ int adreno_device_probe(struct platform_device *pdev,
 		kgsl_mmu_set_feature(device, KGSL_MMU_LLCC_ENABLE);
 
 	/*
-	 * Force no write allocate for A3x, A5x, A6x and all gen7 targets
+	 * Force no write allocate for A5x, A6x and all gen7 targets
 	 * except gen_7_9_x. gen_7_9_x uses write allocate
 	 */
-	if (adreno_is_a3xx(adreno_dev) || adreno_is_a5xx(adreno_dev) ||
-		adreno_is_a6xx(adreno_dev) ||
+	if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev) ||
 		(adreno_is_gen7(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev)))
 		kgsl_mmu_set_feature(device, KGSL_MMU_FORCE_LLCC_NWA);
 
@@ -2487,13 +2482,6 @@ static int adreno_soft_reset(struct kgsl_device *device)
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 
-	/*
-	 * Don't allow a soft reset for a304 because the SMMU needs to be hard
-	 * reset
-	 */
-	if (adreno_is_a304(adreno_dev))
-		return -ENODEV;
-
 	if (gpudev->clear_pending_transactions) {
 		ret = gpudev->clear_pending_transactions(adreno_dev);
 		if (ret)
@@ -3019,8 +3007,6 @@ static bool adreno_is_hw_collapsible(struct kgsl_device *device)
 	if (gpudev->clear_pending_transactions(adreno_dev))
 		return false;
 
-	adreno_dispatcher_stop_fault_timer(device);
-
 	return true;
 }
 
@@ -3114,11 +3100,6 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 			 */
 			ADRENO_DEVICE(device)->wake_on_touch = false;
 		}
-
-		/* A3XX does not have support for drawobj profiling */
-		if (adreno_is_a3xx(ADRENO_DEVICE(device)) &&
-			(drawobj[i]->flags & KGSL_DRAWOBJ_PROFILING))
-			return -EOPNOTSUPP;
 	}
 
 	return 0;
