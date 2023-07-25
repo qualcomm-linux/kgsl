@@ -397,8 +397,11 @@ static ssize_t max_pwrlevel_store(struct device *dev,
 
 	pwr->max_pwrlevel = level;
 
-	/* Update the current level using the new limit */
-	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, level, GPU_PWRLEVEL_OP_MAX_PWRLEVEL)) {
+		/* Update the current level using the new limit */
+		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+	}
+
 	mutex_unlock(&device->mutex);
 
 	return count;
@@ -430,8 +433,10 @@ static void kgsl_pwrctrl_min_pwrlevel_set(struct kgsl_device *device,
 
 	pwr->min_pwrlevel = level;
 
-	/* Update the current level using the new limit */
-	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, level, GPU_PWRLEVEL_OP_MIN_PWRLEVEL)) {
+		/* Update the current level using the new limit */
+		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+	}
 
 	mutex_unlock(&device->mutex);
 }
@@ -540,12 +545,15 @@ static ssize_t gpuclk_store(struct device *dev,
 		return ret;
 
 	level = _get_nearest_pwrlevel(pwr, val);
-	if (level >= 0) {
-		mutex_lock(&device->mutex);
-		kgsl_pwrctrl_pwrlevel_change(device, (unsigned int) level);
-		mutex_unlock(&device->mutex);
-	}
+	if (level < 0)
+		return count;
 
+	mutex_lock(&device->mutex);
+
+	if (device->ftbl->gmu_based_dcvs_pwr_ops(device, level, GPU_PWRLEVEL_OP_GPUCLK))
+		kgsl_pwrctrl_pwrlevel_change(device, (unsigned int) level);
+
+	mutex_unlock(&device->mutex);
 	return count;
 }
 
@@ -802,6 +810,9 @@ static ssize_t bus_split_store(struct device *dev,
 	if (ret)
 		return ret;
 
+	if (!device->host_based_dcvs)
+		return count;
+
 	mutex_lock(&device->mutex);
 	device->pwrctrl.bus_control = val ? true : false;
 	mutex_unlock(&device->mutex);
@@ -835,10 +846,25 @@ static ssize_t default_pwrlevel_store(struct device *dev,
 	if (level >= pwr->num_pwrlevels)
 		return count;
 
+	if (pwr->default_pwrlevel == level)
+		return count;
+
 	mutex_lock(&device->mutex);
-	pwr->default_pwrlevel = level;
-	pwrscale->gpu_profile.profile.initial_freq
-			= pwr->pwrlevels[level].gpu_freq;
+
+	/*
+	 * If GMU based DCVS is enabled, mark the DCVS table for update and force
+	 * a coldboot for the next boot so that the updated default pwrlevel is
+	 * send to GMU
+	 */
+	if (!device->host_based_dcvs) {
+		pwr->update_dcvs_table = true;
+		pwr->default_pwrlevel = level;
+		gmu_core_mark_for_coldboot(device);
+	} else {
+		pwr->default_pwrlevel = level;
+		pwrscale->gpu_profile.profile.initial_freq
+				= pwr->pwrlevels[level].gpu_freq;
+	}
 
 	mutex_unlock(&device->mutex);
 	return count;
@@ -1071,6 +1097,9 @@ static ssize_t pwrscale_store(struct device *dev,
 	ret = kstrtou32(buf, 0, &enable);
 	if (ret)
 		return ret;
+
+	if (!device->host_based_dcvs)
+		return count;
 
 	mutex_lock(&device->mutex);
 
