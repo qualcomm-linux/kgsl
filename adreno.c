@@ -3377,6 +3377,21 @@ static void adreno_set_isdb_breakpoint_registers(struct kgsl_device *device)
 		gpudev->set_isdb_breakpoint_registers(adreno_dev);
 }
 
+static int adreno_gmu_based_dcvs_pwr_ops(struct kgsl_device *device, u32 arg,
+		enum gpu_pwrlevel_op op)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+
+	if (device->host_based_dcvs)
+		return -EOPNOTSUPP;
+
+	if (ops->gmu_based_dcvs_pwr_ops)
+		ops->gmu_based_dcvs_pwr_ops(adreno_dev, arg, op);
+
+	return 0;
+}
+
 static void adreno_drawctxt_sched(struct kgsl_device *device,
 		struct kgsl_context *context)
 {
@@ -3732,6 +3747,7 @@ static const struct kgsl_functable adreno_functable = {
 	.dequeue_recurring_cmd = adreno_dequeue_recurring_cmd,
 	.set_isdb_breakpoint_registers = adreno_set_isdb_breakpoint_registers,
 	.create_hw_fence = adreno_create_hw_fence,
+	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
 };
 
 static const struct component_master_ops adreno_ops = {

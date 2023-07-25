@@ -1782,7 +1782,7 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	u32 max_freq = val * 1000;
 	int level;
 
-	if (!device->pwrscale.devfreq_enabled)
+	if (device->host_based_dcvs && !device->pwrscale.devfreq_enabled)
 		return NOTIFY_DONE;
 
 	for (level = pwr->num_pwrlevels - 1; level >= 0; level--) {
@@ -1803,9 +1803,13 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 
 	mutex_lock(&device->mutex);
 
+	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
+		goto done;
+
 	/* Update the current level using the new limit */
 	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
 
+done:
 	mutex_unlock(&device->mutex);
 	return NOTIFY_OK;
 }
@@ -1817,10 +1821,14 @@ static void kgsl_set_thermal_constraint(struct kthread_work *work)
 
 	mutex_lock(&device->mutex);
 
+	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
+		goto done;
+
 	/* Update the current level using the new limit */
 	if (device->state == KGSL_STATE_ACTIVE)
 		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
 
+done:
 	mutex_unlock(&device->mutex);
 }
 

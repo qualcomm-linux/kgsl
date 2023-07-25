@@ -1884,6 +1884,45 @@ done:
 	return pending_ack.results[2];
 }
 
+int gen8_hwsched_hfi_set_value(struct adreno_device *adreno_dev, u32 type, u32 subtype, u32 data)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct pending_cmd pending_ack;
+	int rc;
+	u32 seqnum;
+	struct hfi_set_value_cmd cmd = {
+		.type = type,
+		.subtype = subtype,
+		.data = data,
+	};
+
+	rc = CMD_MSG_HDR(cmd, H2F_MSG_SET_VALUE);
+	if (rc)
+		return 0;
+
+	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
+	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
+
+	add_waiter(hfi, cmd.hdr, &pending_ack);
+
+	rc = gen8_hfi_cmdq_write(adreno_dev, (u32 *)&cmd, sizeof(cmd));
+	if (rc)
+		goto done;
+
+	rc = adreno_hwsched_wait_ack_completion(adreno_dev, GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
+			&pending_ack, gen8_hwsched_process_msgq);
+
+	if (rc)
+		goto done;
+
+	rc = check_ack_failure(adreno_dev, &pending_ack);
+done:
+	del_waiter(hfi, &pending_ack);
+
+	return rc;
+}
+
 static int gen8_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
@@ -2107,6 +2146,35 @@ int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 		return gen8_hwsched_coldboot_gpu(adreno_dev);
 }
 
+static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 thermal_pwrlevel = max_t(u32, pwr->thermal_pwrlevel, pwr->pmqos_max_pwrlevel);
+	int ret = 0;
+
+	if (thermal_pwrlevel != 0) {
+		ret = gen8_hwsched_hfi_set_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
+				(pwr->num_pwrlevels - thermal_pwrlevel));
+		if (ret)
+			dev_err(GMU_PDEV_DEV(device),
+				"Failed to set default thermal level %u, ret: %d\n",
+				thermal_pwrlevel, ret);
+	}
+
+	return ret;
+}
+
+static int gen8_hwsched_setup_default_votes(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (device->host_based_dcvs)
+		return kgsl_pwrctrl_setup_default_votes(device);
+
+	return gen8_hwsched_set_gmu_based_dcvs_votes(adreno_dev);
+}
+
 int gen8_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2122,7 +2190,7 @@ int gen8_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
+	ret = gen8_hwsched_setup_default_votes(adreno_dev);
 
 err:
 	if (ret) {
@@ -2149,6 +2217,7 @@ static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_de
 	clear_bit(H2F_MSG_WARMBOOT_CMD, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_START, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_GET_VALUE, hfi->wb_set_record_bitmask);
+	clear_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_GX_BW_PERF_VOTE, hfi->wb_set_record_bitmask);
 }
 
@@ -2456,7 +2525,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (adreno_dev->warmboot_enabled)
 		set_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
 
-	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
+	ret = gen8_hwsched_setup_default_votes(adreno_dev);
 
 err:
 	if (ret)
