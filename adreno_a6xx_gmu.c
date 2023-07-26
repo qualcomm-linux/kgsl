@@ -886,18 +886,21 @@ int a6xx_gmu_load_fw(struct adreno_device *adreno_dev)
 				A6XX_GMU_CM3_DTCM_START,
 				gmu->vma[GMU_DTCM].start, blk);
 		} else {
-			struct kgsl_memdesc *md =
-				find_gmu_memdesc(gmu, blk->addr, blk->size);
+			/* The firmware block for memory needs to be copied on first boot only */
+			if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)) {
+				struct kgsl_memdesc *md =
+					find_gmu_memdesc(gmu, blk->addr, blk->size);
 
-			if (!md) {
-				dev_err(&gmu->pdev->dev,
-					"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
-					blk->addr, blk->size);
-				return -EINVAL;
+				if (!md) {
+					dev_err(&gmu->pdev->dev,
+						"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
+						blk->addr, blk->size);
+					return -EINVAL;
+				}
+
+				memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
+					blk->size);
 			}
-
-			memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
-				blk->size);
 		}
 
 		fw += blk->size;
@@ -1065,7 +1068,7 @@ static int a6xx_gmu_hfi_start_msg(struct adreno_device *adreno_dev)
 		if (ret)
 			return ret;
 
-		return a6xx_hfi_send_generic_req(adreno_dev, &req);
+		return a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 	}
 
 	return 0;
@@ -1973,7 +1976,7 @@ static int a6xx_gmu_notify_slumber(struct adreno_device *adreno_dev)
 
 		ret = CMD_MSG_HDR(req, H2F_MSG_PREPARE_SLUMBER);
 		if (!ret)
-			ret = a6xx_hfi_send_generic_req(adreno_dev, &req);
+			ret = a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 
 		goto out;
 	}
@@ -2062,7 +2065,7 @@ static int a6xx_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_HFI_USE_REG))
 		ret = a6xx_gmu_dcvs_nohfi(device, req.freq, req.bw);
 	else
-		ret = a6xx_hfi_send_generic_req(adreno_dev, &req);
+		ret = a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
@@ -2701,7 +2704,7 @@ static void a6xx_gmu_acd_probe(struct kgsl_device *device,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
 		return;
 
-	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, sizeof(*cmd), HFI_MSG_CMD);
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, HFI_MSG_CMD);
 
 	cmd->version = 1;
 	cmd->stride = 1;

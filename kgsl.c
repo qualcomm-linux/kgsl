@@ -5237,6 +5237,8 @@ int __init kgsl_core_init(void)
 	/* Initialize the memory pools */
 	kgsl_probe_page_pools();
 
+	kgsl_register_shmem_callback();
+
 	INIT_LIST_HEAD(&kgsl_driver.process_list);
 
 	INIT_LIST_HEAD(&kgsl_driver.pagetable_list);

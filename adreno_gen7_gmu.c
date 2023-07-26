@@ -74,6 +74,7 @@ static ssize_t log_stream_enable_store(struct kobject *kobj,
 		return ret;
 
 	gmu->log_stream_enable = val;
+	adreno_mark_for_coldboot(gen7_gmu_to_adreno(gmu));
 	return count;
 }
 
@@ -96,6 +97,7 @@ static ssize_t log_group_mask_store(struct kobject *kobj,
 		return ret;
 
 	gmu->log_group_mask = val;
+	adreno_mark_for_coldboot(gen7_gmu_to_adreno(gmu));
 	return count;
 }
 
@@ -136,6 +138,7 @@ static ssize_t stats_enable_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_enable = val;
+	adreno_mark_for_coldboot(gen7_gmu_to_adreno(gmu));
 	return count;
 }
 
@@ -158,6 +161,7 @@ static ssize_t stats_mask_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_mask = val;
+	adreno_mark_for_coldboot(gen7_gmu_to_adreno(gmu));
 	return count;
 }
 
@@ -180,6 +184,7 @@ static ssize_t stats_interval_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_interval = val;
+	adreno_mark_for_coldboot(gen7_gmu_to_adreno(gmu));
 	return count;
 }
 
@@ -565,18 +570,21 @@ int gen7_gmu_load_fw(struct adreno_device *adreno_dev)
 				GEN7_GMU_CM3_DTCM_START,
 				gmu->vma[GMU_DTCM].start, blk);
 		} else {
-			struct kgsl_memdesc *md =
-				find_gmu_memdesc(gmu, blk->addr, blk->size);
+			/* The firmware block for memory needs to be copied on first boot only */
+			if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)) {
+				struct kgsl_memdesc *md =
+					find_gmu_memdesc(gmu, blk->addr, blk->size);
 
-			if (!md) {
-				dev_err(&gmu->pdev->dev,
-					"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
-					blk->addr, blk->size);
-				return -EINVAL;
+				if (!md) {
+					dev_err(&gmu->pdev->dev,
+						"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
+						blk->addr, blk->size);
+					return -EINVAL;
+				}
+
+				memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
+					blk->size);
 			}
-
-			memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
-				blk->size);
 		}
 
 		fw += blk->size;
@@ -724,7 +732,7 @@ static int gen7_gmu_hfi_start_msg(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	return gen7_hfi_send_generic_req(adreno_dev, &req);
+	return gen7_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 }
 
 static u32 gen7_rscc_tcsm_drv0_status_reglist[] = {
@@ -1569,7 +1577,7 @@ static int gen7_gmu_notify_slumber(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = gen7_hfi_send_generic_req(adreno_dev, &req);
+	ret = gen7_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, GEN7_GMU_AO_AHB_FENCE_CTRL, 0);
@@ -1632,7 +1640,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = gen7_hfi_send_generic_req(adreno_dev, &req);
+	ret = gen7_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
 			"Failed to set GPU perf idx %d, bw idx %d\n",
@@ -2311,7 +2319,7 @@ static void gen7_gmu_acd_probe(struct kgsl_device *device,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
 		return;
 
-	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, sizeof(*cmd), HFI_MSG_CMD);
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, HFI_MSG_CMD);
 
 	cmd->version = 1;
 	cmd->stride = 1;
@@ -2665,6 +2673,8 @@ int gen7_gmu_probe(struct kgsl_device *device,
 
 	of_property_read_u32(gmu->pdev->dev.of_node, "qcom,gmu-perf-ddr-bw",
 		&gmu->perf_ddr_bw);
+
+	spin_lock_init(&gmu->hfi.cmdq_lock);
 
 	gmu->irq = kgsl_request_irq(gmu->pdev, "gmu",
 		gen7_gmu_irq_handler, device);

@@ -364,6 +364,7 @@ bool gen7_hw_isidle(struct adreno_device *adreno_dev);
 /**
  * gen7_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
+ * @str: String describing the failure
  *
  * This function logs interesting registers and triggers a snapshot
  */

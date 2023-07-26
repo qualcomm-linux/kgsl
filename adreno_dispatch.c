@@ -79,72 +79,6 @@ static inline bool drawqueue_is_current(
 	return (adreno_dev->cur_rb == rb);
 }
 
-static void _add_context(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt)
-{
-	/* Remove it from the list */
-	list_del_init(&drawctxt->active_node);
-
-	/* And push it to the front */
-	drawctxt->active_time = jiffies;
-	list_add(&drawctxt->active_node, &adreno_dev->active_list);
-}
-
-static int __count_context(struct adreno_context *drawctxt, void *data)
-{
-	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
-
-	return time_after(jiffies, expires) ? 0 : 1;
-}
-
-static int __count_drawqueue_context(struct adreno_context *drawctxt,
-				void *data)
-{
-	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
-
-	if (time_after(jiffies, expires))
-		return 0;
-
-	return (&drawctxt->rb->dispatch_q ==
-			(struct adreno_dispatcher_drawqueue *) data) ? 1 : 0;
-}
-
-static int _adreno_count_active_contexts(struct adreno_device *adreno_dev,
-		int (*func)(struct adreno_context *, void *), void *data)
-{
-	struct adreno_context *ctxt;
-	int count = 0;
-
-	list_for_each_entry(ctxt, &adreno_dev->active_list, active_node) {
-		if (func(ctxt, data) == 0)
-			return count;
-
-		count++;
-	}
-
-	return count;
-}
-
-static void _track_context(struct adreno_device *adreno_dev,
-		struct adreno_dispatcher_drawqueue *drawqueue,
-		struct adreno_context *drawctxt)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	spin_lock(&adreno_dev->active_list_lock);
-
-	_add_context(adreno_dev, drawctxt);
-
-	device->active_context_count =
-			_adreno_count_active_contexts(adreno_dev,
-					__count_context, NULL);
-	drawqueue->active_context_count =
-			_adreno_count_active_contexts(adreno_dev,
-					__count_drawqueue_context, drawqueue);
-
-	spin_unlock(&adreno_dev->active_list_lock);
-}
-
 /*
  *  If only one context has queued in the last 100 milliseconds increase
  *  inflight to a high number to load up the GPU. If multiple contexts
@@ -1387,7 +1321,7 @@ static int adreno_dispatcher_queue_cmds(struct kgsl_device_private *dev_priv,
 
 	dispatch_q = &(ADRENO_CONTEXT(drawobj[0]->context)->rb->dispatch_q);
 
-	_track_context(adreno_dev, dispatch_q, drawctxt);
+	adreno_track_context(adreno_dev, dispatch_q, drawctxt);
 
 	spin_unlock(&drawctxt->lock);
 

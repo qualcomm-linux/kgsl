@@ -48,6 +48,10 @@ struct gen7_gmu_device {
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
+	/** @gmu_init_scratch: Memory to store the initial HFI messages */
+	struct kgsl_memdesc *gmu_init_scratch;
+	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
+	struct kgsl_memdesc *gpu_boot_scratch;
 	struct gen7_hfi hfi;
 	/** @pwrlevels: Array of GMU power levels */
 	struct regulator *cx_gdsc;
@@ -110,6 +114,10 @@ struct gen7_gmu_device {
 	u32 stats_interval;
 	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
 	struct kobject stats_kobj;
+	/** @cp_init_hdr: raw command header for cp_init */
+	u32 cp_init_hdr;
+	/** @switch_to_unsec_hdr: raw command header for switch to unsecure packet */
+	u32 switch_to_unsec_hdr;
 };
 
 struct gmu_mem_type_desc {

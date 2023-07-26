@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/file.h>
@@ -11,9 +11,6 @@
 
 #include "kgsl_device.h"
 #include "kgsl_sync.h"
-
-static void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *timeline,
-	unsigned int timestamp);
 
 static const struct dma_fence_ops kgsl_sync_fence_ops;
 
@@ -357,7 +354,7 @@ int kgsl_sync_timeline_create(struct kgsl_context *context)
 	return 0;
 }
 
-static void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 					unsigned int timestamp)
 {
 	unsigned long flags;
@@ -439,17 +436,19 @@ bool is_kgsl_fence(struct dma_fence *f)
 static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
 {
 	/*
-	 * Even one sw-only fence in this sync object means we can't send this
-	 * sync object to the hardware
+	 * Even one unsignaled sw-only fence in this sync object means we can't send this sync
+	 * object to the hardware
 	 */
 	if (event->syncobj->flags & KGSL_SYNCOBJ_SW)
 		return;
 
-	if (!test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags))
-		event->syncobj->flags |= KGSL_SYNCOBJ_SW;
-	else
+	if (!test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags)) {
+		/* Ignore software fences that are already signaled */
+		if (!dma_fence_is_signaled(fence))
+			event->syncobj->flags |= KGSL_SYNCOBJ_SW;
+	} else {
 		event->syncobj->num_hw_fence++;
-
+	}
 }
 
 static void kgsl_get_fence_info(struct dma_fence *fence,

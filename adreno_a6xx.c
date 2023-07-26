@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -2359,7 +2359,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.preemption_context_init = a6xx_preemption_context_init,
 		.context_detach = a6xx_hwsched_context_detach,
 		.read_alwayson = a6xx_read_alwayson,
-		.reset = a6xx_hwsched_reset,
+		.reset = a6xx_hwsched_reset_replay,
 		.power_ops = &a6xx_hwsched_power_ops,
 		.power_stats = a6xx_power_stats,
 		.setproperty = a6xx_setproperty,

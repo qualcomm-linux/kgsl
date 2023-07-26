@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2014,2018-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SYNC_H
 #define __KGSL_SYNC_H
@@ -112,6 +112,9 @@ void kgsl_syncsource_process_release_syncsources(
 
 bool is_kgsl_fence(struct dma_fence *f);
 
+void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+		u32 timestamp);
+
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
@@ -187,6 +190,12 @@ static inline void kgsl_syncsource_process_release_syncsources(
 }
 
 bool is_kgsl_fence(struct dma_fence *f)
+{
+
+}
+
+void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+		u32 timestamp)
 {
 
 }

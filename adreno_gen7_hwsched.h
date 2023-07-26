@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_H_
@@ -33,12 +33,12 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 		u32 chipid, const struct adreno_gpu_core *gpucore);
 
 /**
- * gen7_hwsched_reset - Restart the gmu and gpu
+ * gen7_hwsched_reset_replay - Restart the gmu and gpu and replay inflight cmdbatches
  * @adreno_dev: Pointer to the adreno device
  *
  * Return: 0 on success or negative error on failure
  */
-int gen7_hwsched_reset(struct adreno_device *adreno_dev);
+int gen7_hwsched_reset_replay(struct adreno_device *adreno_dev);
 
 /**
  * gen7_hwsched_snapshot - take gen7 hwsched snapshot
@@ -95,4 +95,12 @@ int gen7_hwsched_add_to_minidump(struct adreno_device *adreno_dev);
  */
 int gen7_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 		struct kgsl_drawobj_cmd *cmdobj);
+
+/**
+ * gen7_hwsched_fault - Set hwsched fault to request recovery
+ * @adreno_dev: A handle to adreno device
+ * @fault: The type of fault
+ */
+void gen7_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
+
 #endif

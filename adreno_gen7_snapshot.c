@@ -733,6 +733,12 @@ static size_t gen7_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN7_SP_READ_SEL, read_sel);
 
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+
 	for (ptr = cluster->regs; ptr[0] != UINT_MAX; ptr += 2) {
 		unsigned int count = REG_COUNT(ptr);
 

@@ -2351,7 +2351,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_AQE |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
 			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_DMS |
-			ADRENO_HW_FENCE | ADRENO_PREEMPTION,
+			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen7_hwsched_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
@@ -2375,6 +2375,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.ctxt_record_size = (3572 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
@@ -2385,7 +2386,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_AQE |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
 			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_DMS |
-			ADRENO_HW_FENCE | ADRENO_PREEMPTION,
+			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen7_hwsched_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
@@ -2409,6 +2410,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.ctxt_record_size = (3572 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct kgsl_regmap_list a663_hwcg_regs[] = {

@@ -105,6 +105,7 @@
 #define HFI_VALUE_CONTEXT_QUEUE		121
 #define HFI_VALUE_GMU_AB_VOTE		122
 #define HFI_VALUE_RB_GPU_QOS		123
+#define HFI_VALUE_GMU_WARMBOOT		125
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -371,13 +372,22 @@ struct hfi_queue_header {
 
 #define HFI_MSG_CMD 0 /* V1 and V2 */
 #define HFI_MSG_ACK 1 /* V2 only */
+
+ /* Used to NOP a command when executing warmboot sequence */
+#define HFI_MSG_NOP BIT(18)
+ /* Used to record a command when executing coldboot sequence */
+#define HFI_MSG_RECORD BIT(19)
+
 #define HFI_V1_MSG_POST 1 /* V1 only */
 #define HFI_V1_MSG_ACK 2/* V1 only */
 
-/* Size is converted from Bytes to DWords */
-#define CREATE_MSG_HDR(id, size, type) \
-	(((type) << 16) | ((((size) >> 2) & 0xFF) << 8) | ((id) & 0xFF))
-#define ACK_MSG_HDR(id, size) CREATE_MSG_HDR(id, size, HFI_MSG_ACK)
+#define MSG_HDR_SET_SIZE(hdr, size) \
+	(((size & 0xFF) << 8) | hdr)
+
+#define CREATE_MSG_HDR(id, type) \
+	(((type) << 16) | ((id) & 0xFF))
+
+#define ACK_MSG_HDR(id) CREATE_MSG_HDR(id, HFI_MSG_ACK)
 
 #define HFI_QUEUE_DEFAULT_CNT 3
 #define HFI_QUEUE_DISPATCH_MAX_CNT 14
@@ -409,6 +419,9 @@ struct hfi_queue_table {
 #define MSG_HDR_SET_SEQNUM(hdr, num) \
 	(((hdr) & 0xFFFFF) | ((num) << 20))
 
+#define MSG_HDR_SET_TYPE(hdr, type) \
+	(((hdr) & 0xFFFFF) | ((type) << 16))
+
 #define QUEUE_HDR_TYPE(id, prio, rtype, stype) \
 	(((id) & 0xFF) | (((prio) & 0xFF) << 8) | \
 	(((rtype) & 0xFF) << 16) | (((stype) & 0xFF) << 24))
@@ -417,43 +430,47 @@ struct hfi_queue_table {
 
 #define HFI_IRQ_MSGQ_MASK BIT(0)
 
-#define H2F_MSG_INIT			0
-#define H2F_MSG_FW_VER			1
-#define H2F_MSG_LM_CFG			2
-#define H2F_MSG_BW_VOTE_TBL		3
-#define H2F_MSG_PERF_TBL		4
-#define H2F_MSG_TEST			5
-#define H2F_MSG_ACD_TBL			7
-#define H2F_MSG_START			10
-#define H2F_MSG_FEATURE_CTRL		11
-#define H2F_MSG_GET_VALUE		12
-#define H2F_MSG_SET_VALUE		13
-#define H2F_MSG_CORE_FW_START		14
-#define F2H_MSG_MEM_ALLOC		20
-#define H2F_MSG_GX_BW_PERF_VOTE		30
-#define H2F_MSG_FW_HALT			32
-#define H2F_MSG_PREPARE_SLUMBER		33
-#define F2H_MSG_ERR			100
-#define F2H_MSG_DEBUG			101
-#define F2H_MSG_LOG_BLOCK		102
-#define F2H_MSG_GMU_CNTR_REGISTER	110
-#define F2H_MSG_GMU_CNTR_RELEASE	111
-#define F2H_MSG_ACK			126 /* Deprecated for v2.0*/
-#define H2F_MSG_ACK			127 /* Deprecated for v2.0*/
-#define H2F_MSG_REGISTER_CONTEXT	128
-#define H2F_MSG_UNREGISTER_CONTEXT	129
-#define H2F_MSG_ISSUE_CMD		130
-#define H2F_MSG_ISSUE_CMD_RAW		131
-#define H2F_MSG_TS_NOTIFY		132
-#define F2H_MSG_TS_RETIRE		133
-#define H2F_MSG_CONTEXT_POINTERS	134
-#define H2F_MSG_ISSUE_LPAC_CMD_RAW	135
-#define H2F_MSG_CONTEXT_RULE		140 /* AKA constraint */
-#define H2F_MSG_ISSUE_RECURRING_CMD	141
-#define F2H_MSG_CONTEXT_BAD		150
-#define H2F_MSG_HW_FENCE_INFO		151
-#define H2F_MSG_ISSUE_SYNCOBJ		152
-#define F2H_MSG_SYNCOBJ_QUERY		153
+enum hfi_msg_type {
+	H2F_MSG_INIT			= 0,
+	H2F_MSG_FW_VER			= 1,
+	H2F_MSG_LM_CFG			= 2,
+	H2F_MSG_BW_VOTE_TBL		= 3,
+	H2F_MSG_PERF_TBL		= 4,
+	H2F_MSG_TEST			= 5,
+	H2F_MSG_ACD_TBL			= 7,
+	H2F_MSG_START			= 10,
+	H2F_MSG_FEATURE_CTRL		= 11,
+	H2F_MSG_GET_VALUE		= 12,
+	H2F_MSG_SET_VALUE		= 13,
+	H2F_MSG_CORE_FW_START		= 14,
+	F2H_MSG_MEM_ALLOC		= 20,
+	H2F_MSG_GX_BW_PERF_VOTE		= 30,
+	H2F_MSG_FW_HALT			= 32,
+	H2F_MSG_PREPARE_SLUMBER		= 33,
+	F2H_MSG_ERR			= 100,
+	F2H_MSG_DEBUG			= 101,
+	F2H_MSG_LOG_BLOCK		= 102,
+	F2H_MSG_GMU_CNTR_REGISTER	= 110,
+	F2H_MSG_GMU_CNTR_RELEASE	= 111,
+	F2H_MSG_ACK			= 126, /* Deprecated for v2.0*/
+	H2F_MSG_ACK			= 127, /* Deprecated for v2.0*/
+	H2F_MSG_REGISTER_CONTEXT	= 128,
+	H2F_MSG_UNREGISTER_CONTEXT	= 129,
+	H2F_MSG_ISSUE_CMD		= 130,
+	H2F_MSG_ISSUE_CMD_RAW		= 131,
+	H2F_MSG_TS_NOTIFY		= 132,
+	F2H_MSG_TS_RETIRE		= 133,
+	H2F_MSG_CONTEXT_POINTERS	= 134,
+	H2F_MSG_ISSUE_LPAC_CMD_RAW	= 135,
+	H2F_MSG_CONTEXT_RULE		= 140, /* AKA constraint */
+	H2F_MSG_ISSUE_RECURRING_CMD	= 141,
+	F2H_MSG_CONTEXT_BAD		= 150,
+	H2F_MSG_HW_FENCE_INFO		= 151,
+	H2F_MSG_ISSUE_SYNCOBJ		= 152,
+	F2H_MSG_SYNCOBJ_QUERY		= 153,
+	H2F_MSG_WARMBOOT_CMD		= 154,
+	HFI_MAX_ID,
+};
 
 enum gmu_ret_type {
 	GMU_SUCCESS = 0,
@@ -875,6 +892,25 @@ struct hfi_log_block {
 	u32 stop_index;
 } __packed;
 
+enum hfi_warmboot_cmd_type {
+	HFI_WARMBOOT_SET_SCRATCH = 0,
+	HFI_WARMBOOT_EXEC_SCRATCH,
+	HFI_WARMBOOT_QUERY_SCRATCH,
+};
+
+struct hfi_warmboot_scratch_cmd {
+	/** @hdr: Header for the scratch command packet */
+	u32 hdr;
+	/** @version: Version of the scratch command packet */
+	u32 version;
+	/** @flags: Set, Execute or Query scratch flag */
+	u32 flags;
+	/** @scratch_addr: Address of the scratch */
+	u32 scratch_addr;
+	/** @scratch_size: Size of the scratch in bytes*/
+	u32 scratch_size;
+} __packed;
+
 /* Request GMU to add this fence to TxQueue without checking whether this is retired or not */
 #define HW_FENCE_FLAG_SKIP_MEMSTORE 0x1
 
@@ -948,12 +984,21 @@ static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)
 	if (WARN_ON(size > HFI_MAX_MSG_SIZE))
 		return -EMSGSIZE;
 
-	*hdr = CREATE_MSG_HDR(id, size, HFI_MSG_CMD);
+	*hdr = CREATE_MSG_HDR(id, HFI_MSG_CMD);
 	return 0;
 }
 
 #define CMD_MSG_HDR(cmd, id) \
 	_CMD_MSG_HDR(&(cmd).hdr, id, sizeof(cmd))
+
+#define RECORD_MSG_HDR(hdr) \
+	((hdr) | HFI_MSG_RECORD)
+
+#define CLEAR_RECORD_MSG_HDR(hdr) \
+	((hdr) & (~(HFI_MSG_RECORD | HFI_MSG_NOP)))
+
+#define RECORD_NOP_MSG_HDR(hdr) \
+	((hdr) | (HFI_MSG_RECORD | HFI_MSG_NOP))
 
 /* Maximum number of IBs in a submission */
 #define HWSCHED_MAX_DISPATCH_NUMIBS \
