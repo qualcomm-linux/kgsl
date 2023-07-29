@@ -1338,11 +1338,6 @@ static int enable_regulators(struct kgsl_device *device)
 	if (test_and_set_bit(KGSL_PWRFLAGS_POWER_ON, &pwr->power_flags))
 		return 0;
 
-	ret = kgsl_regulator_set_voltage(device->dev,
-			pwr->cx_gdsc_parent,
-			pwr->cx_gdsc_parent_min_corner);
-	pr_err("set cx voltage ret: %d\n", ret);
-
 	ret = enable_regulator(&device->pdev->dev, pwr->cx_gdsc, "vddcx");
 	if (!ret) {
 		/* Set parent in retention voltage to power up vdd supply */
@@ -1616,24 +1611,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 					&pwr->gx_gdsc_parent_min_corner)) {
 			dev_err(device->dev,
 				"vdd-parent-min-corner not found\n");
-			return -ENODEV;
-		}
-	}
-
-	if (of_property_read_bool(pdev->dev.of_node, "vddcx-parent-supply")) {
-		pwr->cx_gdsc_parent = devm_regulator_get(&pdev->dev,
-				"vddcx-parent");
-		if (IS_ERR(pwr->cx_gdsc_parent)) {
-			dev_err(device->dev,
-				"Failed to get vdd-parent regulator:%ld\n",
-				PTR_ERR(pwr->cx_gdsc_parent));
-			return -ENODEV;
-		}
-		if (of_property_read_u32(pdev->dev.of_node,
-					"vddcx-parent-min-corner",
-					&pwr->cx_gdsc_parent_min_corner)) {
-			dev_err(device->dev,
-				"vddcx-parent-min-corner not found\n");
 			return -ENODEV;
 		}
 	}

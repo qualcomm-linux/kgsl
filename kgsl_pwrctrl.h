@@ -117,8 +117,6 @@ struct kgsl_pwrctrl {
 	struct regulator *gx_gdsc_parent;
 	/** @gx_gdsc_parent_min_corner: Minimum supply voltage for GX parent */
 	u32 gx_gdsc_parent_min_corner;
-	struct regulator *cx_gdsc_parent;
-	u32 cx_gdsc_parent_min_corner;
 	int isense_clk_indx;
 	int isense_clk_on_level;
 	unsigned long power_flags;
