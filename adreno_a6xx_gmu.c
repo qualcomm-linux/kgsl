@@ -621,8 +621,6 @@ void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 
-	return;
-
 	reinit_completion(&gmu->gdsc_gate);
 
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))

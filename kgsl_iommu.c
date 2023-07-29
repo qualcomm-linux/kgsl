@@ -1086,8 +1086,6 @@ static void kgsl_iommu_disable_clk(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
 
-	return;
-
 	atomic_dec(&iommu->clk_enable_count);
 
 	/*
