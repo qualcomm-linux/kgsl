@@ -408,7 +408,7 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 *dest = ptr + sizeof(*lock);
 
 	/* Static IFPC-only registers */
-	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
 		reglist[0].regs = gen7_0_0_ifpc_pwrup_reglist;
 		reglist[0].count = ARRAY_SIZE(gen7_0_0_ifpc_pwrup_reglist);
 	} else {
@@ -418,7 +418,7 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	lock->ifpc_list_len = reglist[0].count;
 
 	/* Static IFPC + preemption registers */
-	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
 		reglist[1].regs = gen7_0_0_pwrup_reglist;
 		reglist[1].count = ARRAY_SIZE(gen7_0_0_pwrup_reglist);
 	} else {
