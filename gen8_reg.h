@@ -64,6 +64,7 @@
 #define GEN8_RBBM_CGC_0_PC                       0x10b
 #define GEN8_RBBM_PERFCTR_GPU_BUSY_MASKED        0x19e
 #define GEN8_RBBM_PERFCTR_SRAM_INIT_STATUS       0x19f
+#define GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS      0x1a1
 #define GEN8_RBBM_PERFCTR_CP_0_LO                0x1b0
 #define GEN8_RBBM_PERFCTR_CP_0_HI                0x1b1
 #define GEN8_RBBM_PERFCTR_CP_1_LO                0x1b2
@@ -493,12 +494,14 @@
 #define GEN8_RBBM_PERFCTR_RBBM_SEL_3             0x444
 
 #define GEN8_RBBM_PERFCTR_SRAM_INIT_CMD          0x449
+#define GEN8_RBBM_PERFCTR_FLUSH_HOST_CMD         0x44c
 #define GEN8_RBBM_PERFCTR_CNTL                   0x460
 
 /* GPU Slice registers */
 #define GEN8_RBBM_SLICE_PERFCTR_CNTL              0x500
 #define GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL   0x58f
 #define GEN8_RBBM_SLICE_PERFCTR_SRAM_INIT_CMD     0x5e8
+#define GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD    0x5eb
 #define GEN8_RBBM_SLICE_NC_MODE_CNTL              0x5ec
 #define GEN8_VSC_BIN_SIZE                         0xc02
 

@@ -10,6 +10,28 @@
 #include "adreno_pm4types.h"
 #include "kgsl_device.h"
 
+#define PERFCOUNTER_FLUSH_DONE_MASK BIT(0)
+
+static void gen8_rbbm_perfctr_flush(struct kgsl_device *device)
+{
+	u32 val;
+	int ret;
+
+	/*
+	 * Flush delta counters (both perf counters and pipe stats) present in
+	 * RBBM_S and RBBM_US to perf RAM logic to get the latest data.
+	 */
+	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_FLUSH_HOST_CMD, BIT(0));
+	kgsl_regwrite(device, GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD, BIT(0));
+
+	ret = kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS,
+		val, (val & PERFCOUNTER_FLUSH_DONE_MASK) == PERFCOUNTER_FLUSH_DONE_MASK,
+		100, 100 * 1000);
+
+	if (ret)
+		dev_err(device->dev, "Perfcounter flush timed out: status=0x%08x\n", val);
+}
+
 /*
  * For registers that do not get restored on power cycle, read the value and add
  * the stored shadow value
@@ -20,6 +42,8 @@ static u64 gen8_counter_read_norestore(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
 	u32 hi, lo;
+
+	gen8_rbbm_perfctr_flush(device);
 
 	kgsl_regread(device, reg->offset, &lo);
 	kgsl_regread(device, reg->offset_hi, &hi);
@@ -94,6 +118,8 @@ static u64 gen8_counter_read(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
 	u32 hi, lo;
+
+	gen8_rbbm_perfctr_flush(device);
 
 	kgsl_regread(device, reg->offset, &lo);
 	kgsl_regread(device, reg->offset_hi, &hi);
