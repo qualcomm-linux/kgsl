@@ -393,12 +393,16 @@ static void syncobj_destroy(struct kgsl_drawobj *drawobj)
 
 }
 
-static void timelineobj_destroy(struct kgsl_drawobj *drawobj)
+static void _drawobj_timelineobj_retire(struct kref *kref)
 {
-	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
 	int i;
+	struct kgsl_drawobj_timeline *timelineobj = container_of(kref,
+				struct kgsl_drawobj_timeline, sig_refcount);
 
 	for (i = 0; i < timelineobj->count; i++) {
+		kgsl_timeline_signal(timelineobj->timelines[i].timeline,
+			timelineobj->timelines[i].seqno);
+
 		kgsl_timeline_put(timelineobj->timelines[i].timeline);
 		kgsl_context_put(timelineobj->timelines[i].context);
 	}
@@ -406,6 +410,32 @@ static void timelineobj_destroy(struct kgsl_drawobj *drawobj)
 	kvfree(timelineobj->timelines);
 	timelineobj->timelines = NULL;
 	timelineobj->count = 0;
+}
+
+static void kgsl_timelineobj_signal(struct kgsl_drawobj_timeline *timelineobj)
+{
+	kref_put(&timelineobj->sig_refcount, _drawobj_timelineobj_retire);
+}
+
+static void timelineobj_destroy(struct kgsl_drawobj *drawobj)
+{
+	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
+	int i;
+
+	/*
+	 * At this point any syncobjs blocking this timelinobj have been
+	 * signaled. The timelineobj now only needs all preceding timestamps to
+	 * retire before signaling the timelines. Notify timelines to keep them
+	 * in sync with the timestamps as they retire.
+	 */
+	for (i = 0; i < timelineobj->count; i++)
+		kgsl_timeline_add_signal(&timelineobj->timelines[i]);
+
+	/*
+	 * The scheduler is done with the timelineobj. Put the initial
+	 * sig_refcount to continue with the signaling process.
+	 */
+	kgsl_timelineobj_signal(timelineobj);
 }
 
 static void bindobj_destroy(struct kgsl_drawobj *drawobj)
@@ -945,7 +975,8 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 	 * Initialize the sig_refcount that triggers the timeline signal.
 	 * This refcount goes to 0 when:
 	 * 1) This timelineobj is popped off the context queue. This implies
-	 *    any syncobj blocking this timelineobj was already signaled.
+	 *    any syncobj blocking this timelineobj was already signaled, or
+	 *    the context queue is cleaned up at detach time.
 	 * 2) The cmdobjs queued on this context before this timeline object
 	 *    are retired.
 	 */
@@ -957,43 +988,17 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 	return timelineobj;
 }
 
-static void _drawobj_timelineobj_retire(struct kref *kref)
-{
-	struct kgsl_drawobj_timeline *timelineobj = container_of(kref,
-		struct kgsl_drawobj_timeline, sig_refcount);
-	struct kgsl_drawobj *drawobj = DRAWOBJ(timelineobj);
-	int i;
-
-	for (i = 0; i < timelineobj->count; i++)
-		kgsl_timeline_signal(timelineobj->timelines[i].timeline,
-			timelineobj->timelines[i].seqno);
-
-	/* Now that timelines are signaled destroy the drawobj */
-	kgsl_drawobj_destroy(drawobj);
-}
-
 static void _timeline_signaled(struct kgsl_device *device,
 		struct kgsl_event_group *group, void *priv, int ret)
 {
 	struct kgsl_drawobj_timeline *timelineobj = priv;
+	struct kgsl_drawobj *drawobj = DRAWOBJ(timelineobj);
 
-	kref_put(&timelineobj->sig_refcount, _drawobj_timelineobj_retire);
-}
+	/* Put the sig_refcount we took when registering this event */
+	kgsl_timelineobj_signal(timelineobj);
 
-void kgsl_drawobj_timelineobj_retire(struct kgsl_drawobj_timeline *timelineobj)
-{
-	int i;
-
-	/*
-	 * At this point any syncobjs blocking this timelinobj have been
-	 * signaled. The timelineobj now only needs all preceding timestamps to
-	 * retire before signaling the timelines. Notify timelines to keep them
-	 * in sync with the timestamps as they retire.
-	 */
-	for (i = 0; i < timelineobj->count; i++)
-		kgsl_timeline_add_signal(&timelineobj->timelines[i]);
-
-	kref_put(&timelineobj->sig_refcount, _drawobj_timelineobj_retire);
+	/* Put the drawobj refcount we took when registering this event */
+	kgsl_drawobj_put(drawobj);
 }
 
 int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
@@ -1070,18 +1075,30 @@ int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
 	timelineobj->count = cmd.count;
 
 	/*
-	 * Take a refcount that we put when the last queued timestamp on this
-	 * context is retired. Use a kgsl_event to notify us when this
-	 * timestamp retires.
+	 * Register a kgsl_event to notify us when the last queued timestamp
+	 * retires. Take a refcount on the drawobj to keep it valid for the
+	 * callback, and take the sig_refcount to synchronize with the
+	 * timelineobj retire. Both these refcounts are put in the callback.
 	 */
+	kref_get(&drawobj->refcount);
 	kref_get(&timelineobj->sig_refcount);
 	ret = kgsl_add_event(device, &context->events, queued,
 			_timeline_signaled, timelineobj);
 
 	if (ret)
-		goto err;
+		goto event_err;
 
 	return 0;
+
+event_err:
+	/*
+	 * If there was an error, put back sig_refcount and drawobj refcounts.
+	 * The caller still holds initial refcounts on both and puts them in
+	 * kgsl_drawobj_destroy(). Clean up the timelinelines array since we
+	 * do not want to signal anything now.
+	 */
+	kgsl_timelineobj_signal(timelineobj);
+	kgsl_drawobj_put(drawobj);
 err:
 	for (i = 0; i < cmd.count; i++) {
 		kgsl_timeline_put(timelineobj->timelines[i].timeline);

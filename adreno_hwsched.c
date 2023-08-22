@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/soc/qcom,ipcc.h>
@@ -197,10 +197,8 @@ static int _retire_markerobj(struct adreno_device *adreno_dev, struct kgsl_drawo
 static int _retire_timelineobj(struct kgsl_drawobj *drawobj,
 		struct adreno_context *drawctxt)
 {
-	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
-
 	_pop_drawobj(drawctxt);
-	kgsl_drawobj_timelineobj_retire(timelineobj);
+	kgsl_drawobj_destroy(drawobj);
 	return 0;
 }
 
