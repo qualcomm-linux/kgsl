@@ -8,6 +8,7 @@
 #include <linux/interconnect.h>
 #include <linux/iopoll.h>
 #include <linux/of_device.h>
+#include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
@@ -25,6 +26,8 @@
 #define UPDATE_BUSY_VAL		1000000
 
 #define KGSL_MAX_BUSLEVELS	20
+
+#define GX_GDSC_TIMEOUT_MS	200
 
 /* Order deeply matters here because reasons. New entries go on the end */
 static const char * const clocks[KGSL_MAX_CLKS] = {
@@ -1300,70 +1303,132 @@ int kgsl_pwrctrl_axi(struct kgsl_device *device, bool state)
 	return 0;
 }
 
+static int kgsl_genpd_disable_wait(struct device *dev, u32 timeout)
+{
+	ktime_t tout = ktime_add_us(ktime_get(), timeout * USEC_PER_MSEC);
+	int ret;
+
+	ret = pm_runtime_put_sync(dev);
+	if (ret < 0)
+		return ret;
+
+	for (;;) {
+		if (!kgsl_genpd_is_enabled(dev))
+			return 0;
+
+		if (ktime_compare(ktime_get(), tout) > 0)
+			return (!kgsl_genpd_is_enabled(dev) ? 0 : -ETIMEDOUT);
+
+		usleep_range((100 >> 2) + 1, 100);
+	}
+}
+
+int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout)
+{
+	ktime_t tout = ktime_add_us(ktime_get(), timeout * USEC_PER_MSEC);
+	int ret;
+
+	ret = regulator_disable(reg);
+	if (ret)
+		return ret;
+
+	for (;;) {
+		if (!regulator_is_enabled(reg))
+			return 0;
+
+		if (ktime_compare(ktime_get(), tout) > 0)
+			return (!regulator_is_enabled(reg) ? 0 : -ETIMEDOUT);
+
+		usleep_range((100 >> 2) + 1, 100);
+	}
+}
+
 int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	struct regulator *regulator = pwr->cx_gdsc;
 	int ret;
 
-	if (IS_ERR_OR_NULL(regulator))
+	if (!pwr->cx_regulator && !pwr->cx_pd)
 		return 0;
 
 	ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
 	if (!ret) {
-		dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
 		/* Dump the cx regulator consumer list */
-		qcom_clk_dump(NULL, regulator, false);
+		if (pwr->cx_regulator) {
+			dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
+			qcom_clk_dump(NULL, pwr->cx_regulator, false);
+		} else {
+			dev_err(device->dev, "GPU CX wait timeout\n");
+		}
 	}
 
-	ret = regulator_enable(regulator);
+	if (pwr->cx_regulator)
+		ret = regulator_enable(pwr->cx_regulator);
+	else
+		ret = pm_runtime_resume_and_get(pwr->cx_pd);
+
 	if (ret)
-		dev_err(device->dev, "Failed to enable CX regulator: %d\n", ret);
+		dev_err(device->dev, "Failed to enable CX gdsc, error %d\n", ret);
 
 	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	pwr->cx_gdsc_wait = false;
 	return ret;
 }
 
-static int kgsl_pwtctrl_enable_gx_gdsc(struct kgsl_device *device)
+int kgsl_pwrctrl_enable_gx_gdsc(struct kgsl_device *device)
 {
-	struct regulator *regulator = device->pwrctrl.gx_gdsc;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret;
 
-	if (IS_ERR_OR_NULL(regulator))
+	if (!pwr->gx_regulator && !pwr->gx_pd)
 		return 0;
 
-	ret = regulator_enable(regulator);
+	if (pwr->gx_regulator)
+		ret = regulator_enable(pwr->gx_regulator);
+	else
+		ret = pm_runtime_resume_and_get(pwr->gx_pd);
+
 	if (ret)
-		dev_err(device->dev, "Failed to enable GX regulator: %d\n", ret);
+		dev_err(device->dev, "Failed to enable GX gdsc, error %d\n", ret);
+
 	return ret;
 }
 
 void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device)
 {
-	struct regulator *regulator = device->pwrctrl.cx_gdsc;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (IS_ERR_OR_NULL(regulator))
+	if (!pwr->cx_regulator && !pwr->cx_pd)
 		return;
 
 	kgsl_mmu_send_tlb_hint(&device->mmu, true);
-	reinit_completion(&device->pwrctrl.cx_gdsc_gate);
-	device->pwrctrl.cx_gdsc_wait = true;
-	regulator_disable(regulator);
+	reinit_completion(&pwr->cx_gdsc_gate);
+	pwr->cx_gdsc_wait = true;
+
+	if (pwr->cx_regulator)
+		regulator_disable(pwr->cx_regulator);
+	else
+		pm_runtime_put_sync(pwr->cx_pd);
 }
 
-static void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device)
+void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device)
 {
-	struct regulator *regulator = device->pwrctrl.gx_gdsc;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int ret;
 
-	if (IS_ERR_OR_NULL(regulator))
+	if (!pwr->gx_regulator && !pwr->gx_pd)
 		return;
 
-	if (!kgsl_regulator_disable_wait(regulator, 200))
-		dev_err(device->dev, "Regulator vdd is stuck on\n");
+	if (pwr->gx_regulator)
+		ret = kgsl_regulator_disable_wait(pwr->gx_regulator, GX_GDSC_TIMEOUT_MS);
+	else
+		ret = kgsl_genpd_disable_wait(pwr->gx_pd, GX_GDSC_TIMEOUT_MS);
+
+	if (ret)
+		dev_err(device->dev, "vdd is stuck on, error %d\n", ret);
 }
 
-static int enable_regulators(struct kgsl_device *device)
+static int enable_gdscs(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret;
@@ -1375,10 +1440,10 @@ static int enable_regulators(struct kgsl_device *device)
 	if (!ret) {
 		/* Set parent in retention voltage to power up vdd supply */
 		ret = kgsl_regulator_set_voltage(device->dev,
-				pwr->gx_gdsc_parent,
-				pwr->gx_gdsc_parent_min_corner);
+				pwr->gx_regulator_parent,
+				pwr->gx_regulator_parent_min_corner);
 		if (!ret)
-			ret = kgsl_pwtctrl_enable_gx_gdsc(device);
+			ret = kgsl_pwrctrl_enable_gx_gdsc(device);
 	}
 
 	if (ret) {
@@ -1390,26 +1455,78 @@ static int enable_regulators(struct kgsl_device *device)
 	return 0;
 }
 
-int kgsl_pwrctrl_probe_regulators(struct kgsl_device *device,
-		struct platform_device *pdev)
+static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	pwr->cx_gdsc = devm_regulator_get(&pdev->dev, "vddcx");
-	if (IS_ERR(pwr->cx_gdsc)) {
-		if (PTR_ERR(pwr->cx_gdsc) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Couldn't get the vddcx gdsc\n");
-		return PTR_ERR(pwr->cx_gdsc);
-	}
+	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+		/* Get virtual device handle for CX GDSC to control it */
+		struct device *cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 
-	pwr->gx_gdsc = devm_regulator_get(&pdev->dev, "vdd");
-	if (IS_ERR(pwr->gx_gdsc)) {
-		if (PTR_ERR(pwr->gx_gdsc) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Couldn't get the vdd gdsc\n");
-		return PTR_ERR(pwr->gx_gdsc);
+		if (IS_ERR_OR_NULL(cx_pd)) {
+			dev_err_probe(&pdev->dev, PTR_ERR(cx_pd),
+					"Failed to attach cx power domain\n");
+			return IS_ERR(cx_pd) ? PTR_ERR(cx_pd) : -EINVAL;
+		}
+		pwr->cx_pd = cx_pd;
+	} else {
+		struct regulator *cx_regulator = devm_regulator_get(&pdev->dev, "vddcx");
+
+		if (IS_ERR(cx_regulator)) {
+			dev_err_probe(&pdev->dev, PTR_ERR(cx_regulator),
+					"Couldn't get the vddcx\n");
+			return PTR_ERR(cx_regulator);
+		}
+		pwr->cx_regulator = cx_regulator;
 	}
 
 	return 0;
+}
+
+static int kgsl_pwrctrl_probe_gx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+		/* Get virtual device handle for GX GDSC to control it */
+		struct device *gx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gx");
+
+		if (IS_ERR_OR_NULL(gx_pd)) {
+			dev_err_probe(&pdev->dev, PTR_ERR(gx_pd),
+					"Failed to attach gx power domain\n");
+			return IS_ERR(gx_pd) ? PTR_ERR(gx_pd) : -EINVAL;
+		}
+		pwr->gx_pd = gx_pd;
+	} else {
+		struct regulator *gx_regulator = devm_regulator_get(&pdev->dev, "vdd");
+
+		if (IS_ERR(gx_regulator)) {
+			dev_err_probe(&pdev->dev, PTR_ERR(gx_regulator),
+					"Couldn't get the vdd\n");
+			return PTR_ERR(gx_regulator);
+		}
+		pwr->gx_regulator = gx_regulator;
+	}
+
+	return 0;
+}
+
+int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device *pdev)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int ret;
+
+	ret = kgsl_pwrctrl_probe_cx_gdsc(device, pdev);
+	if (ret)
+		return ret;
+
+	ret = kgsl_pwrctrl_probe_gx_gdsc(device, pdev);
+	if (ret && pwr->cx_pd) {
+		dev_pm_domain_detach(pwr->cx_pd, false);
+		pwr->cx_pd = NULL;
+	}
+
+	return ret;
 }
 
 static int kgsl_cx_gdsc_event(struct notifier_block *nb,
@@ -1419,7 +1536,13 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
 	u32 val;
 
-	if (!(event & REGULATOR_EVENT_DISABLE) || !pwr->cx_gdsc_wait)
+	if (!pwr->cx_gdsc_wait)
+		return 0;
+
+	if (pwr->cx_pd && (event != GENPD_NOTIFY_OFF))
+		return 0;
+
+	if (pwr->cx_regulator && !(event & REGULATOR_EVENT_DISABLE))
 		return 0;
 
 	if (pwr->cx_gdsc_offset) {
@@ -1434,16 +1557,18 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 	return 0;
 }
 
-int kgsl_register_gdsc_notifier(struct kgsl_device *device)
+static int kgsl_register_gdsc_notifier(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (!IS_ERR_OR_NULL(pwr->cx_gdsc)) {
-		pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
-		return devm_regulator_register_notifier(pwr->cx_gdsc, &pwr->cx_gdsc_nb);
-	}
+	if (!pwr->cx_regulator && !pwr->cx_pd)
+		return 0;
 
-	return 0;
+	pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
+	if (pwr->cx_regulator)
+		return devm_regulator_register_notifier(pwr->cx_regulator, &pwr->cx_gdsc_nb);
+
+	return dev_pm_genpd_add_notifier(pwr->cx_pd, &pwr->cx_gdsc_nb);
 }
 
 static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
@@ -1468,18 +1593,18 @@ static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
 			trace_kgsl_rail(device, state);
 
 			/* Set the parent in retention voltage to disable CPR interrupts */
-			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent,
-					pwr->gx_gdsc_parent_min_corner);
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_regulator_parent,
+					pwr->gx_regulator_parent_min_corner);
 
 			kgsl_pwrctrl_disable_gx_gdsc(device);
 
 			/* Remove the vote for the vdd parent supply */
-			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent, 0);
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_regulator_parent, 0);
 
 			kgsl_pwrctrl_disable_cx_gdsc(device);
 		}
 	} else {
-		status = enable_regulators(device);
+		status = enable_gdscs(device);
 		kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	}
 
@@ -1663,24 +1788,26 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 
 	_isense_clk_set_rate(pwr, pwr->num_pwrlevels - 1);
 
-	if (of_property_read_bool(pdev->dev.of_node, "vddcx-supply"))
-		pwr->cx_gdsc = devm_regulator_get(&pdev->dev, "vddcx");
+	if (of_property_read_bool(pdev->dev.of_node, "vddcx-supply") ||
+		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "cx") >= 0))
+		kgsl_pwrctrl_probe_cx_gdsc(device, pdev);
 
-	if (of_property_read_bool(pdev->dev.of_node, "vdd-supply"))
-		pwr->gx_gdsc = devm_regulator_get(&pdev->dev, "vdd");
+	if (of_property_read_bool(pdev->dev.of_node, "vdd-supply") ||
+		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "gx") >= 0))
+		kgsl_pwrctrl_probe_gx_gdsc(device, pdev);
 
 	if (of_property_read_bool(pdev->dev.of_node, "vdd-parent-supply")) {
-		pwr->gx_gdsc_parent = devm_regulator_get(&pdev->dev,
+		pwr->gx_regulator_parent = devm_regulator_get(&pdev->dev,
 				"vdd-parent");
-		if (IS_ERR(pwr->gx_gdsc_parent)) {
+		if (IS_ERR(pwr->gx_regulator_parent)) {
 			dev_err(device->dev,
 				"Failed to get vdd-parent regulator:%ld\n",
-				PTR_ERR(pwr->gx_gdsc_parent));
+				PTR_ERR(pwr->gx_regulator_parent));
 			return -ENODEV;
 		}
 		if (of_property_read_u32(pdev->dev.of_node,
 					"vdd-parent-min-corner",
-					&pwr->gx_gdsc_parent_min_corner)) {
+					&pwr->gx_regulator_parent_min_corner)) {
 			dev_err(device->dev,
 				"vdd-parent-min-corner not found\n");
 			return -ENODEV;
@@ -1713,6 +1840,17 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 		dev_pm_qos_remove_request(&pwr->sysfs_thermal_req);
 
 	pm_runtime_disable(&device->pdev->dev);
+
+	if (pwr->cx_pd) {
+		dev_pm_genpd_remove_notifier(pwr->cx_pd);
+		dev_pm_domain_detach(pwr->cx_pd, false);
+		pwr->cx_pd = NULL;
+	}
+
+	if (pwr->gx_pd) {
+		dev_pm_domain_detach(pwr->gx_pd, false);
+		pwr->gx_pd = NULL;
+	}
 }
 
 void kgsl_idle_check(struct work_struct *work)

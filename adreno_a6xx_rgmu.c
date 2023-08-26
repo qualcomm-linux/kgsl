@@ -484,34 +484,26 @@ static void a6xx_rgmu_disable_clks(struct adreno_device *adreno_dev)
 {
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	int  ret;
 
-	/* Check GX GDSC is status */
-	if (a6xx_rgmu_gx_is_on(adreno_dev)) {
+	/*
+	 * This is based on the assumption that GMU is the only one controlling
+	 * the GX HS. This code path is the only client voting for GX from linux
+	 * kernel.
+	 */
+	if (!a6xx_rgmu_gx_is_on(adreno_dev))
+		goto done;
 
-		if (IS_ERR_OR_NULL(pwr->gx_gdsc))
-			return;
+	/*
+	 * Switch gx gdsc control from GMU to CPU force non-zero reference
+	 * count in clk driver so next disable call will turn off the GDSC
+	 */
+	kgsl_pwrctrl_enable_gx_gdsc(device);
+	kgsl_pwrctrl_disable_gx_gdsc(device);
 
-		/*
-		 * Switch gx gdsc control from RGMU to CPU. Force non-zero
-		 * reference count in clk driver so next disable call will
-		 * turn off the GDSC.
-		 */
-		ret = regulator_enable(pwr->gx_gdsc);
-		if (ret)
-			dev_err(&rgmu->pdev->dev,
-					"Fail to enable gx gdsc:%d\n", ret);
+	if (a6xx_rgmu_gx_is_on(adreno_dev))
+		dev_err(&rgmu->pdev->dev, "gx is stuck on\n");
 
-		ret = regulator_disable(pwr->gx_gdsc);
-		if (ret)
-			dev_err(&rgmu->pdev->dev,
-					"Fail to disable gx gdsc:%d\n", ret);
-
-		if (a6xx_rgmu_gx_is_on(adreno_dev))
-			dev_err(&rgmu->pdev->dev, "gx is stuck on\n");
-	}
-
+done:
 	clk_bulk_disable_unprepare(rgmu->num_clks, rgmu->clks);
 }
 
@@ -1339,8 +1331,8 @@ static int a6xx_rgmu_probe(struct kgsl_device *device,
 
 	rgmu->pdev = pdev;
 
-	/* Set up RGMU regulators */
-	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
+	/* Set up RGMU gdscs */
+	ret = kgsl_pwrctrl_probe_gdscs(device, pdev);
 	if (ret)
 		return ret;
 

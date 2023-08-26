@@ -1361,10 +1361,8 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
 
 static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 {
-	int ret = 0;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
@@ -1399,31 +1397,21 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/*
 	 * This is based on the assumption that GMU is the only one controlling
-	 * the GX HS. This code path is the only client voting for GX through
-	 * the regulator interface.
+	 * the GX HS. This code path is the only client voting for GX from linux
+	 * kernel.
 	 */
-	if (pwr->gx_gdsc) {
-		if (gen8_gmu_gx_is_on(adreno_dev)) {
-			/* Switch gx gdsc control from GMU to CPU
-			 * force non-zero reference count in clk driver
-			 * so next disable call will turn
-			 * off the GDSC
-			 */
-			ret = regulator_enable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx enable %d\n", ret);
+	if (!gen8_gmu_gx_is_on(adreno_dev))
+		return;
 
-			ret = regulator_disable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx disable %d\n", ret);
+	/*
+	 * Switch gx gdsc control from GMU to CPU force non-zero reference
+	 * count in clk driver so next disable call will turn off the GDSC
+	 */
+	kgsl_pwrctrl_enable_gx_gdsc(device);
+	kgsl_pwrctrl_disable_gx_gdsc(device);
 
-			if (gen8_gmu_gx_is_on(adreno_dev))
-				dev_err(&gmu->pdev->dev,
-					"gx is stuck on\n");
-		}
-	}
+	if (gen8_gmu_gx_is_on(adreno_dev))
+		dev_err(&gmu->pdev->dev, "gx is stuck on\n");
 }
 
 /*
@@ -2413,8 +2401,8 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	/* Setup any rdpm register ranges */
 	gen8_gmu_rdpm_probe(gmu, device);
 
-	/* Set up GMU regulators */
-	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
+	/* Set up GMU gdscs */
+	ret = kgsl_pwrctrl_probe_gdscs(device, pdev);
 	if (ret)
 		return ret;
 
