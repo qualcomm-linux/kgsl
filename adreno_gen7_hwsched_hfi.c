@@ -308,7 +308,7 @@ struct syncobj_flags {
 
 static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj *syncobj, u32 index)
 {
-	u32 count = scnprintf(str, max_size, "syncobj[%d] ctxt_id:%lu seqno:%lu flags:", index,
+	u32 count = scnprintf(str, max_size, "syncobj[%d] ctxt_id:%llu seqno:%llu flags:", index,
 			syncobj->ctxt_id, syncobj->seq_no);
 	u32 i;
 	bool first = true;
@@ -819,7 +819,7 @@ static void set_fence_signal_bit(struct adreno_device *adreno_dev,
 
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags)) {
 		dev_err(&gmu->pdev->dev,
-			"GMU is waiting for signaled fence(ctx:%ld seqno:%ld value:%s)\n",
+			"GMU is waiting for signaled fence(ctx:%llu seqno:%llu value:%s)\n",
 			fence->context, fence->seqno, value);
 		reply->queries[index].query_bitmask |= BIT(bit);
 		flags = ADRENO_HW_FENCE_SW_STATUS_SIGNALED;
@@ -2390,6 +2390,10 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen7_hfi_send_clx_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	ret = gen7_hfi_send_ifpc_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
@@ -3096,7 +3100,7 @@ static int add_gmu_waiter(struct adreno_device *adreno_dev,
 
 	if (ret)
 		dev_err_ratelimited(device->dev,
-			"Failed to add GMU as waiter ret:%d fence ctx:%ld ts:%ld\n",
+			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
 			ret, fence->context, fence->seqno);
 
 	return ret;

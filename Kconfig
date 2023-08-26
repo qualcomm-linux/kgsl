@@ -2,7 +2,7 @@
 config QCOM_KGSL
 	tristate "Qualcomm Technologies, Inc. 3D Graphics driver"
 	depends on ARCH_QCOM
-	depends on QCOM_QFPROM
+	depends on NVMEM_QCOM_QFPROM
 	select QCOM_MDT_LOADER
 	select INTERVAL_TREE
 	select TRACE_GPU_MEM

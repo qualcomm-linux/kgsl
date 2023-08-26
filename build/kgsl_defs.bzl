@@ -81,7 +81,7 @@ def external_deps(target, variant):
     # Targets that use hw-fences
     if target in [ "pineapple" ]:
         deplist = deplist + [
-            "//vendor/qcom/opensource/mm-drivers:{}_{}_mm_drivers".format(target, variant)
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:{}_{}_msm_hw_fence".format(target, variant)
             ]
 
     return deplist
@@ -115,8 +115,7 @@ def define_target_variant_module(target, variant):
             "CONFIG_SYNC_FILE": { True: [ "kgsl_sync.c" ] },
         },
         deps = [
-            "//msm-kernel:all_headers",
-            "//msm-kernel:all_headers_unsafe" ] + external_deps(target, variant),
+            "//msm-kernel:all_headers" ] + external_deps(target, variant),
         includes = ["include", "."],
         kernel_build = kernel_build,
         visibility = ["//visibility:private"]

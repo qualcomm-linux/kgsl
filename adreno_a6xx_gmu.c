@@ -22,7 +22,6 @@
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -886,21 +885,18 @@ int a6xx_gmu_load_fw(struct adreno_device *adreno_dev)
 				A6XX_GMU_CM3_DTCM_START,
 				gmu->vma[GMU_DTCM].start, blk);
 		} else {
-			/* The firmware block for memory needs to be copied on first boot only */
-			if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)) {
-				struct kgsl_memdesc *md =
-					find_gmu_memdesc(gmu, blk->addr, blk->size);
+			struct kgsl_memdesc *md =
+				find_gmu_memdesc(gmu, blk->addr, blk->size);
 
-				if (!md) {
-					dev_err(&gmu->pdev->dev,
-						"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
-						blk->addr, blk->size);
-					return -EINVAL;
-				}
-
-				memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
-					blk->size);
+			if (!md) {
+				dev_err(&gmu->pdev->dev,
+					"No backing memory for GMU FW block addr:0x%x size:0x%x\n",
+					blk->addr, blk->size);
+				return -EINVAL;
 			}
+
+			memcpy(md->hostptr + (blk->addr - md->gmuaddr), fw,
+				blk->size);
 		}
 
 		fw += blk->size;
@@ -1620,7 +1616,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		kgsl_sharedmem_free(md);
 		memset(md, 0, sizeof(*md));
@@ -1669,7 +1665,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		md =  ERR_PTR(-ENOMEM);
 		goto done;
@@ -3351,7 +3347,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 		return 0;
 	}
 
-	place_marker("M - DRIVER ADRENO Init");
+	KGSL_BOOT_MARKER("ADRENO Init");
 
 	ret = a6xx_ringbuffer_init(adreno_dev);
 	if (ret)
@@ -3420,7 +3416,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
-	place_marker("M - DRIVER ADRENO Ready");
+	KGSL_BOOT_MARKER("ADRENO Ready");
 
 	return 0;
 }

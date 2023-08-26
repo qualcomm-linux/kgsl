@@ -1683,7 +1683,7 @@ static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj
 				fences[j]->ops->timeline_value_str(fences[j], value, sizeof(value));
 
 			dev_err(device->dev,
-				"dma fence[%d] signaled:%d kgsl:%d ctx:%lu seqno:%lu value:%s\n",
+				"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
 				fence_index, signaled, kgsl, fences[j]->context, fences[j]->seqno,
 				value);
 		}

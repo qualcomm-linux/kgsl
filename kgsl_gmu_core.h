@@ -328,6 +328,13 @@ int gmu_core_timed_poll_check(struct kgsl_device *device,
 struct kgsl_memdesc;
 struct iommu_domain;
 
+struct gmu_mem_type_desc {
+	/** @memdesc: Pointer to the memory descriptor */
+	struct kgsl_memdesc *memdesc;
+	/** @type: Type of the memory descriptor */
+	u32 type;
+};
+
 /**
  * gmu_core_map_memdesc - Map the memdesc into the GMU IOMMU domain
  * @domain: Domain to map the memory into

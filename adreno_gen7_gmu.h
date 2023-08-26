@@ -120,13 +120,6 @@ struct gen7_gmu_device {
 	u32 switch_to_unsec_hdr;
 };
 
-struct gmu_mem_type_desc {
-	/** @memdesc: Pointer to the memory descriptor */
-	struct kgsl_memdesc *memdesc;
-	/** @type: Type of the memory descriptor */
-	u32 type;
-};
-
 /* Helper function to get to gen7 gmu device from adreno device */
 struct gen7_gmu_device *to_gen7_gmu(struct adreno_device *adreno_dev);
 

@@ -439,6 +439,7 @@ enum hfi_msg_type {
 	H2F_MSG_PERF_TBL		= 4,
 	H2F_MSG_TEST			= 5,
 	H2F_MSG_ACD_TBL			= 7,
+	H2F_MSG_CLX_TBL			= 8,
 	H2F_MSG_START			= 10,
 	H2F_MSG_FEATURE_CTRL		= 11,
 	H2F_MSG_GET_VALUE		= 12,
@@ -555,6 +556,38 @@ struct hfi_acd_table_cmd {
 	u32 stride;
 	u32 num_levels;
 	u32 data[MAX_ACD_NUM_LEVELS * MAX_ACD_STRIDE];
+} __packed;
+
+#define CLX_DOMAINS_V2 2
+struct clx_domain_v2 {
+	/**
+	 * @data0: bits[0:15]  Migration time
+	 *         bits[16:21] Current rating
+	 *         bits[22:27] Phases for domain
+	 *         bits[28:28] Path notifications
+	 *         bits[29:31] Extra feature bits
+	 */
+	u32 data0;
+	/** @clxt: CLX time in microseconds */
+	u32 clxt;
+	/** @clxh: CLH time in microseconds */
+	u32 clxh;
+	/** @urgmode: Urgent HW throttle mode of operation */
+	u32 urgmode;
+	/** @lkgen: Enable leakage current estimate */
+	u32 lkgen;
+	/** @currbudget: Current Budget */
+	u32 currbudget;
+} __packed;
+
+/* H2F */
+struct hfi_clx_table_v2_cmd {
+	/** @hdr: HFI header message */
+	u32 hdr;
+	/** @version: Version identifier for the format used for domains */
+	u32 version;
+	/** @domain: GFX and MXC Domain information */
+	struct clx_domain_v2 domain[CLX_DOMAINS_V2];
 } __packed;
 
 /* H2F */

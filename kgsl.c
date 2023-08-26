@@ -27,7 +27,6 @@
 #include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
@@ -1314,6 +1313,9 @@ int kgsl_add_rcu_notifier(struct notifier_block *nb)
 {
 	struct kgsl_device *device = kgsl_get_device(0);
 
+	if (!device)
+		return -ENODEV;
+
 	return srcu_notifier_chain_register(&device->nh, nb);
 }
 EXPORT_SYMBOL(kgsl_add_rcu_notifier);
@@ -1321,6 +1323,9 @@ EXPORT_SYMBOL(kgsl_add_rcu_notifier);
 int kgsl_del_rcu_notifier(struct notifier_block *nb)
 {
 	struct kgsl_device *device = kgsl_get_device(0);
+
+	if (!device)
+		return -ENODEV;
 
 	return srcu_notifier_chain_unregister(&device->nh, nb);
 }
@@ -4426,6 +4431,24 @@ static const struct vm_operations_struct kgsl_memstore_vm_ops = {
 	.fault = kgsl_memstore_vm_fault,
 };
 
+static inline void kgsl_vm_flags_clear(struct vm_area_struct *vma, vm_flags_t flags)
+{
+#if (KERNEL_VERSION(6, 1, 25) <= LINUX_VERSION_CODE)
+	vm_flags_clear(vma, flags);
+#else
+	vma->vm_flags &= ~flags;
+#endif
+}
+
+static inline void kgsl_vm_flags_set(struct vm_area_struct *vma, vm_flags_t flags)
+{
+#if (KERNEL_VERSION(6, 1, 25) <= LINUX_VERSION_CODE)
+	vm_flags_set(vma, flags);
+#else
+	vma->vm_flags |= flags;
+#endif
+}
+
 static int
 kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 		struct vm_area_struct *vma)
@@ -4438,7 +4461,7 @@ kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 	if (vma->vm_flags & VM_WRITE)
 		return -EPERM;
 
-	vma->vm_flags &= ~VM_MAYWRITE;
+	kgsl_vm_flags_clear(vma, VM_MAYWRITE);
 
 	if (memdesc->size  != vma_size) {
 		dev_err(device->dev, "Cannot partially map the memstore\n");
@@ -4447,7 +4470,7 @@ kgsl_mmap_memstore(struct file *file, struct kgsl_device *device,
 
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 	vma->vm_private_data = memdesc;
-	vma->vm_flags |= memdesc->ops->vmflags;
+	kgsl_vm_flags_set(vma, memdesc->ops->vmflags);
 	vma->vm_ops = &kgsl_memstore_vm_ops;
 	vma->vm_file = file;
 
@@ -4775,7 +4798,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 	if (ret)
 		return ret;
 
-	vma->vm_flags |= entry->memdesc.ops->vmflags;
+	kgsl_vm_flags_set(vma, entry->memdesc.ops->vmflags);
 
 	vma->vm_private_data = entry;
 
@@ -5176,7 +5199,7 @@ int __init kgsl_core_init(void)
 {
 	int result = 0;
 
-	place_marker("M - DRIVER KGSL Init");
+	KGSL_BOOT_MARKER("KGSL Init");
 
 	/* alloc major and minor device numbers */
 	result = alloc_chrdev_region(&kgsl_driver.major, 0,
@@ -5281,7 +5304,7 @@ int __init kgsl_core_init(void)
 
 	sysstats_register_kgsl_stats_cb(kgsl_get_stats);
 
-	place_marker("M - DRIVER KGSL Ready");
+	KGSL_BOOT_MARKER("KGSL Ready");
 
 	return 0;
 

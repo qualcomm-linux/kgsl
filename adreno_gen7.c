@@ -841,6 +841,9 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		gpu_req |= GPU_BCL_EN_REQ;
 
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_CLX))
+		gpu_req |= GPU_CLX_EN_REQ;
+
 	if (adreno_is_gen7_9_x(adreno_dev))
 		gpu_req |= GPU_TSENSE_EN_REQ;
 
@@ -852,6 +855,10 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	 */
 	if (!ret && ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		adreno_dev->bcl_enabled = true;
+
+	/* If programming TZ CLX was successful, then program KMD owned CLX regs */
+	if (!ret && ADRENO_FEATURE(adreno_dev, ADRENO_CLX))
+		adreno_dev->clx_enabled = true;
 
 	/*
 	 * If scm call returned EOPNOTSUPP, either we are on a kernel version
@@ -1229,7 +1236,7 @@ static void gen7_err_callback(struct adreno_device *adreno_dev, int bit)
 		kgsl_regread(device, GEN7_RBBM_SECVID_TSB_STATUS_LO, &lo);
 		kgsl_regread(device, GEN7_RBBM_SECVID_TSB_STATUS_HI, &hi);
 
-		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%llx MID: %d\n",
+		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%lx MID: %lu\n",
 			FIELD_GET(GENMASK(16, 0), hi) << 32 | lo,
 			FIELD_GET(GENMASK(31, 23), hi));
 		break;

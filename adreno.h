@@ -134,7 +134,8 @@
 #define ADRENO_AQE BIT(18)
 /* Warm Boot supported on this target */
 #define ADRENO_GMU_WARMBOOT BIT(19)
-
+/* The GPU supports CLX */
+#define ADRENO_CLX BIT(20)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -605,6 +606,8 @@ struct adreno_device {
 	bool sptp_pc_enabled;
 	/** @bcl_enabled: True if BCL is enabled */
 	bool bcl_enabled;
+	/** @clx_enabled: True if CLX is enabled */
+	bool clx_enabled;
 	/** @lpac_enabled: True if LPAC is enabled */
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */

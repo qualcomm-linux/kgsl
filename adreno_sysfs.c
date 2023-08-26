@@ -257,6 +257,19 @@ static int _bcl_store(struct adreno_device *adreno_dev, bool val)
 					val);
 }
 
+static bool _clx_show(struct adreno_device *adreno_dev)
+{
+	return adreno_dev->clx_enabled;
+}
+
+static int _clx_store(struct adreno_device *adreno_dev, bool val)
+{
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_CLX) || adreno_dev->clx_enabled == val)
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->clx_enabled, val);
+}
+
 static bool _dms_show(struct adreno_device *adreno_dev)
 {
 	return adreno_dev->dms_enabled;
@@ -377,6 +390,7 @@ static ADRENO_SYSFS_BOOL(ifpc);
 static ADRENO_SYSFS_RO_U32(ifpc_count);
 static ADRENO_SYSFS_BOOL(acd);
 static ADRENO_SYSFS_BOOL(bcl);
+static ADRENO_SYSFS_BOOL(clx);
 static ADRENO_SYSFS_BOOL(l3_vote);
 static ADRENO_SYSFS_BOOL(perfcounter);
 static ADRENO_SYSFS_BOOL(lpac);
@@ -410,6 +424,7 @@ static const struct attribute *_attr_list[] = {
 	&adreno_attr_dms.attr.attr,
 	&adreno_attr_touch_wake.attr.attr,
 	&adreno_attr_gmu_ab.attr.attr,
+	&adreno_attr_clx.attr.attr,
 	NULL,
 };
 

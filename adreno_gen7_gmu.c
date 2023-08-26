@@ -1160,7 +1160,7 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 
 	/* Failed to map to GMU */
 	dev_err(&gmu->pdev->dev,
-		"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+		"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 		addr, md->size, ret);
 
 	spin_lock(&vma->lock);
@@ -1187,7 +1187,7 @@ static int _map_gmu_static(struct gen7_gmu_device *gmu,
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		return ret;
 	}
@@ -1272,7 +1272,7 @@ struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device 
 		gmu->global_entries++;
 	else {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		memset(md, 0x0, sizeof(*md));
 		md = ERR_PTR(ret);

@@ -154,11 +154,6 @@ static const unsigned int a650_rscc_registers[] = {
 	0x3915B, 0x3915B,
 };
 
-struct gmu_mem_type_desc {
-	struct kgsl_memdesc *memdesc;
-	uint32_t type;
-};
-
 static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {

@@ -21,7 +21,6 @@
 #include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
-#include <soc/qcom/boot_stats.h>
 #include <linux/suspend.h>
 
 #include "adreno.h"
@@ -1061,11 +1060,11 @@ const char *adreno_get_gpu_model(struct kgsl_device *device)
 	if (model)
 		goto done;
 
-	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%d%d%dv%d",
-		ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
-		ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),
-		ADRENO_CHIPID_MINOR(ADRENO_DEVICE(device)->chipid),
-		ADRENO_CHIPID_PATCH(ADRENO_DEVICE(device)->chipid) + 1);
+	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%u%u%uv%u",
+		(u32)ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
+		(u32)ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),
+		(u32)ADRENO_CHIPID_MINOR(ADRENO_DEVICE(device)->chipid),
+		(u32)ADRENO_CHIPID_PATCH(ADRENO_DEVICE(device)->chipid) + 1);
 
 	return gpu_model;
 
@@ -1227,7 +1226,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	int status;
 	u32 size;
 
-	place_marker("M - DRIVER GPU Init");
+	KGSL_BOOT_MARKER("GPU Init");
 
 	/* Initialize the adreno device structure */
 	adreno_setup_device(adreno_dev);
@@ -1387,7 +1386,7 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	kgsl_qcom_va_md_register(device);
 
-	place_marker("M - DRIVER GPU Ready");
+	KGSL_BOOT_MARKER("GPU Ready");
 
 	return 0;
 
@@ -1525,8 +1524,14 @@ static void adreno_resume(struct adreno_device *adreno_dev)
 static int adreno_pm_resume(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+	struct adreno_device *adreno_dev;
+	const struct adreno_power_ops *ops;
+
+	if (!device)
+		return 0;
+
+	adreno_dev = ADRENO_DEVICE(device);
+	ops = ADRENO_POWER_OPS(adreno_dev);
 
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
 	if (pm_suspend_via_firmware()) {
@@ -1560,9 +1565,15 @@ static int adreno_suspend(struct adreno_device *adreno_dev)
 static int adreno_pm_suspend(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+	struct adreno_device *adreno_dev;
+	const struct adreno_power_ops *ops;
 	int status;
+
+	if (!device)
+		return 0;
+
+	adreno_dev = ADRENO_DEVICE(device);
+	ops = ADRENO_POWER_OPS(adreno_dev);
 
 	mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
@@ -3607,12 +3618,15 @@ static int adreno_secure_pt_restore(struct adreno_device *adreno_dev)
 static int adreno_hibernation_suspend(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-	int status = -EINVAL;
+	struct adreno_device *adreno_dev;
+	const struct adreno_power_ops *ops;
+	int status;
 
 	if (!device)
-		return -EINVAL;
+		return 0;
+
+	adreno_dev = ADRENO_DEVICE(device);
+	ops = ADRENO_POWER_OPS(adreno_dev);
 
 	mutex_lock(&device->mutex);
 
@@ -3636,14 +3650,19 @@ err:
 static int adreno_hibernation_resume(struct device *dev)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	struct kgsl_iommu *iommu = &device->mmu.iommu;
-	struct kgsl_pwrscale *pwrscale = &device->pwrscale;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-	int ret = 0;
+	struct kgsl_iommu *iommu;
+	struct kgsl_pwrscale *pwrscale;
+	struct adreno_device *adreno_dev;
+	const struct adreno_power_ops *ops;
+	int ret;
 
 	if (!device)
-		return -EINVAL;
+		return 0;
+
+	iommu = &device->mmu.iommu;
+	pwrscale = &device->pwrscale;
+	adreno_dev = ADRENO_DEVICE(device);
+	ops = ADRENO_POWER_OPS(adreno_dev);
 
 	mutex_lock(&device->mutex);
 
