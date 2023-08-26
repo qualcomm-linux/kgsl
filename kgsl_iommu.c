@@ -14,6 +14,7 @@
 #include <linux/qcom-io-pgtable.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 #include <linux/version.h>
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <linux/firmware/qcom/qcom_scm.h>
@@ -1129,8 +1130,11 @@ static void kgsl_iommu_disable_clk(struct kgsl_mmu *mmu)
 
 	clk_bulk_disable_unprepare(iommu->num_clks, iommu->clks);
 
-	if (!IS_ERR_OR_NULL(iommu->cx_gdsc))
-		regulator_disable(iommu->cx_gdsc);
+	if (!IS_ERR_OR_NULL(iommu->cx_regulator))
+		regulator_disable(iommu->cx_regulator);
+
+	if (pm_runtime_enabled(&iommu->pdev->dev))
+		pm_runtime_put_sync(&iommu->pdev->dev);
 }
 
 /*
@@ -1141,8 +1145,11 @@ static void kgsl_iommu_enable_clk(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
 
-	if (!IS_ERR_OR_NULL(iommu->cx_gdsc))
-		WARN_ON(regulator_enable(iommu->cx_gdsc));
+	if (!IS_ERR_OR_NULL(iommu->cx_regulator))
+		WARN_ON(regulator_enable(iommu->cx_regulator));
+
+	if (pm_runtime_enabled(&iommu->pdev->dev))
+		WARN_ON(pm_runtime_resume_and_get(&iommu->pdev->dev));
 
 	WARN_ON(clk_bulk_prepare_enable(iommu->num_clks, iommu->clks));
 
@@ -1522,6 +1529,9 @@ static void kgsl_iommu_close(struct kgsl_mmu *mmu)
 		__free_page(kgsl_guard_page);
 		kgsl_guard_page = NULL;
 	}
+
+	if (pm_runtime_enabled(&iommu->pdev->dev))
+		pm_runtime_disable(&iommu->pdev->dev);
 
 	kmem_cache_destroy(addr_entry_cache);
 	addr_entry_cache = NULL;
@@ -2537,8 +2547,14 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 		iommu->clks[iommu->num_clks++].clk = c;
 	}
 
-	/* Get the CX regulator if it is available */
-	iommu->cx_gdsc = devm_regulator_get(&pdev->dev, "vddcx");
+	/*
+	 * IOMMU device is already bound to power domain by core framework
+	 * as there is only single power domain
+	 */
+	if (of_property_read_bool(pdev->dev.of_node, "power-domains"))
+		pm_runtime_enable(&pdev->dev);
+	else
+		iommu->cx_regulator = devm_regulator_get(&pdev->dev, "vddcx");
 
 	set_bit(KGSL_MMU_PAGED, &mmu->features);
 
@@ -2601,6 +2617,9 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 	return 0;
 
 err:
+	if (pm_runtime_enabled(&pdev->dev))
+		pm_runtime_disable(&pdev->dev);
+
 	kmem_cache_destroy(addr_entry_cache);
 	addr_entry_cache = NULL;
 
