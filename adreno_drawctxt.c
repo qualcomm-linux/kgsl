@@ -358,7 +358,7 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	}
 
 	/* Make sure that our target can support secure contexts if requested */
-	if (!kgsl_mmu_is_secured(&dev_priv->device->mmu) &&
+	if (!kgsl_mmu_is_secured(&device->mmu) &&
 			(local & KGSL_CONTEXT_SECURE)) {
 		dev_err_once(device->dev, "Secure context not supported\n");
 		return ERR_PTR(-EOPNOTSUPP);
