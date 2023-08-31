@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 #include <linux/thermal.h>
 #include <linux/msm_kgsl.h>
+#include <linux/units.h>
 #include <soc/qcom/dcvs.h>
 
 #include "kgsl_device.h"
@@ -75,17 +76,21 @@ static void _bimc_clk_prepare_enable(struct kgsl_device *device,
 static unsigned int _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, int level,
 					struct kgsl_pwr_constraint *pwrc)
 {
-	unsigned int max_pwrlevel = max_t(unsigned int, pwr->thermal_pwrlevel,
+	unsigned int thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
+	unsigned int max_pwrlevel = max_t(unsigned int, thermal_pwrlevel,
 					pwr->max_pwrlevel);
 	unsigned int min_pwrlevel = min_t(unsigned int,
 					pwr->thermal_pwrlevel_floor,
 					pwr->min_pwrlevel);
 
+	/* Ensure that max pwrlevel is within pmqos max limit */
+	max_pwrlevel = max_t(unsigned int, max_pwrlevel,
+					READ_ONCE(pwr->pmqos_max_pwrlevel));
+
 	/* Ensure that max/min pwrlevels are within thermal max/min limits */
 	max_pwrlevel = min_t(unsigned int, max_pwrlevel,
 					pwr->thermal_pwrlevel_floor);
-	min_pwrlevel = max_t(unsigned int, min_pwrlevel,
-					pwr->thermal_pwrlevel);
+	min_pwrlevel = max_t(unsigned int, min_pwrlevel, thermal_pwrlevel);
 
 	switch (pwrc->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {
@@ -366,8 +371,10 @@ static ssize_t thermal_pwrlevel_show(struct device *dev,
 
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 thermal_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+					READ_ONCE(pwr->pmqos_max_pwrlevel));
 
-	return scnprintf(buf, PAGE_SIZE, "%d\n", pwr->thermal_pwrlevel);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", thermal_pwrlevel);
 }
 
 static ssize_t max_pwrlevel_store(struct device *dev,
@@ -1733,6 +1740,149 @@ static int kgsl_pwrctrl_clk_set_rate(struct clk *grp_clk, unsigned int freq,
 	return ret;
 }
 
+/*
+ * pmqos_max_notifier_call - Callback function registered to receive qos max
+ * frequency events.
+ * @nb: The notifier block
+ * @val: Max frequency value in KHz for GPU
+ *
+ * The function subscribes to GPU max frequency change and updates thermal
+ * power level accordingly.
+ */
+static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val, void *data)
+{
+	struct kgsl_pwrctrl *pwr = container_of(nb, struct kgsl_pwrctrl, nb_max);
+	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
+	u32 max_freq = val * 1000;
+	int level;
+	u32 thermal_pwrlevel;
+
+	if (!device->pwrscale.devfreq_enabled)
+		return NOTIFY_DONE;
+
+	for (level = pwr->num_pwrlevels - 1; level >= 0; level--) {
+		/* get nearest power level with a maximum delta of 5MHz */
+		if (abs(pwr->pwrlevels[level].gpu_freq - max_freq) < 5000000)
+			break;
+	}
+
+	if (level < 0)
+		return NOTIFY_DONE;
+
+	if (level == pwr->pmqos_max_pwrlevel)
+		return NOTIFY_OK;
+
+	pwr->pmqos_max_pwrlevel = level;
+
+	/*
+	 * Since thermal constraint is already applied prior to this, if qos constraint is same as
+	 * thermal constraint, we can return early here.
+	 */
+	thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
+	if (pwr->pmqos_max_pwrlevel == thermal_pwrlevel)
+		return NOTIFY_OK;
+
+	trace_kgsl_thermal_constraint(max_freq);
+
+	mutex_lock(&device->mutex);
+
+	/* Update the current level using the new limit */
+	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+
+	mutex_unlock(&device->mutex);
+	return NOTIFY_OK;
+}
+
+static int kgsl_cooling_get_max_state(struct thermal_cooling_device *cooling_dev,
+		unsigned long *state)
+{
+	struct kgsl_device *device = cooling_dev->devdata;
+
+	*state = device->pwrctrl.num_pwrlevels - 1;
+	return 0;
+}
+
+static int kgsl_cooling_get_cur_state(struct thermal_cooling_device *cooling_dev,
+		unsigned long *state)
+{
+	struct kgsl_device *device = cooling_dev->devdata;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	*state = READ_ONCE(pwr->thermal_pwrlevel);
+	return 0;
+}
+
+static int kgsl_cooling_set_cur_state(struct thermal_cooling_device *cooling_dev,
+		unsigned long state)
+{
+	struct kgsl_device *device = cooling_dev->devdata;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 freq;
+
+	if (state > (pwr->num_pwrlevels - 1))
+		return -EINVAL;
+
+	if (state == READ_ONCE(pwr->thermal_pwrlevel))
+		return 0;
+
+	freq = pwr->pwrlevels[state].gpu_freq;
+	trace_kgsl_thermal_constraint(freq);
+	WRITE_ONCE(pwr->thermal_pwrlevel, state);
+
+	mutex_lock(&device->mutex);
+
+	/* Update the current level using the new limit */
+	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+
+	mutex_unlock(&device->mutex);
+
+	queue_work(kgsl_driver.workqueue, &pwr->cooling_ws);
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops kgsl_cooling_ops = {
+	.get_max_state = kgsl_cooling_get_max_state,
+	.get_cur_state = kgsl_cooling_get_cur_state,
+	.set_cur_state = kgsl_cooling_set_cur_state,
+};
+
+static void do_pmqos_update(struct work_struct *work)
+{
+	struct kgsl_pwrctrl *pwr = container_of(work, struct kgsl_pwrctrl, cooling_ws);
+	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
+	u32 freq = pwr->pwrlevels[thermal_pwrlevel].gpu_freq;
+
+	dev_pm_qos_update_request(&pwr->pmqos_max_freq, DIV_ROUND_UP(freq, HZ_PER_KHZ));
+}
+
+static int register_thermal_cooling_device(struct kgsl_device *device, struct device_node *np)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	const char *name = "kgsl";
+	int ret;
+
+	ret = dev_pm_qos_add_request(&device->pdev->dev, &pwr->pmqos_max_freq,
+			DEV_PM_QOS_MAX_FREQUENCY, PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
+	if (ret)
+		goto err;
+
+	INIT_WORK(&pwr->cooling_ws, do_pmqos_update);
+
+	pwr->cooling_dev = thermal_of_cooling_device_register(np, name, device,
+			&kgsl_cooling_ops);
+	if (IS_ERR(pwr->cooling_dev)) {
+		dev_pm_qos_remove_request(&pwr->pmqos_max_freq);
+		ret = PTR_ERR(pwr->cooling_dev);
+		goto err;
+	}
+
+	return 0;
+
+err:
+	dev_err(device->dev, "Unable to register thermal cooling device: %d\n", ret);
+	return ret;
+}
+
 int kgsl_pwrctrl_init(struct kgsl_device *device)
 {
 	int i, result, freq;
@@ -1760,16 +1910,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	}
 
 	init_waitqueue_head(&device->active_cnt_wq);
-
-	/* Initialize the thermal clock constraints */
-	pwr->thermal_pwrlevel = 0;
-	pwr->thermal_pwrlevel_floor = pwr->num_pwrlevels - 1;
-
-	result = dev_pm_qos_add_request(&pdev->dev, &pwr->sysfs_thermal_req,
-			DEV_PM_QOS_MAX_FREQUENCY,
-			PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
-	if (result < 0)
-		dev_err(device->dev, "PM QoS thermal request failed:%d\n", result);
 
 	for (i = 0; i < pwr->num_pwrlevels; i++) {
 		freq = pwr->pwrlevels[i].gpu_freq;
@@ -1823,7 +1963,34 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	result = kgsl_register_gdsc_notifier(device);
 	if (result) {
 		dev_err(&pdev->dev, "Failed to register gdsc notifier: %d\n", result);
-		return result;
+		goto err;
+	}
+
+	/* Initialize the thermal clock constraints */
+	pwr->thermal_pwrlevel = 0;
+	pwr->thermal_pwrlevel_floor = pwr->num_pwrlevels - 1;
+	result = dev_pm_qos_add_request(&pdev->dev, &pwr->sysfs_thermal_req,
+			DEV_PM_QOS_MAX_FREQUENCY,
+			PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
+	if (result < 0)
+		dev_err(device->dev, "PM QoS sysfs thermal request failed:%d\n", result);
+
+	/*
+	 * Due to the way it is implemented by the thermal driver, thermal skin mitigation event
+	 * is triggered through PMQOS. Usually, this is supposed to be handled via devfreq.
+	 * Because devfreq recommendations can be overridden by kgsl min_freq/pwrlevel sysfs nodes,
+	 * kgsl should listen to PMQOS events and apply MAX FREQUENCY limit correctly.
+	 */
+	pwr->nb_max.notifier_call = pmqos_max_notifier_call;
+	result = dev_pm_qos_add_notifier(&pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
+	if (result)
+		dev_err(device->dev, "Unable to register notifier call for PMQOS updates: %d\n",
+				result);
+
+	result = register_thermal_cooling_device(device, pdev->dev.of_node);
+	if (result) {
+		dev_pm_qos_remove_notifier(&pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
+		goto err;
 	}
 
 	pwr->power_flags = 0;
@@ -1831,6 +1998,12 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	pm_runtime_enable(&pdev->dev);
 
 	return 0;
+
+err:
+	if (dev_pm_qos_request_active(&pwr->sysfs_thermal_req))
+		dev_pm_qos_remove_request(&pwr->sysfs_thermal_req);
+
+	return result;
 }
 
 void kgsl_pwrctrl_close(struct kgsl_device *device)
@@ -1838,6 +2011,13 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	pwr->power_flags = 0;
+
+	if (!IS_ERR(pwr->cooling_dev)) {
+		dev_pm_qos_remove_request(&pwr->pmqos_max_freq);
+		dev_pm_qos_remove_notifier(&device->pdev->dev, &pwr->nb_max,
+						DEV_PM_QOS_MAX_FREQUENCY);
+		thermal_cooling_device_unregister(pwr->cooling_dev);
+	}
 
 	if (dev_pm_qos_request_active(&pwr->sysfs_thermal_req))
 		dev_pm_qos_remove_request(&pwr->sysfs_thermal_req);

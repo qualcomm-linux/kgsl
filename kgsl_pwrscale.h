@@ -40,7 +40,6 @@ struct kgsl_power_stats {
  * @devfreq_notify_ws - Notify devfreq to update sampling
  * @next_governor_call - Timestamp after which the governor may be notified of
  * a new sample
- * @cooling_dev - Thermal cooling device handle
  * @ctxt_aware_enable - Whether or not ctxt aware DCVS feature is enabled
  * @ctxt_aware_busy_penalty - The time in microseconds required to trigger
  * ctxt aware power level jump
@@ -61,7 +60,6 @@ struct kgsl_pwrscale {
 	struct work_struct devfreq_resume_ws;
 	struct work_struct devfreq_notify_ws;
 	ktime_t next_governor_call;
-	struct thermal_cooling_device *cooling_dev;
 	bool ctxt_aware_enable;
 	unsigned int ctxt_aware_target_pwrlevel;
 	unsigned int ctxt_aware_busy_penalty;
