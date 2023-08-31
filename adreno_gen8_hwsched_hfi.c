@@ -4106,44 +4106,6 @@ void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,
 		gen8_free_gmu_block(to_gen8_gmu(adreno_dev), &drawctxt->gmu_hw_fence_queue);
 }
 
-int gen8_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
-		const struct adreno_perfcount_group *group,
-		u32 counter, u32 countable)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 val, cmds[GEN8_PERF_COUNTER_ENABLE_DWORDS + 1];
-	int ret;
-
-	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
-		gen8_perfcounter_update(adreno_dev, reg, false,
-				FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
-
-	cmds[0] = CREATE_MSG_HDR(H2F_MSG_ISSUE_CMD_RAW, HFI_MSG_CMD);
-
-	cmds[1] = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
-	cmds[2] = cp_type4_packet(reg->select, 1);
-	cmds[3] = countable;
-
-	ret = gen8_hfi_send_cmd_async(adreno_dev, cmds, sizeof(cmds));
-	if (ret)
-		goto err;
-
-	/* Wait till the register is programmed with the countable */
-	ret = kgsl_regmap_read_poll_timeout(&device->regmap, reg->select, val,
-				val == countable, 100, ADRENO_IDLE_TIMEOUT);
-	if (!ret) {
-		reg->value = 0;
-		return ret;
-	}
-
-err:
-	dev_err(device->dev, "Perfcounter %s/%u/%u start via commands failed\n",
-			group->name, counter, countable);
-
-	return ret;
-}
-
 int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 {
 	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);

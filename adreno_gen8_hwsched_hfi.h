@@ -158,20 +158,6 @@ void gen8_hwsched_hfi_stop(struct adreno_device *adreno_dev);
 int gen8_hwsched_cp_init(struct adreno_device *adreno_dev);
 
 /**
- * gen8_hwsched_counter_inline_enable - Configure a performance counter for a countable
- * @adreno_dev -  Adreno device to configure
- * @group - Desired performance counter group
- * @counter - Desired performance counter in the group
- * @countable - Desired countable
- *
- * Physically set up a counter within a group with the desired countable
- * Return 0 on success or negative error on failure.
- */
-int gen8_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
-		const struct adreno_perfcount_group *group,
-		u32 counter, u32 countable);
-
-/**
  * gen8_hfi_send_cmd_async - Send an hfi packet
  * @adreno_dev: Pointer to adreno device structure
  * @data: Data to be sent in the hfi packet

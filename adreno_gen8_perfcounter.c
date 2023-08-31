@@ -6,7 +6,6 @@
 
 #include "adreno.h"
 #include "adreno_gen8.h"
-#include "adreno_gen8_hwsched_hfi.h"
 #include "adreno_perfcounter.h"
 #include "adreno_pm4types.h"
 #include "kgsl_device.h"
@@ -83,80 +82,6 @@ static int gen8_counter_enable(struct adreno_device *adreno_dev,
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
 					FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
-	if (!ret)
-		reg->value = 0;
-
-	return ret;
-}
-
-static int gen8_hwsched_counter_enable(struct adreno_device *adreno_dev,
-		const struct adreno_perfcount_group *group,
-		u32 counter, u32 countable)
-{
-	if (!(KGSL_DEVICE(adreno_dev)->state == KGSL_STATE_ACTIVE))
-		return gen8_counter_enable(adreno_dev, group, counter, countable);
-
-	return gen8_hwsched_counter_inline_enable(adreno_dev, group, counter, countable);
-}
-
-/* This function is specific to sw-scheduler and not applicable for hw-scheduler */
-static int gen8_counter_inline_enable(struct adreno_device *adreno_dev,
-		const struct adreno_perfcount_group *group,
-		u32 counter, u32 countable)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_perfcount_register *reg = &group->regs[counter];
-	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffers[0];
-	u32 cmds[3];
-	int ret;
-
-	/* Fallback when we reach here from GPU initialization sequence */
-	if (!(device->state == KGSL_STATE_ACTIVE))
-		return gen8_counter_enable(adreno_dev, group, counter,
-			countable);
-
-	gen8_perfcounter_update(adreno_dev, reg, false,
-				FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
-
-	cmds[0] = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
-	cmds[1] = cp_type4_packet(reg->select, 1);
-	cmds[2] = countable;
-
-	/* submit to highest priority RB always */
-	ret = gen8_ringbuffer_addcmds(adreno_dev, rb, NULL,
-		F_NOTPROTECTED, cmds, 3, 0, NULL);
-	if (ret)
-		return ret;
-
-	/*
-	 * schedule dispatcher to make sure rb[0] is run, because
-	 * if the current RB is not rb[0] and gpu is idle then
-	 * rb[0] will not get scheduled to run
-	 */
-	if (adreno_dev->cur_rb != rb)
-		adreno_dispatcher_schedule(device);
-
-	/* wait for the above commands submitted to complete */
-	ret = adreno_ringbuffer_waittimestamp(rb, rb->timestamp,
-		ADRENO_IDLE_TIMEOUT);
-
-	if (ret) {
-		/*
-		 * If we were woken up because of cancelling rb events
-		 * either due to soft reset or adreno_stop, ignore the
-		 * error and return 0 here. The perfcounter is already
-		 * set up in software and it will be programmed in
-		 * hardware when we wake up or come up after soft reset,
-		 * by adreno_perfcounter_restore.
-		 */
-		if (ret == -EAGAIN)
-			ret = 0;
-		else
-			dev_err_ratelimited(device->dev,
-				     "Perfcounter %s/%u/%u start via commands failed %d\n",
-				     group->name, counter, countable, ret);
-	}
-
 	if (!ret)
 		reg->value = 0;
 
@@ -1072,53 +997,6 @@ static struct adreno_perfcount_register gen8_perfcounters_alwayson[] = {
 	GEN8_BV_PERFCOUNTER_GROUP(offset, name, \
 		gen8_counter_enable, gen8_counter_read)
 
-static const struct adreno_perfcount_group gen8_hwsched_perfcounter_groups
-				[KGSL_PERFCOUNTER_GROUP_MAX] = {
-	GEN8_REGULAR_PERFCOUNTER_GROUP(CP, cp),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, RBBM, rbbm, 0,
-		gen8_counter_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(PC, pc, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(VFD, vfd, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(HLSQ, hlsq, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(VPC, vpc, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(CCU, ccu, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(CMP, cmp, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(TSE, tse, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(RAS, ras, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(LRZ, lrz, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_REGULAR_PERFCOUNTER_GROUP(UCHE, uche),
-	GEN8_PERFCOUNTER_GROUP(TP, tp, gen8_hwsched_counter_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(SP, sp, gen8_hwsched_counter_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(RB, rb, gen8_counter_br_enable, gen8_counter_read),
-	GEN8_REGULAR_PERFCOUNTER_GROUP(VSC, vsc),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, VBIF, gbif, 0,
-		gen8_counter_gbif_enable, gen8_counter_read_norestore),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, VBIF_PWR, gbif_pwr,
-		ADRENO_PERFCOUNTER_GROUP_FIXED,
-		gen8_counter_gbif_pwr_enable, gen8_counter_read_norestore),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, ALWAYSON, alwayson,
-		ADRENO_PERFCOUNTER_GROUP_FIXED,
-		gen8_counter_alwayson_enable, gen8_counter_alwayson_read),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, GMU_XOCLK, gmu_xoclk, 0,
-		gen8_counter_gmu_pwr_enable, gen8_counter_read_norestore),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, GMU_GMUCLK, gmu_gmuclk, 0,
-		gen8_counter_gmu_pwr_enable, gen8_counter_read_norestore),
-	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, GMU_PERF, gmu_perf, 0,
-		gen8_counter_gmu_perf_enable, gen8_counter_read_norestore),
-	GEN8_REGULAR_PERFCOUNTER_GROUP(UFC, ufc),
-	GEN8_BV_REGULAR_PERFCOUNTER_GROUP(CP, cp),
-	GEN8_BV_PERFCOUNTER_GROUP(PC, pc, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_PERFCOUNTER_GROUP(VFD, vfd, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_PERFCOUNTER_GROUP(VPC, vpc, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_REGULAR_PERFCOUNTER_GROUP(TP, tp),
-	GEN8_BV_REGULAR_PERFCOUNTER_GROUP(SP, sp),
-	GEN8_BV_REGULAR_PERFCOUNTER_GROUP(UFC, ufc),
-	GEN8_BV_PERFCOUNTER_GROUP(TSE, tse, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_PERFCOUNTER_GROUP(RAS, ras, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_PERFCOUNTER_GROUP(LRZ, lrz, gen8_counter_bv_enable, gen8_counter_read),
-	GEN8_BV_PERFCOUNTER_GROUP(HLSQ, hlsq, gen8_counter_bv_enable, gen8_counter_read),
-};
-
 static const struct adreno_perfcount_group gen8_perfcounter_groups
 				[KGSL_PERFCOUNTER_GROUP_MAX] = {
 	GEN8_REGULAR_PERFCOUNTER_GROUP(CP, cp),
@@ -1134,8 +1012,8 @@ static const struct adreno_perfcount_group gen8_perfcounter_groups
 	GEN8_PERFCOUNTER_GROUP(RAS, ras, gen8_counter_br_enable, gen8_counter_read),
 	GEN8_PERFCOUNTER_GROUP(LRZ, lrz, gen8_counter_br_enable, gen8_counter_read),
 	GEN8_REGULAR_PERFCOUNTER_GROUP(UCHE, uche),
-	GEN8_PERFCOUNTER_GROUP(TP, tp, gen8_counter_inline_enable, gen8_counter_read),
-	GEN8_PERFCOUNTER_GROUP(SP, sp, gen8_counter_inline_enable, gen8_counter_read),
+	GEN8_REGULAR_PERFCOUNTER_GROUP(TP, tp),
+	GEN8_REGULAR_PERFCOUNTER_GROUP(SP, sp),
 	GEN8_PERFCOUNTER_GROUP(RB, rb, gen8_counter_br_enable, gen8_counter_read),
 	GEN8_REGULAR_PERFCOUNTER_GROUP(VSC, vsc),
 	GEN8_PERFCOUNTER_GROUP_FLAGS(gen8, VBIF, gbif, 0,
@@ -1171,7 +1049,3 @@ const struct adreno_perfcounters adreno_gen8_perfcounters = {
 	ARRAY_SIZE(gen8_perfcounter_groups),
 };
 
-const struct adreno_perfcounters adreno_gen8_hwsched_perfcounters = {
-	gen8_hwsched_perfcounter_groups,
-	ARRAY_SIZE(gen8_hwsched_perfcounter_groups),
-};
