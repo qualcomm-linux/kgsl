@@ -83,6 +83,8 @@ struct gen8_hwsched_hfi {
 		 * @flags: Flags to control the creation of new hardware fences
 		 */
 		unsigned long flags;
+		/** @seqnum: Sequence number for hardware fence packet header */
+		atomic_t seqnum;
 	} hw_fence;
 	/**
 	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop
