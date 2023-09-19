@@ -15,9 +15,6 @@ enum kgsl_bus_vote {
 	KGSL_BUS_VOTE_RT_HINT_ON,
 };
 
-#define ACTIVE_ONLY_TAG 0x3
-#define PERF_MODE_TAG   0x8
-
 struct kgsl_device;
 struct platform_device;
 struct kgsl_pwrctrl;

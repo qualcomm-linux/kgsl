@@ -483,12 +483,14 @@ static void a6xx_rgmu_notify_slumber(struct adreno_device *adreno_dev)
 static void a6xx_rgmu_disable_clks(struct adreno_device *adreno_dev)
 {
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int  ret;
 
 	/* Check GX GDSC is status */
 	if (a6xx_rgmu_gx_is_on(adreno_dev)) {
 
-		if (IS_ERR_OR_NULL(rgmu->gx_gdsc))
+		if (IS_ERR_OR_NULL(pwr->gx_gdsc))
 			return;
 
 		/*
@@ -496,12 +498,12 @@ static void a6xx_rgmu_disable_clks(struct adreno_device *adreno_dev)
 		 * reference count in clk driver so next disable call will
 		 * turn off the GDSC.
 		 */
-		ret = regulator_enable(rgmu->gx_gdsc);
+		ret = regulator_enable(pwr->gx_gdsc);
 		if (ret)
 			dev_err(&rgmu->pdev->dev,
 					"Fail to enable gx gdsc:%d\n", ret);
 
-		ret = regulator_disable(rgmu->gx_gdsc);
+		ret = regulator_disable(pwr->gx_gdsc);
 		if (ret)
 			dev_err(&rgmu->pdev->dev,
 					"Fail to disable gx gdsc:%d\n", ret);
@@ -511,22 +513,6 @@ static void a6xx_rgmu_disable_clks(struct adreno_device *adreno_dev)
 	}
 
 	clk_bulk_disable_unprepare(rgmu->num_clks, rgmu->clks);
-}
-
-static int a6xx_rgmu_disable_gdsc(struct adreno_device *adreno_dev)
-{
-	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	/* Wait up to 5 seconds for the regulator to go off */
-	if (kgsl_regulator_disable_wait(rgmu->cx_gdsc, 5000))
-		return 0;
-
-	dev_err(&rgmu->pdev->dev, "RGMU CX gdsc off timeout\n");
-
-	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
-
-	return -ETIMEDOUT;
 }
 
 void a6xx_rgmu_snapshot(struct adreno_device *adreno_dev,
@@ -550,10 +536,13 @@ void a6xx_rgmu_snapshot(struct adreno_device *adreno_dev,
 
 static void a6xx_rgmu_suspend(struct adreno_device *adreno_dev)
 {
-	a6xx_rgmu_irq_disable(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	a6xx_rgmu_irq_disable(adreno_dev);
 	a6xx_rgmu_disable_clks(adreno_dev);
-	a6xx_rgmu_disable_gdsc(adreno_dev);
+	kgsl_pwrctrl_disable_cx_gdsc(device);
+
+	kgsl_pwrctrl_set_state(KGSL_DEVICE(adreno_dev), KGSL_STATE_NONE);
 }
 
 static int a6xx_rgmu_enable_clks(struct adreno_device *adreno_dev)
@@ -585,22 +574,6 @@ static int a6xx_rgmu_enable_clks(struct adreno_device *adreno_dev)
 	device->state = KGSL_STATE_AWARE;
 
 	return 0;
-}
-
-static int a6xx_rgmu_enable_gdsc(struct adreno_device *adreno_dev)
-{
-	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
-	int ret;
-
-	if (IS_ERR_OR_NULL(rgmu->cx_gdsc))
-		return 0;
-
-	ret = regulator_enable(rgmu->cx_gdsc);
-	if (ret)
-		dev_err(&rgmu->pdev->dev,
-			"Fail to enable CX gdsc:%d\n", ret);
-
-	return ret;
 }
 
 /*
@@ -709,9 +682,11 @@ static void a6xx_rgmu_power_off(struct adreno_device *adreno_dev)
 
 	a6xx_rgmu_irq_disable(adreno_dev);
 	a6xx_rgmu_disable_clks(adreno_dev);
-	a6xx_rgmu_disable_gdsc(adreno_dev);
+	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	kgsl_pwrctrl_clear_l3_vote(device);
+
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 }
 
 static int a6xx_rgmu_clock_set(struct adreno_device *adreno_dev,
@@ -809,13 +784,13 @@ static int a6xx_rgmu_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
-	ret = a6xx_rgmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
 	ret = a6xx_rgmu_enable_clks(adreno_dev);
 	if (ret) {
-		a6xx_rgmu_disable_gdsc(adreno_dev);
+		kgsl_pwrctrl_disable_cx_gdsc(device);
 		return ret;
 	}
 
@@ -1261,30 +1236,6 @@ static int a6xx_rgmu_irq_probe(struct kgsl_device *device)
 	return 0;
 }
 
-static int a6xx_rgmu_regulators_probe(struct a6xx_rgmu_device *rgmu)
-{
-	int ret = 0;
-
-	rgmu->cx_gdsc = devm_regulator_get(&rgmu->pdev->dev, "vddcx");
-	if (IS_ERR(rgmu->cx_gdsc)) {
-		ret = PTR_ERR(rgmu->cx_gdsc);
-		if (ret != -EPROBE_DEFER)
-			dev_err(&rgmu->pdev->dev,
-				"Couldn't get CX gdsc error:%d\n", ret);
-		return ret;
-	}
-
-	rgmu->gx_gdsc = devm_regulator_get(&rgmu->pdev->dev, "vdd");
-	if (IS_ERR(rgmu->gx_gdsc)) {
-		ret = PTR_ERR(rgmu->gx_gdsc);
-		if (ret != -EPROBE_DEFER)
-			dev_err(&rgmu->pdev->dev,
-				"Couldn't get GX gdsc error:%d\n", ret);
-	}
-
-	return ret;
-}
-
 static int a6xx_rgmu_clocks_probe(struct a6xx_rgmu_device *rgmu,
 		struct device_node *node)
 {
@@ -1389,7 +1340,7 @@ static int a6xx_rgmu_probe(struct kgsl_device *device,
 	rgmu->pdev = pdev;
 
 	/* Set up RGMU regulators */
-	ret = a6xx_rgmu_regulators_probe(rgmu);
+	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
 	if (ret)
 		return ret;
 

@@ -110,6 +110,11 @@ struct adreno_hwsched {
 	struct kmem_cache *hw_fence_cache;
 	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
 	atomic_t hw_fence_count;
+	/**
+	 * @submission_seqnum: Sequence number for sending submissions to GMU context queues or
+	 * dispatch queues
+	 */
+	atomic_t submission_seqnum;
 
 };
 
@@ -228,4 +233,16 @@ void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev);
  * Resubmit all cmdbatches to GMU after device reset
  */
 void adreno_hwsched_replay(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_hwsched_parse_payload - Parse payload to look up a key
+ * @payload: Pointer to a payload section
+ * @key: The key who's value is to be looked up
+ *
+ * This function parses the payload data which is a sequence
+ * of key-value pairs.
+ *
+ * Return: The value of the key or 0 if key is not found
+ */
+u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
 #endif

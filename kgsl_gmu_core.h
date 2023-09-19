@@ -156,7 +156,23 @@ struct gmu_block_header {
 #define GMU_BLK_TYPE_PREALLOC_PERSIST_REQ 7
 
 /* For GMU Logs*/
-#define GMU_LOG_SIZE  SZ_16K
+#define GMU_LOG_SIZE  SZ_64K
+
+/* For GMU virtual register bank */
+#define GMU_VRB_SIZE  SZ_4K
+
+/*
+ * GMU Virtual Register Definitions
+ * These values are dword offsets into the GMU Virtual Register Bank
+ */
+enum gmu_vrb_idx {
+	/* Number of dwords supported by VRB */
+	VRB_SIZE_IDX = 0,
+	/* Contains the address of warmboot scratch buffer */
+	VRB_WARMBOOT_SCRATCH_IDX = 1,
+	/* Contains the address of GMU trace buffer */
+	VRB_TRACE_BUFFER_ADDR_IDX = 2,
+};
 
 /* GMU memdesc entries */
 #define GMU_KERNEL_ENTRIES		16
@@ -220,7 +236,6 @@ enum {
 	GMU_PRIV_RSCC_SLEEP_DONE,
 	GMU_PRIV_PM_SUSPEND,
 	GMU_PRIV_PDC_RSC_LOADED,
-	GMU_PRIV_CX_GDSC_WAIT,
 	/* Indicates if GMU INIT HFI messages are recorded successfully */
 	GMU_PRIV_WARMBOOT_GMU_INIT_DONE,
 	/* Indicates if GPU BOOT HFI messages are recorded successfully */
@@ -347,5 +362,13 @@ struct gmu_mem_type_desc {
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
 void gmu_core_dev_force_first_boot(struct kgsl_device *device);
+
+/**
+ * gmu_core_set_vrb_register - set vrb register value at specified index
+ * @ptr: vrb host pointer
+ * @index: vrb index to write the value
+ * @val: value to be writen into vrb
+ */
+void gmu_core_set_vrb_register(void *ptr, u32 index, u32 val);
 
 #endif /* __KGSL_GMU_CORE_H */

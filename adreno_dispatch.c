@@ -299,11 +299,8 @@ static int dispatch_retire_syncobj(struct kgsl_drawobj *drawobj,
 static int drawqueue_retire_timelineobj(struct kgsl_drawobj *drawobj,
 		struct adreno_context *drawctxt)
 {
-	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
-
 	_pop_drawobj(drawctxt);
-	kgsl_drawobj_timelineobj_retire(timelineobj);
-
+	kgsl_drawobj_destroy(drawobj);
 	return 0;
 }
 
@@ -2019,10 +2016,12 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	 */
 	if (!(fault & ADRENO_HARD_FAULT) && gx_on) {
 		adreno_readreg(adreno_dev, ADRENO_REG_CP_ME_CNTL, &reg);
-		if (!adreno_is_a3xx(adreno_dev))
+		if (adreno_is_a3xx(adreno_dev))
+			reg |= (1 << 27) | (1 << 28);
+		else if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev))
 			reg |= 1 | (1 << 1);
 		else
-			reg |= (1 << 27) | (1 << 28);
+			reg = 0x0;
 		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, reg);
 	}
 	/*

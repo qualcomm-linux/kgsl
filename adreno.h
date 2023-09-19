@@ -767,6 +767,8 @@ enum adreno_device_flags {
 	 * via sysfs/debugfs or when we are doing fault recovery
 	 */
 	ADRENO_DEVICE_FORCE_COLDBOOT = 16,
+	/** @ADRENO_DEVICE_CX_TIMER_INITIALIZED: Set if the CX timer is initialized */
+	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 };
 
 /**
@@ -903,8 +905,6 @@ struct adreno_gpudev {
 	void (*preemption_schedule)(struct adreno_device *adreno_dev);
 	int (*preemption_context_init)(struct kgsl_context *context);
 	void (*context_detach)(struct adreno_context *drawctxt);
-	void (*clk_set_options)(struct adreno_device *adreno_dev,
-				const char *name, struct clk *clk, bool on);
 	void (*pre_reset)(struct adreno_device *adreno_dev);
 	void (*gpu_keepalive)(struct adreno_device *adreno_dev,
 			bool state);
@@ -1066,6 +1066,8 @@ void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
 void adreno_isense_regread(struct adreno_device *adreno_dev,
 		unsigned int offsetwords, unsigned int *value);
 bool adreno_gx_is_on(struct adreno_device *adreno_dev);
+
+u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
 
 /**
  * adreno_active_count_get - Wrapper for target specific active count get

@@ -29,6 +29,7 @@
 #define KGSL_ADRENO_CTX_ENTRY "kgsl_adreno_ctx"
 #define KGSL_PROC_PRIV_ENTRY "kgsl_proc_priv"
 #define KGSL_PGTABLE_ENTRY "kgsl_pgtable"
+#define KGSL_GMU_VRB_ENTRY "kgsl_gmu_vrb"
 
 #define MAX_VA_MINIDUMP_STR_LEN 32
 

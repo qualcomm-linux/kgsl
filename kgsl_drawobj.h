@@ -8,7 +8,6 @@
 #define __KGSL_DRAWOBJ_H
 
 #include <linux/dma-fence.h>
-#include <linux/irq_work.h>
 #include <linux/kref.h>
 
 #define DRAWOBJ(obj) (&obj->base)
@@ -344,13 +343,5 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
 		struct kgsl_drawobj_timeline *timelineobj,
 		void __user *src, u64 cmdsize);
-
-/**
- * kgsl_drawobj_timelineobj_retire - Retire the timeline drawobj
- * @timelineobj: Pointer to a timeline drawobject
- *
- * Retire the timelineobj when it is popped off the context queue.
- */
-void kgsl_drawobj_timelineobj_retire(struct kgsl_drawobj_timeline *timelineobj);
 
 #endif /* __KGSL_DRAWOBJ_H */

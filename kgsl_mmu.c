@@ -7,6 +7,7 @@
 #include <linux/component.h>
 #include <linux/of_platform.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include "kgsl_device.h"
 #include "kgsl_mmu.h"
@@ -603,6 +604,17 @@ static struct kgsl_pagetable *nommu_getpagetable(struct kgsl_mmu *mmu,
 static struct kgsl_mmu_ops kgsl_nommu_ops = {
 	.mmu_getpagetable = nommu_getpagetable,
 };
+
+ssize_t kgsl_mmu_map_sg(struct iommu_domain *domain,
+				unsigned long iova, struct scatterlist *sg,
+				unsigned int nents, int prot)
+{
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	return iommu_map_sg(domain, iova, sg, nents, prot, GFP_KERNEL);
+#else
+	return iommu_map_sg(domain, iova, sg, nents, prot);
+#endif
+}
 
 static int kgsl_mmu_cb_bind(struct device *dev, struct device *master, void *data)
 {

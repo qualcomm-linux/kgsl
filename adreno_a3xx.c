@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -1096,8 +1096,14 @@ static struct {
 	{ A3XX_CP_PROTECT_REG_0 + 13, 0x0cc0, 0 },
 	/* VBIF */
 	{ A3XX_CP_PROTECT_REG_0 + 14, 0x3000, 6 },
-	/* SMMU */
-	{ A3XX_CP_PROTECT_REG_0 + 15, 0xa000, 12 },
+	/*
+	 * SMMU
+	 * For A3xx, base offset for smmu region is 0xa000 and length is
+	 * 0x1000 bytes. Offset must be in dword and length of the block
+	 * must be ilog2(dword length).
+	 * 0xa000 >> 2 = 0x2800, ilog2(0x1000 >> 2) = 10.
+	 */
+	{ A3XX_CP_PROTECT_REG_0 + 15, 0x2800, 10 },
 	/* There are no remaining protected mode registers for a3xx */
 };
 
@@ -1312,43 +1318,21 @@ static void a3xx_microcode_load(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	size_t pm4_size = adreno_dev->fw[ADRENO_FW_PM4].size;
 	size_t pfp_size = adreno_dev->fw[ADRENO_FW_PFP].size;
+	int i;
 
 	/* load the CP ucode using AHB writes */
 	kgsl_regwrite(device, A3XX_CP_ME_RAM_WADDR, 0);
 
-	kgsl_regmap_bulk_write(&device->regmap, A3XX_CP_ME_RAM_DATA,
-		&adreno_dev->fw[ADRENO_FW_PM4].fwvirt[1], pm4_size - 1);
+	for (i = 1; i < pm4_size; i++)
+		kgsl_regwrite(device, A3XX_CP_ME_RAM_DATA,
+				adreno_dev->fw[ADRENO_FW_PM4].fwvirt[i]);
 
 	kgsl_regwrite(device, A3XX_CP_PFP_UCODE_ADDR, 0);
 
-	kgsl_regmap_bulk_write(&device->regmap, A3XX_CP_PFP_UCODE_DATA,
-		&adreno_dev->fw[ADRENO_FW_PFP].fwvirt[1], pfp_size - 1);
+	for (i = 1; i < pfp_size; i++)
+		kgsl_regwrite(device, A3XX_CP_PFP_UCODE_DATA,
+				adreno_dev->fw[ADRENO_FW_PFP].fwvirt[i]);
 }
-
-#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
-static void a3xx_clk_set_options(struct adreno_device *adreno_dev,
-	const char *name, struct clk *clk, bool on)
-{
-	if (!clk || !adreno_is_a306a(adreno_dev))
-		return;
-
-	/* Handle clock settings for GFX PSCBCs */
-	if (on) {
-		if (!strcmp(name, "mem_iface_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_MEM);
-		} else if (!strcmp(name, "core_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_RETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_RETAIN_MEM);
-		}
-	} else {
-		if (!strcmp(name, "core_clk")) {
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_PERIPH);
-			qcom_clk_set_flags(clk, CLKFLAG_NORETAIN_MEM);
-		}
-	}
-}
-#endif
 
 static u64 a3xx_read_alwayson(struct adreno_device *adreno_dev)
 {
@@ -1502,9 +1486,6 @@ const struct adreno_gpudev adreno_a3xx_gpudev = {
 	.init = a3xx_init,
 	.start = a3xx_start,
 	.snapshot = a3xx_snapshot,
-#if IS_ENABLED(CONFIG_COMMON_CLK_QCOM)
-	.clk_set_options = a3xx_clk_set_options,
-#endif
 	.read_alwayson = a3xx_read_alwayson,
 	.hw_isidle = a3xx_hw_isidle,
 	.power_ops = &adreno_power_operations,

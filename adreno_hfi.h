@@ -414,11 +414,14 @@ struct hfi_queue_table {
 #define MSG_HDR_GET_TYPE(hdr) (((hdr) >> 16) & 0xF)
 #define MSG_HDR_GET_SEQNUM(hdr) (((hdr) >> 20) & 0xFFF)
 
-#define HDR_CMP_SEQNUM(out_hdr, in_hdr) \
-	(MSG_HDR_GET_SEQNUM(out_hdr) == MSG_HDR_GET_SEQNUM(in_hdr))
+/* Clear the HFI_MSG_RECORD bit from both headers since some acks may have it set, and some not. */
+#define CMP_HFI_ACK_HDR(sent, rcvd) ((sent &= ~HFI_MSG_RECORD) == (rcvd &= ~HFI_MSG_RECORD))
 
 #define MSG_HDR_SET_SEQNUM(hdr, num) \
 	(((hdr) & 0xFFFFF) | ((num) << 20))
+
+#define MSG_HDR_SET_SEQNUM_SIZE(hdr, seqnum, sizedwords) \
+	(FIELD_PREP(GENMASK(31, 20), seqnum) | FIELD_PREP(GENMASK(15, 8), sizedwords) | hdr)
 
 #define MSG_HDR_SET_TYPE(hdr, type) \
 	(((hdr) & 0xFFFFF) | ((type) << 16))

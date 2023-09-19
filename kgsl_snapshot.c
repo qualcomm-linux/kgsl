@@ -640,6 +640,9 @@ void kgsl_device_snapshot(struct kgsl_device *device,
 
 	device->ftbl->snapshot(device, snapshot, context, context_lpac);
 
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_EVENTLOG,
+		snapshot, kgsl_snapshot_eventlog_buffer, NULL);
+
 	/*
 	 * The timestamp is the seconds since boot so it is easier to match to
 	 * the kernel log
