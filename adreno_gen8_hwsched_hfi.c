@@ -3022,6 +3022,7 @@ static void populate_ibs(struct adreno_device *adreno_dev,
 #define HFI_DSP_IRQ_BASE 2
 
 #define DISPQ_IRQ_BIT(_idx) BIT((_idx) + HFI_DSP_IRQ_BASE)
+#define DISPQ_SYNC_IRQ_BIT(_idx) ((DISPQ_IRQ_BIT(_idx) << (KGSL_PRIORITY_MAX_RB_LEVELS + 1)))
 
 int gen8_gmu_context_queue_write(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt, u32 *msg, u32 size_bytes,
@@ -3749,6 +3750,7 @@ int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_dr
 	struct adreno_submit_time time = {0};
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	static void *cmdbuf;
+	struct gmu_context_queue_header *hdr = NULL;
 
 	if (cmdbuf == NULL) {
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3837,9 +3839,15 @@ skipib:
 	if (ret)
 		return ret;
 
-	/* Send interrupt to GMU to receive the message */
-	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
-		DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+	hdr = drawctxt->gmu_context_queue.hostptr;
+	/* The last sync object has been retired by the GMU */
+	if (timestamp_cmp(hdr->sync_obj_ts, drawctxt->syncobj_timestamp) >= 0)
+		/* Send interrupt to GMU to receive the message */
+		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
+			DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+	else
+		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
+			DISPQ_SYNC_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
 
 	drawctxt->internal_timestamp = drawobj->timestamp;
 
