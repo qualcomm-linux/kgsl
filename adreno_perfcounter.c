@@ -303,8 +303,6 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	if (counters == NULL || groupid >= counters->group_count)
 		return -EINVAL;
 
-	mutex_lock(&device->mutex);
-
 	group = &(counters->groups[groupid]);
 	*max_counters = group->reg_count;
 
@@ -312,18 +310,16 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	 * if NULL countable or *count of zero, return max reg_count in
 	 * *max_counters and return success
 	 */
-	if (countables == NULL || count == 0) {
-		mutex_unlock(&device->mutex);
+	if (countables == NULL || count == 0)
 		return 0;
-	}
 
 	t = min_t(unsigned int, group->reg_count, count);
 
 	buf = kmalloc_array(t, sizeof(unsigned int), GFP_KERNEL);
-	if (buf == NULL) {
-		mutex_unlock(&device->mutex);
+	if (buf == NULL)
 		return -ENOMEM;
-	}
+
+	mutex_lock(&device->mutex);
 
 	for (i = 0; i < t; i++)
 		buf[i] = group->regs[i].countable;
