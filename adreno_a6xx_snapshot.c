@@ -4,8 +4,6 @@
  * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <linux/iopoll.h>
-
 #include "adreno.h"
 #include "adreno_a6xx.h"
 #include "adreno_snapshot.h"
@@ -237,6 +235,12 @@ static const unsigned int a6xx_vbif_registers[] = {
 static const unsigned int a6xx_gbif_registers[] = {
 	/* GBIF */
 	0x3C00, 0X3C0B, 0X3C40, 0X3C47, 0X3CC0, 0X3CD1, 0xE3A, 0xE3A,
+};
+
+static const unsigned int a6xx_gbif_reinit_registers[] = {
+	/* GBIF with REINIT */
+	0x3C00, 0X3C0B, 0X3C40, 0X3C47, 0X3C49, 0X3C4A, 0X3CC0, 0X3CD1,
+	0xE3A, 0xE3A, 0x0016, 0x0017,
 };
 
 static const unsigned int a6xx_rb_rac_registers[] = {
@@ -1734,6 +1738,17 @@ static size_t a6xx_snapshot_cp_roq(struct kgsl_device *device, u8 *buf,
 	return DEBUG_SECTION_SZ(size);
 }
 
+static inline bool a6xx_has_gbif_reinit(struct adreno_device *adreno_dev)
+{
+	/*
+	 * Some targets in a6xx do not have reinit support in hardware.
+	 * This check is only for hardware capability and not for finding
+	 * whether gbif reinit sequence in software is enabled or not.
+	 */
+	return !(adreno_is_a630(adreno_dev) || adreno_is_a615_family(adreno_dev) ||
+		 adreno_is_a640_family(adreno_dev));
+}
+
 /*
  * a6xx_snapshot() - A6XX GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -1811,6 +1826,10 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	/* Dump vbif registers as well which get affected by crash dumper */
 	if (adreno_is_a630(adreno_dev))
 		SNAPSHOT_REGISTERS(device, snapshot, a6xx_vbif_registers);
+	else if (a6xx_has_gbif_reinit(adreno_dev))
+		adreno_snapshot_registers(device, snapshot,
+					  a6xx_gbif_reinit_registers,
+					  ARRAY_SIZE(a6xx_gbif_reinit_registers) / 2);
 	else
 		adreno_snapshot_registers(device, snapshot,
 			a6xx_gbif_registers,

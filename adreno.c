@@ -233,28 +233,8 @@ void adreno_touch_wake(struct kgsl_device *device)
 	if (adreno_dev->wake_on_touch)
 		return;
 
-	if (gmu_core_isenabled(device)) {
+	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
 		schedule_work(&adreno_dev->input_work);
-		return;
-	}
-
-	/*
-	 * If the device is in nap, kick the idle timer to make sure that we
-	 * don't go into slumber before the first render. If the device is
-	 * already in slumber schedule the wake.
-	 */
-
-	if (device->state == KGSL_STATE_NAP) {
-		/*
-		 * Set the wake on touch bit to keep from coming back here and
-		 * keeping the device in nap without rendering
-		 */
-		adreno_dev->wake_on_touch = true;
-		kgsl_start_idle_timer(device);
-
-	} else if (device->state == KGSL_STATE_SLUMBER) {
-		schedule_work(&adreno_dev->input_work);
-	}
 }
 
 /*
@@ -913,8 +893,6 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 		return ret;
 
 	device->pwrctrl.interval_timeout = CONFIG_QCOM_KGSL_IDLE_TIMEOUT;
-
-	device->pwrctrl.minbw_timeout = 10;
 
 	/* Set default bus control to true on all targets */
 	device->pwrctrl.bus_control = true;
@@ -1780,16 +1758,8 @@ static void adreno_pwrctrl_active_count_put(struct adreno_device *adreno_dev)
 		return;
 
 	if (atomic_dec_and_test(&device->active_cnt)) {
-		bool nap_on = !(device->pwrctrl.ctrl_flags &
-			BIT(KGSL_PWRFLAGS_NAP_OFF));
-		if (nap_on && device->state == KGSL_STATE_ACTIVE &&
-			device->requested_state == KGSL_STATE_NONE) {
-			kgsl_pwrctrl_request_state(device, KGSL_STATE_NAP);
-			kgsl_schedule_work(&device->idle_check_ws);
-		} else if (!nap_on) {
-			kgsl_pwrscale_update_stats(device);
-			kgsl_pwrscale_update(device);
-		}
+		kgsl_pwrscale_update_stats(device);
+		kgsl_pwrscale_update(device);
 
 		kgsl_start_idle_timer(device);
 	}
@@ -2085,8 +2055,6 @@ int adreno_reset(struct kgsl_device *device, int fault)
 
 	if (atomic_read(&device->active_cnt))
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
-	else
-		kgsl_pwrctrl_change_state(device, KGSL_STATE_NAP);
 
 	return ret;
 }
@@ -3043,16 +3011,6 @@ static void adreno_pwrlevel_change_settings(struct kgsl_device *device,
 					postlevel, post);
 }
 
-static void adreno_clk_set_options(struct kgsl_device *device, const char *name,
-	struct clk *clk, bool on)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-
-	if (gpudev->clk_set_options)
-		gpudev->clk_set_options(adreno_dev, name, clk, on);
-}
-
 static bool adreno_is_hwcg_on(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -3343,6 +3301,7 @@ static int adreno_interconnect_bus_set(struct adreno_device *adreno_dev,
 	if ((level == pwr->cur_buslevel) && (ab == pwr->cur_ab))
 		return 0;
 
+	kgsl_icc_set_tag(pwr, level);
 	pwr->cur_buslevel = level;
 	pwr->cur_ab = ab;
 
@@ -3385,6 +3344,16 @@ static void adreno_create_hw_fence(struct kgsl_device *device, struct kgsl_sync_
 		adreno_dev->dispatch_ops->create_hw_fence(adreno_dev, kfence);
 }
 
+u64 adreno_read_cx_timer(struct adreno_device *adreno_dev)
+{
+	/* Check if the CX timer is initialized */
+	if (!test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
+		return 0;
+
+	/* Since the GPU CX and CPU timers are synchronized return the CPU timer */
+	return arch_timer_read_counter();
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.suspend_context = adreno_suspend_context,
@@ -3417,7 +3386,6 @@ static const struct kgsl_functable adreno_functable = {
 	.is_hw_collapsible = adreno_is_hw_collapsible,
 	.regulator_disable = adreno_regulator_disable,
 	.pwrlevel_change_settings = adreno_pwrlevel_change_settings,
-	.clk_set_options = adreno_clk_set_options,
 	.query_property_list = adreno_query_property_list,
 	.is_hwcg_on = adreno_is_hwcg_on,
 	.gpu_clock_set = adreno_gpu_clock_set,

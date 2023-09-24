@@ -49,6 +49,12 @@ endif
 ifeq ($(CONFIG_ARCH_TRINKET), y)
 	include $(KGSL_PATH)/config/gki_trinket.conf
 endif
+ifeq ($(CONFIG_ARCH_QCS405), y)
+	include $(KGSL_PATH)/config/gki_qcs405.conf
+endif
+ifeq ($(CONFIG_ARCH_HOLI), y)
+	include $(KGSL_PATH)/config/gki_blair.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 

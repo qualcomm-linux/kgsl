@@ -892,6 +892,18 @@
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_21       0xe49
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_22       0xe4a
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_23       0xe4b
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_0      0xe50
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_1      0xe51
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_2      0xe52
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_3      0xe53
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_4      0xe54
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_5      0xe55
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_6      0xe56
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_7      0xe57
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_8      0xe58
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_9      0xe59
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_10     0xe5a
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_11     0xe5b
 
 /* SP registers */
 #define GEN7_SP_NC_MODE_CNTL                0xae02
@@ -1200,6 +1212,7 @@
 #define GEN7_GMU_GENERAL_8			0x1f9cd
 #define GEN7_GMU_GENERAL_9			0x1f9ce
 #define GEN7_GMU_GENERAL_10			0x1f9cf
+#define GEN7_GMU_GENERAL_11			0x1f9d0
 
 /* FAL10 veto register */
 #define GEN7_GPU_GMU_CX_GMU_CX_FAL_INTF		0x1f8f0
@@ -1289,6 +1302,8 @@
 /* GPU CX_MISC registers */
 #define GEN7_CX_MISC_BASE			0x27800
 #define GEN7_GPU_CX_MISC_TCM_RET_CNTL		0x39
+#define GEN7_GPU_CX_MISC_AO_COUNTER_LO		0x80
+#define GEN7_GPU_CX_MISC_AO_COUNTER_HI		0x81
 #define GEN7_GPU_CX_MISC_SW_FUSE_VALUE		0x400
 
 /* GPU SW Fuse Feature bit fields */

@@ -176,6 +176,92 @@ static struct page *iommu_get_guard_page(struct kgsl_memdesc *memdesc)
 	return kgsl_guard_page;
 }
 
+static size_t iommu_pgsize(unsigned long pgsize_bitmap, unsigned long iova,
+		phys_addr_t paddr, size_t size, size_t *count)
+{
+	unsigned int pgsize_idx, pgsize_idx_next;
+	unsigned long pgsizes;
+	size_t offset, pgsize, pgsize_next;
+	unsigned long addr_merge = paddr | iova;
+
+	/* Page sizes supported by the hardware and small enough for @size */
+	pgsizes = pgsize_bitmap & GENMASK(__fls(size), 0);
+
+	/* Constrain the page sizes further based on the maximum alignment */
+	if (likely(addr_merge))
+		pgsizes &= GENMASK(__ffs(addr_merge), 0);
+
+	/* Make sure we have at least one suitable page size */
+	if (!pgsizes)
+		return 0;
+
+	/* Pick the biggest page size remaining */
+	pgsize_idx = __fls(pgsizes);
+	pgsize = BIT(pgsize_idx);
+	if (!count)
+		return pgsize;
+
+	/* Find the next biggest support page size, if it exists */
+	pgsizes = pgsize_bitmap & ~GENMASK(pgsize_idx, 0);
+	if (!pgsizes)
+		goto out_set_count;
+
+	pgsize_idx_next = __ffs(pgsizes);
+	pgsize_next = BIT(pgsize_idx_next);
+
+	/*
+	 * There's no point trying a bigger page size unless the virtual
+	 * and physical addresses are similarly offset within the larger page.
+	 */
+	if ((iova ^ paddr) & (pgsize_next - 1))
+		goto out_set_count;
+
+	/* Calculate the offset to the next page size alignment boundary */
+	offset = pgsize_next - (addr_merge & (pgsize_next - 1));
+
+	/*
+	 * If size is big enough to accommodate the larger page, reduce
+	 * the number of smaller pages.
+	 */
+	if (offset + pgsize_next <= size)
+		size = offset;
+
+out_set_count:
+	*count = size >> pgsize_idx;
+	return pgsize;
+}
+
+static int _iopgtbl_unmap_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr,
+		size_t size)
+{
+	struct io_pgtable_ops *ops = pt->pgtbl_ops;
+	size_t unmapped = 0;
+
+	while (unmapped < size) {
+		size_t ret, size_to_unmap, remaining, pgcount;
+
+		remaining = (size - unmapped);
+		size_to_unmap = iommu_pgsize(pt->info.cfg.pgsize_bitmap,
+				gpuaddr, gpuaddr, remaining, &pgcount);
+		if (size_to_unmap == 0)
+			break;
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+		ret = qcom_arm_lpae_unmap_pages(ops, gpuaddr, size_to_unmap,
+				pgcount, NULL);
+#else
+		ret = ops->unmap_pages(ops, gpuaddr, size_to_unmap,
+				pgcount, NULL);
+#endif
+		if (ret == 0)
+			break;
+
+		gpuaddr += ret;
+		unmapped += ret;
+	}
+
+	return (unmapped == size) ? 0 : -EINVAL;
+}
+
 static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
@@ -189,51 +275,43 @@ static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 
 static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 {
-	struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
+	int ret = 0;
+	size_t unmapped;
 
-	while (size) {
-		if ((ops->unmap(ops, gpuaddr, PAGE_SIZE, NULL)) != PAGE_SIZE)
-			return -EINVAL;
-
-		gpuaddr += PAGE_SIZE;
-		size -= PAGE_SIZE;
+	if (IS_ENABLED(CONFIG_IOMMU_IO_PGTABLE_LPAE)) {
+		ret = _iopgtbl_unmap_pages(pt, gpuaddr, size);
+		if (ret)
+			return ret;
+		goto flush;
 	}
 
-	/* Skip TLB Operations if GPU is in slumber */
-	if (mutex_trylock(&device->mutex)) {
-		if (device->state == KGSL_STATE_SLUMBER) {
+	unmapped = ops->unmap_pages(ops, gpuaddr, PAGE_SIZE,
+				    size >> PAGE_SHIFT, NULL);
+	if (unmapped != size)
+		return -EINVAL;
+
+	/*
+	 * Skip below logic for 6.1 kernel version and above as
+	 * qcom_skip_tlb_management() API takes care of avoiding
+	 * TLB operations during slumber.
+	 */
+flush:
+	if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE) {
+		struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
+
+		/* Skip TLB Operations if GPU is in slumber */
+		if (mutex_trylock(&device->mutex)) {
+			if (device->state == KGSL_STATE_SLUMBER) {
+				mutex_unlock(&device->mutex);
+				return 0;
+			}
 			mutex_unlock(&device->mutex);
-			return 0;
 		}
-		mutex_unlock(&device->mutex);
 	}
 
 	kgsl_iommu_flush_tlb(pt->base.mmu);
 	return 0;
-}
-
-static size_t _iopgtbl_map_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr,
-		struct page **pages, int npages, int prot)
-{
-	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0;
-	u64 addr = gpuaddr;
-	int ret, i;
-
-	for (i = 0; i < npages; i++) {
-		ret = ops->map(ops, addr, page_to_phys(pages[i]), PAGE_SIZE,
-			prot, GFP_KERNEL);
-		if (ret) {
-			_iopgtbl_unmap(pt, gpuaddr, mapped);
-			return 0;
-		}
-
-		mapped += PAGE_SIZE;
-		addr += PAGE_SIZE;
-	}
-
-	return mapped;
 }
 
 static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
@@ -245,28 +323,61 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	u64 addr = gpuaddr;
 	int ret, i;
 
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	if (IS_ENABLED(CONFIG_IOMMU_IO_PGTABLE_LPAE)) {
+		ret = qcom_arm_lpae_map_sg(ops, addr, sgt->sgl, sgt->nents, prot,
+			GFP_KERNEL, &mapped);
+#else
+	if (ops->map_sg) {
+		ret = ops->map_sg(ops, addr, sgt->sgl, sgt->nents, prot,
+			GFP_KERNEL, &mapped);
+#endif
+		if (ret) {
+			_iopgtbl_unmap(pt, gpuaddr, mapped);
+			return 0;
+		}
+		return mapped;
+	}
+
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
-		size_t size = sg->length;
+		size_t size = sg->length, map_size = 0;
 		phys_addr_t phys = sg_phys(sg);
 
-		while (size) {
-			ret = ops->map(ops, addr, phys, PAGE_SIZE, prot, GFP_KERNEL);
-
-			if (ret) {
-				_iopgtbl_unmap(pt, gpuaddr, mapped);
-				return 0;
-			}
-
-			phys += PAGE_SIZE;
-			mapped += PAGE_SIZE;
-			addr += PAGE_SIZE;
-			size -= PAGE_SIZE;
+		ret = ops->map_pages(ops, addr, phys, PAGE_SIZE, size >> PAGE_SHIFT,
+				     prot, GFP_KERNEL, &map_size);
+		if (ret) {
+			_iopgtbl_unmap(pt, gpuaddr, mapped);
+			return 0;
 		}
+		addr += size;
+		mapped += map_size;
 	}
 
 	return mapped;
 }
 
+static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
+{
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	struct kgsl_iommu *iommu = &mmu->iommu;
+
+	/*
+	 * Send hint to SMMU driver for skipping TLB operations during slumber.
+	 * This will help to avoid unnecessary cx gdsc toggling.
+	 */
+	qcom_skip_tlb_management(&iommu->user_context.pdev->dev, hint);
+	if (iommu->lpac_context.domain)
+		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev, hint);
+#endif
+
+	/*
+	 * TLB operations are skipped during slumber. Incase CX doesn't
+	 * go down, it can result in incorrect translations due to stale
+	 * TLB entries. Flush TLB before boot up to ensure fresh start.
+	 */
+	if (!hint)
+		kgsl_iommu_flush_tlb(mmu);
+}
 
 static int
 kgsl_iopgtbl_map_child(struct kgsl_pagetable *pt, struct kgsl_memdesc *memdesc,
@@ -309,19 +420,19 @@ static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
 		struct page *page, u64 gpuaddr, size_t range, int prot)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0;
+	size_t mapped = 0, map_size = 0;
 	u64 addr = gpuaddr;
 	int ret;
 
 	while (range) {
-		ret = ops->map(ops, addr, page_to_phys(page), PAGE_SIZE,
-			prot, GFP_KERNEL);
+		ret = ops->map_pages(ops, addr, page_to_phys(page), PAGE_SIZE,
+				     1, prot, GFP_KERNEL, &map_size);
 		if (ret) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
 
-		mapped += PAGE_SIZE;
+		mapped += map_size;
 		addr += PAGE_SIZE;
 		range -= PAGE_SIZE;
 	}
@@ -367,12 +478,20 @@ static int kgsl_iopgtbl_map(struct kgsl_pagetable *pagetable,
 	/* Get the protection flags for the user context */
 	prot = _iommu_get_protection_flags(pagetable->mmu, memdesc);
 
-	if (memdesc->sgt)
-		mapped = _iopgtbl_map_sg(pt, memdesc->gpuaddr,
-			memdesc->sgt, prot);
-	else
-		mapped = _iopgtbl_map_pages(pt, memdesc->gpuaddr,
-			memdesc->pages, memdesc->page_count, prot);
+	if (!memdesc->sgt) {
+		struct sg_table sgt;
+		int ret;
+
+		ret = sg_alloc_table_from_pages(&sgt, memdesc->pages,
+			memdesc->page_count, 0, memdesc->size, GFP_KERNEL);
+		if (ret)
+			return ret;
+		mapped = _iopgtbl_map_sg(pt, memdesc->gpuaddr, &sgt, prot);
+		sg_free_table(&sgt);
+	} else {
+		mapped = _iopgtbl_map_sg(pt, memdesc->gpuaddr, memdesc->sgt,
+			prot);
+	}
 
 	if (mapped == 0)
 		return -ENOMEM;
@@ -436,8 +555,13 @@ static size_t _iommu_map_page_to_range(struct iommu_domain *domain,
 
 
 	while (range) {
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
 		int ret = iommu_map(domain, addr, page_to_phys(page),
-			PAGE_SIZE, prot);
+				    PAGE_SIZE, prot, GFP_KERNEL);
+#else
+		int ret = iommu_map(domain, addr, page_to_phys(page),
+				    PAGE_SIZE, prot);
+#endif
 		if (ret) {
 			iommu_unmap(domain, gpuaddr, mapped);
 			return 0;
@@ -458,7 +582,7 @@ static size_t _iommu_map_sg(struct iommu_domain *domain, u64 gpuaddr,
 	if (gpuaddr & (1ULL << 48))
 		gpuaddr |= 0xffff000000000000;
 
-	return iommu_map_sg(domain, gpuaddr, sgt->sgl, sgt->orig_nents, prot);
+	return kgsl_mmu_map_sg(domain, gpuaddr, sgt->sgl, sgt->orig_nents, prot);
 }
 
 static int
@@ -1189,7 +1313,7 @@ static void kgsl_iommu_destroy_pagetable(struct kgsl_pagetable *pagetable)
 {
 	struct kgsl_iommu_pt *pt = to_iommu_pt(pagetable);
 
-	free_io_pgtable_ops(pt->pgtbl_ops);
+	qcom_free_io_pgtable_ops(pt->pgtbl_ops);
 	kfree(pt);
 }
 
@@ -1249,22 +1373,23 @@ static int kgsl_iopgtbl_alloc(struct kgsl_iommu_context *ctx, struct kgsl_iommu_
 {
 	struct adreno_smmu_priv *adreno_smmu = dev_get_drvdata(&ctx->pdev->dev);
 	const struct io_pgtable_cfg *cfg = NULL;
+	void *domain = (void *)adreno_smmu->cookie;
 
 	if (adreno_smmu->cookie)
 		cfg = adreno_smmu->get_ttbr1_cfg(adreno_smmu->cookie);
 	if (!cfg)
 		return -ENODEV;
 
-	pt->cfg = *cfg;
-	pt->cfg.quirks &= ~IO_PGTABLE_QUIRK_ARM_TTBR1;
-	pt->cfg.tlb = &kgsl_iopgtbl_tlb_ops;
-
-	pt->pgtbl_ops = alloc_io_pgtable_ops(ARM_64_LPAE_S1, &pt->cfg, NULL);
+	pt->info = adreno_smmu->pgtbl_info;
+	pt->info.cfg = *cfg;
+	pt->info.cfg.quirks &= ~IO_PGTABLE_QUIRK_ARM_TTBR1;
+	pt->info.cfg.tlb = &kgsl_iopgtbl_tlb_ops;
+	pt->pgtbl_ops = qcom_alloc_io_pgtable_ops(QCOM_ARM_64_LPAE_S1, &pt->info, domain);
 
 	if (!pt->pgtbl_ops)
 		return -ENOMEM;
 
-	pt->ttbr0 = pt->cfg.arm_lpae_s1_cfg.ttbr;
+	pt->ttbr0 = pt->info.cfg.arm_lpae_s1_cfg.ttbr;
 
 	return 0;
 }
@@ -2304,11 +2429,11 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	pt = to_iommu_pt(mmu->defaultpagetable);
 
 	/* Enable TTBR0 on the default and LPAC contexts */
-	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->cfg);
+	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->info.cfg);
 
 	kgsl_set_smmu_aperture(device, &iommu->user_context);
 
-	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->cfg);
+	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->info.cfg);
 
 	ret = set_smmu_lpac_aperture(device, &iommu->lpac_context);
 	/* LPAC is optional, ignore setup failures in absence of LPAC feature */
@@ -2415,6 +2540,8 @@ static const char * const kgsl_iommu_clocks[] = {
 	"gcc_bimc_gpu_axi",
 	"gcc_gpu_ahb",
 	"gcc_gpu_axi_clk",
+	"gcc_smmu_cfg_clk",
+	"gcc_gfx_tcu_clk",
 };
 
 static const struct kgsl_mmu_ops kgsl_iommu_ops;
@@ -2577,7 +2704,7 @@ static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_pagefault_resume = kgsl_iommu_pagefault_resume,
 	.mmu_getpagetable = kgsl_iommu_getpagetable,
 	.mmu_map_global = kgsl_iommu_map_global,
-	.mmu_flush_tlb = kgsl_iommu_flush_tlb,
+	.mmu_send_tlb_hint = kgsl_iommu_send_tlb_hint,
 };
 
 static const struct kgsl_mmu_pt_ops iopgtbl_pt_ops = {
