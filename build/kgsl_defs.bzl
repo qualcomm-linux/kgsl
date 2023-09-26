@@ -88,13 +88,20 @@ def external_deps(target, variant):
     defconfigs = []
 
     # Add msm_hw_fence in the dependency and defconfig lists for targets that use it
-    if target in [ "pineapple", "sun" ]:
+    if target in [ "pineapple" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:{}_msm_hw_fence".format(tv),
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
         defconfigs = defconfigs + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:defconfig"
+            ]
+
+    # Add synx-kernel in the dependency list for targets that use it for hardware fences
+    if target in [ "sun" ]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
+            "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
     native.genrule(

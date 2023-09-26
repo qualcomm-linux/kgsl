@@ -36,6 +36,10 @@ ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
         KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM), sun)
+	KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,synx-driver-symvers)/synx-driver-symvers
+endif
+
 include $(CLEAR_VARS)
 # For incremental compilation
 LOCAL_SRC_FILES   := $(wildcard $(LOCAL_PATH)/**/*) $(wildcard $(LOCAL_PATH)/*)

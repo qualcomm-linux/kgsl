@@ -4,6 +4,7 @@
  * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
+#include <dt-bindings/soc/qcom,ipcc.h>
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/sync_file.h>
@@ -11,13 +12,265 @@
 #include "kgsl_device.h"
 #include "kgsl_sync.h"
 
+static const struct dma_fence_ops kgsl_sync_fence_ops;
+/* Only allow a single log in a second */
+static DEFINE_RATELIMIT_STATE(_rs, HZ, 1);
+
+#ifdef CONFIG_QCOM_KGSL_SYNX
+
+#include <synx_api.h>
+
+static struct synx_hw_fence_descriptor {
+	/** @handle: Handle for hardware fences */
+	struct synx_session *handle;
+	/** @descriptor: Memory descriptor for hardware fences */
+	struct synx_queue_desc mem_descriptor;
+} kgsl_synx;
+
+int kgsl_hw_fence_init(struct kgsl_device *device)
+{
+	struct synx_initialization_params params;
+
+	params.id = (enum synx_client_id)SYNX_CLIENT_HW_FENCE_GFX_CTX0;
+	params.ptr = &kgsl_synx.mem_descriptor;
+	kgsl_synx.handle = synx_initialize(&params);
+
+	if (IS_ERR_OR_NULL(kgsl_synx.handle)) {
+		dev_err(device->dev, "HW fences not supported: %d\n",
+			PTR_ERR_OR_ZERO(kgsl_synx.handle));
+		kgsl_synx.handle = NULL;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+void kgsl_hw_fence_close(struct kgsl_device *device)
+{
+	synx_uninitialize(kgsl_synx.handle);
+}
+
+void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *md)
+{
+	md->physaddr = kgsl_synx.mem_descriptor.dev_addr;
+	md->size = kgsl_synx.mem_descriptor.size;
+	md->hostptr = kgsl_synx.mem_descriptor.vaddr;
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	struct synx_create_params params = {0};
+	int ret;
+
+	params.fence = &kfence->fence;
+	params.h_synx = (u32 *)&kfence->hw_fence_index;
+	params.flags = SYNX_CREATE_DMA_FENCE;
+
+	ret = synx_create(kgsl_synx.handle, &params);
+	if (!ret)
+		return 0;
+
+	if (__ratelimit(&_rs))
+		dev_err(device->dev, "Failed to create ctx:%d ts:%d hardware fence:%d\n",
+			kfence->context_id, kfence->timestamp, ret);
+
+	return -EINVAL;
+}
+
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+{
+	struct synx_import_params params;
+	u32 handle = 0;
+	int ret;
+
+	params.indv.fence = fence;
+	params.type = SYNX_IMPORT_INDV_PARAMS;
+	params.indv.new_h_synx = &handle;
+	params.indv.flags = SYNX_IMPORT_DMA_FENCE;
+
+	ret = synx_import(kgsl_synx.handle, &params);
+	if (ret) {
+		dev_err_ratelimited(device->dev,
+			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
+			ret, fence->context, fence->seqno);
+		return ret;
+	}
+
+	/* release reference held by synx_import */
+	ret = synx_release(kgsl_synx.handle, handle);
+	if (ret)
+		dev_err_ratelimited(device->dev,
+			"Failed to release wait fences ret:%d fence ctx:%llu ts:%llu\n",
+			ret, fence->context, fence->seqno);
+
+	return ret;
+}
+
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count)
+{
+	void *ptr = kgsl_synx.mem_descriptor.vaddr;
+	struct synx_hw_fence_hfi_queue_header *hdr = (struct synx_hw_fence_hfi_queue_header *)
+		(ptr + sizeof(struct synx_hw_fence_hfi_queue_table_header));
+	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
+	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
+	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
+	u32 reserved_dwords = atomic_read(hw_fence_count) * payload_size_dwords;
+
+	free_dwords = read_idx <= write_idx ?
+		queue_size_dwords - (write_idx - read_idx) :
+		read_idx - write_idx;
+
+	if (free_dwords - reserved_dwords <= payload_size_dwords)
+		return false;
+
+	return true;
+}
+
+void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
+{
+	synx_release(kgsl_synx.handle, kfence->hw_fence_index);
+}
+
+void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	synx_signal(kgsl_synx.handle, (u32)kfence->hw_fence_index, SYNX_STATE_SIGNALED_SUCCESS);
+}
+
+bool kgsl_hw_fence_signaled(struct dma_fence *fence)
+{
+	return test_bit(SYNX_HW_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
+}
+
+bool kgsl_is_hw_fence(struct dma_fence *fence)
+{
+	return test_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+#else
+
 #if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
 #include <msm_hw_fence.h>
 #else
 #include <linux/soc/qcom/msm_hw_fence.h>
 #endif
 
-static const struct dma_fence_ops kgsl_sync_fence_ops;
+static struct msm_hw_fence_descriptor {
+	/** @handle: Handle for hardware fences */
+	void *handle;
+	/** @descriptor: Memory descriptor for hardware fences */
+	struct msm_hw_fence_mem_addr mem_descriptor;
+} kgsl_msm_hw_fence;
+
+int kgsl_hw_fence_init(struct kgsl_device *device)
+{
+	kgsl_msm_hw_fence.handle = msm_hw_fence_register(HW_FENCE_CLIENT_ID_CTX0,
+				&kgsl_msm_hw_fence.mem_descriptor);
+
+	if (IS_ERR_OR_NULL(kgsl_msm_hw_fence.handle)) {
+		dev_err(device->dev, "HW fences not supported: %d\n",
+			PTR_ERR_OR_ZERO(kgsl_msm_hw_fence.handle));
+		kgsl_msm_hw_fence.handle = NULL;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+void kgsl_hw_fence_close(struct kgsl_device *device)
+{
+	msm_hw_fence_deregister(kgsl_msm_hw_fence.handle);
+}
+
+void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *md)
+{
+	md->physaddr = kgsl_msm_hw_fence.mem_descriptor.device_addr;
+	md->size = kgsl_msm_hw_fence.mem_descriptor.size;
+	md->hostptr = kgsl_msm_hw_fence.mem_descriptor.virtual_addr;
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	struct msm_hw_fence_create_params params = {0};
+	int ret;
+
+	params.fence = &kfence->fence;
+	params.handle = &kfence->hw_fence_index;
+
+	ret = msm_hw_fence_create(kgsl_msm_hw_fence.handle, &params);
+	if ((ret || IS_ERR_OR_NULL(params.handle))) {
+		if (__ratelimit(&_rs))
+			dev_err(device->dev, "Failed to create ctx:%d ts:%d hardware fence:%d\n",
+				kfence->context_id, kfence->timestamp, ret);
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+{
+	int ret = msm_hw_fence_wait_update(kgsl_msm_hw_fence.handle, &fence, 1, true);
+
+	if (ret)
+		dev_err_ratelimited(device->dev,
+			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
+			ret, fence->context, fence->seqno);
+
+	return ret;
+}
+
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count)
+{
+	void *ptr = kgsl_msm_hw_fence.mem_descriptor.virtual_addr;
+	struct msm_hw_fence_hfi_queue_header *hdr = (struct msm_hw_fence_hfi_queue_header *)
+		(ptr + sizeof(struct msm_hw_fence_hfi_queue_table_header));
+	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
+	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
+	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
+	u32 reserved_dwords = atomic_read(hw_fence_count) * payload_size_dwords;
+
+	free_dwords = read_idx <= write_idx ?
+		queue_size_dwords - (write_idx - read_idx) :
+		read_idx - write_idx;
+
+	if (free_dwords - reserved_dwords <= payload_size_dwords)
+		return false;
+
+	return true;
+}
+
+void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
+{
+	msm_hw_fence_destroy(kgsl_msm_hw_fence.handle, &kfence->fence);
+}
+
+#define IPCC_GPU_PHYS_ID 4
+void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	int ret = msm_hw_fence_update_txq(kgsl_msm_hw_fence.handle, kfence->hw_fence_index,
+				0, 0);
+	if (ret) {
+		dev_err_ratelimited(device->dev,
+			"Failed to trigger hw fence via cpu: ctx:%d ts:%d ret:%d\n",
+			kfence->context_id, kfence->timestamp, ret);
+		return;
+	}
+
+	msm_hw_fence_trigger_signal(kgsl_msm_hw_fence.handle, IPCC_GPU_PHYS_ID,
+		IPCC_CLIENT_APSS, 0);
+}
+
+bool kgsl_hw_fence_signaled(struct dma_fence *fence)
+{
+	return test_bit(MSM_HW_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
+}
+
+bool kgsl_is_hw_fence(struct dma_fence *fence)
+{
+	return test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags);
+}
+
+#endif
 
 static struct kgsl_sync_fence *kgsl_sync_fence_create(
 					struct kgsl_context *context,
@@ -68,8 +321,8 @@ static void kgsl_sync_fence_release(struct dma_fence *fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
 
-	if (test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags))
-		msm_hw_fence_destroy(kfence->hw_fence_handle, fence);
+	if (kgsl_is_hw_fence(fence))
+		kgsl_hw_fence_destroy(kfence);
 
 	kgsl_sync_timeline_put(kfence->parent);
 	kfree(kfence);
@@ -447,7 +700,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	if (event->syncobj->flags & KGSL_SYNCOBJ_SW)
 		return;
 
-	if (!test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags)) {
+	if (!kgsl_is_hw_fence(fence)) {
 		/* Ignore software fences that are already signaled */
 		if (!dma_fence_is_signaled(fence))
 			event->syncobj->flags |= KGSL_SYNCOBJ_SW;
