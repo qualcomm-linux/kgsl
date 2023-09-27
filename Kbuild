@@ -127,6 +127,7 @@ msm_kgsl-y += \
 	adreno_gen8_hfi.o \
 	adreno_gen8_hwsched.o \
 	adreno_gen8_hwsched_hfi.o \
+	adreno_gen8_perfcounter.o \
 	adreno_gen8_preempt.o \
 	adreno_gen8_ringbuffer.o \
 	adreno_gen8_rpmh.o \

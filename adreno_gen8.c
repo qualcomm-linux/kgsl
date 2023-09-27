@@ -1724,9 +1724,13 @@ static u32 gen8_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 
 static u32 _get_pipeid(u32 groupid)
 {
-	u32 pipe;
-
 	switch (groupid) {
+	case KGSL_PERFCOUNTER_GROUP_BV_PC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_VFD:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_VPC:
+		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_BV_TSE:
 		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_BV_RAS:
@@ -1734,22 +1738,30 @@ static u32 _get_pipeid(u32 groupid)
 	case KGSL_PERFCOUNTER_GROUP_BV_LRZ:
 		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_BV_HLSQ:
-		pipe = PIPE_BV;
-		break;
+		return PIPE_BV;
+	case KGSL_PERFCOUNTER_GROUP_PC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_VFD:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_HLSQ:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_VPC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_CCU:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_CMP:
+		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_TSE:
 		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_RAS:
 		fallthrough;
 	case KGSL_PERFCOUNTER_GROUP_LRZ:
 		fallthrough;
-	case KGSL_PERFCOUNTER_GROUP_HLSQ:
-		pipe = PIPE_BR;
-		break;
+	case KGSL_PERFCOUNTER_GROUP_RB:
+		return PIPE_BR;
 	default:
-		pipe = PIPE_NONE;
+		return PIPE_NONE;
 	}
-
-	return pipe;
 }
 
 int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
