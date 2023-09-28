@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/component.h>
@@ -458,6 +458,8 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable,
 		size = kgsl_memdesc_footprint(memdesc);
 
 		ret = pagetable->pt_ops->mmu_unmap(pagetable, memdesc);
+		if (ret)
+			return ret;
 
 		atomic_dec(&pagetable->stats.entries);
 		atomic_long_sub(size, &pagetable->stats.mapped);
@@ -487,7 +489,8 @@ kgsl_mmu_unmap_range(struct kgsl_pagetable *pagetable,
 		ret = pagetable->pt_ops->mmu_unmap_range(pagetable, memdesc,
 			offset, length);
 
-		atomic_long_sub(length, &pagetable->stats.mapped);
+		if (!ret)
+			atomic_long_sub(length, &pagetable->stats.mapped);
 	}
 
 	return ret;
