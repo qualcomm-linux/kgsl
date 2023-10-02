@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -187,15 +187,19 @@ void adreno_coresight_start(struct adreno_device *adreno_dev)
 	_adreno_coresight_set(adreno_dev, &adreno_dev->cx_coresight);
 }
 
+#if (KERNEL_VERSION(6, 3, 0) > LINUX_VERSION_CODE)
 static int adreno_coresight_trace_id(struct coresight_device *csdev)
 {
 	struct adreno_coresight_device *adreno_csdev = dev_get_drvdata(&csdev->dev);
 
 	return adreno_csdev->atid;
 }
+#endif
 
 static const struct coresight_ops_source adreno_coresight_source_ops = {
+#if (KERNEL_VERSION(6, 3, 0) > LINUX_VERSION_CODE)
 	.trace_id = adreno_coresight_trace_id,
+#endif
 	.enable = adreno_coresight_enable,
 	.disable = adreno_coresight_disable,
 };

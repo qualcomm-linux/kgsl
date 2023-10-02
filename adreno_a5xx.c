@@ -9,7 +9,12 @@
 #include <linux/firmware.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
 #include <linux/qcom_scm.h>
+#endif
 #include <linux/slab.h>
 
 #include "adreno.h"

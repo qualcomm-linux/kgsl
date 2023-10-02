@@ -5248,8 +5248,11 @@ int __init kgsl_core_init(void)
 		goto err;
 	}
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+	kgsl_driver.class = class_create("kgsl");
+#else
 	kgsl_driver.class = class_create(THIS_MODULE, "kgsl");
-
+#endif
 	if (IS_ERR(kgsl_driver.class)) {
 		result = PTR_ERR(kgsl_driver.class);
 		pr_err("kgsl: failed to create class for kgsl\n");
