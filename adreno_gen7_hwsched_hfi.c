@@ -4244,7 +4244,7 @@ int gen7_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 
 	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
 		gen7_perfcounter_update(adreno_dev, reg, false,
-				FIELD_PREP(GENMASK(13, 12), PIPE_NONE));
+				FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
 
 	cmds = hfi->perfctr_scratch->hostptr;
 

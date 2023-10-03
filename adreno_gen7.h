@@ -385,11 +385,13 @@ void gen7_spin_idle_debug(struct adreno_device *adreno_dev,
  * @reg: Perfcounter reg struct to add/remove to the list
  * @update_reg: true if the perfcounter needs to be programmed by the CPU
  * @pipe: pipe id for CP aperture control
+ * @flags: Flags set for requested perfcounter group
  *
  * Return: 0 on success or -EBUSY if the lock couldn't be taken
  */
 int gen7_perfcounter_update(struct adreno_device *adreno_dev,
-	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe);
+	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe,
+	unsigned long flags);
 
 /*
  * gen7_ringbuffer_init - Initialize the ringbuffers
