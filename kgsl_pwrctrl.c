@@ -1466,7 +1466,16 @@ static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
 			&pwr->power_flags)) {
 			kgsl_mmu_send_tlb_hint(&device->mmu, true);
 			trace_kgsl_rail(device, state);
+
+			/* Set the parent in retention voltage to disable CPR interrupts */
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent,
+					pwr->gx_gdsc_parent_min_corner);
+
 			kgsl_pwrctrl_disable_gx_gdsc(device);
+
+			/* Remove the vote for the vdd parent supply */
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent, 0);
+
 			kgsl_pwrctrl_disable_cx_gdsc(device);
 		}
 	} else {
