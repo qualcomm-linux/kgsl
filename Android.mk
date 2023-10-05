@@ -1,10 +1,10 @@
 ifeq ($(TARGET_USES_QMAA),true)
-	KGSL_ENABLED := false
-	ifeq ($(TARGET_USES_QMAA_OVERRIDE_GFX),true)
-		KGSL_ENABLED := true
-	endif # TARGET_USES_QMAA_OVERRIDE_GFX
+        KGSL_ENABLED := false
+        ifeq ($(TARGET_USES_QMAA_OVERRIDE_GFX),true)
+                KGSL_ENABLED := true
+        endif # TARGET_USES_QMAA_OVERRIDE_GFX
 else
-	KGSL_ENABLED := true
+        KGSL_ENABLED := true
 endif # TARGET_USES_QMAA
 
 ifeq ($(ENABLE_HYP), true)
@@ -29,7 +29,7 @@ KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(KGSL_SELECT)
 KBUILD_OPTIONS += MODNAME=msm_kgsl
 ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
-	KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
+        KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 
 include $(CLEAR_VARS)
@@ -42,8 +42,8 @@ LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 
 ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
-	LOCAL_REQUIRED_MODULES    := hw-fence-module-symvers
-	LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
+        LOCAL_REQUIRED_MODULES    := hw-fence-module-symvers
+        LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 # Include msm_kgsl.ko in the /vendor/lib/modules (vendor.img)
 BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
