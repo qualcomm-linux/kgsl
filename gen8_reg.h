@@ -879,6 +879,8 @@
 #define GEN8_CP_ROQ_SDS_STATUS_PIPE                            0x924
 #define GEN8_CP_ROQ_MRB_STATUS_PIPE                            0x925
 #define GEN8_CP_ROQ_VSD_STATUS_PIPE                            0x926
+#define GEN8_CP_SLICE_MEM_POOL_DBG_ADDR_PIPE                   0xb00
+#define GEN8_CP_SLICE_MEM_POOL_DBG_DATA_PIPE                   0xb01
 
 /* UCHE registers */
 #define GEN8_UCHE_MODE_CNTL                 0xe01

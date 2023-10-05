@@ -497,4 +497,46 @@ void gen8_rdpm_cx_freq_update(struct gen8_gmu_device *gmu, u32 freq);
  */
 int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
+/**
+ * gen8_legacy_snapshot_registers - Dump registers for GPU/GMU
+ * @device: Handle to the KGSL device
+ * @buf: Target buffer to copy the data
+ * @remain: Buffer size remaining for dump
+ * @priv: Private data to dump the registers
+ *
+ * Return: Size of the section
+ */
+size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
+		 u8 *buf, size_t remain, void *priv);
+
+/**
+ * gen8_regread64_aperture - Read 64 bit register values
+ * @device: Handle to the KGSL device
+ * @offsetwords_lo: Lower 32 bit address to read
+ * @offsetwords_hi: Higher 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ * @slice_id: Slice for which the register is to be read
+ * @use_slice_id: Set if the value to be read is from a sliced register
+ *
+ * This function reads the 64 bit value for registers
+ */
+void gen8_regread64_aperture(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe,
+	u32 slice_id, u32 use_slice_id);
+
+/**
+ * gen8_regread_aperture - Read 32 bit register values
+ * @device: Handle to the KGSL device
+ * @offsetwords: 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ * @slice_id: Slice for which the register is to be read
+ * @use_slice_id: Set if the value to be read is from a sliced register
+ *
+ * This function reads the 32 bit value for registers
+ */
+void gen8_regread_aperture(struct kgsl_device *device,
+	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id);
+
 #endif

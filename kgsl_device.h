@@ -985,6 +985,24 @@ void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot, unsigned int index,
 	unsigned int data, unsigned int start, unsigned int count);
 
+/**
+ * kgsl_snapshot_indexed_registers_v2 - Add a set of indexed registers to the
+ * snapshot
+ * @device: Pointer to the KGSL device being snapshotted
+ * @snapshot: Snapshot instance
+ * @index: Offset for the index register
+ * @data: Offset for the data register
+ * @start: Index to start reading
+ * @count: Number of entries to read
+ * @pipe_id: Pipe ID to be dumped
+ * @slice_id: Slice ID to be dumped
+ *
+ * Dump the values from an indexed register group into the snapshot
+ */
+void kgsl_snapshot_indexed_registers_v2(struct kgsl_device *device,
+	struct kgsl_snapshot *snapshot, u32 index, u32 data,
+	u32 start, u32 count, u32 pipe_id, u32 slice_id);
+
 int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	struct kgsl_process_private *process, uint64_t gpuaddr,
 	uint64_t size, unsigned int type);

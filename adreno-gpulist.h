@@ -2654,6 +2654,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.nonctxt_regs = gen8_0_0_nonctxt_regs,
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
+	.gen8_snapshot_block_list = &gen8_0_0_snapshot_block_list,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {

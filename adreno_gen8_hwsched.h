@@ -41,6 +41,16 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_hwsched_snapshot - take gen8 hwsched snapshot
+ * @adreno_dev: Pointer to the adreno device
+ * @snapshot: Pointer to the snapshot instance
+ *
+ * Snapshot the faulty ib and then snapshot rest of gen8 gmu things
+ */
+void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
+		struct kgsl_snapshot *snapshot);
+
+/**
  * gen8_hwsched_handle_watchdog - Handle watchdog interrupt
  * @adreno_dev: Pointer to the adreno device
  */

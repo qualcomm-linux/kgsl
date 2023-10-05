@@ -277,6 +277,8 @@ int gen8_init(struct adreno_device *adreno_dev)
 	if (of_fdt_get_ddrtype() == 0x7)
 		adreno_dev->highest_bank_bit = 14;
 
+	gen8_crashdump_init(adreno_dev);
+
 	return adreno_allocate_global(device, &adreno_dev->pwrup_reglist,
 		PAGE_SIZE, 0, 0, KGSL_MEMDESC_PRIVILEGED,
 		"powerup_register_list");
@@ -377,7 +379,7 @@ static void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id
 	gen8_dev->aperture = aperture_val;
 }
 
-static inline void gen8_regread64_aperture(struct kgsl_device *device,
+void gen8_regread64_aperture(struct kgsl_device *device,
 	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe,
 	u32 slice_id, u32 use_slice_id)
 {
@@ -391,7 +393,7 @@ static inline void gen8_regread64_aperture(struct kgsl_device *device,
 	*value = (((u64)val_hi << 32) | val_lo);
 }
 
-static inline void gen8_regread_aperture(struct kgsl_device *device,
+void gen8_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id)
 {
 	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, slice_id, use_slice_id);
@@ -2344,6 +2346,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen8_register_offsets,
 		.probe = gen8_hwsched_probe,
+		.snapshot = gen8_hwsched_snapshot,
 		.irq_handler = gen8_irq_handler,
 		.iommu_fault_block = gen8_iommu_fault_block,
 		.preemption_context_init = gen8_preemption_context_init,
@@ -2374,6 +2377,7 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 	.base = {
 		.reg_offsets = gen8_register_offsets,
 		.probe = gen8_gmu_device_probe,
+		.snapshot = gen8_gmu_snapshot,
 		.irq_handler = gen8_irq_handler,
 		.rb_start = gen8_rb_start,
 		.gpu_keepalive = gen8_gpu_keepalive,
