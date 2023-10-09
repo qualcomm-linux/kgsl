@@ -985,7 +985,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a619_variant = {
 	},
 	.prim_fifo_threshold = 0x0018000,
 	.sqefw_name = "a630_sqe.fw",
-	.zap_name = "a615_zap.mdt",
+	.zap_name = "gen6_3_25_0_zap.mdt",
 	.hwcg = a615_hwcg_regs,
 	.hwcg_count = ARRAY_SIZE(a615_hwcg_regs),
 	.vbif = a615_gbif_regs,
@@ -2313,7 +2313,7 @@ static const struct gen7_protected_regs gen7_9_0_protected_regs[] = {
 	{ GEN7_CP_PROTECT_REG + 18, 0x08e00, 0x08e00, 1 },
 	{ GEN7_CP_PROTECT_REG + 19, 0x08e08, 0x08e08, 1 },
 	{ GEN7_CP_PROTECT_REG + 20, 0x08e50, 0x08e6f, 1 },
-	{ GEN7_CP_PROTECT_REG + 21, 0x08e7a, 0x09100, 1 },
+	{ GEN7_CP_PROTECT_REG + 21, 0x08e79, 0x09100, 1 },
 	{ GEN7_CP_PROTECT_REG + 22, 0x09624, 0x097ff, 1 },
 	{ GEN7_CP_PROTECT_REG + 23, 0x09b0b, 0x09dff, 0 },
 	{ GEN7_CP_PROTECT_REG + 24, 0x09e1a, 0x09e1b, 1 },
@@ -2326,7 +2326,7 @@ static const struct gen7_protected_regs gen7_9_0_protected_regs[] = {
 	{ GEN7_CP_PROTECT_REG + 31, 0x0ae50, 0x0ae5f, 1 },
 	{ GEN7_CP_PROTECT_REG + 32, 0x0ae66, 0x0ae69, 1 },
 	{ GEN7_CP_PROTECT_REG + 33, 0x0ae6f, 0x0ae72, 1 },
-	{ GEN7_CP_PROTECT_REG + 34, 0x0b604, 0x0b607, 1 },
+	{ GEN7_CP_PROTECT_REG + 34, 0x0b602, 0x0b607, 1 },
 	{ GEN7_CP_PROTECT_REG + 35, 0x0ec00, 0x0fbff, 1 },
 	{ GEN7_CP_PROTECT_REG + 36, 0x0fc00, 0x11bff, 0 },
 	{ GEN7_CP_PROTECT_REG + 37, 0x18400, 0x1857f, 0 },
@@ -2351,9 +2351,10 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_AQE |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
 			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_DMS |
-			ADRENO_HW_FENCE | ADRENO_PREEMPTION,
+			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD |
+			ADRENO_GMU_WARMBOOT,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_9_0_hwsched_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2375,6 +2376,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.ctxt_record_size = (3572 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
@@ -2385,9 +2387,10 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_AQE |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_IFPC |
 			ADRENO_L3_VOTE | ADRENO_BCL | ADRENO_DMS |
-			ADRENO_HW_FENCE | ADRENO_PREEMPTION,
+			ADRENO_HW_FENCE | ADRENO_PREEMPTION | ADRENO_ACD |
+			ADRENO_GMU_WARMBOOT,
 		.gpudev = &adreno_gen7_9_0_hwsched_gpudev.base,
-		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.perfcounters = &adreno_gen7_9_0_hwsched_perfcounters,
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = 3 * SZ_1M,
 		.bus_width = 32,
@@ -2409,6 +2412,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.ctxt_record_size = (3572 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct kgsl_regmap_list a663_hwcg_regs[] = {

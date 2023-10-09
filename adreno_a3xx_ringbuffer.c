@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -109,6 +110,9 @@ static int a3xx_rb_pagetable_switch(struct adreno_device *adreno_dev,
 	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
 	int count = 0;
 
+	/* Skip pagetable switch if current context is using default PT. */
+	if (pagetable == device->mmu.defaultpagetable)
+		return 0;
 	/*
 	 * Adding an indirect buffer ensures that the prefetch stalls until
 	 * the commands in indirect buffer have completed. We need to stall

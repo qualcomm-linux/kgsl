@@ -298,25 +298,12 @@ void adreno_drawctxt_invalidate(struct kgsl_device *device,
 void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 		struct kgsl_context *context)
 {
-	struct adreno_context *drawctxt;
-
 	if (!context)
 		return;
 
 	context->reset_status = KGSL_CTX_STAT_GUILTY_CONTEXT_RESET_EXT;
 
 	adreno_drawctxt_invalidate(device, context);
-
-	drawctxt = ADRENO_CONTEXT(context);
-
-	if (list_empty(&drawctxt->hw_fence_list))
-		return;
-
-	/*
-	 * This makes sure that any pending hardware fences from this context
-	 * are sent to TxQueue after recovery
-	 */
-	set_bit(ADRENO_CONTEXT_DRAIN_HW_FENCE, &context->priv);
 }
 
 #define KGSL_CONTEXT_PRIORITY_MED	0x8
@@ -440,6 +427,7 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 
 	INIT_LIST_HEAD(&drawctxt->active_node);
 	INIT_LIST_HEAD(&drawctxt->hw_fence_list);
+	INIT_LIST_HEAD(&drawctxt->hw_fence_inflight_list);
 
 	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context)
 		adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
@@ -619,4 +607,72 @@ void adreno_put_drawctxt_on_timestamp(struct kgsl_device *device,
 	if (kgsl_add_event(device, &rb->events, timestamp,
 		_drawctxt_switch_wait_callback, drawctxt))
 		kgsl_context_put(&drawctxt->base);
+}
+
+static void _add_context(struct adreno_device *adreno_dev,
+		struct adreno_context *drawctxt)
+{
+	/* Remove it from the list */
+	list_del_init(&drawctxt->active_node);
+
+	/* And push it to the front */
+	drawctxt->active_time = jiffies;
+	list_add(&drawctxt->active_node, &adreno_dev->active_list);
+}
+
+static int __count_context(struct adreno_context *drawctxt, void *data)
+{
+	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
+
+	return time_after(jiffies, expires) ? 0 : 1;
+}
+
+static int __count_drawqueue_context(struct adreno_context *drawctxt,
+				void *data)
+{
+	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
+
+	if (time_after(jiffies, expires))
+		return 0;
+
+	return (&drawctxt->rb->dispatch_q ==
+			(struct adreno_dispatcher_drawqueue *) data) ? 1 : 0;
+}
+
+static int _adreno_count_active_contexts(struct adreno_device *adreno_dev,
+		int (*func)(struct adreno_context *, void *), void *data)
+{
+	struct adreno_context *ctxt;
+	int count = 0;
+
+	list_for_each_entry(ctxt, &adreno_dev->active_list, active_node) {
+		if (func(ctxt, data) == 0)
+			return count;
+
+		count++;
+	}
+
+	return count;
+}
+
+void adreno_track_context(struct adreno_device *adreno_dev,
+		struct adreno_dispatcher_drawqueue *drawqueue,
+		struct adreno_context *drawctxt)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	spin_lock(&adreno_dev->active_list_lock);
+
+	_add_context(adreno_dev, drawctxt);
+
+	device->active_context_count =
+			_adreno_count_active_contexts(adreno_dev,
+					__count_context, NULL);
+
+	if (drawqueue)
+		drawqueue->active_context_count =
+				_adreno_count_active_contexts(adreno_dev,
+					__count_drawqueue_context, drawqueue);
+
+	spin_unlock(&adreno_dev->active_list_lock);
 }

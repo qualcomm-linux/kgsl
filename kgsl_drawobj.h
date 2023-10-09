@@ -1,14 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __KGSL_DRAWOBJ_H
 #define __KGSL_DRAWOBJ_H
 
 #include <linux/dma-fence.h>
-#include <linux/irq_work.h>
 #include <linux/kref.h>
 
 #define DRAWOBJ(obj) (&obj->base)
@@ -203,8 +202,8 @@ struct kgsl_drawobj_sync_event {
 	struct dma_fence *fence;
 	/** @cb: Callback struct for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE */
 	struct dma_fence_cb cb;
-	/** @work : irq worker for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE */
-	struct irq_work work;
+	/** @work : work_struct for KGSL_CMD_SYNCPOINT_TYPE_TIMELINE */
+	struct work_struct work;
 };
 
 #define KGSL_DRAWOBJ_FLAGS \
@@ -344,13 +343,5 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 int kgsl_drawobj_add_timeline(struct kgsl_device_private *dev_priv,
 		struct kgsl_drawobj_timeline *timelineobj,
 		void __user *src, u64 cmdsize);
-
-/**
- * kgsl_drawobj_timelineobj_retire - Retire the timeline drawobj
- * @timelineobj: Pointer to a timeline drawobject
- *
- * Retire the timelineobj when it is popped off the context queue.
- */
-void kgsl_drawobj_timelineobj_retire(struct kgsl_drawobj_timeline *timelineobj);
 
 #endif /* __KGSL_DRAWOBJ_H */

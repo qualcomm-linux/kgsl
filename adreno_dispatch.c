@@ -10,6 +10,7 @@
 #include "adreno.h"
 #include "adreno_sysfs.h"
 #include "adreno_trace.h"
+#include "kgsl_bus.h"
 #include "kgsl_eventlog.h"
 #include "kgsl_gmu_core.h"
 #include "kgsl_timeline.h"
@@ -77,72 +78,6 @@ static inline bool drawqueue_is_current(
 	struct adreno_device *adreno_dev = ADRENO_RB_DEVICE(rb);
 
 	return (adreno_dev->cur_rb == rb);
-}
-
-static void _add_context(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt)
-{
-	/* Remove it from the list */
-	list_del_init(&drawctxt->active_node);
-
-	/* And push it to the front */
-	drawctxt->active_time = jiffies;
-	list_add(&drawctxt->active_node, &adreno_dev->active_list);
-}
-
-static int __count_context(struct adreno_context *drawctxt, void *data)
-{
-	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
-
-	return time_after(jiffies, expires) ? 0 : 1;
-}
-
-static int __count_drawqueue_context(struct adreno_context *drawctxt,
-				void *data)
-{
-	unsigned long expires = drawctxt->active_time + msecs_to_jiffies(100);
-
-	if (time_after(jiffies, expires))
-		return 0;
-
-	return (&drawctxt->rb->dispatch_q ==
-			(struct adreno_dispatcher_drawqueue *) data) ? 1 : 0;
-}
-
-static int _adreno_count_active_contexts(struct adreno_device *adreno_dev,
-		int (*func)(struct adreno_context *, void *), void *data)
-{
-	struct adreno_context *ctxt;
-	int count = 0;
-
-	list_for_each_entry(ctxt, &adreno_dev->active_list, active_node) {
-		if (func(ctxt, data) == 0)
-			return count;
-
-		count++;
-	}
-
-	return count;
-}
-
-static void _track_context(struct adreno_device *adreno_dev,
-		struct adreno_dispatcher_drawqueue *drawqueue,
-		struct adreno_context *drawctxt)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	spin_lock(&adreno_dev->active_list_lock);
-
-	_add_context(adreno_dev, drawctxt);
-
-	device->active_context_count =
-			_adreno_count_active_contexts(adreno_dev,
-					__count_context, NULL);
-	drawqueue->active_context_count =
-			_adreno_count_active_contexts(adreno_dev,
-					__count_drawqueue_context, drawqueue);
-
-	spin_unlock(&adreno_dev->active_list_lock);
 }
 
 /*
@@ -364,11 +299,8 @@ static int dispatch_retire_syncobj(struct kgsl_drawobj *drawobj,
 static int drawqueue_retire_timelineobj(struct kgsl_drawobj *drawobj,
 		struct adreno_context *drawctxt)
 {
-	struct kgsl_drawobj_timeline *timelineobj = TIMELINEOBJ(drawobj);
-
 	_pop_drawobj(drawctxt);
-	kgsl_drawobj_timelineobj_retire(timelineobj);
-
+	kgsl_drawobj_destroy(drawobj);
 	return 0;
 }
 
@@ -534,6 +466,32 @@ static int dispatcher_queue_context(struct adreno_device *adreno_dev,
 	return 0;
 }
 
+/*
+ * Real time clients may demand high BW and have strict latency requirement.
+ * GPU bus DCVS is not fast enough to account for sudden BW requirements.
+ * Bus hint helps to bump up the bus vote (IB) upfront for known time-critical
+ * workloads.
+ */
+static void process_rt_bus_hint(struct kgsl_device *device, bool on)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_dispatcher_drawqueue *drawqueue =
+			DRAWQUEUE(&adreno_dev->ringbuffers[0]);
+
+	if (!adreno_is_preemption_enabled(adreno_dev) ||
+		!device->pwrctrl.rt_bus_hint)
+		return;
+
+	if (device->pwrctrl.rt_bus_hint_active == on)
+		return;
+
+	if (on && drawqueue->inflight == 1)
+		kgsl_bus_update(device, KGSL_BUS_VOTE_RT_HINT_ON);
+
+	if (!on && drawqueue->inflight == 0)
+		kgsl_bus_update(device, KGSL_BUS_VOTE_RT_HINT_OFF);
+}
+
 #define ADRENO_DRAWOBJ_PROFILE_COUNT \
 	(PAGE_SIZE / sizeof(struct adreno_drawobj_profile_entry))
 
@@ -593,6 +551,8 @@ static int sendcmd(struct adreno_device *adreno_dev,
 			ADRENO_DRAWOBJ_PROFILE_COUNT;
 	}
 
+	process_rt_bus_hint(device, true);
+
 	ret = adreno_ringbuffer_submitcmd(adreno_dev, cmdobj, &time);
 
 	/*
@@ -624,6 +584,8 @@ static int sendcmd(struct adreno_device *adreno_dev,
 	if (ret) {
 		dispatcher->inflight--;
 		dispatch_q->inflight--;
+
+		process_rt_bus_hint(device, false);
 
 		mutex_unlock(&device->mutex);
 
@@ -929,6 +891,7 @@ static void _dispatcher_update_timers(struct adreno_device *adreno_dev)
 	/* Kick the idle timer */
 	mutex_lock(&device->mutex);
 	kgsl_pwrscale_update(device);
+	process_rt_bus_hint(device, false);
 	kgsl_start_idle_timer(device);
 	mutex_unlock(&device->mutex);
 
@@ -1387,7 +1350,7 @@ static int adreno_dispatcher_queue_cmds(struct kgsl_device_private *dev_priv,
 
 	dispatch_q = &(ADRENO_CONTEXT(drawobj[0]->context)->rb->dispatch_q);
 
-	_track_context(adreno_dev, dispatch_q, drawctxt);
+	adreno_track_context(adreno_dev, dispatch_q, drawctxt);
 
 	spin_unlock(&drawctxt->lock);
 
@@ -2053,10 +2016,12 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	 */
 	if (!(fault & ADRENO_HARD_FAULT) && gx_on) {
 		adreno_readreg(adreno_dev, ADRENO_REG_CP_ME_CNTL, &reg);
-		if (!adreno_is_a3xx(adreno_dev))
+		if (adreno_is_a3xx(adreno_dev))
+			reg |= (1 << 27) | (1 << 28);
+		else if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev))
 			reg |= 1 | (1 << 1);
 		else
-			reg |= (1 << 27) | (1 << 28);
+			reg = 0x0;
 		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, reg);
 	}
 	/*
@@ -2102,6 +2067,9 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 
 	/* Reset the dispatcher queue */
 	dispatcher->inflight = 0;
+
+	/* Remove the bus hint */
+	device->pwrctrl.rt_bus_hint_active = false;
 
 	/* Reset the GPU and make sure halt is not set during recovery */
 	halt = adreno_gpu_halt(adreno_dev);
@@ -2391,6 +2359,7 @@ static void _dispatcher_power_down(struct adreno_device *adreno_dev)
 		complete_all(&dispatcher->idle_gate);
 
 	adreno_dispatcher_stop_fault_timer(device);
+	process_rt_bus_hint(device, false);
 
 	if (test_bit(ADRENO_DISPATCHER_POWER, &dispatcher->priv)) {
 		adreno_active_count_put(adreno_dev);

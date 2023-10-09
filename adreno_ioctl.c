@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -178,6 +179,82 @@ static long adreno_ioctl_preemption_counters_query(
 	return 0;
 }
 
+static long adreno_ioctl_read_calibrated_ts(struct kgsl_device_private *dev_priv,
+		unsigned int cmd, void *data)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(dev_priv->device);
+	struct kgsl_read_calibrated_timestamps *reads = data;
+	unsigned long flags;
+	u32 *sources = NULL;
+	u64 *ts = NULL;
+	u64 start;
+	u64 samples[KGSL_CALIBRATED_TIME_DOMAIN_MAX] = {0};
+	u32 i;
+	int ret = 0;
+
+	/* Reading calibrated timestamps requires the CX timer be initialized */
+	if (!test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
+		return -EOPNOTSUPP;
+
+	/* Check that the number of timestamps is reasonable */
+	if (!reads->count ||
+		(reads->count > (2 * KGSL_CALIBRATED_TIME_DOMAIN_MAX)))
+		return -EINVAL;
+
+	sources = kvcalloc(reads->count, sizeof(*sources), GFP_KERNEL);
+	if (!sources)
+		return -ENOMEM;
+
+	if (copy_from_user(sources, u64_to_user_ptr(reads->sources),
+			reads->count * sizeof(*sources))) {
+		ret = -EFAULT;
+		goto done;
+	}
+
+	for (i = 0; i < reads->count; i++) {
+		if (sources[i] >= KGSL_CALIBRATED_TIME_DOMAIN_MAX) {
+			ret = -EINVAL;
+			goto done;
+		}
+	}
+
+	ts = kvcalloc(reads->count, sizeof(*ts), GFP_KERNEL);
+	if (!ts) {
+		ret = -ENOMEM;
+		goto done;
+	}
+
+	/* Disable local irqs to prevent context switch delays */
+	local_irq_save(flags);
+
+	/* Sample the MONOTONIC_RAW domain for use in calculating deviation */
+	start = (u64)ktime_to_ns(ktime_get_raw());
+
+	samples[KGSL_CALIBRATED_TIME_DOMAIN_DEVICE] =
+				adreno_read_cx_timer(adreno_dev);
+	samples[KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC] =
+				(u64)ktime_to_ns(ktime_get());
+	samples[KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC_RAW] =
+				(u64)ktime_to_ns(ktime_get_raw());
+
+	/* Done collecting timestamps. Re-enable irqs */
+	local_irq_restore(flags);
+
+	/* Calculate deviation in reads based on the MONOTONIC_RAW samples */
+	reads->deviation = samples[KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC_RAW] - start;
+
+	for (i = 0; i < reads->count; i++)
+		ts[i] = samples[sources[i]];
+
+	if (copy_to_user(u64_to_user_ptr(reads->ts), ts, reads->count * sizeof(*ts)))
+		ret = -EFAULT;
+
+done:
+	kvfree(ts);
+	kvfree(sources);
+	return ret;
+}
+
 long adreno_ioctl_helper(struct kgsl_device_private *dev_priv,
 		unsigned int cmd, unsigned long arg,
 		const struct kgsl_ioctl *cmds, int len)
@@ -225,6 +302,7 @@ static struct kgsl_ioctl adreno_ioctl_funcs[] = {
 	{ IOCTL_KGSL_PERFCOUNTER_READ, adreno_ioctl_perfcounter_read },
 	{ IOCTL_KGSL_PREEMPTIONCOUNTER_QUERY,
 		adreno_ioctl_preemption_counters_query },
+	{ IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS, adreno_ioctl_read_calibrated_ts },
 };
 
 long adreno_ioctl(struct kgsl_device_private *dev_priv,

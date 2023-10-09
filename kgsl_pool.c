@@ -466,11 +466,11 @@ static bool kgsl_pool_available(unsigned int page_size)
 	return (kgsl_get_pool_index(order) >= 0);
 }
 
-int kgsl_get_page_size(size_t size, unsigned int align)
+u32 kgsl_get_page_size(size_t size, unsigned int align)
 {
-	size_t pool;
+	u32 pool;
 
-	for (pool = SZ_1M; pool > PAGE_SIZE; pool >>= 1)
+	for (pool = rounddown_pow_of_two(size); pool > PAGE_SIZE; pool >>= 1)
 		if ((align >= ilog2(pool)) && (size >= pool) &&
 			kgsl_pool_available(pool))
 			return pool;

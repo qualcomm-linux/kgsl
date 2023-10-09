@@ -24,6 +24,7 @@ extern const struct adreno_power_ops gen7_gmu_power_ops;
 extern const struct adreno_power_ops gen7_hwsched_power_ops;
 extern const struct adreno_perfcounters adreno_gen7_perfcounters;
 extern const struct adreno_perfcounters adreno_gen7_hwsched_perfcounters;
+extern const struct adreno_perfcounters adreno_gen7_9_0_hwsched_perfcounters;
 
 struct gen7_gpudev {
 	struct adreno_gpudev base;
@@ -120,6 +121,8 @@ struct adreno_gen7_core {
 	const u32 *qos_value;
 	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
 	u32 acv_perfmode_vote;
+	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */
+	const u32 rt_bus_hint;
 };
 
 /**
@@ -310,6 +313,14 @@ int gen7_start(struct adreno_device *adreno_dev);
 int gen7_init(struct adreno_device *adreno_dev);
 
 /**
+ * gen7_cx_timer_init - Initialize the CX timer on Gen7 devices
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Synchronize the GPU CX timer (if we have one) with the CPU timer
+ */
+void gen7_cx_timer_init(struct adreno_device *adreno_dev);
+
+/**
  * gen7_get_gpu_feature_info - Get hardware supported feature info
  * @adreno_dev: Pointer to the adreno device
  *
@@ -364,6 +375,7 @@ bool gen7_hw_isidle(struct adreno_device *adreno_dev);
 /**
  * gen7_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
+ * @str: String describing the failure
  *
  * This function logs interesting registers and triggers a snapshot
  */

@@ -35,11 +35,11 @@
 #define KGSL_STATE_NONE		0x00000000
 #define KGSL_STATE_INIT		0x00000001
 #define KGSL_STATE_ACTIVE	0x00000002
-#define KGSL_STATE_NAP		0x00000004
+#define KGSL_STATE_NAP		0x00000004 /* Not Used */
 #define KGSL_STATE_SUSPEND	0x00000010
 #define KGSL_STATE_AWARE	0x00000020
 #define KGSL_STATE_SLUMBER	0x00000080
-#define KGSL_STATE_MINBW	0x00000100
+#define KGSL_STATE_MINBW	0x00000100 /* Not Used */
 
 /**
  * enum kgsl_event_results - result codes passed to an event callback when the
@@ -146,8 +146,6 @@ struct kgsl_functable {
 	void (*regulator_disable)(struct kgsl_device *device);
 	void (*pwrlevel_change_settings)(struct kgsl_device *device,
 		unsigned int prelevel, unsigned int postlevel, bool post);
-	void (*clk_set_options)(struct kgsl_device *device,
-		const char *name, struct clk *clk, bool on);
 	/**
 	 * @query_property_list: query the list of properties
 	 * supported by the device. If 'list' is NULL just return the total
@@ -654,12 +652,6 @@ static inline bool kgsl_state_is_awake(struct kgsl_device *device)
 {
 	return (device->state == KGSL_STATE_ACTIVE ||
 		device->state == KGSL_STATE_AWARE);
-}
-
-static inline bool kgsl_state_is_nap_or_minbw(struct kgsl_device *device)
-{
-	return (device->state == KGSL_STATE_NAP ||
-		device->state == KGSL_STATE_MINBW);
 }
 
 /**

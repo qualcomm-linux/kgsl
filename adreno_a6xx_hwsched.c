@@ -144,13 +144,13 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 	u8 *buf = snapshot->ptr + sizeof(*section_header);
 	struct kgsl_snapshot_rb_v2 *header = (struct kgsl_snapshot_rb_v2 *)buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	u32 size = a6xx_hwsched_parse_payload(payload, KEY_RB_SIZEDWORDS) << 2;
+	u32 size = adreno_hwsched_parse_payload(payload, KEY_RB_SIZEDWORDS) << 2;
 	u64 lo, hi, gpuaddr;
 	void *rb_hostptr;
 	char str[16];
 
-	lo = a6xx_hwsched_parse_payload(payload, KEY_RB_GPUADDR_LO);
-	hi = a6xx_hwsched_parse_payload(payload, KEY_RB_GPUADDR_HI);
+	lo = adreno_hwsched_parse_payload(payload, KEY_RB_GPUADDR_LO);
+	hi = adreno_hwsched_parse_payload(payload, KEY_RB_GPUADDR_HI);
 	gpuaddr = hi << 32 | lo;
 
 	/* Sanity check to make sure there is enough for the header */
@@ -178,16 +178,16 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 
 	header->start = 0;
 	header->end = size >> 2;
-	header->rptr = a6xx_hwsched_parse_payload(payload, KEY_RB_RPTR);
-	header->wptr = a6xx_hwsched_parse_payload(payload, KEY_RB_WPTR);
+	header->rptr = adreno_hwsched_parse_payload(payload, KEY_RB_RPTR);
+	header->wptr = adreno_hwsched_parse_payload(payload, KEY_RB_WPTR);
 	header->rbsize = size >> 2;
 	header->count = size >> 2;
-	header->timestamp_queued = a6xx_hwsched_parse_payload(payload,
+	header->timestamp_queued = adreno_hwsched_parse_payload(payload,
 			KEY_RB_QUEUED_TS);
-	header->timestamp_retired = a6xx_hwsched_parse_payload(payload,
+	header->timestamp_retired = adreno_hwsched_parse_payload(payload,
 			KEY_RB_RETIRED_TS);
 	header->gpuaddr = gpuaddr;
-	header->id = a6xx_hwsched_parse_payload(payload, KEY_RB_ID);
+	header->id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
 
 	section_header->magic = SNAPSHOT_SECTION_MAGIC;
 	section_header->id = KGSL_SNAPSHOT_SECTION_RB_V2;
@@ -345,7 +345,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	a6xx_gmu_aop_send_acd_state(gmu, adreno_dev->acd_enabled);
 
-	ret = a6xx_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
@@ -396,7 +396,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	device->gmu_fault = false;
 
-	trace_kgsl_pwr_set_state(device, KGSL_STATE_AWARE);
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_AWARE);
 
 	return 0;
 
@@ -428,20 +428,13 @@ static int a6xx_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
-	ret = a6xx_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
 	ret = a6xx_gmu_enable_clks(adreno_dev, GMU_MAX_PWRLEVELS - 1);
 	if (ret)
 		goto gdsc_off;
-
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
 
 	ret = a6xx_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -465,7 +458,7 @@ static int a6xx_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 
 	device->gmu_fault = false;
 
-	trace_kgsl_pwr_set_state(device, KGSL_STATE_AWARE);
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_AWARE);
 
 	return 0;
 err:
@@ -530,7 +523,7 @@ static int a6xx_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, A6XX_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
-	return a6xx_hfi_send_cmd_async(adreno_dev, &req);
+	return a6xx_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
 }
 static int a6xx_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
@@ -652,6 +645,43 @@ static void hwsched_idle_timer(struct timer_list *t)
 	kgsl_schedule_work(&device->idle_check_ws);
 }
 
+static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
+{
+	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+
+	/* GMU Virtual register bank */
+	if (IS_ERR_OR_NULL(gmu->vrb)) {
+		gmu->vrb = reserve_gmu_kernel_block(gmu, 0, GMU_VRB_SIZE,
+				GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(gmu->vrb))
+			return PTR_ERR(gmu->vrb);
+
+		/* Populate size of the virtual register bank */
+		gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_SIZE_IDX,
+					gmu->vrb->size >> 2);
+	}
+
+	/* GMU trace log */
+	if (IS_ERR_OR_NULL(gmu->trace.md)) {
+		gmu->trace.md = reserve_gmu_kernel_block(gmu, 0,
+					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
+
+		if (IS_ERR(gmu->trace.md))
+			return PTR_ERR(gmu->trace.md);
+
+		/* Pass trace buffer address to GMU through the VRB */
+		gmu_core_set_vrb_register(gmu->vrb->hostptr,
+					VRB_TRACE_BUFFER_ADDR_IDX,
+					gmu->trace.md->gmuaddr);
+
+		/* Initialize the GMU trace buffer header */
+		gmu_core_trace_header_init(&gmu->trace);
+	}
+
+	return 0;
+}
+
 static int a6xx_hwsched_gmu_init(struct adreno_device *adreno_dev)
 {
 	int ret;
@@ -661,6 +691,10 @@ static int a6xx_hwsched_gmu_init(struct adreno_device *adreno_dev)
 		return ret;
 
 	ret = a6xx_gmu_memory_init(adreno_dev);
+	if (ret)
+		return ret;
+
+	ret = a6xx_hwsched_gmu_memory_init(adreno_dev);
 	if (ret)
 		return ret;
 
@@ -997,7 +1031,7 @@ static int a6xx_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = a6xx_hfi_send_cmd_async(adreno_dev, &req);
+	ret = a6xx_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
@@ -1122,7 +1156,7 @@ static int a6xx_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags);
 
-	trace_kgsl_pwr_set_state(device, KGSL_STATE_SUSPEND);
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_SUSPEND);
 
 	return 0;
 
@@ -1182,7 +1216,7 @@ static void a6xx_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
 	read_unlock(&hfi->msglock);
 }
 
-int a6xx_hwsched_reset(struct adreno_device *adreno_dev)
+int a6xx_hwsched_reset_replay(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret;
@@ -1211,6 +1245,9 @@ int a6xx_hwsched_reset(struct adreno_device *adreno_dev)
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
 	ret = a6xx_hwsched_boot(adreno_dev);
+
+	if (!ret)
+		adreno_hwsched_replay(adreno_dev);
 
 	BUG_ON(ret);
 
@@ -1298,11 +1335,29 @@ int a6xx_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 			return ret;
 	}
 
+	if (!IS_ERR_OR_NULL(a6xx_dev->gmu.vrb)) {
+		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
+					KGSL_GMU_VRB_ENTRY,
+					a6xx_dev->gmu.vrb->hostptr,
+					a6xx_dev->gmu.vrb->size);
+		if (ret)
+			return ret;
+	}
+
 	if (!IS_ERR_OR_NULL(a6xx_dev->gmu.dump_mem)) {
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
 					KGSL_GMU_DUMPMEM_ENTRY,
 					a6xx_dev->gmu.dump_mem->hostptr,
 					a6xx_dev->gmu.dump_mem->size);
+		if (ret)
+			return ret;
+	}
+
+	if (!IS_ERR_OR_NULL(a6xx_dev->gmu.trace.md)) {
+		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
+					KGSL_GMU_TRACE_ENTRY,
+					a6xx_dev->gmu.trace.md->hostptr,
+					a6xx_dev->gmu.trace.md->size);
 		if (ret)
 			return ret;
 	}

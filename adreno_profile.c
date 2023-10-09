@@ -309,10 +309,12 @@ static bool results_available(struct adreno_device *adreno_dev,
 {
 	unsigned int global_eop;
 	unsigned int off = profile->shared_tail;
-	unsigned int *shared_ptr = (unsigned int *)
-		profile->shared_buffer->hostptr;
+	unsigned int *shared_ptr;
 	unsigned int ts, cnt;
 	int ts_cmp;
+
+	if (IS_ERR(profile->shared_buffer))
+		return false;
 
 	/*
 	 * If shared_buffer empty or Memstore EOP timestamp is less than
@@ -321,6 +323,7 @@ static bool results_available(struct adreno_device *adreno_dev,
 	if (shared_buf_empty(profile))
 		return false;
 
+	shared_ptr = (unsigned int *)profile->shared_buffer->hostptr;
 	if (adreno_rb_readtimestamp(adreno_dev,
 			adreno_dev->cur_rb,
 			KGSL_TIMESTAMP_RETIRED, &global_eop))
@@ -1049,6 +1052,10 @@ void adreno_profile_close(struct adreno_device *adreno_dev)
 	profile->shared_size = 0;
 
 	profile->assignment_count = 0;
+
+	/* Return if list is not initialized */
+	if (!profile->assignments_list.next)
+		return;
 
 	list_for_each_entry_safe(entry, tmp, &profile->assignments_list, list) {
 		list_del(&entry->list);

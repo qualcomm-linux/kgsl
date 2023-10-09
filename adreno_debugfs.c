@@ -561,6 +561,31 @@ static int _preempt_level_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level_store, "%llu\n");
 
+static int _warmboot_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64)adreno_dev->warmboot_enabled;
+	return 0;
+}
+
+/*
+ * When warmboot feature is enabled from debugfs, the first slumber exit will be a cold boot
+ * and all hfi messages will be recorded, so that warmboot can happen on subsequent slumber
+ * exit. When warmboot feature is disabled from debugfs, every slumber exit will be a coldboot.
+ */
+static int _warmboot_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	if (adreno_dev->warmboot_enabled == val)
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->warmboot_enabled, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(warmboot_fops, _warmboot_show, _warmboot_store, "%llu\n");
+
 static int _ifpc_hyst_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
@@ -622,6 +647,10 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 	if (gmu_core_isenabled(device))
 		debugfs_create_file("ifpc_hyst", 0644, device->d_debugfs,
 			device, &ifpc_hyst_fops);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT))
+		debugfs_create_file("warmboot", 0644, device->d_debugfs,
+			device, &warmboot_fops);
 
 	debugfs_create_file("ctxt_record_size", 0644, snapshot_dir,
 		device, &_ctxt_record_size_fops);

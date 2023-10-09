@@ -484,4 +484,10 @@ static inline void kgsl_sharedmem_put_bind_op(struct kgsl_sharedmem_bind_op *op)
 	if (!IS_ERR_OR_NULL(op))
 		kref_put(&op->ref, kgsl_sharedmem_bind_range_destroy);
 }
+
+/**
+ * kgsl_register_shmem_callback - Register vendor hook callback with SHMEM
+ * driver
+ */
+void kgsl_register_shmem_callback(void);
 #endif /* __KGSL_SHAREDMEM_H */

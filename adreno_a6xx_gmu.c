@@ -6,7 +6,6 @@
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
 #include <linux/clk.h>
-#include <linux/clk/qcom.h>
 #include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/dma-map-ops.h>
@@ -22,7 +21,6 @@
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -595,42 +593,18 @@ static void gmu_ao_sync_event(struct adreno_device *adreno_dev)
 	local_irq_restore(flags);
 }
 
-int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	int ret;
-
-	ret = wait_for_completion_timeout(&gmu->gdsc_gate, msecs_to_jiffies(5000));
-	if (!ret) {
-		dev_err(device->dev, "GPU CX wait timeout. Dumping CX votes:\n");
-		/* Dump the cx regulator consumer list */
-		qcom_clk_dump(NULL, gmu->cx_gdsc, false);
-	}
-
-	ret = regulator_enable(gmu->cx_gdsc);
-	if (ret)
-		dev_err(&gmu->pdev->dev,
-			"Failed to enable GMU CX gdsc, error %d\n", ret);
-
-	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
-	return ret;
-}
-
 void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-
-	reinit_completion(&gmu->gdsc_gate);
-
-	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
-		regulator_set_mode(gmu->cx_gdsc, REGULATOR_MODE_IDLE);
-
-	set_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
-	regulator_disable(gmu->cx_gdsc);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
-		regulator_set_mode(gmu->cx_gdsc, REGULATOR_MODE_NORMAL);
+		regulator_set_mode(pwr->cx_gdsc, REGULATOR_MODE_IDLE);
+
+	kgsl_pwrctrl_disable_cx_gdsc(device);
+
+	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
+		regulator_set_mode(pwr->cx_gdsc, REGULATOR_MODE_NORMAL);
 }
 
 int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
@@ -640,6 +614,7 @@ int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
 	u32 val = 0x00000100;
 	u32 mask = 0x000001FF;
 
+	gmu_core_reset_trace_header(&gmu->trace);
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Check for 0xBABEFACE on legacy targets */
@@ -1065,7 +1040,7 @@ static int a6xx_gmu_hfi_start_msg(struct adreno_device *adreno_dev)
 		if (ret)
 			return ret;
 
-		return a6xx_hfi_send_generic_req(adreno_dev, &req);
+		return a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 	}
 
 	return 0;
@@ -1553,6 +1528,10 @@ void a6xx_gmu_register_config(struct adreno_device *adreno_dev)
 	if (!adreno_is_a630(adreno_dev))
 		kgsl_regwrite(device, A6XX_GBIF_HALT, 0x0);
 
+	/* Set vrb address before starting GMU */
+	if (!IS_ERR_OR_NULL(gmu->vrb))
+		gmu_core_regwrite(device, A6XX_GMU_GENERAL_11, gmu->vrb->gmuaddr);
+
 	/* Set the log wptr index */
 	gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_PWR_COL_CP_RESP,
 			gmu->log_wptr_retention);
@@ -1617,7 +1596,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		kgsl_sharedmem_free(md);
 		memset(md, 0, sizeof(*md));
@@ -1666,7 +1645,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
 	if (ret) {
 		dev_err(&gmu->pdev->dev,
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%x :%d\n",
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
 			addr, md->size, ret);
 		md =  ERR_PTR(-ENOMEM);
 		goto done;
@@ -1860,6 +1839,7 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	int ret = 0;
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* If SPTP_RAC is on, turn off SPTP_RAC HS */
 	a6xx_gmu_sptprac_disable(adreno_dev);
@@ -1904,14 +1884,14 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	 * the GX HS. This code path is the only client voting for GX through
 	 * the regulator interface.
 	 */
-	if (gmu->gx_gdsc) {
+	if (pwr->gx_gdsc) {
 		if (a6xx_gmu_gx_is_on(adreno_dev)) {
 			/* Switch gx gdsc control from GMU to CPU
 			 * force non-zero reference count in clk driver
 			 * so next disable call will turn
 			 * off the GDSC
 			 */
-			ret = regulator_enable(gmu->gx_gdsc);
+			ret = regulator_enable(pwr->gx_gdsc);
 			if (ret)
 				dev_err(&gmu->pdev->dev,
 					"suspend fail: gx enable %d\n", ret);
@@ -1928,7 +1908,7 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 				ndelay(520);
 			}
 
-			ret = regulator_disable(gmu->gx_gdsc);
+			ret = regulator_disable(pwr->gx_gdsc);
 			if (ret)
 				dev_err(&gmu->pdev->dev,
 					"suspend fail: gx disable %d\n", ret);
@@ -1973,7 +1953,7 @@ static int a6xx_gmu_notify_slumber(struct adreno_device *adreno_dev)
 
 		ret = CMD_MSG_HDR(req, H2F_MSG_PREPARE_SLUMBER);
 		if (!ret)
-			ret = a6xx_hfi_send_generic_req(adreno_dev, &req);
+			ret = a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 
 		goto out;
 	}
@@ -2062,7 +2042,7 @@ static int a6xx_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_HFI_USE_REG))
 		ret = a6xx_gmu_dcvs_nohfi(device, req.freq, req.bw);
 	else
-		ret = a6xx_hfi_send_generic_req(adreno_dev, &req);
+		ret = a6xx_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
@@ -2376,7 +2356,7 @@ static void a6xx_gmu_force_first_boot(struct kgsl_device *device)
 	u32 val = 0;
 
 	if (gmu->pdc_cfg_base) {
-		a6xx_gmu_enable_gdsc(adreno_dev);
+		kgsl_pwrctrl_enable_cx_gdsc(device);
 		a6xx_gmu_enable_clks(adreno_dev, 0);
 
 		val = __raw_readl(gmu->pdc_cfg_base + (PDC_GPU_ENABLE_PDC << 2));
@@ -2406,7 +2386,7 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	a6xx_gmu_aop_send_acd_state(gmu, adreno_dev->acd_enabled);
 
-	ret = a6xx_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
@@ -2502,20 +2482,13 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
 
-	ret = a6xx_gmu_enable_gdsc(adreno_dev);
+	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
 
 	ret = a6xx_gmu_enable_clks(adreno_dev, 0);
 	if (ret)
 		goto gdsc_off;
-
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
 
 	ret = a6xx_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -2701,7 +2674,7 @@ static void a6xx_gmu_acd_probe(struct kgsl_device *device,
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
 		return;
 
-	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, sizeof(*cmd), HFI_MSG_CMD);
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, HFI_MSG_CMD);
 
 	cmd->version = 1;
 	cmd->stride = 1;
@@ -2827,65 +2800,6 @@ static void a6xx_gmu_rdpm_probe(struct a6xx_gmu_device *gmu,
 				res->start, resource_size(res));
 }
 
-static int gmu_cx_gdsc_event(struct notifier_block *nb,
-	unsigned long event, void *data)
-{
-	struct a6xx_gmu_device *gmu = container_of(nb, struct a6xx_gmu_device, gdsc_nb);
-	struct adreno_device *adreno_dev = a6xx_gmu_to_adreno(gmu);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 val, offset;
-
-	if (!(event & REGULATOR_EVENT_DISABLE) ||
-		!test_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags))
-		return 0;
-
-	offset = (adreno_is_a662(ADRENO_DEVICE(device)) ||
-		adreno_is_a621(ADRENO_DEVICE(device))) ?
-		A662_GPU_CC_CX_GDSCR : A6XX_GPU_CC_CX_GDSCR;
-
-	if (kgsl_regmap_read_poll_timeout(&device->regmap, offset, val,
-		!(val & BIT(31)), 100, 100 * 1000))
-		dev_err(device->dev, "GPU CX wait timeout.\n");
-
-	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
-	complete_all(&gmu->gdsc_gate);
-
-	return 0;
-}
-
-static int a6xx_gmu_regulators_probe(struct a6xx_gmu_device *gmu,
-		struct platform_device *pdev)
-{
-	int ret;
-
-	gmu->cx_gdsc = devm_regulator_get(&pdev->dev, "vddcx");
-	if (IS_ERR(gmu->cx_gdsc)) {
-		if (PTR_ERR(gmu->cx_gdsc) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Couldn't get the vddcx gdsc\n");
-		return PTR_ERR(gmu->cx_gdsc);
-	}
-
-	gmu->gx_gdsc = devm_regulator_get(&pdev->dev, "vdd");
-	if (IS_ERR(gmu->gx_gdsc)) {
-		if (PTR_ERR(gmu->gx_gdsc) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Couldn't get the vdd gdsc\n");
-		return PTR_ERR(gmu->gx_gdsc);
-	}
-
-	gmu->gdsc_nb.notifier_call = gmu_cx_gdsc_event;
-	ret = devm_regulator_register_notifier(gmu->cx_gdsc, &gmu->gdsc_nb);
-
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to register gmu cx gdsc notifier: %d\n", ret);
-		return ret;
-	}
-
-	init_completion(&gmu->gdsc_gate);
-	complete_all(&gmu->gdsc_gate);
-
-	return 0;
-}
-
 void a6xx_gmu_remove(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -2991,7 +2905,7 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	a6xx_gmu_rdpm_probe(gmu, device);
 
 	/* Set up GMU regulators */
-	ret = a6xx_gmu_regulators_probe(gmu, pdev);
+	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
 	if (ret)
 		return ret;
 
@@ -3031,6 +2945,9 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	a6xx_gmu_acd_probe(device, gmu, pdev->dev.of_node);
 
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
+
+	/* Initialize to zero to detect trace packet loss */
+	gmu->trace.seq_num = 0;
 
 	device->gmu_core.dev_ops = &a6xx_gmudev;
 
@@ -3348,7 +3265,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 		return 0;
 	}
 
-	place_marker("M - DRIVER ADRENO Init");
+	KGSL_BOOT_MARKER("ADRENO Init");
 
 	ret = a6xx_ringbuffer_init(adreno_dev);
 	if (ret)
@@ -3417,7 +3334,7 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
-	place_marker("M - DRIVER ADRENO Ready");
+	KGSL_BOOT_MARKER("ADRENO Ready");
 
 	return 0;
 }

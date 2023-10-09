@@ -56,6 +56,22 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv);
 
 /**
+ * adreno_snapshot_registers_v2 - Dump a series of CX_MISC registers
+ * @device: Pointer to the kgsl device
+ * @buf: The snapshot buffer
+ * @remain: The size remaining in the snapshot buffer
+ * @priv: Pointer to the CX_MISC register array to be dumped
+ *
+ * Return: Number of bytes written to the snapshot
+ *
+ * This function dumps the CX_MISC registers in a way that we need to
+ * only dump the start address and count for each pair of register
+ * in the array. This helps us save some memory in snapshot.
+ */
+size_t adreno_snapshot_cx_misc_registers(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv);
+
+/**
  * adreno_parse_ib - Parse the given IB
  * @device: Pointer to the kgsl device
  * @snapshot: Pointer to the snapshot structure

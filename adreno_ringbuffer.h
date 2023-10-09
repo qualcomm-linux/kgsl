@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_RINGBUFFER_H
 #define __ADRENO_RINGBUFFER_H
@@ -142,11 +143,6 @@ struct adreno_ringbuffer {
 /* Returns the current ringbuffer */
 #define ADRENO_CURRENT_RINGBUFFER(a)	((a)->cur_rb)
 
-int adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
-				struct kgsl_context *context,
-				struct kgsl_drawobj *drawobj,
-				uint32_t *timestamp);
-
 /**
  * adreno_ringbuffer_setup - Do generic set up on a ringbuffer
  * @adreno_dev: Pointer to an Adreno GPU handle
@@ -166,17 +162,8 @@ int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
 
 void adreno_ringbuffer_stop(struct adreno_device *adreno_dev);
 
-void adreno_ringbuffer_submit(struct adreno_ringbuffer *rb,
-		struct adreno_submit_time *time);
-
-void kgsl_cp_intrcallback(struct kgsl_device *device);
-
 unsigned int *adreno_ringbuffer_allocspace(struct adreno_ringbuffer *rb,
 						unsigned int numcmds);
-
-void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device);
-
-void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device);
 
 int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 					unsigned int timestamp,
@@ -207,16 +194,6 @@ static inline unsigned int adreno_ringbuffer_dec_wrapped(unsigned int val,
 {
 	return (val + size - sizeof(unsigned int)) % size;
 }
-
-/**
- * adreno_ringbuffer_set_constraint - Set a system constraint before submission
- * @device: A KGSL GPU device handle
- * @drawobj: Pointer to the drawobj being sbumitted
- *
- * Check the drawobj to see if a constraint is applied and apply it.
- */
-void adreno_ringbuffer_set_constraint(struct kgsl_device *device,
-		struct kgsl_drawobj *drawobj);
 
 void adreno_get_submit_time(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "a6xx_reg.h"
@@ -154,11 +154,6 @@ static const unsigned int a650_rscc_registers[] = {
 	0x3915B, 0x3915B,
 };
 
-struct gmu_mem_type_desc {
-	struct kgsl_memdesc *memdesc;
-	uint32_t type;
-};
-
 static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
@@ -264,6 +259,10 @@ static void a6xx_gmu_snapshot_memories(struct kgsl_device *device,
 			desc.type = SNAPSHOT_GMU_MEM_LOG;
 		else if (md == gmu->dump_mem)
 			desc.type = SNAPSHOT_GMU_MEM_DEBUG;
+		else if (md == gmu->vrb)
+			desc.type = SNAPSHOT_GMU_MEM_VRB;
+		else if (md == gmu->trace.md)
+			desc.type = SNAPSHOT_GMU_MEM_TRACE;
 		else
 			desc.type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 

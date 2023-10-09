@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
@@ -82,8 +82,8 @@ struct adreno_context {
 	struct kgsl_memdesc gmu_hw_fence_queue;
 	/** @hw_fence_list: List of hardware fences(sorted by timestamp) not yet submitted to GMU */
 	struct list_head hw_fence_list;
-	/** @hw_fence_ts: timestamp of the last hardware fence in the fence list */
-	u32 hw_fence_ts;
+	/** @hw_fence_inflight_list: List of hardware fences submitted to GMU */
+	struct list_head hw_fence_inflight_list;
 	/** @hw_fence_count: Number of hardware fences not yet sent to Tx Queue */
 	u32 hw_fence_count;
 	/** @syncobj_timestamp: Timestamp to check whether GMU has consumed a syncobj */
@@ -113,11 +113,6 @@ enum adreno_context_priv {
 	ADRENO_CONTEXT_FORCE_PREAMBLE,
 	ADRENO_CONTEXT_SKIP_CMD,
 	ADRENO_CONTEXT_FENCE_LOG,
-	/**
-	 * @ADRENO_CONTEXT_DRAIN_HW_FENCE: Signal any hardware fences that weren't dispatched to
-	 * GMU
-	 */
-	ADRENO_CONTEXT_DRAIN_HW_FENCE,
 };
 
 struct kgsl_context *adreno_drawctxt_create(
@@ -129,6 +124,7 @@ void adreno_drawctxt_detach(struct kgsl_context *context);
 void adreno_drawctxt_destroy(struct kgsl_context *context);
 
 struct adreno_ringbuffer;
+struct adreno_dispatcher_drawqueue;
 
 int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 		struct kgsl_context *context,
@@ -193,4 +189,18 @@ adreno_drawctxt_get_pagetable(struct adreno_context *drawctxt)
  */
 void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 		struct kgsl_context *context);
+
+/**
+ * adreno_track_context - Add a context to active list and keep track of active contexts
+ * @adreno_dev: Pointer to adreno device
+ * @drawqueue: Pointer to the dispatch queue to which context send commands
+ * @drawctxt: Draw context which is to be tracked
+ *
+ * Add the given draw context to the active list and update number of contexts which
+ * are active overall as well as which are active on the dispatch queue to which
+ * the given context sends commands.
+ */
+void adreno_track_context(struct adreno_device *adreno_dev,
+		struct adreno_dispatcher_drawqueue *drawqueue,
+		struct adreno_context *drawctxt);
 #endif  /* __ADRENO_DRAWCTXT_H */

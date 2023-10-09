@@ -23,12 +23,16 @@ struct cmd_list_obj {
  * struct adreno_hw_fence_entry - A structure to store hardware fence and the context
  */
 struct adreno_hw_fence_entry {
+	/** @cmd: H2F_MSG_HW_FENCE_INFO packet for this hardware fence */
+	struct hfi_hw_fence_info cmd;
 	/** @kfence: Pointer to the kgsl fence */
 	struct kgsl_sync_fence *kfence;
 	/** @drawctxt: Pointer to the context */
 	struct adreno_context *drawctxt;
 	/** @node: list node to add it to a list */
 	struct list_head node;
+	/** @reset_node: list node to add it to post reset list of hardware fences */
+	struct list_head reset_node;
 };
 
 /**
@@ -46,11 +50,10 @@ struct adreno_hwsched_ops {
 	 */
 	u32 (*preempt_count)(struct adreno_device *adreno_dev);
 	/**
-	 * @send_hw_fence - Target specific function to send hardware fence
-	 * info to the GMU
+	 * @create_hw_fence - Target specific function to create a hardware fence
 	 */
-	int (*send_hw_fence)(struct adreno_device *adreno_dev,
-		struct adreno_hw_fence_entry *entry);
+	void (*create_hw_fence)(struct adreno_device *adreno_dev,
+		struct kgsl_sync_fence *kfence);
 
 };
 
@@ -105,10 +108,13 @@ struct adreno_hwsched {
 	struct adreno_hw_fence hw_fence;
 	/** @hw_fence_cache: kmem cache for storing hardware output fences */
 	struct kmem_cache *hw_fence_cache;
-	/** @hw_fence_list: List of hardware fences sent to GMU */
-	struct list_head hw_fence_list;
 	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
-	u32 hw_fence_count;
+	atomic_t hw_fence_count;
+	/**
+	 * @submission_seqnum: Sequence number for sending submissions to GMU context queues or
+	 * dispatch queues
+	 */
+	atomic_t submission_seqnum;
 
 };
 
@@ -221,22 +227,22 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev);
 void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_remove_hw_fence_entry - Remove hardware fence entry
+ * adreno_hwsched_replay - Resubmit inflight cmdbatches after gpu reset
  * @adreno_dev: pointer to the adreno device
- * @entry: Pointer to the hardware fence entry
+ *
+ * Resubmit all cmdbatches to GMU after device reset
  */
-void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
+void adreno_hwsched_replay(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_trigger_hw_fence_cpu - Trigger hardware fence from cpu
- * @adreno_dev: pointer to the adreno device
- * @fence: hardware fence entry to be triggered
+ * adreno_hwsched_parse_payload - Parse payload to look up a key
+ * @payload: Pointer to a payload section
+ * @key: The key who's value is to be looked up
  *
- * Trigger the hardware fence by sending it to GMU's Tx Queue and raise the
- * interrupt from GMU to APPS
+ * This function parses the payload data which is a sequence
+ * of key-value pairs.
+ *
+ * Return: The value of the key or 0 if key is not found
  */
-void adreno_hwsched_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *fence);
-
+u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
 #endif

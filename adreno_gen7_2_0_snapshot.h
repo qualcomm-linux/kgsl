@@ -739,7 +739,6 @@ static_assert(IS_ALIGNED(sizeof(gen7_2_0_dpm_registers), 8));
 
 static struct gen7_reg_list gen7_2_0_reg_list[] = {
 	{ gen7_2_0_gpu_registers, NULL },
-	{ gen7_2_0_cx_misc_registers, NULL },
 	{ gen7_2_0_dpm_registers, NULL },
 	{ gen7_2_0_dbgc_registers, NULL },
 	{ NULL, NULL },
