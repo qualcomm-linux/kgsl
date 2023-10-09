@@ -1278,6 +1278,8 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 
 			adreno_perfcounter_put(adreno_dev,
 				cmd->group_id, cmd->countable, PERFCOUNTER_FLAG_KERNEL);
+
+			adreno_mark_for_coldboot(adreno_dev);
 			}
 			break;
 		}
