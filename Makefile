@@ -5,13 +5,14 @@ endif
 
 KBUILD_OPTIONS+=KGSL_PATH=$(KGSL_MODULE_ROOT)
 
-all: modules
+SRC := $(shell pwd)
+
+all:
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules $(KBUILD_OPTIONS)
 
 modules_install:
-	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M) modules_install
-
-clean:
-	rm -f *.cmd *.d *.mod *.o *.ko *.mod.c *.mod.o Module.symvers modules.order
-
+	$(MAKE) M=$(SRC) -C $(KERNEL_SRC) modules_install
 %:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) $@ $(KBUILD_OPTIONS)
+clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) clean
