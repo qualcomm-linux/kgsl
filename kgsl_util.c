@@ -23,7 +23,6 @@
 #include <linux/soc/qcom/mdt_loader.h>
 #include <linux/string.h>
 #include <linux/version.h>
-#include <soc/qcom/minidump.h>
 
 #include "adreno.h"
 #include "kgsl_util.h"
@@ -235,6 +234,8 @@ void kgsl_hwunlock(struct cpu_gpu_lock *lock)
 }
 
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
+#include <soc/qcom/minidump.h>
+
 void kgsl_add_to_minidump(char *name, u64 virt_addr, u64 phy_addr, size_t size)
 {
 	struct md_region md_entry = {0};
