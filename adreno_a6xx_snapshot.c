@@ -1799,6 +1799,10 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 
 	sptprac_on = a6xx_gmu_sptprac_is_on(adreno_dev);
 
+	/* SQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, a6xx_snapshot_sqe, NULL);
+
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
 
@@ -1894,10 +1898,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	 */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a6xx_snapshot_cp_roq, NULL);
-
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, a6xx_snapshot_sqe, NULL);
 
 	/* Mempool debug data */
 	if (adreno_is_a650_family(adreno_dev))

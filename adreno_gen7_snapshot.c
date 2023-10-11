@@ -1643,6 +1643,14 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL3_TP0, cgc2);
 	}
 
+	/* SQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen7_snapshot_sqe, NULL);
+
+	/* AQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen7_snapshot_aqe, NULL);
+
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
 
@@ -1719,14 +1727,6 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 
 		gen7_snapshot_lpac_roq(device, snapshot);
 	}
-
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen7_snapshot_sqe, NULL);
-
-	/* AQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen7_snapshot_aqe, NULL);
 
 	/* Mempool debug data */
 	gen7_snapshot_mempool(device, snapshot);
