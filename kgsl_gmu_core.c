@@ -207,3 +207,11 @@ int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memde
 
 	return mapped == 0 ? -ENOMEM : 0;
 }
+
+void gmu_core_dev_force_first_boot(struct kgsl_device *device)
+{
+	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
+
+	if (ops && ops->force_first_boot)
+		return ops->force_first_boot(device);
+}

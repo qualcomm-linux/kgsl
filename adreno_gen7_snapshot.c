@@ -12,6 +12,7 @@ static struct kgsl_memdesc *gen7_capturescript;
 static struct kgsl_memdesc *gen7_crashdump_registers;
 static u32 *gen7_cd_reg_end;
 static const struct gen7_snapshot_block_list *gen7_snapshot_block_list;
+static bool gen7_crashdump_timedout;
 
 /* Starting kernel virtual address for QDSS TMC register block */
 static void __iomem *tmc_virt;
@@ -37,6 +38,8 @@ const struct gen7_snapshot_block_list gen7_0_0_snapshot_block_list = {
 	.sptp_clusters = gen7_0_0_sptp_clusters,
 	.num_sptp_clusters = ARRAY_SIZE(gen7_0_0_sptp_clusters),
 	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
+	.index_registers = gen7_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_cp_indexed_reg_list),
 };
 
 const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list = {
@@ -60,6 +63,33 @@ const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list = {
 	.sptp_clusters = gen7_2_0_sptp_clusters,
 	.num_sptp_clusters = ARRAY_SIZE(gen7_2_0_sptp_clusters),
 	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
+	.index_registers = gen7_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_cp_indexed_reg_list),
+};
+
+const struct gen7_snapshot_block_list gen7_14_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen7_14_0_pre_crashdumper_registers,
+	.debugbus_blocks = gen7_14_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen7_14_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen7_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen7_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen7_cx_dbgc_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen7_cx_dbgc_debugbus_blocks),
+	.external_core_regs = gen7_14_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen7_14_0_external_core_regs),
+	.gmu_regs = gen7_14_0_gmu_registers,
+	.gmu_gx_regs = gen7_14_0_gmu_gx_registers,
+	.rscc_regs = gen7_14_0_rscc_registers,
+	.reg_list = gen7_14_0_reg_list,
+	.shader_blocks = gen7_14_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen7_14_0_shader_blocks),
+	.clusters = gen7_14_0_clusters,
+	.num_clusters = ARRAY_SIZE(gen7_14_0_clusters),
+	.sptp_clusters = gen7_14_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen7_14_0_sptp_clusters),
+	.post_crashdumper_regs = gen7_14_0_post_crashdumper_registers,
+	.index_registers = gen7_14_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_14_0_cp_indexed_reg_list),
 };
 
 #define GEN7_DEBUGBUS_BLOCK_SIZE 0x100
@@ -111,7 +141,8 @@ static bool CD_SCRIPT_CHECK(struct kgsl_device *device)
 {
 	return (gen7_is_smmu_stalled(device) || (!device->snapshot_crashdumper) ||
 		IS_ERR_OR_NULL(gen7_capturescript) ||
-		IS_ERR_OR_NULL(gen7_crashdump_registers));
+		IS_ERR_OR_NULL(gen7_crashdump_registers) ||
+		gen7_crashdump_timedout);
 }
 
 static bool _gen7_do_crashdump(struct kgsl_device *device)
@@ -152,8 +183,18 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 
 	kgsl_regwrite(device, GEN7_CP_CRASH_DUMP_CNTL, 0);
 
-	if (WARN(!(reg & 0x2), "Crashdumper timed out\n"))
+	if (WARN(!(reg & 0x2), "Crashdumper timed out\n")) {
+		/*
+		 * Gen7 crash dumper script is broken down into multiple chunks
+		 * and script will be invoked multiple times to capture snapshot
+		 * of different sections of GPU. If crashdumper fails once, it is
+		 * highly likely it will fail subsequently as well. Hence update
+		 * gen7_crashdump_timedout variable to avoid running crashdumper
+		 * after it fails once.
+		 */
+		gen7_crashdump_timedout = true;
 		return false;
+	}
 
 	return true;
 }
@@ -640,18 +681,20 @@ static void gen7_snapshot_mempool(struct kgsl_device *device,
 {
 	/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
 	kgsl_regrmw(device, GEN7_CP_CHICKEN_DBG, 0x4, 0x4);
-	kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x4);
 
 	kgsl_snapshot_indexed_registers(device, snapshot,
 		GEN7_CP_MEM_POOL_DBG_ADDR, GEN7_CP_MEM_POOL_DBG_DATA,
 		0, 0x2200);
 
-	kgsl_snapshot_indexed_registers(device, snapshot,
-		GEN7_CP_BV_MEM_POOL_DBG_ADDR, GEN7_CP_BV_MEM_POOL_DBG_DATA,
-		0, 0x2200);
+	if (!adreno_is_gen7_14_0(ADRENO_DEVICE(device))) {
+		kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x4);
+		kgsl_snapshot_indexed_registers(device, snapshot,
+			GEN7_CP_BV_MEM_POOL_DBG_ADDR, GEN7_CP_BV_MEM_POOL_DBG_DATA,
+			0, 0x2200);
+		kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x0);
+	}
 
 	kgsl_regrmw(device, GEN7_CP_CHICKEN_DBG, 0x4, 0x0);
-	kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x0);
 }
 
 static unsigned int gen7_read_dbgahb(struct kgsl_device *device,
@@ -1463,6 +1506,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
 	int is_current_rt;
 
+	gen7_crashdump_timedout = false;
 	gen7_snapshot_block_list = gpucore->gen7_snapshot_block_list;
 
 	/* External registers are dumped in the beginning of gmu snapshot */
@@ -1557,17 +1601,18 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	if (device->ftbl->is_hwcg_on(device))
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_MODE_CP, cgc);
 
-	for (i = 0; i < ARRAY_SIZE(gen7_cp_indexed_reg_list); i++)
+	for (i = 0; i < gen7_snapshot_block_list->index_registers_len; i++)
 		kgsl_snapshot_indexed_registers(device, snapshot,
-			gen7_cp_indexed_reg_list[i].addr,
-			gen7_cp_indexed_reg_list[i].data, 0,
-			gen7_cp_indexed_reg_list[i].size);
+			gen7_snapshot_block_list->index_registers[i].addr,
+			gen7_snapshot_block_list->index_registers[i].data, 0,
+			gen7_snapshot_block_list->index_registers[i].size);
 
 	gen7_snapshot_br_roq(device, snapshot);
 
-	gen7_snapshot_bv_roq(device, snapshot);
-
-	gen7_snapshot_lpac_roq(device, snapshot);
+	if (!adreno_is_gen7_14_0(ADRENO_DEVICE(device))) {
+		gen7_snapshot_bv_roq(device, snapshot);
+		gen7_snapshot_lpac_roq(device, snapshot);
+	}
 
 	/* SQE Firmware */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,

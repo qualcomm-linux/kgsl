@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_UTIL_H_
@@ -124,6 +125,15 @@ int kgsl_clk_set_rate(struct clk_bulk_data *clks, int num_clks,
  * Return: 0 on success or negative on failure
  */
 int kgsl_zap_shader_load(struct device *dev, const char *name);
+
+/**
+ * kgsl_zap_shader_unload - Unload a zap shader
+ * @dev: Pointer to the struct device for the GPU platform device
+ *
+ * Unload zap_shader and shutdown the peripheral
+ * Return: 0 on success or negative on failure
+ */
+int kgsl_zap_shader_unload(struct device *dev);
 
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 /**
