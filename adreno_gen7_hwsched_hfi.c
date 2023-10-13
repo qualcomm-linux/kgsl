@@ -8,7 +8,6 @@
 #include <linux/dma-fence-array.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
-#include <linux/soc/qcom/msm_hw_fence.h>
 #include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
@@ -22,6 +21,12 @@
 #include "kgsl_pwrctrl.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
+
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <msm_hw_fence.h>
+#else
+#include <linux/soc/qcom/msm_hw_fence.h>
+#endif
 
 #define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT + HFI_QUEUE_DISPATCH_MAX_CNT)
 

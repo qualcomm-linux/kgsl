@@ -6,11 +6,16 @@
 
 #include <linux/file.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/msm_hw_fence.h>
 #include <linux/sync_file.h>
 
 #include "kgsl_device.h"
 #include "kgsl_sync.h"
+
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <msm_hw_fence.h>
+#else
+#include <linux/soc/qcom/msm_hw_fence.h>
+#endif
 
 static const struct dma_fence_ops kgsl_sync_fence_ops;
 
