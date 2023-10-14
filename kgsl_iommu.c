@@ -277,6 +277,7 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
 	int ret = 0;
+	size_t unmapped;
 
 	if (IS_ENABLED(CONFIG_IOMMU_IO_PGTABLE_LPAE)) {
 		ret = _iopgtbl_unmap_pages(pt, gpuaddr, size);
@@ -285,13 +286,10 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 		goto flush;
 	}
 
-	while (size) {
-		if ((ops->unmap(ops, gpuaddr, PAGE_SIZE, NULL)) != PAGE_SIZE)
-			return -EINVAL;
-
-		gpuaddr += PAGE_SIZE;
-		size -= PAGE_SIZE;
-	}
+	unmapped = ops->unmap_pages(ops, gpuaddr, PAGE_SIZE,
+				    size >> PAGE_SHIFT, NULL);
+	if (unmapped != size)
+		return -EINVAL;
 
 	/*
 	 * Skip below logic for 6.1 kernel version and above as
@@ -342,22 +340,17 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	}
 
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
-		size_t size = sg->length;
+		size_t size = sg->length, map_size = 0;
 		phys_addr_t phys = sg_phys(sg);
 
-		while (size) {
-			ret = ops->map(ops, addr, phys, PAGE_SIZE, prot, GFP_KERNEL);
-
-			if (ret) {
-				_iopgtbl_unmap(pt, gpuaddr, mapped);
-				return 0;
-			}
-
-			phys += PAGE_SIZE;
-			mapped += PAGE_SIZE;
-			addr += PAGE_SIZE;
-			size -= PAGE_SIZE;
+		ret = ops->map_pages(ops, addr, phys, PAGE_SIZE, size >> PAGE_SHIFT,
+				     prot, GFP_KERNEL, &map_size);
+		if (ret) {
+			_iopgtbl_unmap(pt, gpuaddr, mapped);
+			return 0;
 		}
+		addr += size;
+		mapped += map_size;
 	}
 
 	return mapped;
@@ -427,19 +420,19 @@ static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
 		struct page *page, u64 gpuaddr, size_t range, int prot)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0;
+	size_t mapped = 0, map_size = 0;
 	u64 addr = gpuaddr;
 	int ret;
 
 	while (range) {
-		ret = ops->map(ops, addr, page_to_phys(page), PAGE_SIZE,
-			prot, GFP_KERNEL);
+		ret = ops->map_pages(ops, addr, page_to_phys(page), PAGE_SIZE,
+				     1, prot, GFP_KERNEL, &map_size);
 		if (ret) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
 
-		mapped += PAGE_SIZE;
+		mapped += map_size;
 		addr += PAGE_SIZE;
 		range -= PAGE_SIZE;
 	}

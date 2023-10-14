@@ -11,6 +11,13 @@
 #include "adreno_gen7_hfi.h"
 #include "kgsl_gmu_core.h"
 
+struct gen7_dcvs_table {
+	u32 gpu_level_num;
+	u32 gmu_level_num;
+	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS];
+};
+
 /**
  * struct gen7_gmu_device - GMU device structure
  * @ver: GMU Version information
@@ -51,6 +58,8 @@ struct gen7_gmu_device {
 	struct kgsl_memdesc *gpu_boot_scratch;
 	/** @vrb: GMU virtual register bank memory */
 	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 	struct gen7_hfi hfi;
 	struct clk_bulk_data *clks;
 	/** @num_clks: Number of entries in the @clks array */
@@ -110,6 +119,8 @@ struct gen7_gmu_device {
 	u32 cp_init_hdr;
 	/** @switch_to_unsec_hdr: raw command header for switch to unsecure packet */
 	u32 switch_to_unsec_hdr;
+	/** @dcvs_table: Table for gpu dcvs levels */
+	struct gen7_dcvs_table dcvs_table;
 };
 
 /* Helper function to get to gen7 gmu device from adreno device */

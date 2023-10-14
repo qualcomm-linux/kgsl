@@ -14,7 +14,7 @@
  ****************************************************************************/
 #define KGSL_MAX_CLKS 18
 
-#define KGSL_MAX_PWRLEVELS 16
+#define KGSL_MAX_PWRLEVELS 32
 
 #define KGSL_PWRFLAGS_POWER_ON 0
 #define KGSL_PWRFLAGS_CLK_ON   1

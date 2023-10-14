@@ -349,6 +349,8 @@ int gen7_gmu_device_start(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 
+	gmu_core_reset_trace_header(&gmu->trace);
+
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Bring GMU out of reset */
@@ -1532,7 +1534,7 @@ static int gen7_gmu_notify_slumber(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int bus_level = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
-	int perf_idx = gmu->hfi.dcvs_table.gpu_level_num -
+	int perf_idx = gmu->dcvs_table.gpu_level_num -
 			pwr->default_pwrlevel - 1;
 	struct hfi_prep_slumber_cmd req = {
 		.freq = perf_idx,
@@ -1580,7 +1582,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct hfi_dcvstable_cmd *table = &gmu->hfi.dcvs_table;
+	struct gen7_dcvs_table *table = &gmu->dcvs_table;
 	struct hfi_gx_bw_perf_vote_cmd req = {
 		.ack_type = DCVS_ACK_BLOCK,
 		.freq = INVALID_DCVS_IDX,
@@ -1629,7 +1631,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 
 	if (req.freq != INVALID_DCVS_IDX)
 		gen7_rdpm_mx_freq_update(gmu,
-			gmu->hfi.dcvs_table.gx_votes[req.freq].freq);
+			gmu->dcvs_table.gx_votes[req.freq].freq);
 
 	return ret;
 }
@@ -2574,6 +2576,9 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	/* Set default GMU attributes */
 	gmu->log_stream_enable = false;
 	gmu->log_group_mask = 0x3;
+
+	/* Initialize to zero to detect trace packet loss */
+	gmu->trace.seq_num = 0;
 
 	/* Disabled by default */
 	gmu->stats_enable = false;
