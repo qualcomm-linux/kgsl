@@ -494,6 +494,8 @@ struct adreno_dispatch_ops {
 	void (*fault)(struct adreno_device *adreno_dev, u32 fault);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
+	/* @get_fault: Get the GPU fault status */
+	u32 (*get_fault)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -1962,4 +1964,12 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
  *
  */
 void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_smmu_is_stalled() - Check whether smmu is stalled or not
+ * @device: Pointer to adreno device
+ *
+ * Return - True if smmu is stalled or false otherwise
+ */
+bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
 #endif /*__ADRENO_H */

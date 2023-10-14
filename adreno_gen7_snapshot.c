@@ -142,7 +142,7 @@ static void CD_FINISH(u64 *ptr, u32 offset)
 
 static bool CD_SCRIPT_CHECK(struct kgsl_device *device)
 {
-	return (gen7_is_smmu_stalled(device) || (!device->snapshot_crashdumper) ||
+	return (adreno_smmu_is_stalled(ADRENO_DEVICE(device)) || (!device->snapshot_crashdumper) ||
 		IS_ERR_OR_NULL(gen7_capturescript) ||
 		IS_ERR_OR_NULL(gen7_crashdump_registers) ||
 		gen7_crashdump_timedout);

@@ -1593,7 +1593,7 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	if (a6xx_is_smmu_stalled(device))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV for legacy targets so we can access the buffers */
@@ -1915,7 +1915,7 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		/* Shader memory */
 		a6xx_snapshot_shader(device, snapshot);
 
-		if (!a6xx_is_smmu_stalled(device))
+		if (!adreno_smmu_is_stalled(adreno_dev))
 			memset(a6xx_crashdump_registers->hostptr, 0xaa,
 					a6xx_crashdump_registers->size);
 	}

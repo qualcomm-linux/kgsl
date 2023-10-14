@@ -707,6 +707,13 @@ static inline void _decrement_submit_now(struct kgsl_device *device)
 	spin_unlock(&device->submit_lock);
 }
 
+u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev)
+{
+	/* make sure we're reading the latest value */
+	smp_rmb();
+	return atomic_read(&adreno_dev->hwsched.fault);
+}
+
 /**
  * adreno_hwsched_issuecmds() - Issue commmands from pending contexts
  * @adreno_dev: Pointer to the adreno device struct
@@ -733,7 +740,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		goto done;
 	}
 
-	if (!hwsched_in_fault(hwsched))
+	if (!adreno_hwsched_gpu_fault(adreno_dev))
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
@@ -2017,6 +2024,7 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_context = adreno_hwsched_queue_context,
 	.fault = adreno_hwsched_fault,
 	.create_hw_fence = adreno_hwsched_create_hw_fence,
+	.get_fault = adreno_hwsched_gpu_fault,
 };
 
 static void hwsched_lsr_check(struct work_struct *work)
@@ -2238,7 +2246,6 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	unsigned long wait = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
@@ -2254,7 +2261,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 		return ret;
 
 	do {
-		if (hwsched_in_fault(hwsched))
+		if (adreno_hwsched_gpu_fault(adreno_dev))
 			return -EDEADLK;
 
 		if (gpudev->hw_isidle(adreno_dev))
@@ -2266,7 +2273,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 	 * without checking if the gpu is idle. check one last time before we
 	 * return failure.
 	 */
-	if (hwsched_in_fault(hwsched))
+	if (adreno_hwsched_gpu_fault(adreno_dev))
 		return -EDEADLK;
 
 	if (gpudev->hw_isidle(adreno_dev))

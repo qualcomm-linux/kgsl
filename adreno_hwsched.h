@@ -202,13 +202,6 @@ void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev);
  */
 int adreno_hwsched_idle(struct adreno_device *adreno_dev);
 
-static inline bool hwsched_in_fault(struct adreno_hwsched *hwsched)
-{
-	/* make sure we're reading the latest value */
-	smp_rmb();
-	return atomic_read(&hwsched->fault) != 0;
-}
-
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj);
 
@@ -252,4 +245,12 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev);
  * Return: The value of the key or 0 if key is not found
  */
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
+
+/**
+ * adreno_hwsched_gpu_fault - Gets hwsched gpu fault info
+ * @adreno_dev: pointer to the adreno device
+ *
+ * Returns zero for hwsched fault else non zero value
+ */
+u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
 #endif

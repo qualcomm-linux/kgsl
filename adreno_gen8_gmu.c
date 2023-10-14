@@ -1639,7 +1639,7 @@ void gen8_gmu_send_nmi(struct kgsl_device *device, bool force)
 	 * Do not send NMI if the SMMU is stalled because GMU will not be able
 	 * to save cm3 state to DDR.
 	 */
-	if (gen8_gmu_gx_is_on(adreno_dev) && gen8_is_smmu_stalled(device)) {
+	if (gen8_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
 		return;

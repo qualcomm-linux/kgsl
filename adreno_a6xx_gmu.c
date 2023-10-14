@@ -2111,7 +2111,7 @@ void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force)
 	 * Do not send NMI if the SMMU is stalled because GMU will not be able
 	 * to save cm3 state to DDR.
 	 */
-	if (a6xx_gmu_gx_is_on(adreno_dev) && a6xx_is_smmu_stalled(device)) {
+	if (a6xx_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
 		return;

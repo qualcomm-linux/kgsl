@@ -3232,6 +3232,31 @@ void adreno_mark_for_coldboot(struct adreno_device *adreno_dev)
 	set_bit(ADRENO_DEVICE_FORCE_COLDBOOT, &adreno_dev->priv);
 }
 
+bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_mmu *mmu = &device->mmu;
+	u32 fault, val;
+
+	/*
+	 * RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24) to tells if GPU
+	 * encoutnered a pagefault. Gen8 page fault status checked from
+	 * the software condition as RBBM_STATS3 is not available.
+	 */
+	if (ADRENO_GPUREV(adreno_dev) < ADRENO_REV_GEN8_0_0) {
+		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
+		return (val & BIT(24));
+	}
+
+	if (WARN_ON(!adreno_dev->dispatch_ops || !adreno_dev->dispatch_ops->get_fault))
+		return false;
+
+	fault = adreno_dev->dispatch_ops->get_fault(adreno_dev);
+
+	return ((fault & ADRENO_IOMMU_PAGE_FAULT) &&
+		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;
+}
+
 int adreno_power_cycle(struct adreno_device *adreno_dev,
 	void (*callback)(struct adreno_device *adreno_dev, void *priv),
 	void *priv)

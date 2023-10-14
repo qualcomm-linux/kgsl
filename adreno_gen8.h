@@ -236,19 +236,6 @@ to_gen8_core(struct adreno_device *adreno_dev)
 	return container_of(core, struct adreno_gen8_core, base);
 }
 
-/**
- * gen8_is_smmu_stalled() - Check whether smmu is stalled or not
- * @device: Pointer to KGSL device
- *
- * Return - True if smmu is stalled or false otherwise
- */
-static inline bool gen8_is_smmu_stalled(struct kgsl_device *device)
-{
-
-	/* FIXME: Implment SW smmu stall check */
-	return false;
-}
-
 /* Preemption functions */
 void gen8_preemption_trigger(struct adreno_device *adreno_dev, bool atomic);
 void gen8_preemption_schedule(struct adreno_device *adreno_dev);
