@@ -1773,8 +1773,7 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
 	int offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
-	int i, second_last_offset, last_offset;
-	bool remove_counter = false;
+	int i, last_offset, num_removed, start_offset = -1;
 	u32 pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 
 	if (!lock->dynamic_list_len)
@@ -1793,43 +1792,39 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 		goto disable_perfcounter;
 	}
 
-	second_last_offset = offset + (lock->dynamic_list_len - 3) * 3;
-	last_offset = second_last_offset + 3;
+	last_offset = offset + lock->dynamic_list_len * 3;
 
 	/* Look for the perfcounter to remove in the list */
 	for (i = 0; i < lock->dynamic_list_len - 2; i++) {
 		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
-			remove_counter = true;
+			start_offset = offset;
 			break;
 		}
 		offset += 3;
 	}
 
-	if (!remove_counter)
+	if (start_offset == -1)
 		return -ENOENT;
+
+	for (i = 0; i < PERFCOUNTER_REG_DEPENDENCY_LEN && reg->reg_dependency[i]; i++)
+		offset += 3;
 
 	if (kgsl_hwlock(lock)) {
 		kgsl_hwunlock(lock);
 		return -EBUSY;
 	}
 
-	/*
-	 * If the entry is found, remove it from the list by overwriting with second last
-	 * entry. Skip this if data at offset is already second last entry
-	 */
-	if (offset != second_last_offset)
-		memcpy(&data[offset], &data[second_last_offset], 6 * sizeof(u32));
+	/* Let offset point to the first entry that is going to be retained */
+	offset += 3;
 
-	/*
-	 * Overwrite the second last entry with last entry as last entry always has to be
-	 * GEN8_RBBM_SLICE_PERFCTR_CNTL.
-	 */
-	memcpy(&data[second_last_offset], &data[last_offset], 6 * sizeof(u32));
+	memcpy(&data[start_offset], &data[offset], (last_offset - offset) * sizeof(u32));
 
-	/* Clear the last entry */
-	memset(&data[last_offset], 0, 6 * sizeof(u32));
+	memset(&data[start_offset + (last_offset - offset)], 0,
+			(offset - start_offset) * sizeof(u32));
 
-	lock->dynamic_list_len--;
+	num_removed = offset - start_offset;
+	do_div(num_removed, 3);
+	lock->dynamic_list_len -= num_removed;
 
 disable_perfcounter:
 	/*
@@ -1851,18 +1846,14 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
-	int i, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
-	bool select_reg_present = false;
+	int i, start_offset = -1, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
 
 	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
-		for (i = 0; i < lock->dynamic_list_len; i++) {
+		for (i = 0; i < lock->dynamic_list_len - 2; i++) {
 			if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
-				select_reg_present = true;
+				start_offset = offset;
 				break;
 			}
-
-			if (data[offset + 1] == GEN8_RBBM_PERFCTR_CNTL)
-				break;
 
 			offset += 3;
 		}
@@ -1880,8 +1871,12 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	 * update it, otherwise append the <aperture, select register, value>
 	 * triplet to the end of the list.
 	 */
-	if (select_reg_present) {
+	if (start_offset != -1) {
 		data[offset + 2] = reg->countable;
+		for (i = 0; i < PERFCOUNTER_REG_DEPENDENCY_LEN && reg->reg_dependency[i]; i++) {
+			offset += 3;
+			data[offset + 2] = reg->countable;
+		}
 		kgsl_hwunlock(lock);
 		goto update;
 	}
@@ -1900,6 +1895,13 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 		data[offset++] = reg->select;
 		data[offset++] = reg->countable;
 		lock->dynamic_list_len++;
+
+		for (i = 0; i < PERFCOUNTER_REG_DEPENDENCY_LEN && reg->reg_dependency[i]; i++) {
+			data[offset++] = pipe;
+			data[offset++] = reg->reg_dependency[i];
+			data[offset++] = reg->countable;
+			lock->dynamic_list_len++;
+		}
 	}
 
 	data[offset++] = FIELD_PREP(GENMASK(13, 12), PIPE_NONE);
@@ -1913,9 +1915,14 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	kgsl_hwunlock(lock);
 
 update:
-	if (update_reg)
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), reg->select,
-			reg->countable);
+	if (update_reg) {
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+		kgsl_regwrite(device, reg->select, reg->countable);
+
+		for (i = 0; i < PERFCOUNTER_REG_DEPENDENCY_LEN && reg->reg_dependency[i]; i++)
+			kgsl_regwrite(device, reg->reg_dependency[i], reg->countable);
+	}
 
 	return 0;
 }
