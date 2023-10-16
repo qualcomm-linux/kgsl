@@ -2886,7 +2886,12 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, unsigned long useraddr)
 		goto out;
 	}
 
+#if (KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE)
+	npages = get_user_pages(useraddr, sglen, write, pages);
+#else
 	npages = get_user_pages(useraddr, sglen, write, pages, NULL);
+#endif
+
 	mmap_read_unlock(current->mm);
 
 	ret = (npages < 0) ? (int)npages : 0;
@@ -5016,7 +5021,7 @@ static int _register_device(struct kgsl_device *device)
 	device->dev->dma_mask = &dma_mask;
 	device->dev->dma_parms = &dma_parms;
 
-	dma_set_max_seg_size(device->dev, DMA_BIT_MASK(32));
+	dma_set_max_seg_size(device->dev, (u32)DMA_BIT_MASK(32));
 
 	set_dma_ops(device->dev, NULL);
 
