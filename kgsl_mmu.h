@@ -90,6 +90,8 @@ struct kgsl_pagetable {
 	 * forced 32 bit allocations
 	 */
 	u64 compat_va_end;
+	/** @va_hint: Virtual address hint for 64-bit non-SVM allocations */
+	u64 va_hint;
 	u64 global_base;
 };
 
@@ -167,6 +169,8 @@ enum kgsl_mmu_feature {
 	KGSL_MMU_SUPPORT_VBO,
 	/** @KGSL_MMU_PAGEFAULT_TERMINATE: Set to make pagefaults fatal */
 	KGSL_MMU_PAGEFAULT_TERMINATE,
+	/** @KGSL_MMU_LLCC_NWA: Set to make no write allocate the default LLCC policy */
+	KGSL_MMU_FORCE_LLCC_NWA,
 };
 
 #include "kgsl_iommu.h"

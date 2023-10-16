@@ -83,10 +83,12 @@ static struct kgsl_iommu_pt *to_iommu_pt(struct kgsl_pagetable *pagetable)
 
 static u32 get_llcc_flags(struct kgsl_mmu *mmu)
 {
-	if (mmu->subtype == KGSL_IOMMU_SMMU_V500)
-		return IOMMU_USE_LLC_NWA;
-	else
-		return IOMMU_USE_UPSTREAM_HINT;
+	/* Return no-write-allocate if mmu feature for no-write-allocate is set */
+	if (test_bit(KGSL_MMU_FORCE_LLCC_NWA, &mmu->features))
+		return IOMMU_SYS_CACHE_NWA;
+
+	/* Return write allocate as default llcc allocation policy */
+	return IOMMU_SYS_CACHE;
 }
 
 static int _iommu_get_protection_flags(struct kgsl_mmu *mmu,
@@ -1289,7 +1291,7 @@ static void _enable_gpuhtw_llc(struct kgsl_mmu *mmu, struct iommu_domain *domain
 		iommu_set_pgtable_quirks(domain, IO_PGTABLE_QUIRK_ARM_OUTER_WBWA);
 }
 
-static int set_smmu_aperture(struct kgsl_device *device,
+int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
 	int ret;
@@ -1477,6 +1479,17 @@ static struct kgsl_pagetable *kgsl_iopgtbl_pagetable(struct kgsl_mmu *mmu, u32 n
 		pt->base.svm_start = KGSL_IOMMU_SVM_BASE32(mmu);
 		pt->base.svm_end = KGSL_IOMMU_SVM_END32(mmu);
 	}
+
+	/*
+	 * We expect the 64-bit SVM and non-SVM ranges not to overlap so that
+	 * va_hint points to VA space at the top of the 64-bit non-SVM range.
+	 */
+	BUILD_BUG_ON_MSG(!((KGSL_IOMMU_VA_BASE64 >= KGSL_IOMMU_SVM_END64) ||
+			(KGSL_IOMMU_SVM_BASE64 >= KGSL_IOMMU_VA_END64)),
+			"64-bit SVM and non-SVM ranges should not overlap");
+
+	/* Set up the hint for 64-bit non-SVM VA on per-process pagetables */
+	pt->base.va_hint = pt->base.va_start;
 
 	ret = kgsl_iopgtbl_alloc(&iommu->user_context, pt);
 	if (ret) {
@@ -1868,6 +1881,21 @@ static int _remove_gpuaddr(struct kgsl_pagetable *pagetable,
 	if (WARN(!entry, "GPU address %llx doesn't exist\n", gpuaddr))
 		return -ENOMEM;
 
+	/*
+	 * If the hint was based on this entry, adjust it to the end of the
+	 * previous entry.
+	 */
+	if (pagetable->va_hint == (entry->base + entry->size)) {
+		struct kgsl_iommu_addr_entry *prev =
+			rb_entry_safe(rb_prev(&entry->node),
+				struct kgsl_iommu_addr_entry, node);
+
+		pagetable->va_hint = pagetable->va_start;
+		if (prev)
+			pagetable->va_hint = max_t(u64, prev->base + prev->size,
+							pagetable->va_start);
+	}
+
 	rb_erase(&entry->node, &pagetable->rbtree);
 	kmem_cache_free(addr_entry_cache, entry);
 	return 0;
@@ -1912,13 +1940,49 @@ static int _insert_gpuaddr(struct kgsl_pagetable *pagetable,
 	return 0;
 }
 
+static u64 _get_unmapped_area_hint(struct kgsl_pagetable *pagetable,
+		u64 bottom, u64 top, u64 size, u64 align)
+{
+	u64 hint;
+
+	/*
+	 * VA fragmentation can be a problem on global and secure pagetables
+	 * that are common to all processes, or if we're constrained to a 32-bit
+	 * range. Don't use the va_hint in these cases.
+	 */
+	if (!pagetable->va_hint || !upper_32_bits(top))
+		return (u64) -EINVAL;
+
+	/* Satisfy requested alignment */
+	hint = ALIGN(pagetable->va_hint, align);
+
+	/*
+	 * The va_hint is the highest VA that was allocated in the non-SVM
+	 * region. The 64-bit SVM and non-SVM regions do not overlap. So, we
+	 * know there is no VA allocated at this gpuaddr. Therefore, we only
+	 * need to check whether we have enough space for this allocation.
+	 */
+	if ((hint + size) > top)
+		return (u64) -ENOMEM;
+
+	pagetable->va_hint = hint + size;
+	return hint;
+}
+
 static uint64_t _get_unmapped_area(struct kgsl_pagetable *pagetable,
 		uint64_t bottom, uint64_t top, uint64_t size,
 		uint64_t align)
 {
-	struct rb_node *node = rb_first(&pagetable->rbtree);
+	struct rb_node *node;
 	uint64_t start;
 
+	/* Check if we can assign a gpuaddr based on the last allocation */
+	start = _get_unmapped_area_hint(pagetable, bottom, top, size, align);
+	if (!IS_ERR_VALUE(start))
+		return start;
+
+	/* Fall back to searching through the range. */
+	node = rb_first(&pagetable->rbtree);
 	bottom = ALIGN(bottom, align);
 	start = bottom;
 
@@ -2055,14 +2119,20 @@ static uint64_t kgsl_iommu_find_svm_region(struct kgsl_pagetable *pagetable,
 static bool iommu_addr_in_svm_ranges(struct kgsl_pagetable *pagetable,
 	u64 gpuaddr, u64 size)
 {
+	u64 end = gpuaddr + size;
+
+	/* Make sure size is not zero and we don't wrap around */
+	if (end <= gpuaddr)
+		return false;
+
 	if ((gpuaddr >= pagetable->compat_va_start && gpuaddr < pagetable->compat_va_end) &&
-		((gpuaddr + size) > pagetable->compat_va_start &&
-			(gpuaddr + size) <= pagetable->compat_va_end))
+		(end > pagetable->compat_va_start &&
+			end <= pagetable->compat_va_end))
 		return true;
 
 	if ((gpuaddr >= pagetable->svm_start && gpuaddr < pagetable->svm_end) &&
-		((gpuaddr + size) > pagetable->svm_start &&
-			(gpuaddr + size) <= pagetable->svm_end))
+		(end > pagetable->svm_start &&
+			end <= pagetable->svm_end))
 		return true;
 
 	return false;
@@ -2281,6 +2351,20 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	if (ret)
 		return ret;
 
+	/*
+	 * It is problamatic if smmu driver does system suspend before consumer
+	 * device (gpu). So smmu driver creates a device_link to act as a
+	 * supplier which in turn will ensure correct order during system
+	 * suspend. In kgsl, since we don't initialize iommu on the gpu device,
+	 * we should create a device_link between kgsl iommu device and gpu
+	 * device to maintain a correct suspend order between smmu device and
+	 * gpu device.
+	 */
+	if (!device_link_add(&device->pdev->dev, &iommu->user_context.pdev->dev,
+				DL_FLAG_AUTOREMOVE_CONSUMER))
+		dev_err(&iommu->user_context.pdev->dev,
+				"Unable to create device link to gpu device\n");
+
 	/* LPAC is optional so don't worry if it returns error */
 	kgsl_iommu_setup_context(mmu, node, &iommu->lpac_context,
 		"gfx3d_lpac", kgsl_iommu_lpac_fault_handler);
@@ -2304,7 +2388,7 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	/* Enable TTBR0 on the default and LPAC contexts */
 	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->info.cfg);
 
-	set_smmu_aperture(device, &iommu->user_context);
+	kgsl_set_smmu_aperture(device, &iommu->user_context);
 
 	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->info.cfg);
 
