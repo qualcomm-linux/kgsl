@@ -23,6 +23,7 @@
 #include <linux/qcom_dma_heap.h>
 #include <linux/security.h>
 #include <linux/sort.h>
+#include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
 #include <soc/qcom/boot_stats.h>
@@ -939,6 +940,7 @@ static void kgsl_destroy_process_private(struct kref *kref)
 	write_unlock(&kgsl_driver.proclist_lock);
 	mutex_unlock(&kgsl_driver.process_mutex);
 
+	kfree(private->cmdline);
 	put_pid(private->pid);
 	idr_destroy(&private->mem_idr);
 	idr_destroy(&private->syncsource_idr);
@@ -1157,6 +1159,7 @@ static struct kgsl_process_private *kgsl_process_private_new(
 	private->fd_count = 1;
 	private->pid = cur_pid;
 	get_task_comm(private->comm, current->group_leader);
+	private->cmdline = kstrdup_quotable_cmdline(current, GFP_KERNEL);
 
 	spin_lock_init(&private->mem_lock);
 	spin_lock_init(&private->syncsource_lock);
@@ -2252,6 +2255,10 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 
 	if (!(param->flags &
 		(KGSL_GPU_AUX_COMMAND_BIND | KGSL_GPU_AUX_COMMAND_TIMELINE)))
+		return -EINVAL;
+
+	if ((param->flags & KGSL_GPU_AUX_COMMAND_SYNC) &&
+		(param->numsyncs > KGSL_MAX_SYNCPOINTS))
 		return -EINVAL;
 
 	context = kgsl_context_get_owner(dev_priv, param->context_id);

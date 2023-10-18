@@ -17,6 +17,7 @@
 #include "adreno_gen7.h"
 #include "adreno_gen7_hwsched.h"
 #include "adreno_pm4types.h"
+#include "kgsl_pwrscale.h"
 #include "adreno_trace.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -667,6 +668,10 @@ int gen7_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, GEN7_CP_BV_APRIV_CNTL, GEN7_APRIV_DEFAULT);
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		kgsl_regwrite(device, GEN7_CP_LPAC_APRIV_CNTL, GEN7_APRIV_DEFAULT);
+
+	if (adreno_is_gen7_14_0(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 2));
 
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
@@ -1372,6 +1377,8 @@ int gen7_probe_common(struct platform_device *pdev,
 {
 	const struct adreno_gpudev *gpudev = gpucore->gpudev;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen7_core *gen7_core = container_of(gpucore,
+		struct adreno_gen7_core, base);
 	int ret;
 
 	adreno_dev->gpucore = gpucore;
@@ -1381,6 +1388,8 @@ int gen7_probe_common(struct platform_device *pdev,
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
+
+	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_PREEMPTION)) {
 		const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
@@ -1498,12 +1507,11 @@ int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 
 	/*
 	 * If dynamic list length is 1, the only entry in the list is the GEN7_RBBM_PERFCTR_CNTL.
-	 * Remove the same as we can disable perfcounters now.
+	 * Remove the same.
 	 */
 	if (lock->dynamic_list_len == 1) {
 		memset(&data[offset], 0, 3 * sizeof(u32));
 		lock->dynamic_list_len = 0;
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN7_RBBM_PERFCTR_CNTL, 0x0);
 	}
 
 	kgsl_hwunlock(lock);

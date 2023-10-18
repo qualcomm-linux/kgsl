@@ -1396,6 +1396,9 @@ static void do_fault_header_lpac(struct adreno_device *adreno_dev,
 		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
 		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
 
+	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
+			drawctxt_lpac->base.proc_priv->cmdline);
+
 	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
 		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
 		adreno_get_level(drawobj_lpac->context));
@@ -1430,6 +1433,9 @@ static void do_fault_header(struct adreno_device *adreno_dev,
 		drawobj->timestamp, status,
 		drawobj->context->gmu_dispatch_queue, rptr, wptr,
 		ib1base, ib1sz, ib2base, ib2sz);
+
+	pr_context(device, drawobj->context, "cmdline: %s\n",
+			drawctxt->base.proc_priv->cmdline);
 
 	trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
 		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,

@@ -230,7 +230,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	if (pwr->bus_mod < 0 || new_level < old_level) {
 		pwr->bus_mod = 0;
 		pwr->bus_percent_ab = 0;
-		pwr->ddr_stall_percent = 0;
 	}
 	/*
 	 * Update the bus before the GPU clock to prevent underrun during
@@ -293,14 +292,14 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 
 	/*
 	 * If a constraint is already set, set a new constraint only
-	 * if it is faster.  If the requested constraint is the same
+	 * if it is faster. If the requested constraint is the same
 	 * as the current one, update ownership and timestamp.
 	 */
 	if ((pwrc_old->type == KGSL_CONSTRAINT_NONE) ||
-		(constraint < pwrc_old->hint.pwrlevel.level)) {
+		(pwrc_old->sub_type == KGSL_CONSTRAINT_PWR_MIN &&
+		 pwrc->sub_type == KGSL_CONSTRAINT_PWR_MAX)) {
 		pwrc_old->type = pwrc->type;
 		pwrc_old->sub_type = pwrc->sub_type;
-		pwrc_old->hint.pwrlevel.level = constraint;
 		pwrc_old->owner_id = id;
 		pwrc_old->expires = jiffies +
 			msecs_to_jiffies(device->pwrctrl.interval_timeout);
@@ -308,8 +307,7 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		kgsl_pwrctrl_pwrlevel_change(device, constraint);
 		/* Trace the constraint being set by the driver */
 		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1);
-	} else if ((pwrc_old->type == pwrc->type) &&
-		(pwrc_old->hint.pwrlevel.level == constraint)) {
+	} else if (pwrc_old->type == pwrc->type) {
 		pwrc_old->owner_id = id;
 		pwrc_old->owner_timestamp = ts;
 		pwrc_old->expires = jiffies +
@@ -1561,8 +1559,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	pwr->thermal_pwrlevel = 0;
 	pwr->thermal_pwrlevel_floor = pwr->num_pwrlevels - 1;
 
-	pwr->wakeup_maxpwrlevel = 0;
-
 	result = dev_pm_qos_add_request(&pdev->dev, &pwr->sysfs_thermal_req,
 			DEV_PM_QOS_MAX_FREQUENCY,
 			PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
@@ -1749,12 +1745,7 @@ static int kgsl_pwrctrl_enable(struct kgsl_device *device)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int level, status;
 
-	if (pwr->wakeup_maxpwrlevel) {
-		level = pwr->max_pwrlevel;
-		pwr->wakeup_maxpwrlevel = 0;
-	} else {
-		level = pwr->default_pwrlevel;
-	}
+	level = pwr->default_pwrlevel;
 
 	kgsl_pwrctrl_pwrlevel_change(device, level);
 

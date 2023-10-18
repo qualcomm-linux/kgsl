@@ -1935,6 +1935,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_0 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.fast_bus_hint = true,
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
@@ -1969,6 +1970,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.fast_bus_hint = true,
 };
 
 extern const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list;
@@ -2068,6 +2070,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_0 = {
 	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
 	.bcl_data = 1,
 	.preempt_level = 1,
+	.fast_bus_hint = true,
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
@@ -2102,6 +2105,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
 	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
 	.bcl_data = 1,
 	.preempt_level = 1,
+	.fast_bus_hint = true,
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
@@ -2136,6 +2140,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
 	.highest_bank_bit = 16,
 	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
 	.preempt_level = 1,
+	.fast_bus_hint = true,
 };
 
 /* GEN7_9_0 protected register list */
@@ -2219,7 +2224,10 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.gmu_hub_clk_freq = 200000000,
 	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
 	.bcl_data = 1,
+	.fast_bus_hint = true,
 };
+
+extern const struct gen7_snapshot_block_list gen7_14_0_snapshot_block_list;
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_14_0 = {
 	.base = {
@@ -2227,7 +2235,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_14_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen7-14-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
-			ADRENO_PREEMPTION | ADRENO_IFPC,
+			ADRENO_PREEMPTION | ADRENO_IFPC | ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_perfcounters,
 		.uche_gmem_alignment = 0,
@@ -2247,8 +2255,9 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_14_0 = {
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen7_0_0_protected_regs,
 	.highest_bank_bit = 15,
-	.gen7_snapshot_block_list = &gen7_0_0_snapshot_block_list,
+	.gen7_snapshot_block_list = &gen7_14_0_snapshot_block_list,
 	.preempt_level = 1,
+	.fast_bus_hint = false,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
