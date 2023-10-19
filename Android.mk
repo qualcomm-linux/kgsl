@@ -23,7 +23,11 @@ include $(CLEAR_VARS)
 # This makefile is only for DLKM
 ifneq ($(findstring vendor,$(LOCAL_PATH)),)
 
-DLKM_DIR   := device/qcom/common/dlkm
+ifeq ($(BOARD_COMMON_DIR),)
+	BOARD_COMMON_DIR := device/qcom/common
+endif
+
+DLKM_DIR   := $(BOARD_COMMON_DIR)/dlkm
 
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(KGSL_SELECT)
