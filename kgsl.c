@@ -5047,6 +5047,27 @@ int kgsl_request_irq(struct platform_device *pdev, const  char *name,
 	return num;
 }
 
+int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
+		irq_handler_t handler, void *data)
+{
+	int ret, num = platform_get_irq_byname_optional(pdev, name);
+
+	if (num < 0)
+		return num;
+
+	ret = devm_request_irq(&pdev->dev, num, handler, IRQF_TRIGGER_HIGH,
+		name, data);
+
+	if (ret) {
+		dev_err(&pdev->dev, "Unable to get interrupt %s: %d\n",
+			name, ret);
+		return ret;
+	}
+
+	disable_irq(num);
+	return num;
+}
+
 int kgsl_of_property_read_ddrtype(struct device_node *node, const char *base,
 		u32 *ptr)
 {

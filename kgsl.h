@@ -565,6 +565,9 @@ enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
 int kgsl_request_irq(struct platform_device *pdev, const  char *name,
 		irq_handler_t handler, void *data);
 
+int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
+		irq_handler_t handler, void *data);
+
 int __init kgsl_core_init(void);
 void kgsl_core_exit(void);
 
