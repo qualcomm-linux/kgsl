@@ -1,5 +1,3 @@
-load(":build/kgsl_defs.bzl", "define_target_module")
+load(":build/kgsl_defs.bzl", "define_target_modules")
 
-define_target_module("pineapple")
-define_target_module("sun")
-define_target_module("blair")
+define_target_modules()

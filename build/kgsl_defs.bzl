@@ -1,5 +1,6 @@
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
+load("//msm-kernel:target_variants.bzl", "get_all_la_variants")
 
 msm_kgsl_includes = [
     "include/linux/msm_kgsl.h",
@@ -143,6 +144,6 @@ def define_target_variant_module(target, variant):
         log = "info",
     )
 
-def define_target_module(target):
-    define_target_variant_module(target, "gki")
-    define_target_variant_module(target, "consolidate")
+def define_target_modules():
+        for target, variant in get_all_la_variants():
+                define_target_variant_module(target, variant)
