@@ -377,6 +377,20 @@ static void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id
 	gen8_dev->aperture = aperture_val;
 }
 
+static inline void gen8_regread64_aperture(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe,
+	u32 slice_id, u32 use_slice_id)
+{
+	u32 val_lo = 0, val_hi = 0;
+
+	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, slice_id, use_slice_id);
+
+	val_lo = kgsl_regmap_read(&device->regmap, offsetwords_lo);
+	val_hi = kgsl_regmap_read(&device->regmap, offsetwords_hi);
+
+	*value = (((u64)val_hi << 32) | val_lo);
+}
+
 static inline void gen8_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id)
 {
@@ -2207,6 +2221,125 @@ static void gen8_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
 			state ? GEN8_SW_FUSE_INT_MASK : 0);
 }
 
+static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt;
+	u32 status, rptr, wptr, ib1sz, ib2sz, ib3sz;
+	u64 ib1base, ib2base, ib3base;
+
+	kgsl_regread(device, GEN8_RBBM_LPAC_STATUS, &status);
+	kgsl_regread(device, GEN8_CP_RB_RPTR_LPAC, &rptr);
+	kgsl_regread(device, GEN8_CP_RB_WPTR_LPAC, &wptr);
+	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
+			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base, PIPE_LPAC, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz, PIPE_LPAC, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
+			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base, PIPE_LPAC, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz, PIPE_LPAC, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
+			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base, PIPE_LPAC, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz, PIPE_LPAC, 0, 0);
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+
+	drawctxt = ADRENO_CONTEXT(drawobj->context);
+	drawobj->context->last_faulted_cmd_ts = drawobj->timestamp;
+	drawobj->context->total_fault_count++;
+
+	pr_context(device, drawobj->context,
+		"LPAC ctx %u ctx_type %s ts %u status %8.8X\n",
+		drawobj->context->id, kgsl_context_type(drawctxt->type),
+		drawobj->timestamp, status);
+
+	pr_context(device, drawobj->context,
+		"LPAC: rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x ib3 %16.16llX/%4.4x\n",
+		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz, ib3base, ib3sz);
+
+	pr_context(device, drawobj->context, "lpac cmdline: %s\n",
+			drawctxt->base.proc_priv->cmdline);
+
+	trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
+		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,
+		adreno_get_level(drawobj->context));
+
+}
+
+static void gen8_fault_header(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt;
+	u32 status, rptr, wptr, ib1sz, ib2sz, ib3sz, rptr_bv, ib1sz_bv, ib2sz_bv, ib3sz_bv;
+	u32 gfx_status, gfx_br_status, gfx_bv_status;
+	u64 ib1base, ib2base, ib3base, ib1base_bv, ib2base_bv, ib3base_bv;
+	u32 ctxt_id = 0;
+	u32 ts = 0;
+	int rb_id = -1;
+
+	kgsl_regread(device, GEN8_RBBM_STATUS, &status);
+	kgsl_regread(device, GEN8_RBBM_GFX_STATUS, &gfx_status);
+	kgsl_regread(device, GEN8_RBBM_GFX_BV_STATUS, &gfx_bv_status);
+	kgsl_regread(device, GEN8_RBBM_GFX_BR_STATUS, &gfx_br_status);
+	kgsl_regread(device, GEN8_CP_RB_RPTR_BR, &rptr);
+	kgsl_regread(device, GEN8_CP_RB_WPTR_GC, &wptr);
+	kgsl_regread(device, GEN8_CP_RB_RPTR_BV, &rptr_bv);
+	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
+			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base, PIPE_BR, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz, PIPE_BR, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
+			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base, PIPE_BR, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz, PIPE_BR, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
+			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base, PIPE_BR, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz, PIPE_BR, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
+			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base_bv, PIPE_BV, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz_bv, PIPE_BV, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
+			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base_bv, PIPE_BV, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz_bv, PIPE_BV, 0, 0);
+	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
+			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base_bv, PIPE_BV, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz_bv, PIPE_BV, 0, 0);
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+
+	if (drawobj) {
+		drawctxt = ADRENO_CONTEXT(drawobj->context);
+		drawobj->context->last_faulted_cmd_ts = drawobj->timestamp;
+		drawobj->context->total_fault_count++;
+		ctxt_id = drawobj->context->id;
+		ts = drawobj->timestamp;
+		rb_id = adreno_get_level(drawobj->context);
+
+		pr_context(device, drawobj->context,
+			"ctx %u ctx_type %s ts %u\n",
+			drawobj->context->id, kgsl_context_type(drawctxt->type),
+			drawobj->timestamp);
+
+		pr_context(device, drawobj->context, "cmdline: %s\n",
+			drawctxt->base.proc_priv->cmdline);
+
+		trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
+			rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,
+			adreno_get_level(drawobj->context));
+	}
+	dev_err(device->dev,
+		"status %8.8X gfx_status %8.8X gfx_br_status %8.8X gfx_bv_status %8.8X\n",
+		status, gfx_status, gfx_br_status, gfx_bv_status);
+
+	dev_err(device->dev,
+		"BR: rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x ib3 %16.16llX/%4.4x\n",
+		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz, ib3base, ib3sz);
+
+	dev_err(device->dev,
+		"BV: rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x ib3 %16.16llX/%4.4x\n",
+		rptr_bv, wptr, ib1base_bv, ib1sz_bv, ib2base_bv, ib2sz_bv, ib3base_bv, ib3sz_bv);
+
+	trace_adreno_gpu_fault(ctxt_id, ts, status,
+		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz, rb_id);
+}
+
 const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 	.base = {
 		.reg_offsets = gen8_register_offsets,
@@ -2229,6 +2362,8 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.context_destroy = gen8_hwsched_context_destroy,
 		.lpac_store = gen8_lpac_store,
 		.get_uche_trap_base = gen8_get_uche_trap_base,
+		.fault_header = gen8_fault_header,
+		.lpac_fault_header = gen8_lpac_fault_header,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,
@@ -2259,6 +2394,7 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.set_isdb_breakpoint_registers = gen8_set_isdb_breakpoint_registers,
 		.swfuse_irqctrl = gen8_swfuse_irqctrl,
 		.get_uche_trap_base = gen8_get_uche_trap_base,
+		.fault_header = gen8_fault_header,
 	},
 	.hfi_probe = gen8_gmu_hfi_probe,
 	.handle_watchdog = gen8_gmu_handle_watchdog,

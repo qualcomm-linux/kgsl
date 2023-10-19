@@ -977,6 +977,14 @@ struct adreno_gpudev {
 	 * @get_uche_trap_base: Return the UCHE_TRAP_BASE value
 	 */
 	u64 (*get_uche_trap_base)(void);
+	/**
+	 * @fault_header: Print fault header
+	 */
+	void (*fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @lpac_fault_header: Print LPAC fault header
+	 */
+	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
 };
 
 /**
