@@ -236,6 +236,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_4_0 = 0x070400,
 	ADRENO_REV_GEN7_9_0 = 0x070900,
 	ADRENO_REV_GEN7_9_1 = 0x070901,
+	ADRENO_REV_GEN8_0_0 = 0x080000,
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -246,6 +247,17 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
+
+enum adreno_pipe_type {
+	PIPE_NONE = 0,
+	PIPE_BR = 1,
+	PIPE_BV = 2,
+	PIPE_LPAC = 3,
+	PIPE_AQE0 = 4,
+	PIPE_AQE1 = 5,
+	PIPE_DDE_BR = 6,
+	PIPE_DDE_BV = 7,
+};
 
 /* number of throttle counters for DCVS adjustment */
 #define ADRENO_GPMU_THROTTLE_COUNTERS 4
@@ -1219,6 +1231,12 @@ static inline int adreno_is_gen7(struct adreno_device *adreno_dev)
 {
 	return ADRENO_GPUREV(adreno_dev) >= 0x070000 &&
 			ADRENO_GPUREV(adreno_dev) < 0x080000;
+}
+
+static inline int adreno_is_gen8(struct adreno_device *adreno_dev)
+{
+	return ADRENO_GPUREV(adreno_dev) >= 0x080000 &&
+			ADRENO_GPUREV(adreno_dev) < 0x090000;
 }
 
 ADRENO_TARGET(gen7_0_0, ADRENO_REV_GEN7_0_0)

@@ -1201,6 +1201,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 }
 
 static const struct of_device_id adreno_component_match[] = {
+	{ .compatible = "qcom,gen8-gmu" },
 	{ .compatible = "qcom,gen7-gmu" },
 	{ .compatible = "qcom,gpu-gmu" },
 	{ .compatible = "qcom,gpu-rgmu" },
@@ -1826,7 +1827,7 @@ void adreno_get_bus_counters(struct adreno_device *adreno_dev)
 		&adreno_dev->starved_ram_lo, NULL);
 
 	/* Target has GBIF */
-	if (adreno_is_gen7(adreno_dev) ||
+	if (adreno_is_gen8(adreno_dev) || adreno_is_gen7(adreno_dev) ||
 		(adreno_is_a6xx(adreno_dev) && !adreno_is_a630(adreno_dev))) {
 		ret |= adreno_perfcounter_kernel_get(adreno_dev,
 			KGSL_PERFCOUNTER_GROUP_VBIF_PWR, 1,

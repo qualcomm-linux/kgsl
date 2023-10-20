@@ -183,8 +183,6 @@ static const u32 gen7_9_x_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4,
 };
 
-#define F_PWR_ACD_CALIBRATE 78
-
 static int acd_calibrate_set(void *data, u64 val)
 {
 	struct kgsl_device *device = data;

@@ -1502,6 +1502,8 @@ static void adreno_fault_header(struct kgsl_device *device,
 					   ADRENO_REG_CP_IB2_BASE_HI, &ib2base);
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_IB2_BUFSZ, &ib2sz);
 
+	/* FIXME Add slice and unslice busy status for Gen8 */
+
 	if (drawobj != NULL) {
 		drawctxt->base.total_fault_count++;
 		drawctxt->base.last_faulted_cmd_ts = drawobj->timestamp;
@@ -1921,6 +1923,7 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) && gx_on) {
 		unsigned int val;
 
+		/* FIXME: Use adreno_is_smmu_stalled() for Gen8 */
 		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
 		if (val & BIT(24)) {
 			mutex_unlock(&device->mutex);

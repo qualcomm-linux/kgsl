@@ -2500,6 +2500,102 @@ static const struct adreno_a6xx_core adreno_gpu_core_a663 = {
 	.ctxt_record_size = 2496 * 1024,
 };
 
+extern const struct gen8_snapshot_block_list gen8_0_0_snapshot_block_list;
+
+static const struct kgsl_regmap_list gen8_0_0_gbif_cx_regs[] = {
+	{ GEN8_GBIF_QSB_SIDE0, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE1, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE2, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE3, 0x00071e20 },
+	{ GEN8_GBIF_CX_CONFIG, 0x20023000 },
+	{ GEN8_GMUCX_MRC_GBIF_QOS_CTRL, 0x33 },
+};
+
+/* GEN8_0_0 protected register list */
+static const struct gen8_protected_regs gen8_0_0_protected_regs[] = {
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 0, 0x00000, 0x003a3, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 1, 0x003b4, 0x0043f, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 2, 0x00440, 0x0045f, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 3, 0x00580, 0x005df, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 4, 0x005e0, 0x006ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 5, 0x0074a, 0x0074f, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 6, 0x00759, 0x0077f, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 7, 0x00789, 0x00789, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 8, 0x0078c, 0x0079f, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 9, 0x00800, 0x00829, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 10, 0x00837, 0x008e6, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 11, 0x008e7, 0x009b0, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 12, 0x008ec, 0x009af, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 13, 0x009b1, 0x00c01, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 14, 0x00ce0, 0x00ce1, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 15, 0x00df0, 0x00df0, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 16, 0x00df1, 0x00df1, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 17, 0x00e01, 0x00e01, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 18, 0x00e03, 0x02e02, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 19, 0x03c00, 0x03cc5, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 20, 0x03cc6, 0x05cc5, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 21, 0x08600, 0x087ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 22, 0x08e00, 0x08eff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 23, 0x08f00, 0x08f00, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 24, 0x08f01, 0x090bf, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 25, 0x09600, 0x097ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 26, 0x0981a, 0x09aff, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 27, 0x09e00, 0x09fff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 28, 0x0a600, 0x0a7ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 29, 0x0ae00, 0x0ae06, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 30, 0x0ae08, 0x0ae0e, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 31, 0x0ae10, 0x0b17f, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 32, 0x0b600, 0x0d5ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 33, 0x0dc00, 0x0fbff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 34, 0x0fc00, 0x11bff, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 35, 0x18400, 0x1843f, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 36, 0x18440, 0x1857f, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 37, 0x18580, 0x1a57f, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 38, 0x1b400, 0x1d3ff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 39, 0x1f400, 0x1f877, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 40, 0x1f878, 0x1ffff, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 41, 0x1f930, 0x1fc59, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 42, 0x20000, 0x21fff, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 43, 0x27800, 0x2787f, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 44, 0x27880, 0x27c01, 0 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 45, 0x27882, 0x27883, 1 },
+	{ GEN8_CP_PROTECT_REG_GLOBAL + 63, 0x27c02, 0x27c02, 1 },
+	{ 0 },
+};
+
+static const struct kgsl_regmap_list gen8_ao_hwcg_regs[] = {
+	{ GEN8_GMUAO_CGC_MODE_CNTL, 0x00020000 },
+	{ GEN8_GMUAO_CGC_DELAY_CNTL, 0x00010111 },
+	{ GEN8_GMUAO_CGC_HYST_CNTL, 0x00005555 },
+};
+
+static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_0_0,
+				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen8-0-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+			ADRENO_CONTENT_PROTECTION,
+		.gpudev = &adreno_gen8_hwsched_gpudev.base,
+		.uche_gmem_alignment = SZ_16M,
+		.gmem_size = 12 * SZ_1M,
+		.bus_width = 32,
+		.snapshot_size = SZ_8M,
+	},
+	.aqefw_name = "gen80000_aqe.fw",
+	.sqefw_name = "gen80000_sqe.fw",
+	.gmufw_name = "gen80000_gmu.bin",
+	.zap_name = "gen80000_zap.mbn",
+	.ao_hwcg = gen8_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen8_ao_hwcg_regs),
+	.gbif = gen8_0_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen8_0_0_gbif_cx_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen8_0_0_protected_regs,
+	.highest_bank_bit = 16,
+	.gmu_hub_clk_freq = 200000000,
+};
+
 static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a306,		/* Deprecated */
 	&adreno_gpu_core_a306a,		/* Deprecated */
@@ -2547,5 +2643,6 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen7_4_0.base,
 	&adreno_gpu_core_gen7_9_0.base,
 	&adreno_gpu_core_gen7_9_1.base,
+	&adreno_gpu_core_gen8_0_0.base,
 
 };
