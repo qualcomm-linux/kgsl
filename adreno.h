@@ -725,6 +725,11 @@ struct adreno_device {
 	u32 ifpc_hyst_floor;
 	/** @cx_misc_base: CX MISC register block base offset */
 	u32 cx_misc_base;
+	/*
+	 * @no_restore_count: Keep track of perfcounter requests that don't have
+	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
+	 */
+	u32 no_restore_count;
 };
 
 /**
