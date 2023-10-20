@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __KGSL_PWRSCALE_H
@@ -9,7 +9,12 @@
 
 #include "governor.h"
 #include "kgsl_pwrctrl.h"
+
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
+#include <linux/soc/qcom/msm_adreno_devfreq.h>
+#else
 #include "msm_adreno_devfreq.h"
+#endif
 
 /* devfreq governor call window in usec */
 #define KGSL_GOVERNOR_CALL_INTERVAL 10000
@@ -107,13 +112,34 @@ int kgsl_busmon_get_dev_status(struct device *dev,
 			struct devfreq_dev_status *stat);
 int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq);
 
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
+static inline int msm_adreno_tz_init(void)
+{
+	return 0;
+}
+
+static inline void msm_adreno_tz_exit(void)
+{
+}
+#else
 int msm_adreno_tz_init(void);
 
-int msm_adreno_tz_reinit(struct devfreq *devfreq);
-
 void msm_adreno_tz_exit(void);
+#endif
 
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
+static inline int devfreq_gpubw_init(void)
+{
+	return 0;
+}
+
+static inline void devfreq_gpubw_exit(void)
+{
+}
+#else
 int devfreq_gpubw_init(void);
 
 void devfreq_gpubw_exit(void);
+#endif
+
 #endif
