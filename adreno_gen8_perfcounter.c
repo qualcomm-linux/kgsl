@@ -40,11 +40,8 @@ static int gen8_counter_br_enable(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BR));
 
-	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
-		ret = gen8_perfcounter_update(adreno_dev, reg, true,
-						FIELD_PREP(GENMASK(13, 12), PIPE_BR));
-	else
-		kgsl_regwrite(device, reg->select, countable);
+	ret = gen8_perfcounter_update(adreno_dev, reg, true,
+			FIELD_PREP(GENMASK(13, 12), PIPE_BR), group->flags);
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
 
@@ -66,11 +63,8 @@ static int gen8_counter_bv_enable(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BV));
 
-	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
-		ret = gen8_perfcounter_update(adreno_dev, reg, true,
-						FIELD_PREP(GENMASK(13, 12), PIPE_BV));
-	else
-		kgsl_regwrite(device, reg->select, countable);
+	ret = gen8_perfcounter_update(adreno_dev, reg, true,
+				FIELD_PREP(GENMASK(13, 12), PIPE_BV), group->flags);
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
 
@@ -84,16 +78,11 @@ static int gen8_counter_enable(struct adreno_device *adreno_dev,
 		const struct adreno_perfcount_group *group,
 		u32 counter, u32 countable)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
 	int ret = 0;
 
-	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
-		ret = gen8_perfcounter_update(adreno_dev, reg, true,
-						FIELD_PREP(GENMASK(13, 12), PIPE_NONE));
-	else
-		kgsl_regwrite(device, reg->select, countable);
-
+	ret = gen8_perfcounter_update(adreno_dev, reg, true,
+					FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
 	if (!ret)
 		reg->value = 0;
 
@@ -126,9 +115,8 @@ static int gen8_counter_inline_enable(struct adreno_device *adreno_dev,
 		return gen8_counter_enable(adreno_dev, group, counter,
 			countable);
 
-	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
-		gen8_perfcounter_update(adreno_dev, reg, false,
-						FIELD_PREP(GENMASK(13, 12), PIPE_NONE));
+	gen8_perfcounter_update(adreno_dev, reg, false,
+				FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
 
 	cmds[0] = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
 	cmds[1] = cp_type4_packet(reg->select, 1);

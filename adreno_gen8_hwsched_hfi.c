@@ -4117,7 +4117,7 @@ int gen8_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 
 	if (group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)
 		gen8_perfcounter_update(adreno_dev, reg, false,
-				FIELD_PREP(GENMASK(13, 12), PIPE_NONE));
+				FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
 
 	cmds[0] = CREATE_MSG_HDR(H2F_MSG_ISSUE_CMD_RAW, HFI_MSG_CMD);
 

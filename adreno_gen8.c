@@ -1767,6 +1767,8 @@ static u32 _get_pipeid(u32 groupid)
 int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 			    struct adreno_perfcount_register *reg, u32 groupid)
 {
+	const struct adreno_perfcounters *counters = ADRENO_PERFCOUNTERS(adreno_dev);
+	const struct adreno_perfcount_group *group;
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
@@ -1775,8 +1777,21 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 	bool remove_counter = false;
 	u32 pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 
-	if (lock->dynamic_list_len < 3)
+	if (!lock->dynamic_list_len)
 		return -EINVAL;
+
+	group = &(counters->groups[groupid]);
+
+	if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)) {
+		if (lock->dynamic_list_len != 2)
+			return 0;
+
+		if (kgsl_hwlock(lock)) {
+			kgsl_hwunlock(lock);
+			return -EBUSY;
+		}
+		goto disable_perfcounter;
+	}
 
 	second_last_offset = offset + (lock->dynamic_list_len - 3) * 3;
 	last_offset = second_last_offset + 3;
@@ -1816,11 +1831,12 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 
 	lock->dynamic_list_len--;
 
+disable_perfcounter:
 	/*
-	 * If dynamic list length is 2, the only entry in the list is the GEN8_RBBM_PERFCTR_CNTL.
-	 * Remove the same.
+	 * If dynamic list length is 2 and no_restore_count is 0, then we can remove
+	 * the perfcounter controls from the list.
 	 */
-	if (lock->dynamic_list_len == 2) {
+	if (lock->dynamic_list_len == 2 && !adreno_dev->no_restore_count) {
 		memset(&data[offset], 0, 6 * sizeof(u32));
 		lock->dynamic_list_len = 0;
 	}
@@ -1830,7 +1846,7 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 }
 
 int gen8_perfcounter_update(struct adreno_device *adreno_dev,
-	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe)
+	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe, unsigned long flags)
 {
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
@@ -1838,16 +1854,20 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	int i, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
 	bool select_reg_present = false;
 
-	for (i = 0; i < lock->dynamic_list_len; i++) {
-		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
-			select_reg_present = true;
-			break;
+	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
+		for (i = 0; i < lock->dynamic_list_len; i++) {
+			if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
+				select_reg_present = true;
+				break;
+			}
+
+			if (data[offset + 1] == GEN8_RBBM_PERFCTR_CNTL)
+				break;
+
+			offset += 3;
 		}
-
-		if (data[offset + 1] == GEN8_RBBM_PERFCTR_CNTL)
-			break;
-
-		offset += 3;
+	} else if (lock->dynamic_list_len) {
+		goto update;
 	}
 
 	if (kgsl_hwlock(lock)) {
@@ -1862,40 +1882,41 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	 */
 	if (select_reg_present) {
 		data[offset + 2] = reg->countable;
+		kgsl_hwunlock(lock);
 		goto update;
 	}
 
+	/* Initialize the lock->dynamic_list_len to account for perfcounter controls */
+	if (!lock->dynamic_list_len)
+		lock->dynamic_list_len = 2;
+
 	/*
-	 * For all targets GEN8_RBBM_PERFCTR_CNTL needs to be the last entry,
-	 * so overwrite the existing GEN8_RBBM_PERFCNTL_CTRL and add it back to
+	 * For all targets GEN8_SLICE_RBBM_PERFCTR_CNTL needs to be the last entry,
+	 * so overwrite the existing GEN8_SLICE_RBBM_PERFCNTL_CNTL and add it back to
 	 * the end.
 	 */
-	data[offset++] = pipe;
-	data[offset++] = reg->select;
-	data[offset++] = reg->countable;
+	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
+		data[offset++] = pipe;
+		data[offset++] = reg->select;
+		data[offset++] = reg->countable;
+		lock->dynamic_list_len++;
+	}
 
 	data[offset++] = FIELD_PREP(GENMASK(13, 12), PIPE_NONE);
 	data[offset++] = GEN8_RBBM_PERFCTR_CNTL;
 	data[offset++] = 1;
-	lock->dynamic_list_len++;
 
 	data[offset++] = FIELD_PREP(GENMASK(13, 12), PIPE_NONE);
 	data[offset++] = GEN8_RBBM_SLICE_PERFCTR_CNTL;
 	data[offset++] = 1;
-	lock->dynamic_list_len++;
 
-	/* If this is the first entry, enable perfcounters */
-	if (lock->dynamic_list_len == 2) {
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_PERFCTR_CNTL, 0x1);
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_SLICE_PERFCTR_CNTL, 0x1);
-	}
+	kgsl_hwunlock(lock);
 
 update:
 	if (update_reg)
 		kgsl_regwrite(KGSL_DEVICE(adreno_dev), reg->select,
 			reg->countable);
 
-	kgsl_hwunlock(lock);
 	return 0;
 }
 
