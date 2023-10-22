@@ -1775,15 +1775,8 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 	bool remove_counter = false;
 	u32 pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
 
-	if (kgsl_hwlock(lock)) {
-		kgsl_hwunlock(lock);
-		return -EBUSY;
-	}
-
-	if (lock->dynamic_list_len < 3) {
-		kgsl_hwunlock(lock);
+	if (lock->dynamic_list_len < 3)
 		return -EINVAL;
-	}
 
 	second_last_offset = offset + (lock->dynamic_list_len - 3) * 3;
 	last_offset = second_last_offset + 3;
@@ -1797,9 +1790,12 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 		offset += 3;
 	}
 
-	if (!remove_counter) {
-		kgsl_hwunlock(lock);
+	if (!remove_counter)
 		return -ENOENT;
+
+	if (kgsl_hwlock(lock)) {
+		kgsl_hwunlock(lock);
+		return -EBUSY;
 	}
 
 	/*
@@ -1840,6 +1836,19 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	struct cpu_gpu_lock *lock = ptr;
 	u32 *data = ptr + sizeof(*lock);
 	int i, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
+	bool select_reg_present = false;
+
+	for (i = 0; i < lock->dynamic_list_len; i++) {
+		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
+			select_reg_present = true;
+			break;
+		}
+
+		if (data[offset + 1] == GEN8_RBBM_PERFCTR_CNTL)
+			break;
+
+		offset += 3;
+	}
 
 	if (kgsl_hwlock(lock)) {
 		kgsl_hwunlock(lock);
@@ -1851,16 +1860,9 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	 * update it, otherwise append the <aperture, select register, value>
 	 * triplet to the end of the list.
 	 */
-	for (i = 0; i < lock->dynamic_list_len; i++) {
-		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
-			data[offset + 2] = reg->countable;
-			goto update;
-		}
-
-		if (data[offset + 1] == GEN8_RBBM_PERFCTR_CNTL)
-			break;
-
-		offset += 3;
+	if (select_reg_present) {
+		data[offset + 2] = reg->countable;
+		goto update;
 	}
 
 	/*
