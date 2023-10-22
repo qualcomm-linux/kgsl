@@ -173,6 +173,8 @@ enum kgsl_mmu_feature {
 	KGSL_MMU_SUPPORT_VBO,
 	/** @KGSL_MMU_PAGEFAULT_TERMINATE: Set to make pagefaults fatal */
 	KGSL_MMU_PAGEFAULT_TERMINATE,
+	/** @KGSL_MMU_LLCC_NWA: Set to make no write allocate the default LLCC policy */
+	KGSL_MMU_FORCE_LLCC_NWA,
 };
 
 #include "kgsl_iommu.h"
