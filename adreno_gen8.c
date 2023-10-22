@@ -1822,13 +1822,11 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 
 	/*
 	 * If dynamic list length is 2, the only entry in the list is the GEN8_RBBM_PERFCTR_CNTL.
-	 * Remove the same as we can disable perfcounters now.
+	 * Remove the same.
 	 */
 	if (lock->dynamic_list_len == 2) {
 		memset(&data[offset], 0, 6 * sizeof(u32));
 		lock->dynamic_list_len = 0;
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_PERFCTR_CNTL, 0x0);
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_SLICE_PERFCTR_CNTL, 0x0);
 	}
 
 	kgsl_hwunlock(lock);
