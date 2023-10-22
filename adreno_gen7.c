@@ -828,6 +828,10 @@ int gen7_start(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
 		kgsl_regwrite(device, GEN7_CP_AQE_APRIV_CNTL, BIT(0));
 
+	if (adreno_is_gen7_9_x(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 1));
+
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
 	 * the prefetch granularity size.
