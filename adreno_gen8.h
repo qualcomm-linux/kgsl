@@ -59,6 +59,18 @@ struct gen8_protected_regs {
 };
 
 /**
+ * struct gen8_nonctxt_regs - Container for non context registers span
+ */
+struct gen8_nonctxt_regs {
+	/** @offset: Dword offset of the register to write */
+	u32 offset;
+	/** @val: Value to write */
+	u32 val;
+	/** @pipelines: pipelines to write */
+	u32 pipelines;
+};
+
+/**
  * struct adreno_gen8_core - gen8 specific GPU core definitions
  */
 struct adreno_gen8_core {
@@ -86,6 +98,8 @@ struct adreno_gen8_core {
 	u32 hang_detect_cycles;
 	/** @protected_regs: Array of protected registers for the target */
 	const struct gen8_protected_regs *protected_regs;
+	/** @nonctxt_regs: Array of non context register list */
+	const struct gen8_nonctxt_regs *nonctxt_regs;
 	/** @ctxt_record_size: Size of the preemption record in bytes */
 	u64 ctxt_record_size;
 	/** @highest_bank_bit: Highest bank bit value */

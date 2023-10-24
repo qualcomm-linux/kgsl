@@ -429,6 +429,7 @@
 #define GEN8_CP_RB_RPTR_ADDR_HI_LPAC                           0x810
 #define GEN8_CP_RB_RPTR_LPAC                                   0x811
 #define GEN8_CP_RB_WPTR_LPAC                                   0x812
+#define GEN8_CP_SMMU_STREAM_ID_LPAC                            0x814
 #define GEN8_CP_SQE_CNTL                                       0x815
 #define GEN8_CP_SQE_INSTR_BASE_LO                              0x816
 #define GEN8_CP_SQE_INSTR_BASE_HI                              0x817
@@ -690,6 +691,7 @@
 
 
 /* VFD registers */
+#define GEN8_VFD_DBG_ECO_CNTL               0xa600
 #define GEN8_VFD_PERFCTR_VFD_SEL_0          0xa610
 #define GEN8_VFD_PERFCTR_VFD_SEL_1          0xa611
 #define GEN8_VFD_PERFCTR_VFD_SEL_2          0xa612

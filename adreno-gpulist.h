@@ -2511,6 +2511,56 @@ static const struct kgsl_regmap_list gen8_0_0_gbif_cx_regs[] = {
 	{ GEN8_GMUCX_MRC_GBIF_QOS_CTRL, 0x33 },
 };
 
+/* GEN8_0_0 noncontext register list */
+static const struct gen8_nonctxt_regs gen8_0_0_nonctxt_regs[] = {
+	{ GEN8_CP_SMMU_STREAM_ID_LPAC, 0x00000101, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_CNTLT, 0xf0004000, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_0, 0x00000003, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_2, 0xffffffff, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_MASKL_3, 0xffffffff, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_0, 0x00000008, BIT(PIPE_NONE) },
+	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_1, 0x76543210, BIT(PIPE_NONE) },
+	{ GEN8_GRAS_DBG_ECO_CNTL, 0x00000800, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_AUTO_VERTEX_STRIDE, 0x00000001, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_VIS_STREAM_CNTL, 0x10010000, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1, 0x00000002, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_CHICKEN_BITS_1, 0x00000003, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_CHICKEN_BITS_2, 0x00000200, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_CHICKEN_BITS_3, 0x00500000, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_PC_CHICKEN_BITS_4, 0x00500050, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	/* Enable full concurrent resolve and unresolves */
+	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
+	{ GEN8_RB_GC_GMEM_PROTECT, 0x0c000000, BIT(PIPE_BR) },
+	/* Configure number of outstanding transactions to 32 */
+	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
+	/* Disable ubwc merged UFC request feature */
+	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
+	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
+	{ GEN8_RBBM_SLICE_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
+	{ GEN8_SP_CHICKEN_BITS_2, 0x00800000, BIT(PIPE_NONE) },
+	{ GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP, 0x00000080,  BIT(PIPE_NONE) },
+	{ GEN8_SP_READ_SEL, 0x0001ff00,  BIT(PIPE_NONE) },
+	{ GEN8_TPL1_DBG_ECO_CNTL, 0x10000000, BIT(PIPE_NONE) },
+	/* Enable cubemap small miplevel optimization settings */
+	{ GEN8_TPL1_DBG_ECO_CNTL1, 0x00000724, BIT(PIPE_NONE) },
+	/* Disable tag bank id hashing */
+	{ GEN8_UCHE_MODE_CNTL, 0x000a0000, BIT(PIPE_NONE) },
+	{ GEN8_UCHE_CCHE_MODE_CNTL, 0x00001000, BIT(PIPE_NONE) },
+	/* Limit gmem number of ways for GMEM requests in each set */
+	{ GEN8_UCHE_CCHE_CACHE_WAYS, 0x00000800, BIT(PIPE_NONE)},
+	{ GEN8_UCHE_CACHE_WAYS, 0x00080000, BIT(PIPE_NONE) },
+	/* Configure UCHE to CCU switchthreshold timeout cycles */
+	{ GEN8_UCHE_VARB_IDLE_TIMEOUT, 0x00000020, BIT(PIPE_NONE) },
+	{ GEN8_VFD_DBG_ECO_CNTL, 0x00008000, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VFD_CB_BV_THRESHOLD, 0x00500050, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VFD_CB_BR_THRESHOLD, 0x00600060, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VFD_CB_BUSY_REQ_CNT, 0x00200020, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VFD_CB_LP_REQ_CNT, 0x00000020, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VPC_FLATSHADE_MODE_CNTL, 0x00000001, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_VSC_BIN_SIZE, 0x00010001, BIT(PIPE_NONE) },
+	{ 0 },
+};
+
 /* GEN8_0_0 protected register list */
 static const struct gen8_protected_regs gen8_0_0_protected_regs[] = {
 	{ GEN8_CP_PROTECT_REG_GLOBAL + 0, 0x00000, 0x003a3, 0 },
@@ -2592,6 +2642,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.gbif_count = ARRAY_SIZE(gen8_0_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen8_0_0_protected_regs,
+	.nonctxt_regs = gen8_0_0_nonctxt_regs,
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
 };

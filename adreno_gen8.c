@@ -399,6 +399,35 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       PIPE_LPAC, 0, 0);
 }
 
+static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	const struct gen8_nonctxt_regs *regs = gen8_core->nonctxt_regs;
+	u32 i, pipe_id;
+	unsigned long pipe;
+
+	/* Program non context registers for all pipes */
+	for (pipe_id = PIPE_NONE; pipe_id <= PIPE_AQE1; pipe_id++) {
+
+		if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+			continue;
+		else if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+			 !ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+			continue;
+
+		for (i = 0; regs[i].offset; i++) {
+			pipe = (unsigned long)regs[i].pipelines;
+			if (test_bit(pipe_id, &pipe))
+				gen8_regwrite_aperture(device, regs[i].offset,
+					regs[i].val, pipe_id, 0, 0);
+		}
+	}
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+}
+
 #define RBBM_CLOCK_CNTL_ON 0x8aa8aa82
 
 static void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
@@ -739,6 +768,9 @@ int gen8_start(struct adreno_device *adreno_dev)
 	/* Configure TP bicubic registers */
 	kgsl_regmap_multi_write(&device->regmap, gen8_0_0_bicubic_regs,
 				ARRAY_SIZE(gen8_0_0_bicubic_regs));
+
+	/* Program noncontext registers */
+	gen8_nonctxt_regconfig(adreno_dev);
 
 	/* Enable hardware hang detection */
 	kgsl_regwrite(device, GEN8_RBBM_INTERFACE_HANG_INT_CNTL, BIT(30) |
