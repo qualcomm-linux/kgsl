@@ -11,7 +11,6 @@
 #include <linux/random.h>
 #include <linux/shmem_fs.h>
 #include <linux/sched/signal.h>
-#include <linux/version.h>
 
 #include "kgsl_device.h"
 #include "kgsl_pool.h"
@@ -707,32 +706,16 @@ static void _dma_cache_op(struct device *dev, struct page *page,
 	sg_set_page(&sgl, page, PAGE_SIZE, 0);
 	sg_dma_address(&sgl) = page_to_phys(page);
 
-	/*
-	 * APIs for Cache Maintenance Operations are updated in kernel
-	 * version 6.1. Prior to 6.1, dma_sync_sg_for_device() with
-	 * DMA_FROM_DEVICE as direction triggers cache invalidate and
-	 * clean whereas in kernel version 6.1, it triggers only cache
-	 * clean. Hence use dma_sync_sg_for_cpu() for cache invalidate
-	 * for kernel version 6.1 and above.
-	 */
-
 	switch (op) {
 	case KGSL_CACHE_OP_FLUSH:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_TO_DEVICE);
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
-		dma_sync_sg_for_cpu(dev, &sgl, 1, DMA_FROM_DEVICE);
-#else
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_FROM_DEVICE);
-#endif
 		break;
 	case KGSL_CACHE_OP_CLEAN:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_TO_DEVICE);
 		break;
 	case KGSL_CACHE_OP_INV:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_FROM_DEVICE);
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
-		dma_sync_sg_for_cpu(dev, &sgl, 1, DMA_FROM_DEVICE);
-#endif
 		break;
 	}
 }
