@@ -630,7 +630,7 @@ static int _kgsl_get_context_id(struct kgsl_device *device)
 	write_lock(&device->context_lock);
 	/* Allocate the slot but don't put a pointer in it yet */
 	id = idr_alloc(&device->context_idr, NULL, 1,
-		KGSL_MEMSTORE_MAX, GFP_NOWAIT);
+		KGSL_GLOBAL_CTXT_ID, GFP_NOWAIT);
 	write_unlock(&device->context_lock);
 	idr_preload_end();
 
@@ -655,7 +655,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_device *device = dev_priv->device;
 	int ret = 0, id;
-	struct kgsl_process_private  *proc_priv = dev_priv->process_priv;
+	struct kgsl_process_private *proc_priv = dev_priv->process_priv;
 
 	/*
 	 * Read and increment the context count under lock to make sure
@@ -665,7 +665,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 	if (atomic_read(&proc_priv->ctxt_count) > KGSL_MAX_CONTEXTS_PER_PROC) {
 		dev_err(device->dev,
 			     "Per process context limit reached for pid %u\n",
-			     pid_nr(dev_priv->process_priv->pid));
+			     pid_nr(proc_priv->pid));
 		spin_unlock(&proc_priv->ctxt_count_lock);
 		kgsl_context_debug_info(device);
 		return -ENOSPC;
@@ -707,18 +707,19 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 	 * the context is destroyed. This will also prevent the pagetable
 	 * from being destroyed
 	 */
-	if (!kgsl_process_private_get(dev_priv->process_priv)) {
+	if (!kgsl_process_private_get(proc_priv)) {
 		ret = -EBADF;
 		goto out;
 	}
-	context->device = dev_priv->device;
+
+	context->device = device;
 	context->dev_priv = dev_priv;
-	context->proc_priv = dev_priv->process_priv;
+	context->proc_priv = proc_priv;
 	context->tid = task_pid_nr(current);
 
 	ret = kgsl_sync_timeline_create(context);
 	if (ret) {
-		kgsl_process_private_put(dev_priv->process_priv);
+		kgsl_process_private_put(proc_priv);
 		goto out;
 	}
 
@@ -729,7 +730,7 @@ out:
 	if (ret) {
 		atomic_dec(&proc_priv->ctxt_count);
 		write_lock(&device->context_lock);
-		idr_remove(&dev_priv->device->context_idr, id);
+		idr_remove(&device->context_idr, id);
 		write_unlock(&device->context_lock);
 	}
 
@@ -2059,7 +2060,7 @@ long kgsl_ioctl_rb_issueibcmds(struct kgsl_device_private *dev_priv,
 		result = kgsl_reclaim_to_pinned_state(dev_priv->process_priv);
 
 	if (result == 0)
-		result = dev_priv->device->ftbl->queue_cmds(dev_priv, context,
+		result = device->ftbl->queue_cmds(dev_priv, context,
 				&drawobj, 1, &param->timestamp);
 
 	/*
@@ -2580,7 +2581,7 @@ long kgsl_ioctl_drawctxt_create(struct kgsl_device_private *dev_priv,
 		result = PTR_ERR(context);
 		goto done;
 	}
-	trace_kgsl_context_create(dev_priv->device, context, param->flags);
+	trace_kgsl_context_create(device, context, param->flags);
 
 	/* Commit the pointer to the context in context_idr */
 	write_lock(&device->context_lock);
@@ -2764,8 +2765,7 @@ static long gpuobj_free_on_fence(struct kgsl_device_private *dev_priv,
 		return -EINVAL;
 	}
 
-	handle = kgsl_sync_fence_async_wait(event.fd,
-		gpuobj_free_fence_func, entry, NULL);
+	handle = kgsl_sync_fence_async_wait(event.fd, gpuobj_free_fence_func, entry);
 
 	if (IS_ERR(handle)) {
 		kgsl_mem_entry_unset_pend(entry);
