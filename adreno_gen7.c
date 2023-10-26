@@ -47,6 +47,7 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_SP_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -96,6 +97,70 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_CP_PROTECT_REG+46,
 	GEN7_CP_PROTECT_REG+47,
 	GEN7_CP_AHB_CNTL,
+};
+
+static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
+	GEN7_TPL1_NC_MODE_CNTL,
+	GEN7_CP_DBG_ECO_CNTL,
+	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
+	GEN7_CP_PROTECT_REG,
+	GEN7_CP_PROTECT_REG+1,
+	GEN7_CP_PROTECT_REG+2,
+	GEN7_CP_PROTECT_REG+3,
+	GEN7_CP_PROTECT_REG+4,
+	GEN7_CP_PROTECT_REG+5,
+	GEN7_CP_PROTECT_REG+6,
+	GEN7_CP_PROTECT_REG+7,
+	GEN7_CP_PROTECT_REG+8,
+	GEN7_CP_PROTECT_REG+9,
+	GEN7_CP_PROTECT_REG+10,
+	GEN7_CP_PROTECT_REG+11,
+	GEN7_CP_PROTECT_REG+12,
+	GEN7_CP_PROTECT_REG+13,
+	GEN7_CP_PROTECT_REG+14,
+	GEN7_CP_PROTECT_REG+15,
+	GEN7_CP_PROTECT_REG+16,
+	GEN7_CP_PROTECT_REG+17,
+	GEN7_CP_PROTECT_REG+18,
+	GEN7_CP_PROTECT_REG+19,
+	GEN7_CP_PROTECT_REG+20,
+	GEN7_CP_PROTECT_REG+21,
+	GEN7_CP_PROTECT_REG+22,
+	GEN7_CP_PROTECT_REG+23,
+	GEN7_CP_PROTECT_REG+24,
+	GEN7_CP_PROTECT_REG+25,
+	GEN7_CP_PROTECT_REG+26,
+	GEN7_CP_PROTECT_REG+27,
+	GEN7_CP_PROTECT_REG+28,
+	GEN7_CP_PROTECT_REG+29,
+	GEN7_CP_PROTECT_REG+30,
+	GEN7_CP_PROTECT_REG+31,
+	GEN7_CP_PROTECT_REG+32,
+	GEN7_CP_PROTECT_REG+33,
+	GEN7_CP_PROTECT_REG+34,
+	GEN7_CP_PROTECT_REG+35,
+	GEN7_CP_PROTECT_REG+36,
+	GEN7_CP_PROTECT_REG+37,
+	GEN7_CP_PROTECT_REG+38,
+	GEN7_CP_PROTECT_REG+39,
+	GEN7_CP_PROTECT_REG+40,
+	GEN7_CP_PROTECT_REG+41,
+	GEN7_CP_PROTECT_REG+42,
+	GEN7_CP_PROTECT_REG+43,
+	GEN7_CP_PROTECT_REG+44,
+	GEN7_CP_PROTECT_REG+45,
+	GEN7_CP_PROTECT_REG+46,
+	GEN7_CP_PROTECT_REG+47,
+	GEN7_CP_AHB_CNTL,
+};
+
+/* Gen7_9_x IFPC only static powerup restore list */
+static const u32 gen7_9_x_ifpc_pwrup_reglist[] = {
+	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_1,
+	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_2,
+	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_3,
+	GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4,
 };
 
 #define F_PWR_ACD_CALIBRATE 78
@@ -282,6 +347,7 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	adreno_dev->feature_fuse = feature_fuse;
 }
 
+#define GEN7_PROTECT_DEFAULT (BIT(0) | BIT(1) | BIT(3))
 static void gen7_protect_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -294,8 +360,10 @@ static void gen7_protect_init(struct adreno_device *adreno_dev)
 	 * protect violation and select the last span to protect from the start
 	 * address all the way to the end of the register address space
 	 */
-	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL,
-		BIT(0) | BIT(1) | BIT(3));
+	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
+
+	if (adreno_dev->lpac_enabled)
+		kgsl_regwrite(device, GEN7_CP_LPAC_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
 
 	/* Program each register defined by the core definition */
 	for (i = 0; regs[i].reg; i++) {
