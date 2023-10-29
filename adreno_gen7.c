@@ -1671,16 +1671,34 @@ static unsigned int gen7_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 
 static u32 _get_pipeid(u32 groupid)
 {
-	if (groupid == KGSL_PERFCOUNTER_GROUP_BV_TSE || groupid == KGSL_PERFCOUNTER_GROUP_BV_RAS
-						|| groupid == KGSL_PERFCOUNTER_GROUP_BV_LRZ
-						|| groupid == KGSL_PERFCOUNTER_GROUP_BV_HLSQ)
+	switch (groupid) {
+	case KGSL_PERFCOUNTER_GROUP_BV_PC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_VPC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_TSE:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_RAS:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_LRZ:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_BV_HLSQ:
 		return PIPE_BV;
-	else if (groupid == KGSL_PERFCOUNTER_GROUP_HLSQ || groupid == KGSL_PERFCOUNTER_GROUP_TSE
-						|| groupid == KGSL_PERFCOUNTER_GROUP_RAS
-						|| groupid == KGSL_PERFCOUNTER_GROUP_LRZ)
+	case KGSL_PERFCOUNTER_GROUP_PC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_VPC:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_TSE:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_RAS:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_LRZ:
+		fallthrough;
+	case KGSL_PERFCOUNTER_GROUP_HLSQ:
 		return PIPE_BR;
-	else
+	default:
 		return PIPE_NONE;
+	}
 }
 
 int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
