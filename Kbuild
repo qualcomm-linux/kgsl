@@ -13,6 +13,8 @@ ifeq ($(CONFIG_QTI_QUIN_GVM),)
 	endif
 endif
 
+include $(KGSL_PATH)/config/gki_k2c.conf
+
 ifeq ($(CONFIG_ARCH_WAIPIO), y)
 	include $(KGSL_PATH)/config/gki_waipiodisp.conf
 endif
