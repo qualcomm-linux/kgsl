@@ -118,3 +118,9 @@ config QCOM_KGSL_HIBERNATION
 	  Say 'Y' to enable hibernation support in kgsl. If enabled, kgsl
 	  will register necessary power manager callbacks to support
 	  hibernation.
+
+config QCOM_KGSL_UPSTREAM
+	bool "Enable KGSL compilation with upstream kernel"
+	help
+	  Say 'Y' to enable kgsl compilation with upstream kernel. If enabled,
+	  all downstream dependencies are stubbed out.

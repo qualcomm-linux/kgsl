@@ -3321,6 +3321,7 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 		goto out;
 	}
 
+#ifndef CONFIG_QCOM_KGSL_UPSTREAM
 	/*
 	 * If dma buffer is marked IO coherent, skip sync at attach,
 	 * which involves flushing the buffer on CPU.
@@ -3328,6 +3329,7 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 	 */
 	if (entry->memdesc.flags & KGSL_MEMFLAGS_IOCOHERENT)
 		attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+#endif
 
 	metadata->dmabuf = dmabuf;
 	metadata->attach = attach;

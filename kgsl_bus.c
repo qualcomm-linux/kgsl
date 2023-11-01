@@ -97,6 +97,12 @@ int kgsl_bus_update(struct kgsl_device *device,
 	return device->ftbl->gpu_bus_set(device, buslevel, ab);
 }
 
+#ifdef CONFIG_QCOM_KGSL_UPSTREAM
+void kgsl_icc_set_tag(struct kgsl_pwrctrl *pwr, int buslevel)
+{
+	icc_set_tag(pwr->icc_path, QCOM_ICC_TAG_ALWAYS);
+}
+#else
 void kgsl_icc_set_tag(struct kgsl_pwrctrl *pwr, int buslevel)
 {
 	if (buslevel == pwr->pwrlevels[0].bus_max)
@@ -104,6 +110,7 @@ void kgsl_icc_set_tag(struct kgsl_pwrctrl *pwr, int buslevel)
 	else
 		icc_set_tag(pwr->icc_path, QCOM_ICC_TAG_ALWAYS);
 }
+#endif
 
 static void validate_pwrlevels(struct kgsl_device *device, u32 *ibs,
 		int count)
