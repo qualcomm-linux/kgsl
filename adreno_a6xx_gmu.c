@@ -4,7 +4,7 @@
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
+#include <dt-bindings/power/qcom-rpmpd.h>
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/delay.h>
