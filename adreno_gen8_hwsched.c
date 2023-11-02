@@ -108,15 +108,6 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
-	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
-		ret = gen8_load_pdc_ucode(adreno_dev);
-		if (ret)
-			goto clks_gdsc_off;
-
-		gen8_load_rsc_ucode(adreno_dev);
-		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
-	}
-
 	ret = gen8_scm_gpu_init_cx_regs(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;

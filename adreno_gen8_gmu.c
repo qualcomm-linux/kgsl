@@ -241,67 +241,6 @@ struct adreno_device *gen8_gmu_to_adreno(struct gen8_gmu_device *gmu)
 	return &gen8_dev->adreno_dev;
 }
 
-#define RSC_CMD_OFFSET 2
-
-static void _regwrite(void __iomem *regbase,
-		u32 offsetwords, u32 value)
-{
-	void __iomem *reg;
-
-	reg = regbase + (offsetwords << 2);
-	__raw_writel(value, reg);
-}
-
-void gen8_load_rsc_ucode(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	void __iomem *rscc = gmu->rscc_virt;
-	u32 seq_offset = GEN8_RSCC_SEQ_MEM_0_DRV0;
-
-	/* Disable SDE clock gating */
-	_regwrite(rscc, GEN8_GPU_RSCC_RSC_STATUS0_DRV0, BIT(24));
-
-	/* Setup RSC PDC handshake for sleep and wakeup */
-	_regwrite(rscc, GEN8_RSCC_PDC_SLAVE_ID_DRV0, 1);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_DATA, 0);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_ADDR, 0);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET, 0);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET, 0);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_DATA + RSC_CMD_OFFSET * 2, 0x80000021);
-	_regwrite(rscc, GEN8_RSCC_HIDDEN_TCS_CMD0_ADDR + RSC_CMD_OFFSET * 2, 0);
-
-	/* Load RSC sequencer uCode for sleep and wakeup */
-	_regwrite(rscc, seq_offset, 0xeaaae5a0);
-	_regwrite(rscc, seq_offset + 1, 0xe1a1ebab);
-	_regwrite(rscc, seq_offset + 2, 0xa2e0a581);
-	_regwrite(rscc, seq_offset + 3, 0xecac82e2);
-	_regwrite(rscc, seq_offset + 4, 0x0020edad);
-}
-
-int gen8_load_pdc_ucode(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct resource *res_cfg;
-	void __iomem *cfg = NULL;
-
-	res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
-			"gmu_pdc");
-	if (res_cfg)
-		cfg = ioremap(res_cfg->start, resource_size(res_cfg));
-
-	if (!cfg) {
-		dev_err(&gmu->pdev->dev, "Failed to map PDC CFG\n");
-		return -ENODEV;
-	}
-
-	/* Setup GPU PDC */
-	_regwrite(cfg, GEN8_PDC_GPU_ENABLE_PDC, 0x80000001);
-
-	iounmap(cfg);
-
-	return 0;
-}
-
 /* Configure and enable GMU low power mode */
 static void gen8_gmu_power_config(struct adreno_device *adreno_dev)
 {
@@ -1896,15 +1835,6 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
-
-	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
-		ret = gen8_load_pdc_ucode(adreno_dev);
-		if (ret)
-			goto err;
-
-		gen8_load_rsc_ucode(adreno_dev);
-		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
-	}
 
 	ret = gen8_gmu_hfi_start(adreno_dev);
 	if (ret)

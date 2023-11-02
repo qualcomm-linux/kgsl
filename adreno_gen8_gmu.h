@@ -428,20 +428,6 @@ int gen8_rscc_wakeup_sequence(struct adreno_device *adreno_dev);
 int gen8_halt_gbif(struct adreno_device *adreno_dev);
 
 /**
- * gen8_load_pdc_ucode - Load and enable pdc sequence
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int gen8_load_pdc_ucode(struct adreno_device *adreno_dev);
-
-/**
- * gen8_load_rsc_ucode - Load rscc sequence
- * @adreno_dev: Pointer to the adreno device
- */
-void gen8_load_rsc_ucode(struct adreno_device *adreno_dev);
-
-/**
  * gen8_gmu_remove - Clean up gmu probed resources
  * @device: Pointer to the kgsl device
  */
