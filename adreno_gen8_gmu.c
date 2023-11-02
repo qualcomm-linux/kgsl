@@ -308,9 +308,9 @@ static void gen8_gmu_power_config(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	/* Disable GMU WB/RB buffer and caches at boot */
-	gmu_core_regwrite(device, GEN8_GMU_SYS_BUS_CONFIG, 0x1);
-	gmu_core_regwrite(device, GEN8_GMU_ICACHE_CONFIG, 0x1);
-	gmu_core_regwrite(device, GEN8_GMU_DCACHE_CONFIG, 0x1);
+	gmu_core_regwrite(device, GEN8_GMUCX_SYS_BUS_CONFIG, 0x1);
+	gmu_core_regwrite(device, GEN8_GMUCX_ICACHE_CONFIG, 0x1);
+	gmu_core_regwrite(device, GEN8_GMUCX_DCACHE_CONFIG, 0x1);
 }
 
 static void gmu_ao_sync_event(struct adreno_device *adreno_dev)
