@@ -642,10 +642,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	/* Reset aperture fields to go through first aperture write check */
 	gen8_dev->aperture = UINT_MAX;
 
-	/* Configure GBIF GX registers */
-	kgsl_regwrite(device, GEN8_UCHE_GBIF_GX_CONFIG, 0x010240e0);
-	kgsl_regwrite(device, GEN8_RBBM_GBIF_CLIENT_QOS_CNTL, 0x22122212);
-
 	/* Make all blocks contribute to the GPU BUSY perf counter */
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_GPU_BUSY_MASKED, 0xffffffff);
 
