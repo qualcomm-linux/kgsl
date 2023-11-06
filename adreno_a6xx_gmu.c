@@ -703,7 +703,8 @@ int a6xx_rscc_wakeup_sequence(struct adreno_device *adreno_dev)
 	if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev))
 		gmu_core_regread(device, A662_GPU_CC_GX_DOMAIN_MISC3, &val);
 	else if (adreno_is_a660(ADRENO_DEVICE(device)) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a623(adreno_dev))
 		gmu_core_regread(device, A6XX_GPU_CC_GX_DOMAIN_MISC3, &val);
 	else
 		gmu_core_regread(device, A6XX_GPU_CC_GX_DOMAIN_MISC, &val);
@@ -3190,7 +3191,8 @@ static void a6xx_fusa_init(struct adreno_device *adreno_dev)
 	void __iomem *fusa_virt = NULL;
 	struct resource *res;
 
-	if (!adreno_is_a663(adreno_dev))
+	if (!(adreno_is_a663(adreno_dev) ||
+				adreno_is_a623(adreno_dev)))
 		return;
 
 	res = platform_get_resource_byname(device->pdev,
