@@ -1254,6 +1254,7 @@
 /* GPUCC registers */
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541
 #define GEN7_GPU_CC_CX_GDSCR			0x26442
+#define GEN7_11_0_GPU_CC_CX_GDSCR		0x26423
 
 /* GPU RSC sequencer registers */
 #define GEN7_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
