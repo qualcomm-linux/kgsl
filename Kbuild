@@ -46,6 +46,9 @@ endif
 ifeq ($(CONFIG_ARCH_KONA), y)
         include $(KGSL_PATH)/config/gki_kona.conf
 endif
+ifeq ($(CONFIG_ARCH_MONACO_AUTO), y)
+	include $(KGSL_PATH)/config/gki_monaco_auto.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 

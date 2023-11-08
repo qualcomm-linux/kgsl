@@ -633,7 +633,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	if (adreno_is_a660(adreno_dev))
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 
-	if (adreno_is_a663(adreno_dev)) {
+	if (adreno_is_a663(adreno_dev) || adreno_is_a623(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
 		kgsl_regwrite(device, A6XX_RBBM_LPAC_GBIF_CLIENT_QOS_CNTL, 0x0);
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
@@ -706,7 +706,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	 * overwrite to 1: 8 channels for A680
 	 */
 	if (adreno_is_a680(adreno_dev) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a623(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_NC_MODE_CNTL, 1);
 
 	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
@@ -1580,7 +1581,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 	 * GFO allows it allocate partial cache lines
 	 */
 	if (adreno_is_a660(adreno_dev) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a623(adreno_dev))
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL0, (0x1f << 10) |
 				BIT(8), (gpu_scid << 10) | BIT(8));
 }
