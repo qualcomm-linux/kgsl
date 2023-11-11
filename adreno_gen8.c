@@ -1900,11 +1900,11 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 		}
 	}
 
-	data[offset++] = FIELD_PREP(GENMASK(13, 12), PIPE_NONE);
+	data[offset++] = FIELD_PREP(GENMASK(15, 12), PIPE_NONE);
 	data[offset++] = GEN8_RBBM_PERFCTR_CNTL;
 	data[offset++] = 1;
 
-	data[offset++] = FIELD_PREP(GENMASK(13, 12), PIPE_NONE);
+	data[offset++] = FIELD_PREP(GENMASK(15, 12), PIPE_NONE);
 	data[offset++] = GEN8_RBBM_SLICE_PERFCTR_CNTL;
 	data[offset++] = 1;
 

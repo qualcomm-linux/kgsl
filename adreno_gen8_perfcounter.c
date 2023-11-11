@@ -61,10 +61,10 @@ static int gen8_counter_br_enable(struct adreno_device *adreno_dev,
 	u32 val = 0;
 
 	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BR));
+	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(15, 12), PIPE_BR));
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
-			FIELD_PREP(GENMASK(13, 12), PIPE_BR), group->flags);
+			FIELD_PREP(GENMASK(15, 12), PIPE_BR), group->flags);
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
 
@@ -84,10 +84,10 @@ static int gen8_counter_bv_enable(struct adreno_device *adreno_dev,
 	u32 val = 0;
 
 	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BV));
+	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(15, 12), PIPE_BV));
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
-				FIELD_PREP(GENMASK(13, 12), PIPE_BV), group->flags);
+				FIELD_PREP(GENMASK(15, 12), PIPE_BV), group->flags);
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
 
@@ -105,7 +105,7 @@ static int gen8_counter_enable(struct adreno_device *adreno_dev,
 	int ret = 0;
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
-					FIELD_PREP(GENMASK(13, 12), PIPE_NONE), group->flags);
+					FIELD_PREP(GENMASK(15, 12), PIPE_NONE), group->flags);
 	if (!ret)
 		reg->value = 0;
 
