@@ -787,7 +787,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	/* Enable GMU power counter 0 to count GPU busy */
 	kgsl_regwrite(device, GEN8_GMUAO_GPU_CX_BUSY_MASK, 0xff000000);
-	kgsl_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_1, 0xFF, 0x20);
+	kgsl_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_0, 0xFF, 0x20);
 	kgsl_regwrite(device, GEN8_GMUCX_POWER_COUNTER_ENABLE, 0x1);
 
 	gen8_protect_init(adreno_dev);
