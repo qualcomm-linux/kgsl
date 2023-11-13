@@ -572,6 +572,39 @@ int gen8_hfi_send_bcl_feature_ctrl(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_BCL, 1, adreno_dev->bcl_data);
 }
 
+int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	int ret = 0;
+	struct hfi_clx_table_v2_cmd cmd = {0};
+
+	if (!adreno_dev->clx_enabled)
+		return 0;
+
+	/* Make sure the table is valid before enabling feature */
+	ret = CMD_MSG_HDR(cmd, H2F_MSG_CLX_TBL);
+	if (ret)
+		return ret;
+
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_CLX, 1, 0);
+	if (ret)
+		return ret;
+
+	cmd.version = FIELD_PREP(GENMASK(31, 16), 0x2) | FIELD_PREP(GENMASK(15, 0), 0x1);
+	/* cmd.domain[0] is never used but needed per hfi spec */
+	cmd.domain[1].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
+				FIELD_PREP(GENMASK(28, 28), 1) |
+				FIELD_PREP(GENMASK(27, 22), 1) |
+				FIELD_PREP(GENMASK(21, 16), 40) |
+				FIELD_PREP(GENMASK(15, 0), 0);
+	cmd.domain[1].clxt = 0;
+	cmd.domain[1].clxh = 0;
+	cmd.domain[1].urgmode = 1;
+	cmd.domain[1].lkgen = 0;
+	cmd.domain[1].currbudget = 50;
+
+	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+}
+
 #define EVENT_PWR_ACD_THROTTLE_PROF 44
 
 int gen8_hfi_send_acd_feature_ctrl(struct adreno_device *adreno_dev)
@@ -728,6 +761,10 @@ int gen8_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	result = gen8_hfi_send_bcl_feature_ctrl(adreno_dev);
+	if (result)
+		goto err;
+
+	result = gen8_hfi_send_clx_feature_ctrl(adreno_dev);
 	if (result)
 		goto err;
 

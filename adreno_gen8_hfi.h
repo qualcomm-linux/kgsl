@@ -185,6 +185,14 @@ int gen8_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 int gen8_hfi_send_bcl_feature_ctrl(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_hfi_send_clx_feature_ctrl - Send the clx feature hfi packet
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev);
+
+/**
  * gen8_hfi_send_ifpc_feature_ctrl - Send the ipfc feature hfi packet
  * @adreno_dev: Pointer to the adreno device
  *
