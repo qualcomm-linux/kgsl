@@ -279,6 +279,8 @@ int gen8_gmu_device_start(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
+	gmu_core_reset_trace_header(&gmu->trace);
+
 	gmu_ao_sync_event(adreno_dev);
 
 	/* Bring GMU out of reset */
@@ -2461,6 +2463,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	/* Set default GMU attributes */
 	gmu->log_stream_enable = false;
 	gmu->log_group_mask = 0x3;
+
+	/* Initialize to zero to detect trace packet loss */
+	gmu->trace.seq_num = 0;
 
 	/* Disabled by default */
 	gmu->stats_enable = false;

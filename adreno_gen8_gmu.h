@@ -55,6 +55,8 @@ struct gen8_gmu_device {
 	struct kgsl_memdesc *gmu_log;
 	/** @vrb: GMU virtual register bank memory */
 	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 	/** @gmu_init_scratch: Memory to store the initial HFI messages */
 	struct kgsl_memdesc *gmu_init_scratch;
 	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
