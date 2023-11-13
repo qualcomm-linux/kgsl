@@ -1588,6 +1588,8 @@
 #define GEN8_SMMU_BASE				0x28000
 
 /* GPU CX_MISC registers */
+#define GEN8_GPU_CX_MISC_AO_COUNTER_LO		0x80
+#define GEN8_GPU_CX_MISC_AO_COUNTER_HI		0x81
 #define GEN8_GPU_CX_MISC_SW_FUSE_VALUE		0x400
 
 /* GPU SW Fuse Feature bit fields */

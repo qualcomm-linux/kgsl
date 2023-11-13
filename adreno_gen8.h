@@ -295,6 +295,14 @@ int gen8_start(struct adreno_device *adreno_dev);
 int gen8_init(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_cx_timer_init - Initialize the CX timer on Gen8 devices
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Synchronize the GPU CX timer (if we have one) with the CPU timer
+ */
+void gen8_cx_timer_init(struct adreno_device *adreno_dev);
+
+/**
  * gen8_get_gpu_feature_info - Get hardware supported feature info
  * @adreno_dev: Pointer to the adreno device
  *

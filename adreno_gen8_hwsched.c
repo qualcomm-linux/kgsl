@@ -100,6 +100,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
+
 	ret = gen8_gmu_load_fw(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;

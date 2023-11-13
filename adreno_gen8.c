@@ -282,6 +282,65 @@ int gen8_init(struct adreno_device *adreno_dev)
 		"powerup_register_list");
 }
 
+#define CX_TIMER_INIT_SAMPLES 16
+void gen8_cx_timer_init(struct adreno_device *adreno_dev)
+{
+	u64 seed_val, tmr, skew = 0;
+	int i;
+	unsigned long flags;
+
+	/* Set up the CX timer just once */
+	if (test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
+		return;
+
+	/* Disable irqs to get accurate timings */
+	local_irq_save(flags);
+
+	/* Calculate the overhead of timer reads and register writes */
+	for (i = 0; i < CX_TIMER_INIT_SAMPLES; i++) {
+		u64 tmr1, tmr2, tmr3;
+
+		/* Measure time for two reads of the CPU timer */
+		tmr1 = arch_timer_read_counter();
+		tmr2 = arch_timer_read_counter();
+
+		/* Write to the register and time it */
+		adreno_cx_misc_regwrite(adreno_dev,
+					GEN8_GPU_CX_MISC_AO_COUNTER_LO,
+					lower_32_bits(tmr2));
+		adreno_cx_misc_regwrite(adreno_dev,
+					GEN8_GPU_CX_MISC_AO_COUNTER_HI,
+					upper_32_bits(tmr2));
+
+		/* Barrier to make sure the write completes before timing it */
+		mb();
+		tmr3 = arch_timer_read_counter();
+
+		/* Calculate difference between register write and CPU timer */
+		skew += (tmr3 - tmr2) - (tmr2 - tmr1);
+	}
+
+	local_irq_restore(flags);
+
+	/* Get the average over all our readings, to the closest integer */
+	skew = (skew + CX_TIMER_INIT_SAMPLES / 2) / CX_TIMER_INIT_SAMPLES;
+
+	local_irq_save(flags);
+	tmr = arch_timer_read_counter();
+
+	seed_val = tmr + skew;
+
+	/* Seed the GPU CX counter with the adjusted timer */
+	adreno_cx_misc_regwrite(adreno_dev,
+			GEN8_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(seed_val));
+	adreno_cx_misc_regwrite(adreno_dev,
+			GEN8_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(seed_val));
+
+	local_irq_restore(flags);
+
+	set_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
+}
+
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
 	u32 feature_fuse = 0;
