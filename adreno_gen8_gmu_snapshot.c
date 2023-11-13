@@ -128,6 +128,8 @@ static void gen8_gmu_snapshot_memories(struct kgsl_device *device,
 			desc.type = SNAPSHOT_GMU_MEM_DEBUG;
 		else if ((md == gmu->gmu_init_scratch) || (md == gmu->gpu_boot_scratch))
 			desc.type = SNAPSHOT_GMU_MEM_WARMBOOT;
+		else if (md == gmu->vrb)
+			desc.type = SNAPSHOT_GMU_MEM_VRB;
 		else
 			desc.type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 

@@ -858,6 +858,24 @@ static int gen8_gmu_warmboot_init(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+
+	/* GMU Virtual register bank */
+	if (IS_ERR_OR_NULL(gmu->vrb)) {
+		gmu->vrb = gen8_reserve_gmu_kernel_block(gmu, 0, GMU_VRB_SIZE,
+						GMU_NONCACHED_KERNEL, 0);
+
+		/* Populate size of the virtual register bank */
+		if (!IS_ERR(gmu->vrb))
+			gmu_core_set_vrb_register(gmu->vrb->hostptr,
+					VRB_SIZE_IDX, gmu->vrb->size >> 2);
+	}
+
+	return PTR_ERR_OR_ZERO(gmu->vrb);
+}
+
 static int gen8_hwsched_gmu_init(struct adreno_device *adreno_dev)
 {
 	int ret;
@@ -873,6 +891,10 @@ static int gen8_hwsched_gmu_init(struct adreno_device *adreno_dev)
 	ret = gen8_gmu_warmboot_init(adreno_dev);
 	if (ret)
 		return ret;
+
+	ret = gen8_hwsched_gmu_memory_init(adreno_dev);
+		if (ret)
+			return ret;
 
 	return gen8_hwsched_hfi_init(adreno_dev);
 }
@@ -1813,6 +1835,15 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 			return ret;
 	}
 
+	if (!IS_ERR_OR_NULL(gen8_dev->gmu.vrb)) {
+		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
+					KGSL_GMU_VRB_ENTRY,
+					gen8_dev->gmu.vrb->hostptr,
+					gen8_dev->gmu.vrb->size);
+			if (ret)
+				return ret;
+	}
+
 	/* Dump HFI hwsched global mem alloc entries */
 	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
 		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
@@ -1820,12 +1851,12 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 		u32 rb_id = 0;
 
 		if (!hfi_get_minidump_string(entry->desc.mem_kind,
-					     &hfi_minidump_str[0],
-					     sizeof(hfi_minidump_str), &rb_id)) {
+						&hfi_minidump_str[0],
+						sizeof(hfi_minidump_str), &rb_id)) {
 			ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
-						      hfi_minidump_str,
-						      entry->md->hostptr,
-						      entry->md->size);
+						hfi_minidump_str,
+						entry->md->hostptr,
+						entry->md->size);
 			if (ret)
 				return ret;
 		}
@@ -1833,18 +1864,18 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 
 	if (!IS_ERR_OR_NULL(hw_hfi->big_ib)) {
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
-					      KGSL_HFI_BIG_IB_ENTRY,
-					      hw_hfi->big_ib->hostptr,
-					      hw_hfi->big_ib->size);
+					KGSL_HFI_BIG_IB_ENTRY,
+					hw_hfi->big_ib->hostptr,
+					hw_hfi->big_ib->size);
 		if (ret)
 			return ret;
 	}
 
 	if (!IS_ERR_OR_NULL(hw_hfi->big_ib_recurring))
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
-					      KGSL_HFI_BIG_IB_REC_ENTRY,
-					      hw_hfi->big_ib_recurring->hostptr,
-					      hw_hfi->big_ib_recurring->size);
+					KGSL_HFI_BIG_IB_REC_ENTRY,
+					hw_hfi->big_ib_recurring->hostptr,
+					hw_hfi->big_ib_recurring->size);
 
 	return ret;
 }

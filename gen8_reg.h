@@ -1539,6 +1539,7 @@
 #define GEN8_GMUCX_GENERAL_8			0x1f9c8
 #define GEN8_GMUCX_GENERAL_9			0x1f9c9
 #define GEN8_GMUCX_GENERAL_10			0x1f9ca
+#define GEN8_GMUCX_GENERAL_11			0x1f9cb
 
 /* Always on registers */
 #define GEN8_GMUAO_AO_INTERRUPT_EN		0x23b03

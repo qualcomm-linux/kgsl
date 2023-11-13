@@ -882,6 +882,10 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 	 */
 	kgsl_regwrite(device, GEN8_GBIF_HALT, BIT(3));
 
+	/* Set vrb address before starting GMU */
+	if (!IS_ERR_OR_NULL(gmu->vrb))
+		gmu_core_regwrite(device, GEN8_GMUCX_GENERAL_11, gmu->vrb->gmuaddr);
+
 	/* Set the log wptr index */
 	gmu_core_regwrite(device, GEN8_GMUCX_GENERAL_9,
 			gmu->log_wptr_retention);

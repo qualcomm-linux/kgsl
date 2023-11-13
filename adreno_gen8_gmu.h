@@ -53,6 +53,8 @@ struct gen8_gmu_device {
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
+	/** @vrb: GMU virtual register bank memory */
+	struct kgsl_memdesc *vrb;
 	/** @gmu_init_scratch: Memory to store the initial HFI messages */
 	struct kgsl_memdesc *gmu_init_scratch;
 	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
