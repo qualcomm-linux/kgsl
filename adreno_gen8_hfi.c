@@ -9,6 +9,7 @@
 
 #include "adreno.h"
 #include "adreno_gen8.h"
+#include "adreno_gen8_gmu.h"
 #include "adreno_gen8_hfi.h"
 #include "kgsl_device.h"
 #include "kgsl_trace.h"
@@ -624,6 +625,87 @@ static void reset_hfi_queues(struct adreno_device *adreno_dev)
 	}
 }
 
+/* Fill the entry and return the dword count written */
+static u32 _fill_table_entry(struct hfi_table_entry *entry, u32 count,
+		u32 stride_bytes, u32 *data)
+{
+	entry->count = count;
+	entry->stride = stride_bytes >> 2; /* entry->stride is in dwords */
+	memcpy(entry->data, data, stride_bytes * count);
+
+	/* Return total dword count of entry + data */
+	return (sizeof(*entry) >> 2) + (entry->count * entry->stride);
+}
+
+int gen8_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev)
+{
+	/*
+	 * Buffer to store either hfi_table_cmd or hfi_dcvstable_cmd.
+	 * Current max size for either is 165 dwords.
+	 */
+	static u32 cmd_buf[200];
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_dcvs_table *tbl = &gmu->dcvs_table;
+	int ret = 0;
+
+	/* Starting with GMU HFI Version 2.6.1, use H2F_MSG_TABLE */
+	if (gmu->ver.hfi >= HFI_VERSION(2, 6, 1)) {
+		struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
+		u32 dword_off;
+
+		/* Already setup, so just send cmd */
+		if (cmd->hdr)
+			return gen8_hfi_send_generic_req(adreno_dev, cmd,
+					MSG_HDR_GET_SIZE(cmd->hdr) << 2);
+
+		if (tbl->gpu_level_num > MAX_GX_LEVELS || tbl->gmu_level_num > MAX_CX_LEVELS)
+			return -EINVAL;
+
+		/* CMD starts with struct hfi_table_cmd data */
+		cmd->type = HFI_TABLE_GPU_PERF;
+		dword_off = sizeof(*cmd) >> 2;
+
+		/* Fill in the table entry and data starting at dword_off */
+		dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
+				tbl->gpu_level_num, sizeof(struct opp_gx_desc),
+				(u32 *)tbl->gx_votes);
+
+		/* Fill in the table entry and data starting at dword_off */
+		dword_off += _fill_table_entry((struct hfi_table_entry *)&cmd_buf[dword_off],
+				tbl->gmu_level_num, sizeof(struct opp_desc),
+				(u32 *)tbl->cx_votes);
+
+		cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
+		cmd->hdr = MSG_HDR_SET_SIZE(cmd->hdr, dword_off);
+
+		ret = gen8_hfi_send_generic_req(adreno_dev, cmd, dword_off << 2);
+	} else {
+		struct hfi_dcvstable_cmd *cmd = (struct hfi_dcvstable_cmd *)&cmd_buf[0];
+
+		/* Already setup, so just send cmd */
+		if (cmd->hdr)
+			return gen8_hfi_send_generic_req(adreno_dev, cmd, sizeof(*cmd));
+
+		if (tbl->gpu_level_num > MAX_GX_LEVELS_LEGACY || tbl->gmu_level_num > MAX_CX_LEVELS)
+			return -EINVAL;
+
+		ret = CMD_MSG_HDR(*cmd, H2F_MSG_PERF_TBL);
+		if (ret)
+			return ret;
+
+		cmd->gpu_level_num = tbl->gpu_level_num;
+		cmd->gmu_level_num = tbl->gmu_level_num;
+		memcpy(&cmd->gx_votes, tbl->gx_votes,
+				sizeof(struct opp_gx_desc) * cmd->gpu_level_num);
+		memcpy(&cmd->cx_votes, tbl->cx_votes,
+				sizeof(struct opp_desc) * cmd->gmu_level_num);
+
+		ret = gen8_hfi_send_generic_req(adreno_dev, cmd, sizeof(*cmd));
+	}
+
+	return ret;
+}
+
 int gen8_hfi_start(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -632,8 +714,7 @@ int gen8_hfi_start(struct adreno_device *adreno_dev)
 
 	reset_hfi_queues(adreno_dev);
 
-	result = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.dcvs_table,
-			sizeof(gmu->hfi.dcvs_table));
+	result = gen8_hfi_send_gpu_perf_table(adreno_dev);
 	if (result)
 		goto err;
 

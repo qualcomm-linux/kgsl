@@ -255,23 +255,22 @@ static struct rpmh_bw_votes *build_rpmh_bw_votes(struct bcm *bcms,
 
 /*
  * setup_gmu_arc_votes - Build the gmu voting table
- * @hfi: Pointer to hfi device
+ * @gmu: Pointer to gmu device
  * @pri_rail: Pointer to primary power rail vlvl table
  * @sec_rail: Pointer to second/dependent power rail vlvl table
- * @freqs: List of GMU frequencies
- * @vlvls: List of GMU voltage levels
  *
  * This function initializes the cx votes for all gmu frequencies
  * for gmu dcvs
  */
-static int setup_cx_arc_votes(struct gen8_hfi *hfi,
-	struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail,
-	u32 *freqs, u32 *vlvls)
+static int setup_cx_arc_votes(struct gen8_gmu_device *gmu,
+	struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail)
 {
 	/* Hardcoded values of GMU CX voltage levels */
 	u16 gmu_cx_vlvl[MAX_CX_LEVELS];
 	u32 cx_votes[MAX_CX_LEVELS];
-	struct hfi_dcvstable_cmd *table = &hfi->dcvs_table;
+	struct gen8_dcvs_table *table = &gmu->dcvs_table;
+	u32 *freqs = gmu->freqs;
+	u32 *vlvls = gmu->vlvls;
 	int ret, i;
 
 	gmu_cx_vlvl[0] = 0;
@@ -333,20 +332,20 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	struct hfi_dcvstable_cmd *table = &gmu->hfi.dcvs_table;
+	struct gen8_dcvs_table *table = &gmu->dcvs_table;
 	u32 index;
 	u16 vlvl_tbl[MAX_GX_LEVELS];
 	u32 gx_votes[MAX_GX_LEVELS];
 	int ret, i;
 
-	/* Add the zero powerlevel for the perf table */
-	table->gpu_level_num = device->pwrctrl.num_pwrlevels + 1;
-
-	if (table->gpu_level_num > ARRAY_SIZE(vlvl_tbl)) {
-		dev_err(&gmu->pdev->dev,
+	if (pwr->num_pwrlevels + 1 > ARRAY_SIZE(vlvl_tbl)) {
+		dev_err(device->dev,
 			"Defined more GPU DCVS levels than RPMh can support\n");
 		return -ERANGE;
 	}
+
+	/* Add the zero powerlevel for the perf table */
+	table->gpu_level_num = pwr->num_pwrlevels + 1;
 
 	memset(vlvl_tbl, 0, sizeof(vlvl_tbl));
 
@@ -366,7 +365,7 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 		ret = to_cx_hlvl(cx_rail, cx_vlvl,
 				&table->gx_votes[index].cx_vote);
 		if (ret) {
-			dev_err(&gmu->pdev->dev, "Unsupported cx corner: %u\n",
+			dev_err(device->dev, "Unsupported cx corner: %u\n",
 					cx_vlvl);
 			return ret;
 		}
@@ -386,13 +385,8 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 static int build_dcvs_table(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct gen8_hfi *hfi = &gmu->hfi;
 	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc;
 	int ret;
-
-	ret = CMD_MSG_HDR(hfi->dcvs_table, H2F_MSG_PERF_TBL);
-	if (ret)
-		return ret;
 
 	ret = rpmh_arc_cmds(&gx_arc, "gfx.lvl");
 	if (ret)
@@ -406,8 +400,7 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = setup_cx_arc_votes(hfi, &cx_arc, &mx_arc,
-			gmu->freqs, gmu->vlvls);
+	ret = setup_cx_arc_votes(gmu, &cx_arc, &mx_arc);
 	if (ret)
 		return ret;
 

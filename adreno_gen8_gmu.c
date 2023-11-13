@@ -1430,7 +1430,7 @@ static int gen8_gmu_notify_slumber(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int bus_level = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
-	int perf_idx = gmu->hfi.dcvs_table.gpu_level_num -
+	int perf_idx = gmu->dcvs_table.gpu_level_num -
 			pwr->default_pwrlevel - 1;
 	struct hfi_prep_slumber_cmd req = {
 		.freq = perf_idx,
@@ -1478,7 +1478,7 @@ static int gen8_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct hfi_dcvstable_cmd *table = &gmu->hfi.dcvs_table;
+	struct gen8_dcvs_table *table = &gmu->dcvs_table;
 	struct hfi_gx_bw_perf_vote_cmd req = {
 		.ack_type = DCVS_ACK_BLOCK,
 		.freq = INVALID_DCVS_IDX,
@@ -1527,7 +1527,7 @@ static int gen8_gmu_dcvs_set(struct adreno_device *adreno_dev,
 
 	if (req.freq != INVALID_DCVS_IDX)
 		gen8_rdpm_mx_freq_update(gmu,
-			gmu->hfi.dcvs_table.gx_votes[req.freq].freq);
+			gmu->dcvs_table.gx_votes[req.freq].freq);
 
 	return ret;
 }
