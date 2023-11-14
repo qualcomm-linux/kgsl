@@ -1939,6 +1939,7 @@ static void gen8_hwsched_enable_async_hfi(struct adreno_device *adreno_dev)
 static int enable_preemption(struct adreno_device *adreno_dev)
 {
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 data;
 	int ret;
 
@@ -1970,6 +1971,13 @@ static int enable_preemption(struct adreno_device *adreno_dev)
 				HFI_VALUE_RB_GPU_QOS, i,
 				gen8_core->qos_value[i]);
 		}
+	}
+
+	if (device->pwrctrl.rt_bus_hint) {
+		ret = gen8_hfi_send_set_value(adreno_dev, HFI_VALUE_RB_IB_RULE, 0,
+			device->pwrctrl.rt_bus_hint);
+		if (ret)
+			device->pwrctrl.rt_bus_hint = 0;
 	}
 
 	/*

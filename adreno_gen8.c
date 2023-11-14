@@ -1675,6 +1675,8 @@ int gen8_probe_common(struct platform_device *pdev,
 	kgsl_pwrscale_fast_bus_hint(gen8_core->fast_bus_hint);
 	device->pwrctrl.cx_gdsc_offset = GEN8_GPU_CC_CX_GDSCR;
 
+	device->pwrctrl.rt_bus_hint = gen8_core->rt_bus_hint;
+
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
 		return ret;
