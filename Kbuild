@@ -25,6 +25,9 @@ endif
 ifeq ($(CONFIG_ARCH_BLAIR), y)
 	include $(KGSL_PATH)/config/gki_blair.conf
 endif
+ifeq ($(CONFIG_ARCH_PITTI), y)
+	include $(KGSL_PATH)/config/gki_pitti.conf
+endif
 ifeq ($(CONFIG_ARCH_SA8155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
