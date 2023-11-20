@@ -892,6 +892,18 @@
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_21       0xe49
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_22       0xe4a
 #define GEN7_UCHE_PERFCTR_UCHE_SEL_23       0xe4b
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_0      0xe50
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_1      0xe51
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_2      0xe52
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_3      0xe53
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_4      0xe54
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_5      0xe55
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_6      0xe56
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_7      0xe57
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_8      0xe58
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_9      0xe59
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_10     0xe5a
+#define GEN7_UCHE_PERFCTR_UCHE_SEL_2_11     0xe5b
 
 /* SP registers */
 #define GEN7_SP_NC_MODE_CNTL                0xae02
@@ -1001,6 +1013,7 @@
 #define GBIF_AXI1_WRITE_DATA_TOTAL_BEATS   47
 
 /* GBIF registers */
+#define GEN7_GBIF_CX_CONFIG               0x3c00
 #define GEN7_GBIF_SCACHE_CNTL0            0x3c01
 #define GEN7_GBIF_SCACHE_CNTL1            0x3c02
 #define GEN7_GBIF_QSB_SIDE0               0x3c03
@@ -1200,10 +1213,16 @@
 #define GEN7_GMU_GENERAL_8			0x1f9cd
 #define GEN7_GMU_GENERAL_9			0x1f9ce
 #define GEN7_GMU_GENERAL_10			0x1f9cf
+#define GEN7_GMU_GENERAL_11			0x1f9d0
 
 /* FAL10 veto register */
 #define GEN7_GPU_GMU_CX_GMU_CX_FAL_INTF		0x1f8f0
 #define GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF	0x1f8f1
+
+/* CLX registers */
+#define GEN7_GPU_GMU_CX_CBCAST_GENERIC_ID       0x20001
+#define GEN7_GPU_GMU_CX_PMIC_PAYLOAD            0x20003
+#define GEN7_GPU_GMU_CX_PMIC_PAYLOAD_1          0x20005
 
 #define GEN7_GMU_AO_INTERRUPT_EN		0x23b03
 #define GEN7_GMU_AO_HOST_INTERRUPT_CLR		0x23b04
@@ -1235,6 +1254,7 @@
 /* GPUCC registers */
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541
 #define GEN7_GPU_CC_CX_GDSCR			0x26442
+#define GEN7_11_0_GPU_CC_CX_GDSCR		0x26423
 
 /* GPU RSC sequencer registers */
 #define GEN7_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
@@ -1282,7 +1302,10 @@
 #define GEN7_SMMU_BASE				0x28000
 
 /* GPU CX_MISC registers */
+#define GEN7_CX_MISC_BASE			0x27800
 #define GEN7_GPU_CX_MISC_TCM_RET_CNTL		0x39
+#define GEN7_GPU_CX_MISC_AO_COUNTER_LO		0x80
+#define GEN7_GPU_CX_MISC_AO_COUNTER_HI		0x81
 #define GEN7_GPU_CX_MISC_SW_FUSE_VALUE		0x400
 
 /* GPU SW Fuse Feature bit fields */

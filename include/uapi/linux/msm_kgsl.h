@@ -2127,4 +2127,33 @@ struct kgsl_recurring_command {
 #define IOCTL_KGSL_RECURRING_COMMAND \
 	_IOWR(KGSL_IOC_TYPE, 0x5F, struct kgsl_recurring_command)
 
+enum kgsl_calibrated_time_domain {
+	KGSL_CALIBRATED_TIME_DOMAIN_DEVICE = 0,
+	KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC = 1,
+	KGSL_CALIBRATED_TIME_DOMAIN_MONOTONIC_RAW = 2,
+	KGSL_CALIBRATED_TIME_DOMAIN_MAX,
+};
+
+/**
+ * struct kgsl_read_calibrated_timestamps - Argument for IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS
+ * @sources: List of time domains of type enum kgsl_calibrated_time_domain
+ * @ts: List of calibrated timestamps
+ * @deviation: Deviation between timestamp samples in nsecs
+ * @count: Number of timestamps to read
+ *
+ * Returns a list of calibrated timestamps corresponding to an input list of time domains to
+ * query.
+ */
+struct kgsl_read_calibrated_timestamps {
+	__u64 __user sources;
+	__u64 __user ts;
+	__u64 deviation;
+	__u32 count;
+	/* private: Padding for 64 bit compatibility */
+	__u32 padding;
+};
+
+#define IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS \
+	_IOWR(KGSL_IOC_TYPE, 0x60, struct kgsl_read_calibrated_timestamps)
+
 #endif /* _UAPI_MSM_KGSL_H */

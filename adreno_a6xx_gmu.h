@@ -24,9 +24,6 @@
  * @num_bwlevel: number of GPU BW levels
  * @num_cnocbwlevel: number CNOC BW levels
  * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
- * @cx_gdsc: CX headswitch that controls power of GMU and
-		subsystem peripherals
- * @gx_gdsc: GX headswitch that controls power of GPU subsystem
  * @clks: GPU subsystem clocks required for GMU functionality
  * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
  *		than default power level
@@ -48,10 +45,11 @@ struct a6xx_gmu_device {
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
+	/** @vrb: GMU virtual register bank memory */
+	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 	struct a6xx_hfi hfi;
-	/** @pwrlevels: Array of GMU power levels */
-	struct regulator *cx_gdsc;
-	struct regulator *gx_gdsc;
 	struct clk_bulk_data *clks;
 	/** @num_clks: Number of entries in the @clks array */
 	int num_clks;
@@ -97,10 +95,6 @@ struct a6xx_gmu_device {
 	u32 perf_ddr_bw;
 	/** @num_oob_perfcntr: Number of active oob_perfcntr requests */
 	u32 num_oob_perfcntr;
-	/** @gdsc_nb: Notifier block for cx gdsc regulator */
-	struct notifier_block gdsc_nb;
-	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
-	struct completion gdsc_gate;
 	/** @pdc_cfg_base: Base address of PDC cfg registers */
 	void __iomem *pdc_cfg_base;
 	/** @pdc_seq_base: Base address of PDC seq registers */
@@ -264,14 +258,6 @@ int a6xx_gmu_memory_init(struct adreno_device *adreno_dev);
  * This function enables or disables gpu acd feature using mailbox
  */
 void a6xx_gmu_aop_send_acd_state(struct a6xx_gmu_device *gmu, bool flag);
-
-/**
- * a6xx_gmu_enable_gdsc - Enable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev);
 
 /**
  * a6xx_gmu_disable_gdsc - Disable gmu gdsc
@@ -442,14 +428,6 @@ void a6xx_gmu_remove(struct kgsl_device *device);
  * Return: 0 on success or negative error on failure
  */
 int a6xx_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
-
-/**
- * a6xx_gmu_enable_gdsc - Enable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev);
 
 /**
  * a6xx_gmu_handle_watchdog - Handle watchdog interrupt

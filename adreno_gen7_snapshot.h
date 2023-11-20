@@ -139,6 +139,8 @@ struct gen7_snapshot_block_list {
 	const u32 *rscc_regs;
 	/* reg_list : List of GPU internal registers */
 	struct gen7_reg_list *reg_list;
+	/* reg_list : List of cx_misc registers */
+	const u32 *cx_misc_regs;
 	/* shader_blocks : List of GPU shader memory */
 	struct gen7_shader_block *shader_blocks;
 	/* num_shader_blocks : Length of the shader memory list */

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_A6XX_RGMU_H
 #define __ADRENO_A6XX_RGMU_H
@@ -31,8 +32,6 @@ enum {
  * @oob_interrupt_num: number of RGMU asserted OOB interrupt
  * @fw_hostptr: Buffer which holds the RGMU firmware
  * @fw_size: Size of RGMU firmware buffer
- * @cx_gdsc: CX headswitch that controls power of RGMU and
-		subsystem peripherals
  * @clks: RGMU clocks including the GPU
  * @gpu_clk: Pointer to GPU core clock
  * @rgmu_clk: Pointer to rgmu clock
@@ -47,8 +46,6 @@ struct a6xx_rgmu_device {
 	unsigned int oob_interrupt_num;
 	unsigned int *fw_hostptr;
 	uint32_t fw_size;
-	struct regulator *cx_gdsc;
-	struct regulator *gx_gdsc;
 	struct clk_bulk_data *clks;
 	/** @num_clks: Number of clocks in @clks */
 	int num_clks;

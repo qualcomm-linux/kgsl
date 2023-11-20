@@ -134,7 +134,8 @@
 #define ADRENO_AQE BIT(18)
 /* Warm Boot supported on this target */
 #define ADRENO_GMU_WARMBOOT BIT(19)
-
+/* The GPU supports CLX */
+#define ADRENO_CLX BIT(20)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -235,6 +236,7 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_4_0 = 0x070400,
 	ADRENO_REV_GEN7_9_0 = 0x070900,
 	ADRENO_REV_GEN7_9_1 = 0x070901,
+	ADRENO_REV_GEN7_11_0 = 0x070b00,
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -605,6 +607,8 @@ struct adreno_device {
 	bool sptp_pc_enabled;
 	/** @bcl_enabled: True if BCL is enabled */
 	bool bcl_enabled;
+	/** @clx_enabled: True if CLX is enabled */
+	bool clx_enabled;
 	/** @lpac_enabled: True if LPAC is enabled */
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
@@ -720,6 +724,8 @@ struct adreno_device {
 	u32 ifpc_hyst;
 	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
 	u32 ifpc_hyst_floor;
+	/** @cx_misc_base: CX MISC register block base offset */
+	u32 cx_misc_base;
 };
 
 /**
@@ -762,6 +768,8 @@ enum adreno_device_flags {
 	 * via sysfs/debugfs or when we are doing fault recovery
 	 */
 	ADRENO_DEVICE_FORCE_COLDBOOT = 16,
+	/** @ADRENO_DEVICE_CX_TIMER_INITIALIZED: Set if the CX timer is initialized */
+	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 };
 
 /**
@@ -898,8 +906,6 @@ struct adreno_gpudev {
 	void (*preemption_schedule)(struct adreno_device *adreno_dev);
 	int (*preemption_context_init)(struct kgsl_context *context);
 	void (*context_detach)(struct adreno_context *drawctxt);
-	void (*clk_set_options)(struct adreno_device *adreno_dev,
-				const char *name, struct clk *clk, bool on);
 	void (*pre_reset)(struct adreno_device *adreno_dev);
 	void (*gpu_keepalive)(struct adreno_device *adreno_dev,
 			bool state);
@@ -1021,17 +1027,6 @@ long adreno_ioctl_helper(struct kgsl_device_private *dev_priv,
 		unsigned int cmd, unsigned long arg,
 		const struct kgsl_ioctl *cmds, int len);
 
-/*
- * adreno_switch_to_unsecure_mode - Execute a zap shader
- * @adreno_dev: An Adreno GPU handle
- * @rb: The ringbuffer to execute on
- *
- * Execute the zap shader from the CP to take the GPU out of secure mode.
- * Return: 0 on success or negative on failure
- */
-int adreno_switch_to_unsecure_mode(struct adreno_device *adreno_dev,
-				struct adreno_ringbuffer *rb);
-
 int adreno_spin_idle(struct adreno_device *device, unsigned int timeout);
 int adreno_idle(struct kgsl_device *device);
 
@@ -1072,6 +1067,8 @@ void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
 void adreno_isense_regread(struct adreno_device *adreno_dev,
 		unsigned int offsetwords, unsigned int *value);
 bool adreno_gx_is_on(struct adreno_device *adreno_dev);
+
+u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
 
 /**
  * adreno_active_count_get - Wrapper for target specific active count get
@@ -1254,6 +1251,7 @@ ADRENO_TARGET(gen7_2_1, ADRENO_REV_GEN7_2_1)
 ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
+ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1269,7 +1267,7 @@ static inline int adreno_is_gen7_0_x_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
-		adreno_is_gen7_9_x(adreno_dev);
+		adreno_is_gen7_9_x(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
 }
 
 /*

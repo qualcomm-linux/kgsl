@@ -329,7 +329,7 @@ int kgsl_devfreq_get_dev_status(struct device *dev,
 
 		last_b->ram_time = device->pwrscale.accum_stats.ram_time;
 		last_b->ram_wait = device->pwrscale.accum_stats.ram_wait;
-		last_b->buslevel = device->pwrctrl.cur_buslevel;
+		last_b->buslevel = device->pwrctrl.cur_dcvs_buslevel;
 
 		if (pwrscale->avoid_ddr_stall) {
 			struct kgsl_pwrlevel *pwrlevel;
@@ -500,8 +500,11 @@ int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 		 * When gpu is thermally throttled to its lowest power level,
 		 * drop GPU's AB vote as a last resort to lower CX voltage and
 		 * to prevent thermal reset.
+		 * Ignore this check when only single power level in use to
+		 * avoid setting default AB vote in normal situations too.
 		 */
-		if (pwr->thermal_pwrlevel != pwr->num_pwrlevels - 1)
+		if (pwr->thermal_pwrlevel != pwr->num_pwrlevels - 1 ||
+			pwr->num_pwrlevels == 1)
 			pwr->bus_ab_mbytes = ab_mbytes;
 		else
 			pwr->bus_ab_mbytes = 0;
@@ -546,8 +549,10 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 
 	dev_set_name(dev, "kgsl-busmon");
 	dev_set_drvdata(dev, device);
-	if (device_register(dev))
+	if (device_register(dev)) {
+		put_device(dev);
 		return;
+	}
 
 	/* Build out the OPP table for the busmon device */
 	for (i = 0; i < pwr->num_pwrlevels; i++) {
@@ -561,7 +566,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add busmon governor: %d\n", ret);
 		dev_pm_opp_remove_all_dynamic(dev);
-		put_device(dev);
+		device_unregister(dev);
 		return;
 	}
 
@@ -572,7 +577,7 @@ static void pwrscale_busmon_create(struct kgsl_device *device,
 		dev_err(&pdev->dev, "Bus scaling not enabled\n");
 		devfreq_gpubw_exit();
 		dev_pm_opp_remove_all_dynamic(dev);
-		put_device(dev);
+		device_unregister(dev);
 		return;
 	}
 
@@ -819,7 +824,7 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 		pwrscale->bus_devfreq = NULL;
 		devfreq_gpubw_exit();
 		dev_pm_opp_remove_all_dynamic(&pwrscale->busmondev);
-		put_device(&pwrscale->busmondev);
+		device_unregister(&pwrscale->busmondev);
 	}
 
 	if (!pwrscale->devfreqptr)

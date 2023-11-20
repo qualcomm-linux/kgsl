@@ -1319,7 +1319,6 @@ static struct gen7_cp_indexed_reg gen7_9_0_cp_indexed_reg_list[] = {
 
 static struct gen7_reg_list gen7_9_0_reg_list[] = {
 	{ gen7_9_0_gpu_registers, NULL},
-	{ gen7_9_0_cx_misc_registers, NULL},
 	{ gen7_9_0_cx_dbgc_registers, NULL},
 	{ gen7_9_0_dbgc_registers, NULL},
 	{ NULL, NULL},

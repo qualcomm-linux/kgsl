@@ -77,12 +77,25 @@ def kgsl_get_srcs():
     return srcs
 
 def external_deps(target, variant):
+    tv = "{}_{}".format(target, variant)
     deplist = []
-    # Targets that use hw-fences
+    defconfigs = []
+
+    # Add msm_hw_fence in the dependency and defconfig lists for targets that use it
     if target in [ "pineapple" ]:
         deplist = deplist + [
-            "//vendor/qcom/opensource/mm-drivers:{}_{}_mm_drivers".format(target, variant)
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:{}_msm_hw_fence".format(tv)
             ]
+        defconfigs = defconfigs + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:defconfig"
+            ]
+
+    native.genrule(
+       name = "{}_defconfig".format(tv),
+       srcs = defconfigs + [ "config/{}_gpuconf".format(tv) ],
+       outs = [ "{}_defconfig.generated".format(tv) ],
+       cmd = "cat $(SRCS) > $@"
+    )
 
     return deplist
 
@@ -90,15 +103,14 @@ def define_target_variant_module(target, variant):
     tv = "{}_{}".format(target, variant)
     rule_name = "{}_msm_kgsl".format(tv)
     kernel_build = "//msm-kernel:{}".format(tv)
-    defconfig = "config/{}_gpuconf".format(tv)
-    defconfig_hdr = "{}.h".format(defconfig)
+
+    ext_deps = external_deps(target, variant)
 
     ddk_module(
         name = rule_name,
         out = "msm_kgsl.ko",
-        srcs = kgsl_get_srcs() + [ defconfig_hdr ],
-        copts = [ "-include", defconfig_hdr ],
-        defconfig = defconfig,
+        srcs = kgsl_get_srcs(),
+        defconfig = "{}_defconfig".format(tv),
         kconfig = "Kconfig",
         conditional_srcs = {
             "CONFIG_ARM_SMMU": { True: [ "kgsl_iommu.c" ] },
@@ -114,9 +126,7 @@ def define_target_variant_module(target, variant):
             "CONFIG_QCOM_KGSL_USE_SHMEM": { False: [ "kgsl_pool.c" ] },
             "CONFIG_SYNC_FILE": { True: [ "kgsl_sync.c" ] },
         },
-        deps = [
-            "//msm-kernel:all_headers",
-            "//msm-kernel:all_headers_unsafe" ] + external_deps(target, variant),
+        deps = [ "//msm-kernel:all_headers" ] + ext_deps,
         includes = ["include", "."],
         kernel_build = kernel_build,
         visibility = ["//visibility:private"]

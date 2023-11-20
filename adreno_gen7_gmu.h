@@ -11,6 +11,13 @@
 #include "adreno_gen7_hfi.h"
 #include "kgsl_gmu_core.h"
 
+struct gen7_dcvs_table {
+	u32 gpu_level_num;
+	u32 gmu_level_num;
+	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS];
+};
+
 /**
  * struct gen7_gmu_device - GMU device structure
  * @ver: GMU Version information
@@ -24,9 +31,6 @@
  * @num_bwlevel: number of GPU BW levels
  * @num_cnocbwlevel: number CNOC BW levels
  * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
- * @cx_gdsc: CX headswitch that controls power of GMU and
- *  subsystem peripherals
- * @gx_gdsc: GX headswitch that controls power of GPU subsystem
  * @clks: GPU subsystem clocks required for GMU functionality
  * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
  *  than default power level
@@ -52,10 +56,11 @@ struct gen7_gmu_device {
 	struct kgsl_memdesc *gmu_init_scratch;
 	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
 	struct kgsl_memdesc *gpu_boot_scratch;
+	/** @vrb: GMU virtual register bank memory */
+	struct kgsl_memdesc *vrb;
+	/** @trace: gmu trace container */
+	struct kgsl_gmu_trace trace;
 	struct gen7_hfi hfi;
-	/** @pwrlevels: Array of GMU power levels */
-	struct regulator *cx_gdsc;
-	struct regulator *gx_gdsc;
 	struct clk_bulk_data *clks;
 	/** @num_clks: Number of entries in the @clks array */
 	int num_clks;
@@ -102,10 +107,6 @@ struct gen7_gmu_device {
 	u32 num_oob_perfcntr;
 	/** @acd_debug_val: DVM value to calibrate ACD for a level */
 	u32 acd_debug_val;
-	/** @gdsc_nb: Notifier block for cx gdsc regulator */
-	struct notifier_block gdsc_nb;
-	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
-	struct completion gdsc_gate;
 	/** @stats_enable: GMU stats feature enable */
 	bool stats_enable;
 	/** @stats_mask: GMU performance countables to enable */
@@ -118,13 +119,8 @@ struct gen7_gmu_device {
 	u32 cp_init_hdr;
 	/** @switch_to_unsec_hdr: raw command header for switch to unsecure packet */
 	u32 switch_to_unsec_hdr;
-};
-
-struct gmu_mem_type_desc {
-	/** @memdesc: Pointer to the memory descriptor */
-	struct kgsl_memdesc *memdesc;
-	/** @type: Type of the memory descriptor */
-	u32 type;
+	/** @dcvs_table: Table for gpu dcvs levels */
+	struct gen7_dcvs_table dcvs_table;
 };
 
 /* Helper function to get to gen7 gmu device from adreno device */
@@ -306,14 +302,6 @@ int gen7_gmu_memory_init(struct adreno_device *adreno_dev);
 void gen7_gmu_aop_send_acd_state(struct gen7_gmu_device *gmu, bool flag);
 
 /**
- * gen7_gmu_enable_clocks - Enable gmu clocks
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev);
-
-/**
  * gen7_gmu_load_fw - Load gmu firmware
  * @adreno_dev: Pointer to the adreno device
  *
@@ -478,20 +466,6 @@ void gen7_gmu_remove(struct kgsl_device *device);
  * Return: 0 on success or negative error on failure
  */
 int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
-
-/**
- * gen7_gmu_enable_gdsc - Enable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev);
-
-/**
- * gen7_gmu_disable_gdsc - Disable gmu gdsc
- * @adreno_dev: Pointer to the adreno device
- */
-void gen7_gmu_disable_gdsc(struct adreno_device *adreno_dev);
 
 /**
  * gen7_gmu_handle_watchdog - Handle watchdog interrupt

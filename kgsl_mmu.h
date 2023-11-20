@@ -115,7 +115,7 @@ struct kgsl_mmu_ops {
 			unsigned long name);
 	void (*mmu_map_global)(struct kgsl_mmu *mmu,
 		struct kgsl_memdesc *memdesc, u32 padding);
-	void (*mmu_flush_tlb)(struct kgsl_mmu *mmu);
+	void (*mmu_send_tlb_hint)(struct kgsl_mmu *mmu, bool hint);
 };
 
 struct kgsl_mmu_pt_ops {
@@ -210,7 +210,6 @@ void kgsl_mmu_exit(void);
 
 int kgsl_mmu_start(struct kgsl_device *device);
 
-void kgsl_print_global_pt_entries(struct seq_file *s);
 void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable);
 
 int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
@@ -229,13 +228,6 @@ unsigned int kgsl_mmu_log_fault_addr(struct kgsl_mmu *mmu,
 		u64 ttbr0, uint64_t addr);
 bool kgsl_mmu_gpuaddr_in_range(struct kgsl_pagetable *pt, uint64_t gpuaddr,
 		uint64_t size);
-
-int kgsl_mmu_get_region(struct kgsl_pagetable *pagetable,
-		uint64_t gpuaddr, uint64_t size);
-
-int kgsl_mmu_find_region(struct kgsl_pagetable *pagetable,
-		uint64_t region_start, uint64_t region_end,
-		uint64_t *gpuaddr, uint64_t size, unsigned int align);
 
 uint64_t kgsl_mmu_find_svm_region(struct kgsl_pagetable *pagetable,
 		uint64_t start, uint64_t end, uint64_t size,
@@ -367,13 +359,10 @@ kgsl_mmu_pagetable_get_ttbr0(struct kgsl_pagetable *pagetable)
 	return 0;
 }
 
-static inline void kgsl_mmu_flush_tlb(struct kgsl_mmu *mmu)
+static inline void kgsl_mmu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
 {
-	if (!test_bit(KGSL_MMU_IOPGTABLE, &mmu->features))
-		return;
-
-	if (MMU_OP_VALID(mmu, mmu_flush_tlb))
-		return mmu->mmu_ops->mmu_flush_tlb(mmu);
+	if (MMU_OP_VALID(mmu, mmu_send_tlb_hint))
+		return mmu->mmu_ops->mmu_send_tlb_hint(mmu, hint);
 }
 
 /**
@@ -427,4 +416,18 @@ static inline int kgsl_iommu_bind(struct kgsl_device *device, struct platform_de
 	return -ENODEV;
 }
 #endif
+
+/**
+ * kgsl_mmu_map_sg - Map the given buffer to the IOMMU domain
+ * @domain: The IOMMU domain to perform the mapping
+ * @iova: The start address to map the buffer
+ * @sgt: The sg_table object describing the buffer
+ * @prot: IOMMU protection bits
+ *
+ * Creates a mapping at @iova for the buffer described by a scatterlist
+ * stored in the given sg_table object in the provided IOMMU domain.
+ */
+ssize_t kgsl_mmu_map_sg(struct iommu_domain *domain,
+				unsigned long iova, struct scatterlist *sg,
+				unsigned int nents, int prot);
 #endif /* __KGSL_MMU_H */

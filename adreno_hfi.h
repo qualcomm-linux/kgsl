@@ -79,6 +79,19 @@
 #define HFI_FEATURE_DMS		27
 #define HFI_FEATURE_AQE		29
 
+/* Types to be used with H2F_MSG_TABLE */
+enum hfi_table_type {
+	HFI_TABLE_BW_VOTE	= 0,
+	HFI_TABLE_GPU_PERF	= 1,
+	HFI_TABLE_DIDT		= 2,
+	HFI_TABLE_ACD		= 3,
+	HFI_TABLE_CLX_V1	= 4,
+	HFI_TABLE_CLX_V2	= 5,
+	HFI_TABLE_THERM		= 6,
+	HFI_TABLE_DCVS_DATA	= 7,
+	HFI_TABLE_MAX,
+};
+
 /* A6xx uses a different value for KPROF */
 #define HFI_FEATURE_A6XX_KPROF	14
 
@@ -105,6 +118,7 @@
 #define HFI_VALUE_CONTEXT_QUEUE		121
 #define HFI_VALUE_GMU_AB_VOTE		122
 #define HFI_VALUE_RB_GPU_QOS		123
+#define HFI_VALUE_RB_IB_RULE		124
 #define HFI_VALUE_GMU_WARMBOOT		125
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
@@ -413,11 +427,14 @@ struct hfi_queue_table {
 #define MSG_HDR_GET_TYPE(hdr) (((hdr) >> 16) & 0xF)
 #define MSG_HDR_GET_SEQNUM(hdr) (((hdr) >> 20) & 0xFFF)
 
-#define HDR_CMP_SEQNUM(out_hdr, in_hdr) \
-	(MSG_HDR_GET_SEQNUM(out_hdr) == MSG_HDR_GET_SEQNUM(in_hdr))
+/* Clear the HFI_MSG_RECORD bit from both headers since some acks may have it set, and some not. */
+#define CMP_HFI_ACK_HDR(sent, rcvd) ((sent &= ~HFI_MSG_RECORD) == (rcvd &= ~HFI_MSG_RECORD))
 
 #define MSG_HDR_SET_SEQNUM(hdr, num) \
 	(((hdr) & 0xFFFFF) | ((num) << 20))
+
+#define MSG_HDR_SET_SEQNUM_SIZE(hdr, seqnum, sizedwords) \
+	(FIELD_PREP(GENMASK(31, 20), seqnum) | FIELD_PREP(GENMASK(15, 8), sizedwords) | hdr)
 
 #define MSG_HDR_SET_TYPE(hdr, type) \
 	(((hdr) & 0xFFFFF) | ((type) << 16))
@@ -438,11 +455,13 @@ enum hfi_msg_type {
 	H2F_MSG_PERF_TBL		= 4,
 	H2F_MSG_TEST			= 5,
 	H2F_MSG_ACD_TBL			= 7,
+	H2F_MSG_CLX_TBL			= 8,
 	H2F_MSG_START			= 10,
 	H2F_MSG_FEATURE_CTRL		= 11,
 	H2F_MSG_GET_VALUE		= 12,
 	H2F_MSG_SET_VALUE		= 13,
 	H2F_MSG_CORE_FW_START		= 14,
+	H2F_MSG_TABLE			= 15,
 	F2H_MSG_MEM_ALLOC		= 20,
 	H2F_MSG_GX_BW_PERF_VOTE		= 30,
 	H2F_MSG_FW_HALT			= 32,
@@ -469,6 +488,7 @@ enum hfi_msg_type {
 	H2F_MSG_ISSUE_SYNCOBJ		= 152,
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
+	F2H_MSG_PROCESS_TRACE		= 155,
 	HFI_MAX_ID,
 };
 
@@ -510,7 +530,7 @@ struct hfi_bwtable_cmd {
 	u32 cnoc_cmd_addrs[MAX_CNOC_CMDS];
 	u32 cnoc_cmd_data[MAX_CNOC_LEVELS][MAX_CNOC_CMDS];
 	u32 ddr_cmd_addrs[MAX_BW_CMDS];
-	u32 ddr_cmd_data[MAX_GX_LEVELS][MAX_BW_CMDS];
+	u32 ddr_cmd_data[MAX_BW_LEVELS][MAX_BW_CMDS];
 } __packed;
 
 struct opp_gx_desc {
@@ -530,7 +550,7 @@ struct hfi_dcvstable_v1_cmd {
 	u32 hdr;
 	u32 gpu_level_num;
 	u32 gmu_level_num;
-	struct opp_desc gx_votes[MAX_GX_LEVELS];
+	struct opp_desc gx_votes[MAX_GX_LEVELS_LEGACY];
 	struct opp_desc cx_votes[MAX_CX_LEVELS];
 } __packed;
 
@@ -539,8 +559,22 @@ struct hfi_dcvstable_cmd {
 	u32 hdr;
 	u32 gpu_level_num;
 	u32 gmu_level_num;
-	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
+	struct opp_gx_desc gx_votes[MAX_GX_LEVELS_LEGACY];
 	struct opp_desc cx_votes[MAX_CX_LEVELS];
+} __packed;
+
+/* H2F */
+struct hfi_table_entry {
+	u32 count;
+	u32 stride;
+	u32 data[];
+} __packed;
+
+struct hfi_table_cmd {
+	u32 hdr;
+	u32 version;
+	u32 type;
+	struct hfi_table_entry entry[];
 } __packed;
 
 #define MAX_ACD_STRIDE 2
@@ -554,6 +588,38 @@ struct hfi_acd_table_cmd {
 	u32 stride;
 	u32 num_levels;
 	u32 data[MAX_ACD_NUM_LEVELS * MAX_ACD_STRIDE];
+} __packed;
+
+#define CLX_DOMAINS_V2 2
+struct clx_domain_v2 {
+	/**
+	 * @data0: bits[0:15]  Migration time
+	 *         bits[16:21] Current rating
+	 *         bits[22:27] Phases for domain
+	 *         bits[28:28] Path notifications
+	 *         bits[29:31] Extra feature bits
+	 */
+	u32 data0;
+	/** @clxt: CLX time in microseconds */
+	u32 clxt;
+	/** @clxh: CLH time in microseconds */
+	u32 clxh;
+	/** @urgmode: Urgent HW throttle mode of operation */
+	u32 urgmode;
+	/** @lkgen: Enable leakage current estimate */
+	u32 lkgen;
+	/** @currbudget: Current Budget */
+	u32 currbudget;
+} __packed;
+
+/* H2F */
+struct hfi_clx_table_v2_cmd {
+	/** @hdr: HFI header message */
+	u32 hdr;
+	/** @version: Version identifier for the format used for domains */
+	u32 version;
+	/** @domain: GFX and MXC Domain information */
+	struct clx_domain_v2 domain[CLX_DOMAINS_V2];
 } __packed;
 
 /* H2F */
@@ -694,6 +760,21 @@ struct hfi_debug_cmd {
 	u32 type;
 	u32 timestamp;
 	u32 data;
+} __packed;
+
+/* F2H */
+struct hfi_trace_cmd {
+	u32 hdr;
+	u32 version;
+	u64 identifier;
+} __packed;
+
+/* Trace packet definition */
+struct gmu_trace_packet {
+	u32 hdr;
+	u32 trace_id;
+	u64 ticks;
+	u32 payload[];
 } __packed;
 
 /* F2H */

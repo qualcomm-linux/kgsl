@@ -13,11 +13,19 @@
 #include <linux/mm.h>
 #include <uapi/linux/msm_kgsl.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrscale.h"
 
 #define KGSL_L3_DEVICE "kgsl-l3"
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+#include <soc/qcom/boot_stats.h>
+#define KGSL_BOOT_MARKER(str)          place_marker("M - DRIVER " str)
+#else
+#define KGSL_BOOT_MARKER(str)          pr_info("boot_kpi: M - DRIVER " str)
+#endif
 
 /*
  * --- kgsl drawobj flags ---
@@ -548,10 +556,6 @@ struct kgsl_mem_entry *gpumem_alloc_entry(struct kgsl_device_private *dev_priv,
 long gpumem_free_entry(struct kgsl_mem_entry *entry);
 
 enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
-void kgsl_mmu_add_global(struct kgsl_device *device,
-	struct kgsl_memdesc *memdesc, const char *name);
-void kgsl_mmu_remove_global(struct kgsl_device *device,
-		struct kgsl_memdesc *memdesc);
 
 /* Helper functions */
 int kgsl_request_irq(struct platform_device *pdev, const  char *name,

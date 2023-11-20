@@ -640,6 +640,9 @@ void kgsl_device_snapshot(struct kgsl_device *device,
 
 	device->ftbl->snapshot(device, snapshot, context, context_lpac);
 
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_EVENTLOG,
+		snapshot, kgsl_snapshot_eventlog_buffer, NULL);
+
 	/*
 	 * The timestamp is the seconds since boot so it is easier to match to
 	 * the kernel log
@@ -1096,6 +1099,9 @@ void kgsl_device_snapshot_close(struct kgsl_device *device)
 
 	kgsl_remove_from_minidump("GPU_SNAPSHOT", (u64) device->snapshot_memory.ptr,
 			snapshot_phy_addr(device), device->snapshot_memory.size);
+
+	atomic_notifier_chain_unregister(&panic_notifier_list,
+					 &device->panic_nb);
 
 	sysfs_remove_bin_file(&device->snapshot_kobj, &snapshot_attr);
 	sysfs_remove_files(&device->snapshot_kobj, snapshot_attrs);
