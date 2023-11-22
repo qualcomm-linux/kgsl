@@ -6,7 +6,9 @@
 
 #include <linux/clk.h>
 #include <linux/component.h>
+#include <linux/cpufreq.h>
 #include <linux/interconnect.h>
+#include <linux/pm_qos.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
@@ -1333,6 +1335,95 @@ int gen7_hwsched_active_count_get(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static DEFINE_PER_CPU(struct freq_qos_request, qos_min_req);
+#define GEN7_9_X_GPU_BUSY_THRESHOLD (65)
+#define GEN7_9_X_GPU_FREQ_THRESHOLD_KHZ (700 * 1000)
+#define GEN7_9_X_FREQ_QOS_CPUID_0_KHZ 960000
+#define GEN7_9_X_FREQ_QOS_CPUID_5_KHZ 1132800
+#define CPUID_0 0
+#define CPUID_5 5
+
+static void _cpu_perf_vote_req_init(u32 cpu)
+{
+	struct cpufreq_policy *policy;
+	struct freq_qos_request *req;
+
+	policy = cpufreq_cpu_get(cpu);
+	if (!policy)
+		return;
+
+	req = &per_cpu(qos_min_req, cpu);
+
+	freq_qos_add_request(&policy->constraints, req, FREQ_QOS_MIN, FREQ_QOS_MIN_DEFAULT_VALUE);
+
+	cpufreq_cpu_put(policy);
+}
+
+static void _cpu_perf_vote_update(u32 cpu, u32 freq)
+{
+	cpus_read_lock();
+	if (cpu_online(cpu))
+		freq_qos_update_request(&per_cpu(qos_min_req, cpu), freq);
+	cpus_read_unlock();
+}
+
+/*
+ * Make the vote based on the enable/disable param.
+ * Return true on enable, false if skipped or disabled.
+ */
+static bool _cpu_perf_vote_req(struct adreno_device *adreno_dev, bool enable)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
+	u32 busy_percent = 0;
+
+	/* Get GPU busy percentage */
+	if (stats->total_old != 0)
+		busy_percent = (stats->busy_old * 100) / stats->total_old;
+
+	/* Skip if enabling AND we aren't busy */
+	if (enable && (busy_percent <= GEN7_9_X_GPU_BUSY_THRESHOLD))
+		return false;
+
+	_cpu_perf_vote_update(CPUID_0, enable ? GEN7_9_X_FREQ_QOS_CPUID_0_KHZ :
+				FREQ_QOS_MIN_DEFAULT_VALUE);
+	_cpu_perf_vote_update(CPUID_5, enable ? GEN7_9_X_FREQ_QOS_CPUID_5_KHZ :
+				FREQ_QOS_MIN_DEFAULT_VALUE);
+
+	/* Return the requested enablement */
+	return enable;
+}
+
+static void _cpu_perf_vote_init(void)
+{
+	static bool init_done;
+
+	if (init_done)
+		return;
+
+	_cpu_perf_vote_req_init(CPUID_0);
+	_cpu_perf_vote_req_init(CPUID_5);
+	init_done = true;
+}
+
+static void _cpu_perf_vote(struct adreno_device *adreno_dev, u32 req_freq)
+{
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	static bool cpu_vote_state;
+	u32 freq;
+
+	if (!adreno_is_gen7_9_x(adreno_dev))
+		return;
+
+	_cpu_perf_vote_init();
+
+	freq = gmu->dcvs_table.gx_votes[req_freq].freq;
+	if (!cpu_vote_state && (freq >= GEN7_9_X_GPU_FREQ_THRESHOLD_KHZ))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, true);
+	else if (cpu_vote_state && (freq < GEN7_9_X_GPU_FREQ_THRESHOLD_KHZ))
+		cpu_vote_state = _cpu_perf_vote_req(adreno_dev, false);
+}
+
 static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		int gpu_pwrlevel, int bus_level, u32 ab)
 {
@@ -1389,8 +1480,10 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 	}
 
-	if (req.freq != INVALID_DCVS_IDX)
+	if (!ret && req.freq != INVALID_DCVS_IDX) {
 		gen7_rdpm_mx_freq_update(gmu, gmu->dcvs_table.gx_votes[req.freq].freq);
+		_cpu_perf_vote(adreno_dev, req.freq);
+	}
 
 	return ret;
 }

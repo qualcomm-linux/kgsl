@@ -1438,8 +1438,12 @@ int kgsl_register_gdsc_notifier(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
-	return devm_regulator_register_notifier(pwr->cx_gdsc, &pwr->cx_gdsc_nb);
+	if (!IS_ERR_OR_NULL(pwr->cx_gdsc)) {
+		pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
+		return devm_regulator_register_notifier(pwr->cx_gdsc, &pwr->cx_gdsc_nb);
+	}
+
+	return 0;
 }
 
 static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)

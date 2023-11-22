@@ -978,7 +978,7 @@ static int send_start_msg(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 seqnum;
-	int rc, read_size;
+	int rc;
 	struct hfi_start_cmd cmd;
 	u32 rcvd[MAX_RCVD_SIZE];
 	struct pending_cmd pending_ack = {0};
@@ -996,66 +996,59 @@ static int send_start_msg(struct adreno_device *adreno_dev)
 	if (rc)
 		return rc;
 
-	/*
-	 * This will never be an infinite loop. We break out either when we receive the
-	 * HFI_MSG_ACK or when we timeout waiting for the ack.
-	 */
-	while (true) {
-		rc = gmu_core_timed_poll_check(device, A6XX_GMU_GMU2HOST_INTR_INFO,
-			HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
+poll:
+	rc = gmu_core_timed_poll_check(device, A6XX_GMU_GMU2HOST_INTR_INFO,
+		HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
 
-		if (rc) {
-			dev_err(&gmu->pdev->dev,
-				"Timed out processing MSG_START seqnum: %d\n",
-				seqnum);
-			gmu_core_fault_snapshot(device);
-			return rc;
-		}
-
-		/* Clear the interrupt */
-		gmu_core_regwrite(device, A6XX_GMU_GMU2HOST_INTR_CLR, HFI_IRQ_MSGQ_MASK);
-
-		read_size = a6xx_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
-
-		if (read_size <= 0) {
-			dev_err(&gmu->pdev->dev, "MSG_START: no payload\n");
-			gmu_core_fault_snapshot(device);
-			return -EINVAL;
-		}
-		/* Loop through the msg queue to read all messages */
-		while (read_size > 0) {
-			switch (MSG_HDR_GET_ID(rcvd[0])) {
-			case F2H_MSG_MEM_ALLOC:
-				rc = mem_alloc_reply(adreno_dev, rcvd);
-				break;
-			case F2H_MSG_GMU_CNTR_REGISTER:
-				rc = gmu_cntr_register_reply(adreno_dev, rcvd);
-				break;
-			default:
-				if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
-					rc = a6xx_receive_ack_cmd(gmu, rcvd, &pending_ack);
-					if (rc)
-						return rc;
-
-					return check_ack_failure(adreno_dev, &pending_ack);
-				}
-
-				dev_err(&gmu->pdev->dev,
-					"MSG_START: unexpected response id:%d, type:%d\n",
-					MSG_HDR_GET_ID(rcvd[0]),
-					MSG_HDR_GET_TYPE(rcvd[0]));
-				gmu_core_fault_snapshot(device);
-				return -EINVAL;
-			}
-
-			if (rc)
-				return rc;
-
-			/* Clear the interrupt before checking the queue again */
-			gmu_core_regwrite(device, A6XX_GMU_GMU2HOST_INTR_CLR, HFI_IRQ_MSGQ_MASK);
-			read_size = a6xx_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
-		}
+	if (rc) {
+		dev_err(&gmu->pdev->dev,
+			"Timed out processing MSG_START seqnum: %d\n",
+			seqnum);
+		gmu_core_fault_snapshot(device);
+		return rc;
 	}
+
+	/* Clear the interrupt */
+	gmu_core_regwrite(device, A6XX_GMU_GMU2HOST_INTR_CLR,
+		HFI_IRQ_MSGQ_MASK);
+
+	if (a6xx_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) <= 0) {
+		dev_err(&gmu->pdev->dev, "MSG_START: no payload\n");
+		gmu_core_fault_snapshot(device);
+		return -EINVAL;
+	}
+
+	if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
+		rc = a6xx_receive_ack_cmd(gmu, rcvd, &pending_ack);
+		if (rc)
+			return rc;
+
+		return check_ack_failure(adreno_dev, &pending_ack);
+	}
+
+	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_MEM_ALLOC) {
+		rc = mem_alloc_reply(adreno_dev, rcvd);
+		if (rc)
+			return rc;
+
+		goto poll;
+	}
+
+	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_REGISTER) {
+		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
+		if (rc)
+			return rc;
+		goto poll;
+	}
+
+	dev_err(&gmu->pdev->dev,
+		"MSG_START: unexpected response id:%d, type:%d\n",
+		MSG_HDR_GET_ID(rcvd[0]),
+		MSG_HDR_GET_TYPE(rcvd[0]));
+
+	gmu_core_fault_snapshot(device);
+
+	return rc;
 }
 
 static void reset_hfi_mem_records(struct adreno_device *adreno_dev)
