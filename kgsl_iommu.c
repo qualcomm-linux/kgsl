@@ -2482,7 +2482,8 @@ static void kgsl_iommu_check_config(struct kgsl_mmu *mmu,
 	phandle = of_parse_phandle(node, "iommus", 0);
 
 	if (phandle) {
-		if (of_device_is_compatible(phandle, "qcom,qsmmu-v500"))
+		if (of_device_is_compatible(phandle, "qcom,qsmmu-v500") ||
+			of_device_is_compatible(phandle, "arm,mmu-500"))
 			mmu->subtype = KGSL_IOMMU_SMMU_V500;
 		if (of_device_is_compatible(phandle, "qcom,adreno-smmu"))
 			set_bit(KGSL_MMU_IOPGTABLE, &mmu->features);
