@@ -1643,6 +1643,8 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL3_TP0, cgc2);
 	}
 
+	gen7_cx_misc_regs_snapshot(device, snapshot);
+
 	/* SQE Firmware */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen7_snapshot_sqe, NULL);
@@ -1694,8 +1696,6 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		(void *) gen7_snapshot_block_list->pre_crashdumper_regs);
 
 	gen7_reglist_snapshot(device, snapshot);
-
-	gen7_cx_misc_regs_snapshot(device, snapshot);
 
 	/*
 	 * Need to program and save this register before capturing resource table
