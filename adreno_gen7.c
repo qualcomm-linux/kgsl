@@ -118,7 +118,6 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_CP_PROTECT_REG+45,
 	GEN7_CP_PROTECT_REG+46,
 	GEN7_CP_PROTECT_REG+47,
-	GEN7_CP_AHB_CNTL,
 };
 
 static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
@@ -174,7 +173,6 @@ static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
 	GEN7_CP_PROTECT_REG+45,
 	GEN7_CP_PROTECT_REG+46,
 	GEN7_CP_PROTECT_REG+47,
-	GEN7_CP_AHB_CNTL,
 };
 
 /* Gen7_9_x IFPC only static powerup restore list */
