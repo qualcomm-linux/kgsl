@@ -1453,6 +1453,49 @@ static int enable_gdscs(struct kgsl_device *device)
 	return 0;
 }
 
+#ifdef CONFIG_QCOM_KGSL_UPSTREAM
+static int kgsl_device_link_add_cxpd_iommu(struct kgsl_device *device, struct platform_device *pdev)
+{
+	struct device_node *phandle;
+	struct platform_device *iommu_pdev;
+
+	phandle = of_parse_phandle(pdev->dev.of_node, "iommus", 0);
+
+	if (!phandle)
+		return -ENOENT;
+
+	iommu_pdev = of_find_device_by_node(phandle);
+
+	if (!iommu_pdev) {
+		of_node_put(phandle);
+		return -ENOENT;
+	}
+
+	/*
+	 * As part of runtime_resume PM callback, the smmu driver resets the device.
+	 * This creates problems if GPU is active and runtime_resume callback of
+	 * iommu device kicks in. Hence, add device link between the CX power domain
+	 * and iommu device to keep the iommu device active when GPU is active. This
+	 * is not needed when using downstream driver with qcom addons because reset
+	 * of the device is done only during resume PM callback.
+	 */
+	if (!device_link_add(device->pwrctrl.cx_pd, &iommu_pdev->dev, DL_FLAG_PM_RUNTIME |
+				DL_FLAG_AUTOREMOVE_SUPPLIER))
+		dev_err(device->dev,
+				"Unable to create device link between cxpd and iommu\n");
+
+	put_device(&iommu_pdev->dev);
+	of_node_put(phandle);
+
+	return 0;
+}
+#else
+static int kgsl_device_link_add_cxpd_iommu(struct kgsl_device *device, struct platform_device *pdev)
+{
+	return 0;
+}
+#endif
+
 static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1467,6 +1510,8 @@ static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platfor
 			return IS_ERR(cx_pd) ? PTR_ERR(cx_pd) : -EINVAL;
 		}
 		pwr->cx_pd = cx_pd;
+
+		return kgsl_device_link_add_cxpd_iommu(device, pdev);
 	} else {
 		struct regulator *cx_regulator = devm_regulator_get(&pdev->dev, "vddcx");
 
