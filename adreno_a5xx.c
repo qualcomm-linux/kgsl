@@ -15,6 +15,9 @@
 #else
 #include <linux/qcom_scm.h>
 #endif
+#ifdef CONFIG_QCOM_KGSL_UPSTREAM
+#include <linux/firmware/qcom/qcom_scm_addon.h>
+#endif
 #include <linux/slab.h>
 
 #include "adreno.h"

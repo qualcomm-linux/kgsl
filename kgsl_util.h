@@ -250,25 +250,15 @@ static inline void kgsl_qcom_va_md_unregister(struct kgsl_device *device)
 #endif
 
 #ifdef CONFIG_QCOM_KGSL_UPSTREAM
-static inline int qcom_scm_kgsl_set_smmu_aperture(
-				unsigned int num_context_bank)
+static inline int qcom_scm_pas_shutdown_retry(u32 peripheral)
 {
 	return -EINVAL;
 }
 
 static inline int qcom_scm_kgsl_set_smmu_lpac_aperture(
-				unsigned int num_context_bank)
+                               unsigned int num_context_bank)
 {
-	return -EINVAL;
-}
-static inline int qcom_scm_kgsl_init_regs(u32 gpu_req)
-{
-	return -EOPNOTSUPP;
-}
-
-static inline int qcom_scm_pas_shutdown_retry(u32 peripheral)
-{
-	return -EINVAL;
+       return -EINVAL;
 }
 #endif
 
