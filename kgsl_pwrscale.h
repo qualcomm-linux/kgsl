@@ -135,8 +135,8 @@ static inline void devfreq_gpubw_exit(void)
 int devfreq_gpubw_init(void);
 
 void devfreq_gpubw_exit(void);
+#endif
 
 void kgsl_pwrscale_fast_bus_hint(bool on);
-#endif
 
 #endif
