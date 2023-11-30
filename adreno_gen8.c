@@ -123,6 +123,27 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_CP_PROTECT_REG_PIPE + 15,
 };
 
+static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
+	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR)},
+	{ GEN8_RB_CCU_NC_MODE_CNTL, BIT(PIPE_BR)},
+	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR)},
+	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR)},
+	{ GEN8_RB_GC_GMEM_PROTECT, BIT(PIPE_BR)},
+	{ GEN8_RB_LPAC_GMEM_PROTECT, BIT(PIPE_BR)},
+	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_PC_CHICKEN_BITS_2, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_VFD_CB_BV_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_VFD_CB_BR_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_VFD_CB_BUSY_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR)},
+	{ GEN8_VFD_CB_LP_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR)},
+};
+
 static int acd_calibrate_set(void *data, u64 val)
 {
 	struct kgsl_device *device = data;
@@ -548,13 +569,16 @@ static void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
 
 static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
 	struct adreno_reglist_list reglist[3];
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
-	u32 items = 0, i, j;
+	u32 items = 0, i, j, pipe_id;
 	u32 *dest = ptr + sizeof(*lock);
 
-	/* Static IFPC-only registers */
+	/* Static IFPC restore only registers */
 	reglist[items].regs = gen8_ifpc_pwrup_reglist;
 	reglist[items].count = ARRAY_SIZE(gen8_ifpc_pwrup_reglist);
 	lock->ifpc_list_len = reglist[items].count;
@@ -575,7 +599,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 
 		for (j = 0; j < reglist[i].count; j++) {
 			*dest++ = r[j];
-			kgsl_regread(KGSL_DEVICE(adreno_dev), r[j], dest++);
+			kgsl_regread(device, r[j], dest++);
 		}
 	}
 
@@ -593,8 +617,35 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	 * dynamic list with triplets as
 	 * (<aperture, shifted 12 bits> <address> <data>), and the length is
 	 * stored as number for triplets in dynamic_list_len.
+	 *
+	 * Starting with Gen8, some of the registers that are initialized statically
+	 * by the kernel are pipe-specific. Because only the dynamic list is able to
+	 * support specifying a pipe ID, these registers are bundled along with any
+	 * dynamic entries such as perf counter selects into a single dynamic list.
 	 */
-	lock->dynamic_list_len = 0;
+
+	gen8_dev->ext_pwrup_list_len = 0;
+
+	/*
+	 * Write external pipe specific regs (<aperture> <address> <value> - triplets)
+	 * offset and the current value into GPU buffer
+	 */
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_BV; pipe_id++) {
+		for (i = 0; i < ARRAY_SIZE(gen8_0_0_pwrup_extlist); i++) {
+			unsigned long pipe = (unsigned long)gen8_0_0_pwrup_extlist[i].pipelines;
+
+			if (!test_bit(pipe_id, &pipe))
+				continue;
+
+			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
+			*dest++ = gen8_0_0_pwrup_extlist[i].offset;
+			gen8_regread_aperture(device, gen8_0_0_pwrup_extlist[i].offset,
+					dest++, pipe_id, 0, 0);
+			gen8_dev->ext_pwrup_list_len++;
+		}
+	}
+
+	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }
 
 /* _llc_configure_gpu_scid() - Program the sub-cache ID for all GPU blocks */
@@ -755,12 +806,11 @@ int gen8_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
 
-
 	/*
 	 * CP takes care of the restore during IFPC exit. We need to restore at slumber
 	 * boundary as well
 	 */
-	if (pwrup_lock->dynamic_list_len > 0) {
+	if (pwrup_lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len > 0) {
 		kgsl_regwrite(device, GEN8_RBBM_PERFCTR_CNTL, 0x1);
 		kgsl_regwrite(device, GEN8_RBBM_SLICE_PERFCTR_CNTL, 0x1);
 	}
@@ -1848,21 +1898,23 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 			    struct adreno_perfcount_register *reg, u32 groupid)
 {
 	const struct adreno_perfcounters *counters = ADRENO_PERFCOUNTERS(adreno_dev);
+	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 	const struct adreno_perfcount_group *group;
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
-	u32 *data = ptr + sizeof(*lock);
-	int offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
+	u32 offset = ((lock->ifpc_list_len + lock->preemption_list_len) * 2) +
+			(gen8_dev->ext_pwrup_list_len * 3);
 	int i, last_offset, num_removed, start_offset = -1;
-	u32 pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
+	u32 *data = ptr + sizeof(*lock), pipe = FIELD_PREP(GENMASK(13, 12), _get_pipeid(groupid));
+	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
 
-	if (!lock->dynamic_list_len)
+	if (!perfcntr_list_len)
 		return -EINVAL;
 
 	group = &(counters->groups[groupid]);
 
 	if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE)) {
-		if (lock->dynamic_list_len != 2)
+		if (perfcntr_list_len != 2)
 			return 0;
 
 		if (kgsl_hwlock(lock)) {
@@ -1872,10 +1924,10 @@ int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 		goto disable_perfcounter;
 	}
 
-	last_offset = offset + lock->dynamic_list_len * 3;
+	last_offset = offset + (perfcntr_list_len * 3);
 
 	/* Look for the perfcounter to remove in the list */
-	for (i = 0; i < lock->dynamic_list_len - 2; i++) {
+	for (i = 0; i < perfcntr_list_len - 2; i++) {
 		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 			start_offset = offset;
 			break;
@@ -1911,9 +1963,9 @@ disable_perfcounter:
 	 * If dynamic list length is 2 and no_restore_count is 0, then we can remove
 	 * the perfcounter controls from the list.
 	 */
-	if (lock->dynamic_list_len == 2 && !adreno_dev->no_restore_count) {
+	if (perfcntr_list_len == 2 && !adreno_dev->no_restore_count) {
 		memset(&data[offset], 0, 6 * sizeof(u32));
-		lock->dynamic_list_len = 0;
+		lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 	}
 
 	kgsl_hwunlock(lock);
@@ -1923,13 +1975,17 @@ disable_perfcounter:
 int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe, unsigned long flags)
 {
+	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;
 	struct cpu_gpu_lock *lock = ptr;
+	u32 offset = ((lock->ifpc_list_len + lock->preemption_list_len) * 2) +
+			(gen8_dev->ext_pwrup_list_len * 3);
 	u32 *data = ptr + sizeof(*lock);
-	int i, start_offset = -1, offset = (lock->ifpc_list_len + lock->preemption_list_len) * 2;
+	int i, start_offset = -1;
+	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
 
 	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
-		for (i = 0; i < lock->dynamic_list_len - 2; i++) {
+		for (i = 0; i < perfcntr_list_len - 2; i++) {
 			if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 				start_offset = offset;
 				break;
@@ -1937,7 +1993,7 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 
 			offset += 3;
 		}
-	} else if (lock->dynamic_list_len) {
+	} else if (perfcntr_list_len) {
 		goto update;
 	}
 
@@ -1962,8 +2018,8 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	}
 
 	/* Initialize the lock->dynamic_list_len to account for perfcounter controls */
-	if (!lock->dynamic_list_len)
-		lock->dynamic_list_len = 2;
+	if (!perfcntr_list_len)
+		lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len + 2;
 
 	/*
 	 * For all targets GEN8_SLICE_RBBM_PERFCTR_CNTL needs to be the last entry,

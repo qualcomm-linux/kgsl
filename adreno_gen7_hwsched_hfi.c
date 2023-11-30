@@ -3016,6 +3016,7 @@ static void populate_ibs(struct adreno_device *adreno_dev,
 #define HFI_DSP_IRQ_BASE 2
 
 #define DISPQ_IRQ_BIT(_idx) BIT((_idx) + HFI_DSP_IRQ_BASE)
+#define DISPQ_SYNC_IRQ_BIT(_idx) ((DISPQ_IRQ_BIT(_idx) << (KGSL_PRIORITY_MAX_RB_LEVELS + 1)))
 
 int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 	struct kgsl_memdesc *gmu_context_queue, u32 *msg, u32 size_bytes,
@@ -3570,7 +3571,7 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	 * If this ts hasn't been submitted yet, then store it in the drawctxt hardware fence
 	 * list and return. This fence will be sent to GMU when this ts is dispatched to GMU.
 	 */
-	if (timestamp_cmp(kfence->timestamp, drawctxt->internal_timestamp) > 0) {
+	if (timestamp_cmp(kfence->timestamp, drawctxt->gmu_hw_fence_ready_ts) > 0) {
 		drawctxt_queue_hw_fence(drawctxt, entry);
 		destroy_hw_fence = false;
 		goto done;
@@ -3751,6 +3752,7 @@ int gen7_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_dr
 	struct adreno_submit_time time = {0};
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
 	static void *cmdbuf;
+	struct gmu_context_queue_header *hdr = NULL;
 
 	if (cmdbuf == NULL) {
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3839,17 +3841,26 @@ skipib:
 	if (ret)
 		return ret;
 
-	/* Send interrupt to GMU to receive the message */
-	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
-		DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+	hdr = drawctxt->gmu_context_queue.hostptr;
+	/* The last sync object has been retired by the GMU */
+	if (timestamp_cmp(hdr->sync_obj_ts, drawctxt->syncobj_timestamp) >= 0)
+		/* Send interrupt to GMU to receive the message */
+		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
+			DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+	else
+		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN7_GMU_HOST2GMU_INTR_SET,
+			DISPQ_SYNC_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+
+	drawctxt->internal_timestamp = drawobj->timestamp;
 
 	spin_lock(&drawctxt->lock);
 	process_hw_fence_queue(adreno_dev, drawctxt, drawobj->timestamp);
 	/*
-	 * We need to update the internal timestamp while holding the drawctxt lock since we have to
-	 * check it in the hardware fence creation path, where we are not taking the device mutex.
+	 * We need to update the gmu_hw_fence_ready_ts while holding the drawctxt lock since we
+	 * have to check it in the hardware fence creation path, where we are not taking the device
+	 * mutex.
 	 */
-	drawctxt->internal_timestamp = drawobj->timestamp;
+	drawctxt->gmu_hw_fence_ready_ts = drawobj->timestamp;
 	spin_unlock(&drawctxt->lock);
 
 	return 0;

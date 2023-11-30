@@ -88,6 +88,14 @@ struct adreno_context {
 	u32 hw_fence_count;
 	/** @syncobj_timestamp: Timestamp to check whether GMU has consumed a syncobj */
 	u32 syncobj_timestamp;
+	/**
+	 * @gmu_hw_fence_ready_ts: This timestamp is used to figure out whether a hardware fence
+	 * is ready to be submitted to GMU at the time of its creation or not. This timestamp
+	 * tracks the timestamp of the most recently submitted cmdbatch submission to the GMU
+	 * context queue for this context. This is different from the internal_timestamp (which gets
+	 * reset to 0 in some cases).
+	 */
+	u32 gmu_hw_fence_ready_ts;
 };
 
 /* Flag definitions for flag field in adreno_context */

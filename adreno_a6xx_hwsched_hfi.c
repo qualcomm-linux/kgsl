@@ -1918,9 +1918,6 @@ skipib:
 	gmu_core_regwrite(KGSL_DEVICE(adreno_dev), A6XX_GMU_HOST2GMU_INTR_SET,
 		DISPQ_IRQ_BIT(drawobj->context->gmu_dispatch_queue));
 
-	/*
-	 * We don't need the drawctxt spinlock here because hardware fences are not enabled for a6x
-	 */
 	drawctxt->internal_timestamp = drawobj->timestamp;
 
 	return ret;
