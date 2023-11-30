@@ -2582,7 +2582,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a623 = {
 	.veto_fal10 = true,
 	.protected_regs = a663_protected_regs,
 	.disable_tseskip = true,
-	.highest_bank_bit = 13,
+	.highest_bank_bit = 16,
 	.pdc_in_aop = true,
 	.ctxt_record_size = 2496 * 1024,
 };
