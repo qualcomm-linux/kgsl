@@ -600,7 +600,7 @@ static void gen8_snapshot_shader(struct kgsl_device *device,
 		for (i = 0; i < num_shader_blocks; i++) {
 			struct gen8_shader_block *block = &shader_blocks[i];
 
-			for (slice = 0; sp < block->num_slices; slice++) {
+			for (slice = 0; slice < block->num_slices; slice++) {
 				for (sp = 0; sp < block->num_sps; sp++) {
 					for (usptp = 0; usptp < block->num_usptps; usptp++) {
 						info.block = block;

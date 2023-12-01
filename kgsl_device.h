@@ -965,7 +965,7 @@ struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
  * the number of strings in the binary
  */
 #define SNAPSHOT_ERR_NOMEM(_d, _s) \
-	dev_err((_d)->dev, \
+	dev_err_ratelimited((_d)->dev, \
 	"snapshot: not enough snapshot memory for section %s\n", (_s))
 
 /**
