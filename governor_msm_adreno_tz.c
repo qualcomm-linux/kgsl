@@ -23,7 +23,6 @@
 #include <linux/firmware/qcom/qcom_scm_addon.h>
 #endif
 #include <asm/cacheflush.h>
-#include <linux/qtee_shmbridge.h>
 
 #include "governor.h"
 #include "msm_adreno_devfreq.h"
