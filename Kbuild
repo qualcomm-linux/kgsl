@@ -34,6 +34,9 @@ endif
 ifeq ($(CONFIG_ARCH_SA8195), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
+ifeq ($(CONFIG_ARCH_SA6155), y)
+	include $(KGSL_PATH)/config/gki_sa8155.conf
+endif
 ifeq ($(CONFIG_ARCH_MONACO), y)
 	include $(KGSL_PATH)/config/gki_monaco.conf
 endif
@@ -42,6 +45,9 @@ ifeq ($(CONFIG_ARCH_LEMANS), y)
 endif
 ifeq ($(CONFIG_ARCH_KONA), y)
         include $(KGSL_PATH)/config/gki_kona.conf
+endif
+ifeq ($(CONFIG_ARCH_MONACO_AUTO), y)
+	include $(KGSL_PATH)/config/gki_monaco_auto.conf
 endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
