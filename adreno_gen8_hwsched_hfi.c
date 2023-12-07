@@ -1794,57 +1794,61 @@ static int send_start_msg(struct adreno_device *adreno_dev)
 		return rc;
 
 poll:
-	rc = gmu_core_timed_poll_check(device, GEN8_GMUCX_GMU2HOST_INTR_INFO,
-		HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
+	rc = adreno_hwsched_poll_msg_queue_write_index(gmu->hfi.hfi_mem);
 
 	if (rc) {
 		dev_err(&gmu->pdev->dev,
 			"Timed out processing MSG_START seqnum: %d\n",
 			seqnum);
+		gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
 		goto done;
 	}
 
-	/* Clear the interrupt */
-	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR,
-		HFI_IRQ_MSGQ_MASK);
-
-	if (gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) <= 0) {
-		dev_err(&gmu->pdev->dev, "MSG_START: no payload\n");
-		rc = -EINVAL;
+	rc = gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
+	if (rc <= 0) {
+		dev_err(&gmu->pdev->dev,
+			"MSG_START: payload error: %d\n",
+			rc);
+		gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
 		goto done;
 	}
 
-	if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
-		rc = gen8_receive_ack_cmd(gmu, rcvd, &pending_ack);
-		if (rc)
-			return rc;
-
-		return check_ack_failure(adreno_dev, &pending_ack);
-	}
-
-	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_MEM_ALLOC) {
+	switch (MSG_HDR_GET_ID(rcvd[0])) {
+	case F2H_MSG_MEM_ALLOC:
 		rc = mem_alloc_reply(adreno_dev, rcvd);
-		if (rc)
-			return rc;
-
-		goto poll;
-	}
-
-	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_REGISTER) {
+		break;
+	case F2H_MSG_GMU_CNTR_REGISTER:
 		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
-		if (rc)
-			return rc;
-		goto poll;
+		break;
+	default:
+		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
+			rc = gen8_receive_ack_cmd(gmu, rcvd, &pending_ack);
+			/* Check ack failure if we received an expected ack */
+			if (!rc)
+				rc = check_ack_failure(adreno_dev, &pending_ack);
+			goto done;
+		} else {
+			dev_err(&gmu->pdev->dev,
+				"MSG_START: unexpected response id:%d, type:%d\n",
+				MSG_HDR_GET_ID(rcvd[0]),
+				MSG_HDR_GET_TYPE(rcvd[0]));
+			gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
+			rc = -EINVAL;
+			goto done;
+		}
 	}
 
-	dev_err(&gmu->pdev->dev,
-		"MSG_START: unexpected response id:%d, type:%d\n",
-		MSG_HDR_GET_ID(rcvd[0]),
-		MSG_HDR_GET_TYPE(rcvd[0]));
+	if (!rc)
+		goto poll;
 
 done:
-	gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
-
+	/* Clear the interrupt */
+	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR, HFI_IRQ_MSGQ_MASK);
+	/*
+	 * Add a write barrier to post the interrupt clear so that we dont have a
+	 * pending interrupt.
+	 */
+	wmb();
 	return rc;
 }
 

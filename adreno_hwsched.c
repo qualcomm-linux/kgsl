@@ -13,6 +13,8 @@
 #include <linux/msm_kgsl.h>
 #include <soc/qcom/msm_performance.h>
 
+#define POLL_SLEEP_US 100
+
 /*
  * Number of commands that can be queued in a context before it sleeps
  *
@@ -2461,4 +2463,33 @@ bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
 	}
 
 	return non_fatal;
+}
+
+int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem)
+{
+	struct hfi_queue_table *tbl = hfi_mem->hostptr;
+	struct hfi_queue_header *hdr = &tbl->qhdr[HFI_MSG_ID];
+	unsigned long timeout = jiffies + msecs_to_jiffies(HFI_RSP_TIMEOUT);
+
+	while (time_before(jiffies, timeout)) {
+		if (hdr->write_index != hdr->read_index)
+			goto done;
+
+		/* Wait for upto 100 us before trying again */
+		usleep_range((POLL_SLEEP_US >> 2) + 1, POLL_SLEEP_US);
+		cpu_relax();
+	}
+
+	/* Check if the write index has advanced */
+	if (hdr->write_index == hdr->read_index)
+		return -ETIMEDOUT;
+
+done:
+	/*
+	 * This is to ensure that the queue is not read speculatively before the
+	 * polling condition is evaluated.
+	 */
+	rmb();
+
+	return 0;
 }
