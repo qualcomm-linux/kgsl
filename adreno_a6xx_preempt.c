@@ -345,17 +345,19 @@ void a6xx_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 		FENCE_STATUS_WRITEDROPPED1_MASK))
 		goto err;
 
-	if (a6xx_fenced_write(adreno_dev,
-		A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO,
-		lower_32_bits(next->secure_preemption_desc->gpuaddr),
-		FENCE_STATUS_WRITEDROPPED1_MASK))
-		goto err;
+	if (kgsl_mmu_is_secured(&device->mmu)) {
+		if (a6xx_fenced_write(adreno_dev,
+			A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO,
+			lower_32_bits(next->secure_preemption_desc->gpuaddr),
+			FENCE_STATUS_WRITEDROPPED1_MASK))
+			goto err;
 
-	if (a6xx_fenced_write(adreno_dev,
-		A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI,
-		upper_32_bits(next->secure_preemption_desc->gpuaddr),
-		FENCE_STATUS_WRITEDROPPED1_MASK))
-		goto err;
+		if (a6xx_fenced_write(adreno_dev,
+			A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI,
+			upper_32_bits(next->secure_preemption_desc->gpuaddr),
+			FENCE_STATUS_WRITEDROPPED1_MASK))
+			goto err;
+	}
 
 	if (a6xx_fenced_write(adreno_dev,
 		A6XX_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_LO,
@@ -493,6 +495,8 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 *cmds)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 count = kgsl_mmu_is_secured(&device->mmu) ? 12 : 9;
 	unsigned int *cmds_orig = cmds;
 	uint64_t gpuaddr = 0;
 
@@ -501,11 +505,10 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 
 	if (drawctxt) {
 		gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
-		*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 15);
-	} else {
-		*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 12);
+		count += 3;
 	}
 
+	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, count);
 	/* NULL SMMU_INFO buffer - we track in KMD */
 	*cmds++ = SET_PSEUDO_SMMU_INFO;
 	cmds += cp_gpuaddr(adreno_dev, cmds, 0x0);
@@ -513,9 +516,11 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 	*cmds++ = SET_PSEUDO_PRIV_NON_SECURE_SAVE_ADDR;
 	cmds += cp_gpuaddr(adreno_dev, cmds, rb->preemption_desc->gpuaddr);
 
-	*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
-	cmds += cp_gpuaddr(adreno_dev, cmds,
-			rb->secure_preemption_desc->gpuaddr);
+	if (kgsl_mmu_is_secured(&device->mmu)) {
+		*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
+		cmds += cp_gpuaddr(adreno_dev, cmds,
+				rb->secure_preemption_desc->gpuaddr);
+	}
 
 	if (drawctxt) {
 		*cmds++ = SET_PSEUDO_NON_PRIV_SAVE_ADDR;
@@ -676,11 +681,13 @@ static int a6xx_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = adreno_allocate_global(device, &rb->secure_preemption_desc,
-		ctxt_record_size, 0, KGSL_MEMFLAGS_SECURE,
-		KGSL_MEMDESC_PRIVILEGED, "preemption_desc");
-	if (ret)
-		return ret;
+	if (kgsl_mmu_is_secured(&device->mmu)) {
+		ret = adreno_allocate_global(device, &rb->secure_preemption_desc,
+			ctxt_record_size, 0, KGSL_MEMFLAGS_SECURE,
+			KGSL_MEMDESC_PRIVILEGED, "preemption_desc");
+		if (ret)
+			return ret;
+	}
 
 	ret = adreno_allocate_global(device, &rb->perfcounter_save_restore_desc,
 			A6XX_CP_PERFCOUNTER_SAVE_RESTORE_SIZE, 0, 0,

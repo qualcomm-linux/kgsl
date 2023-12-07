@@ -1070,20 +1070,24 @@ static int _preemption_init(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, unsigned int *cmds,
 		struct kgsl_context *context)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned int *cmds_orig = cmds;
 
 	/* Turn CP protection OFF on legacy targets */
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))
 		cmds += cp_protected_mode(adreno_dev, cmds, 0);
 
-	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 6);
+	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER,
+			kgsl_mmu_is_secured(&device->mmu) ? 6 : 3);
 	*cmds++ = SET_PSEUDO_PRIV_NON_SECURE_SAVE_ADDR;
 	cmds += cp_gpuaddr(adreno_dev, cmds,
 			rb->preemption_desc->gpuaddr);
 
-	*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
-	cmds += cp_gpuaddr(adreno_dev, cmds,
-		rb->secure_preemption_desc->gpuaddr);
+	if (kgsl_mmu_is_secured(&device->mmu)) {
+		*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
+		cmds += cp_gpuaddr(adreno_dev, cmds,
+			rb->secure_preemption_desc->gpuaddr);
+	}
 
 	/* Turn CP protection back ON */
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_APRIV))

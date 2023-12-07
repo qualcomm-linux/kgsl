@@ -995,7 +995,9 @@ static int gen7_post_start(struct adreno_device *adreno_dev)
 	unsigned int *cmds;
 	struct adreno_ringbuffer *rb = adreno_dev->cur_rb;
 	struct adreno_preemption *preempt = &adreno_dev->preempt;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u64 kmd_postamble_addr;
+	u32 count = 9;
 
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return 0;
@@ -1003,18 +1005,27 @@ static int gen7_post_start(struct adreno_device *adreno_dev)
 	kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
 	gen7_preemption_prepare_postamble(adreno_dev);
 
-	cmds = adreno_ringbuffer_allocspace(rb, (preempt->postamble_bootup_len ? 16 : 12));
+	if (kgsl_mmu_is_secured(&device->mmu))
+		count += 3;
+
+	if (preempt->postamble_bootup_len)
+		count += 4;
+
+	cmds = adreno_ringbuffer_allocspace(rb, count);
 	if (IS_ERR(cmds))
 		return PTR_ERR(cmds);
 
-	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 6);
+	*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER,
+			kgsl_mmu_is_secured(&device->mmu) ? 6 : 3);
 	*cmds++ = SET_PSEUDO_PRIV_NON_SECURE_SAVE_ADDR;
 	*cmds++ = lower_32_bits(rb->preemption_desc->gpuaddr);
 	*cmds++ = upper_32_bits(rb->preemption_desc->gpuaddr);
 
-	*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
-	*cmds++ = lower_32_bits(rb->secure_preemption_desc->gpuaddr);
-	*cmds++ = upper_32_bits(rb->secure_preemption_desc->gpuaddr);
+	if (kgsl_mmu_is_secured(&device->mmu)) {
+		*cmds++ = SET_PSEUDO_PRIV_SECURE_SAVE_ADDR;
+		*cmds++ = lower_32_bits(rb->secure_preemption_desc->gpuaddr);
+		*cmds++ = upper_32_bits(rb->secure_preemption_desc->gpuaddr);
+	}
 
 	if (preempt->postamble_bootup_len) {
 		*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
