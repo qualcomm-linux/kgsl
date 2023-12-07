@@ -96,7 +96,7 @@ static u32 a6xx_ifpc_pwrup_reglist[] = {
 	A6XX_CP_AHB_CNTL,
 };
 
-/* Applicable to a620, a621, a642l, a650 and a660 */
+/* Applicable to a620, a621, a642l, a643, a650 and a660 */
 static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+32,
 	A6XX_CP_PROTECT_REG+33,
@@ -116,7 +116,7 @@ static u32 a650_ifpc_pwrup_reglist[] = {
 	A6XX_CP_PROTECT_REG+47,
 };
 
-/* Applicable to a620, a621, a642l, a650 and a660 */
+/* Applicable to a620, a621, a642l, a643, a650 and a660 */
 static u32 a650_pwrup_reglist[] = {
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_0,
 	A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_1,
@@ -201,6 +201,7 @@ int a6xx_init(struct adreno_device *adreno_dev)
 	if (of_fdt_get_ddrtype() == 0x7) {
 		if (adreno_is_a660_shima(adreno_dev) ||
 			adreno_is_a642l(adreno_dev) ||
+			adreno_is_a643(adreno_dev) ||
 			adreno_is_a662(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
 		else if ((adreno_is_a650(adreno_dev) ||
@@ -659,7 +660,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		a6xx_core->prim_fifo_threshold);
 
 	/* This enables ECO for an issue in SP instruction fetching */
-	if (adreno_is_a642l(adreno_dev))
+	if (adreno_is_a642l(adreno_dev) || adreno_is_a643(adreno_dev))
 		kgsl_regrmw(device, A6XX_SP_DBG_ECO_CNTL, 0x6,
 			FIELD_PREP(GENMASK(2, 1), 0x3));
 
@@ -812,8 +813,9 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
 
-		/* Set dualQ + disable afull for A660 GPU but not for A642l */
-		if (!adreno_is_a642l(adreno_dev))
+		/* Set dualQ + disable afull for A660 GPU but not for A642l and A643 */
+		if (!adreno_is_a642l(adreno_dev) &&
+				!adreno_is_a643(adreno_dev))
 			kgsl_regwrite(device, A6XX_UCHE_CMDQ_CONFIG, 0x66906);
 	}
 
