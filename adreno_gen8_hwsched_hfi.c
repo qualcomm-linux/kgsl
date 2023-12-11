@@ -2176,6 +2176,134 @@ static int gen8_hfi_send_thermal_feature_ctrl(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
 
+static int gen8_hwsched_build_dcvs_table(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct hfi_table_cmd *cmd;
+	struct hfi_table_entry *entry;
+	u32 size_config_entry_dwords = (sizeof(*entry) >> 2) + (1 * 4);
+	u32 size_ddr_levels_dwords = (sizeof(*entry) >> 2) + ((pwr->num_pwrlevels + 1) * 3);
+	u32 size_ddr_table_dwords = (sizeof(*entry) >> 2) + (1 * pwr->ddr_table_count);
+	u32 size_table_dwords = (sizeof(*cmd) >> 2) + size_config_entry_dwords +
+				size_ddr_levels_dwords + size_ddr_table_dwords;
+	u32 index;
+	int i, j = 0;
+
+	/* If cmdbuf is not allocated, allocate it first */
+	if (!gmu->dcvs_cmdbuf) {
+		/*
+		 * size_dwords is the total size of struct elements and data, which is
+		 * (count * stride) for each entry. Make sure the size is equal to the
+		 * total number of entries in the buffer (index) to avoid overflow.
+		 */
+		gmu->dcvs_cmdbuf = kcalloc(size_table_dwords, sizeof(*(gmu->dcvs_cmdbuf)),
+						GFP_KERNEL);
+		if (!gmu->dcvs_cmdbuf)
+			return -ENOMEM;
+		pwr->update_dcvs_table = true;
+	}
+
+	/* If there are no changes needed for the table, use the existing table */
+	if (!pwr->update_dcvs_table)
+		return 0;
+
+	cmd = (struct hfi_table_cmd *)gmu->dcvs_cmdbuf;
+	cmd->version = 0;
+	cmd->type = HFI_TABLE_DCVS_DATA;
+	index = sizeof(*cmd) >> 2;
+
+	/*
+	 * Fill up config entry
+	 * First entry table contains 4 data.
+	 *     1) Number of gpu power levels
+	 *     2) GMU index to default level
+	 *     3) Bus width for the target
+	 *     4) Max ddr bandwidth across 4 channels
+	 */
+	entry = (struct hfi_table_entry *)&gmu->dcvs_cmdbuf[index];
+	entry->count = 1;
+	entry->stride = 4;
+	/* Number of power levels */
+	entry->data[j++] = pwr->num_pwrlevels + 1;
+	/* GMU index to default level */
+	entry->data[j++] = pwr->num_pwrlevels - pwr->default_pwrlevel;
+	/* Bus width for the target */
+	entry->data[j++] = pwr->bus_width;
+	/* Number of ddr channels for the target */
+	entry->data[j++] = adreno_dev->gpucore->num_ddr_channels;
+	index += size_config_entry_dwords;
+
+	/*
+	 * Fill up ddr levels entry
+	 * Second entry table contains default, min and max bus indexes for each power level.
+	 */
+	entry = (struct hfi_table_entry *)&gmu->dcvs_cmdbuf[index];
+	entry->count = pwr->num_pwrlevels + 1;
+	entry->stride = 3;
+	j = 0;
+	/* GMU has 0 MHz as its lowest level */
+	entry->data[j++] = 0;
+	entry->data[j++] = 0;
+	entry->data[j++] = 0;
+	/* GPU power levels and associated bus votes */
+	for (i = pwr->num_pwrlevels - 1; i >= 0; i--) {
+		entry->data[j++] = pwr->pwrlevels[i].bus_freq;
+		entry->data[j++] = pwr->pwrlevels[i].bus_min;
+		entry->data[j++] = pwr->pwrlevels[i].bus_max;
+	}
+
+	index += size_ddr_levels_dwords;
+
+	/*
+	 * Fill up ddr table entry
+	 * This contains the ddr table
+	 */
+	entry = (struct hfi_table_entry *)&gmu->dcvs_cmdbuf[index];
+	entry->count = 1;
+	entry->stride = pwr->ddr_table_count;
+	for (i = 0; i < pwr->ddr_table_count; i++)
+		entry->data[i] = pwr->ddr_table[i];
+	index += size_ddr_table_dwords;
+
+	/* If index is greater than size, buffer has overflown */
+	if (index > size_table_dwords) {
+		dev_err(device->dev, "Buffer overflown for dcvs table\n");
+		return -EINVAL;
+	}
+
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
+	cmd->hdr = MSG_HDR_SET_SIZE(cmd->hdr, index);
+
+	pwr->update_dcvs_table = false;
+	return 0;
+}
+
+static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct hfi_table_cmd *cmd;
+	int ret;
+
+	/* If KGSL is performing pwrscale, just return */
+	if (device->host_based_dcvs)
+		return 0;
+
+	/* Build the table to be send to GMU for GMU based DCVS */
+	ret = gen8_hwsched_build_dcvs_table(adreno_dev);
+	if (ret)
+		return ret;
+
+	cmd = (struct hfi_table_cmd *)gmu->dcvs_cmdbuf;
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_DCVS, 1, GMU_GPU_DCVS_OBJ_PARITY);
+	if (ret)
+		return ret;
+
+	return gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
+}
+
 int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2213,6 +2341,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 		goto err;
 
 	ret = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.bw_table, sizeof(gmu->hfi.bw_table));
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_gmu_dcvs_req(adreno_dev);
 	if (ret)
 		goto err;
 

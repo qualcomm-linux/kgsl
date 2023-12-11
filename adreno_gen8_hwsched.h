@@ -10,6 +10,22 @@
 #include "adreno_gen8_hwsched_hfi.h"
 
 /**
+ * enum gen8_gmu_dcvs_obj - Type of DCVS object to be used for GMU based DCVS
+ * @GMU_GPU_DCVS_OBJ_OFF: DCVS disabled
+ * @GMU_GPU_DCVS_OBJ_DEPRECATED: Deprecated object
+ * @GMU_GPU_DCVS_OBJ_DOS: DCVS Old School algorithm
+ * @GMU_GPU_DCVS_OBJ_PARITY: Parity algorithm based on host based DCVS
+ * @GMU_GPU_DCVS_OBJ_MAX: enum to define max allowed object
+ */
+enum gen8_gmu_dcvs_obj {
+	GMU_GPU_DCVS_OBJ_OFF = 0,
+	GMU_GPU_DCVS_OBJ_DEPRECATED = 1,
+	GMU_GPU_DCVS_OBJ_DOS = 2,
+	GMU_GPU_DCVS_OBJ_PARITY = 3,
+	GMU_GPU_DCVS_OBJ_MAX,
+};
+
+/**
  * struct gen8_hwsched_device - Container for the gen8 hwscheduling device
  */
 struct gen8_hwsched_device {

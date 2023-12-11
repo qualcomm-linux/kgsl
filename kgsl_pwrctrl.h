@@ -203,6 +203,8 @@ struct kgsl_pwrctrl {
 	struct kthread_worker *cooling_worker;
 	/** @cooling_work: ws to update pwrlevel as per the thermal mitigation request */
 	struct kthread_work cooling_work;
+	/** @update_dcvs_table: Set when the dcvs table needs an update for GMU */
+	bool update_dcvs_table;
 };
 
 int kgsl_pwrctrl_init(struct kgsl_device *device);

@@ -1981,6 +1981,7 @@ void gen8_gmu_remove(struct kgsl_device *device)
 	vfree(gmu->itcm_shadow);
 	kobject_put(&gmu->log_kobj);
 	kobject_put(&gmu->stats_kobj);
+	kfree(gmu->dcvs_cmdbuf);
 }
 
 /* Default IFPC timer (300usec) value */

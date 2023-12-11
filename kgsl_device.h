@@ -351,6 +351,8 @@ struct kgsl_device {
 	u32 max_syncobj_hw_fence_count;
 	/** @file_mutex: Mutex to protect device open and close operations */
 	struct mutex file_mutex;
+	/** @host_based_dcvs: Set when KGSL is in charge of DCVS */
+	bool host_based_dcvs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

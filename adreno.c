@@ -907,9 +907,6 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 
 	atomic64_set(&device->pwrctrl.interval_timeout, CONFIG_QCOM_KGSL_IDLE_TIMEOUT);
 
-	/* Set default bus control to true on all targets */
-	device->pwrctrl.bus_control = true;
-
 	return 0;
 }
 
@@ -1487,8 +1484,10 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_sysfs_init(adreno_dev);
 
-	/* Ignore return value, as driver can still function without pwrscale enabled */
-	kgsl_pwrscale_init(device, pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS)) {
+		/* Ignore return value, as driver can still function without pwrscale enabled */
+		kgsl_pwrscale_init(device, pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
+	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_L3_VOTE))
 		device->l3_vote = true;

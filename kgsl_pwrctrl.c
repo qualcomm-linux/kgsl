@@ -2580,7 +2580,11 @@ static int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 
 int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device)
 {
-	int ret;
+	int ret = 0;
+
+	/* If DCVS on GMU is enabled, skip initial default voting */
+	if (!device->host_based_dcvs)
+		return ret;
 
 	/* Request default DCVS level */
 	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
