@@ -9,6 +9,7 @@
 #include "adreno_gen7_0_0_snapshot.h"
 #include "adreno_gen7_2_0_snapshot.h"
 #include "adreno_gen7_9_0_snapshot.h"
+#include "adreno_gen7_14_0_snapshot.h"
 
 static struct kgsl_memdesc *gen7_capturescript;
 static struct kgsl_memdesc *gen7_crashdump_registers;
@@ -95,6 +96,32 @@ const struct gen7_snapshot_block_list gen7_9_0_snapshot_block_list = {
 	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
 	.index_registers = gen7_9_0_cp_indexed_reg_list,
 	.index_registers_len = ARRAY_SIZE(gen7_9_0_cp_indexed_reg_list),
+};
+
+const struct gen7_snapshot_block_list gen7_14_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen7_9_0_pre_crashdumper_gpu_registers,
+	.debugbus_blocks = gen7_14_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen7_14_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen7_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen7_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen7_cx_dbgc_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen7_cx_dbgc_debugbus_blocks),
+	.external_core_regs = gen7_14_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen7_14_0_external_core_regs),
+	.gmu_regs = gen7_14_0_gmu_registers,
+	.gmu_gx_regs = gen7_14_0_gmu_gx_registers,
+	.rscc_regs = gen7_14_0_rscc_registers,
+	.reg_list = gen7_14_0_reg_list,
+	.cx_misc_regs = gen7_14_0_cx_misc_registers,
+	.shader_blocks = gen7_14_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen7_14_0_shader_blocks),
+	.clusters = gen7_14_0_clusters,
+	.num_clusters = ARRAY_SIZE(gen7_14_0_clusters),
+	.sptp_clusters = gen7_14_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen7_14_0_sptp_clusters),
+	.post_crashdumper_regs = gen7_14_0_post_crashdumper_registers,
+	.index_registers = gen7_14_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_14_0_cp_indexed_reg_list),
 };
 
 #define GEN7_SP_READ_SEL_VAL(_location, _pipe, _statetype, _usptp, _sptp) \
@@ -269,8 +296,7 @@ static size_t gen7_legacy_snapshot_shader(struct kgsl_device *device,
 	 * AHB path might fail. Hence, skip SP_INST_TAG and SP_INST_DATA*
 	 * state types during snapshot dump in legacy flow.
 	 */
-	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
-		adreno_is_gen7_4_0(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
 		if (block->statetype == SP_INST_TAG ||
 			block->statetype == SP_INST_DATA ||
 			block->statetype == SP_INST_DATA_1 ||
@@ -685,18 +711,20 @@ static void gen7_snapshot_mempool(struct kgsl_device *device,
 {
 	/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
 	kgsl_regrmw(device, GEN7_CP_CHICKEN_DBG, 0x4, 0x4);
-	kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x4);
 
 	kgsl_snapshot_indexed_registers(device, snapshot,
 		GEN7_CP_MEM_POOL_DBG_ADDR, GEN7_CP_MEM_POOL_DBG_DATA,
 		0, 0x2200);
 
-	kgsl_snapshot_indexed_registers(device, snapshot,
-		GEN7_CP_BV_MEM_POOL_DBG_ADDR, GEN7_CP_BV_MEM_POOL_DBG_DATA,
-		0, 0x2200);
+	if (!adreno_is_gen7_14_0(ADRENO_DEVICE(device))) {
+		kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x4);
+		kgsl_snapshot_indexed_registers(device, snapshot,
+			GEN7_CP_BV_MEM_POOL_DBG_ADDR, GEN7_CP_BV_MEM_POOL_DBG_DATA,
+			0, 0x2200);
+		kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x0);
+	}
 
 	kgsl_regrmw(device, GEN7_CP_CHICKEN_DBG, 0x4, 0x0);
-	kgsl_regrmw(device, GEN7_CP_BV_CHICKEN_DBG, 0x4, 0x0);
 }
 
 static unsigned int gen7_read_dbgahb(struct kgsl_device *device,
@@ -1720,11 +1748,11 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 			gen7_snapshot_block_list->index_registers[i].data, 0,
 			gen7_snapshot_block_list->index_registers[i].size);
 
-	if (!adreno_is_gen7_9_x(adreno_dev)) {
+	if (!adreno_is_gen7_9_x(adreno_dev))
 		gen7_snapshot_br_roq(device, snapshot);
 
+	if (!adreno_is_gen7_9_x(adreno_dev) && !adreno_is_gen7_14_0(adreno_dev)) {
 		gen7_snapshot_bv_roq(device, snapshot);
-
 		gen7_snapshot_lpac_roq(device, snapshot);
 	}
 
