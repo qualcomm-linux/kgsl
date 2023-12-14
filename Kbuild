@@ -58,6 +58,12 @@ endif
 ifeq ($(CONFIG_ARCH_HOLI), y)
 	include $(KGSL_PATH)/config/gki_blair.conf
 endif
+ifeq ($(CONFIG_ARCH_SDM670), y)
+	include $(KGSL_PATH)/config/gki_qcs605.conf
+endif
+ifeq ($(CONFIG_ARCH_NIOBE), y)
+	include $(KGSL_PATH)/config/gki_niobe.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 
