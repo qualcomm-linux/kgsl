@@ -7,12 +7,6 @@
 #ifndef _ADRENO_HWSCHED_H_
 #define _ADRENO_HWSCHED_H_
 
-#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
-#include <msm_hw_fence.h>
-#else
-#include <linux/soc/qcom/msm_hw_fence.h>
-#endif
-
 #include "kgsl_sync.h"
 
 /* This structure represents inflight command object */
@@ -62,18 +56,6 @@ struct adreno_hwsched_ops {
 };
 
 /**
- * struct adreno_hw_fence - Container for hardware fences instance
- */
-struct adreno_hw_fence {
-	/** @handle: Handle for hardware fences */
-	void *handle;
-	/** @descriptor: Memory descriptor for hardware fences */
-	struct msm_hw_fence_mem_addr mem_descriptor;
-	/** @memdesc: Kgsl memory descriptor for hardware fences queue */
-	struct kgsl_memdesc memdesc;
-};
-
-/**
  * struct adreno_hwsched - Container for the hardware scheduler
  */
 struct adreno_hwsched {
@@ -109,8 +91,6 @@ struct adreno_hwsched {
 	/** @lsr_check_ws: Lsr work to update power stats */
 	struct work_struct lsr_check_ws;
 	/** @hw_fence: Container for the hw fences instance */
-	struct adreno_hw_fence hw_fence;
-	/** @hw_fence_cache: kmem cache for storing hardware output fences */
 	struct kmem_cache *hw_fence_cache;
 	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
 	atomic_t hw_fence_count;
@@ -123,6 +103,8 @@ struct adreno_hwsched {
 	struct kgsl_memdesc global_ctxtq;
 	/** @global_ctxt_gmu_registered: Whether global context is registered with gmu */
 	bool global_ctxt_gmu_registered;
+	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
+	struct kgsl_memdesc hw_fence_md;
 };
 
 /*

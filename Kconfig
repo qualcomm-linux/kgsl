@@ -100,3 +100,11 @@ config QCOM_KGSL_HIBERNATION
 	  Say 'Y' to enable hibernation support in kgsl. If enabled, kgsl
 	  will register necessary power manager callbacks to support
 	  hibernation.
+
+config QCOM_KGSL_SYNX
+	bool "Use synx APIs in KGSL for HW fences"
+	help
+	  Say 'Y' to enable synx API in kgsl. If enabled, kgsl  will use
+	  synx API for HW fence feature. This allows hardware fence inter-op
+	  between HW fence clients and SYNX clients. If not enabled, then
+	  kgsl will use msm_hw_fence APIs for hardware fence feature.

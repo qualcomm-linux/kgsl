@@ -1107,7 +1107,7 @@ static void drain_ctx_hw_fences_cpu(struct adreno_device *adreno_dev,
 
 	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
-		gen7_trigger_hw_fence_cpu(adreno_dev, entry);
+		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
 		gen7_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);

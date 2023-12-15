@@ -4,7 +4,6 @@
  * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <dt-bindings/soc/qcom,ipcc.h>
 #include <linux/dma-fence-array.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
@@ -21,13 +20,6 @@
 #include "kgsl_pwrctrl.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
-
-#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
-#include <msm_hw_fence.h>
-#else
-#include <linux/soc/qcom/msm_hw_fence.h>
-#endif
-
 
 #define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT + HFI_QUEUE_DISPATCH_MAX_CNT)
 
@@ -1658,7 +1650,7 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	 */
 	switch (desc->mem_kind) {
 	case HFI_MEMKIND_HW_FENCE:
-		entry->md = &adreno_dev->hwsched.hw_fence.memdesc;
+		entry->md = &adreno_dev->hwsched.hw_fence_md;
 		break;
 	case HFI_MEMKIND_MEMSTORE:
 		entry->md = device->memstore;
@@ -2087,7 +2079,7 @@ static int gen8_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_HW_FENCE, 1, 0);
 	if (ret && (ret == -ENOENT)) {
 		dev_err(&gmu->pdev->dev, "GMU doesn't support HW_FENCE feature\n");
-		adreno_hwsched_deregister_hw_fence(hwsched->hw_fence.handle);
+		adreno_hwsched_deregister_hw_fence(adreno_dev);
 		return 0;
 	}
 
@@ -3105,21 +3097,6 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *dr
 	return 0;
 }
 
-static int add_gmu_waiter(struct adreno_device *adreno_dev,
-	struct dma_fence *fence)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = msm_hw_fence_wait_update(adreno_dev->hwsched.hw_fence.handle,
-			&fence, 1, true);
-
-	if (ret)
-		dev_err_ratelimited(device->dev,
-			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
-			ret, fence->context, fence->seqno);
-
-	return ret;
-}
-
 static void populate_kgsl_fence(struct hfi_syncobj *obj,
 	struct dma_fence *fence)
 {
@@ -3151,6 +3128,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct hfi_submit_syncobj *cmd;
 	struct hfi_syncobj *obj = NULL;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	/* Add hfi_syncobj struct for sync object */
 	cmd_sizebytes = sizeof(*cmd) +
@@ -3190,7 +3168,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			 * If this sync object has a software only fence, make sure that it is
 			 * already signaled so that we can skip sending this fence to the GMU.
 			 */
-			if (!test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fences[j]->flags)) {
+			if (!kgsl_is_hw_fence(fences[j])) {
 				if (WARN(!dma_fence_is_signaled(fences[j]),
 					"sync object has unsignaled software fence"))
 					return -EINVAL;
@@ -3200,14 +3178,14 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			if (is_kgsl_fence(fences[j])) {
 				populate_kgsl_fence(obj, fences[j]);
 			} else {
-				int ret = add_gmu_waiter(adreno_dev, fences[j]);
+				int ret = kgsl_hw_fence_add_waiter(device, fences[j]);
 
 				if (ret) {
 					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
 					return ret;
 				}
 
-				if (test_bit(MSM_HW_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags) ||
+				if (kgsl_hw_fence_signaled(fences[j]) ||
 					test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags))
 					obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
 
@@ -3526,7 +3504,6 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_context *context = ktimeline->context;
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 	struct adreno_hw_fence_entry *entry = NULL;
-	struct msm_hw_fence_create_params params = {0};
 	/* Only allow a single log in a second */
 	static DEFINE_RATELIMIT_STATE(_rs, HZ, 1);
 	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
@@ -3535,17 +3512,8 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	int ret = 0;
 	bool destroy_hw_fence = true;
 
-	params.fence = &kfence->fence;
-	params.handle = &kfence->hw_fence_index;
-	kfence->hw_fence_handle = adreno_dev->hwsched.hw_fence.handle;
-
-	ret = msm_hw_fence_create(kfence->hw_fence_handle, &params);
-	if ((ret || IS_ERR_OR_NULL(params.handle))) {
-		if (__ratelimit(&_rs))
-			dev_err(device->dev, "Failed to create ctx:%d ts:%d hardware fence:%d\n",
-				kfence->context_id, kfence->timestamp, ret);
+	if (kgsl_hw_fence_create(device, kfence))
 		return;
-	}
 
 	spin_lock(&drawctxt->lock);
 	spin_lock(&hw_hfi->hw_fence.lock);
@@ -3612,7 +3580,7 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 
 done:
 	if (destroy_hw_fence) {
-		msm_hw_fence_destroy(kfence->hw_fence_handle, &kfence->fence);
+		kgsl_hw_fence_destroy(kfence);
 		if (entry)
 			gen8_remove_hw_fence_entry(adreno_dev, entry);
 	}
@@ -3955,23 +3923,6 @@ int gen8_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	return ret;
 }
 
-void gen8_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry)
-{
-	int ret = msm_hw_fence_update_txq(adreno_dev->hwsched.hw_fence.handle,
-			entry->cmd.hash_index, 0, 0);
-
-	if (ret) {
-		dev_err_ratelimited(adreno_dev->dev.dev,
-			"Failed to trigger hw fence via cpu: ctx:%d ts:%d ret:%d\n",
-			entry->drawctxt->base.id, (u32)entry->cmd.ts, ret);
-		return;
-	}
-
-	msm_hw_fence_trigger_signal(adreno_dev->hwsched.hw_fence.handle, IPCC_CLIENT_GPU,
-		IPCC_CLIENT_APSS, 0);
-}
-
 /* We don't want to unnecessarily wake the GMU to trigger hardware fences */
 static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
@@ -3980,7 +3931,7 @@ static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
 
-		gen8_trigger_hw_fence_cpu(adreno_dev, entry);
+		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
 
 		gen8_remove_hw_fence_entry(adreno_dev, entry);
 	}
