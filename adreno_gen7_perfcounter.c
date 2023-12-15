@@ -1134,7 +1134,6 @@ static const struct adreno_perfcount_group gen7_9_0_hwsched_perfcounter_groups
 		gen7_counter_gmu_perf_enable, gen7_counter_read_norestore),
 	GEN7_REGULAR_PERFCOUNTER_GROUP(UFC, ufc),
 	GEN7_BV_REGULAR_PERFCOUNTER_GROUP(CP, cp),
-	GEN7_BV_REGULAR_PERFCOUNTER_GROUP(PC, pc),
 	GEN7_BV_PERFCOUNTER_GROUP(PC, pc, gen7_counter_bv_enable, gen7_counter_read),
 	GEN7_BV_REGULAR_PERFCOUNTER_GROUP(VFD, vfd),
 	GEN7_BV_PERFCOUNTER_GROUP(VPC, vpc, gen7_counter_bv_enable, gen7_counter_read),
