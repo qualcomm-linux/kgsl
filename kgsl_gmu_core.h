@@ -180,6 +180,8 @@ enum gmu_vrb_idx {
 	VRB_WARMBOOT_SCRATCH_IDX = 1,
 	/* Contains the address of GMU trace buffer */
 	VRB_TRACE_BUFFER_ADDR_IDX = 2,
+	/* Contains the number of hw fence shadow table entries */
+	VRB_HW_FENCE_SHADOW_NUM_ENTRIES = 3,
 };
 
 /* For GMU Trace */
@@ -271,6 +273,7 @@ struct gmu_trace_header {
 enum gmu_trace_id {
 	GMU_TRACE_PREEMPT_TRIGGER = 1,
 	GMU_TRACE_PREEMPT_DONE = 2,
+	GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL = 3,
 	GMU_TRACE_MAX,
 };
 
@@ -284,6 +287,12 @@ struct trace_preempt_done {
 	u32 prev_rb;
 	u32 next_rb;
 	u32 ctx_switch_cntl;
+} __packed;
+
+struct trace_ext_hw_fence_signal {
+	u64 context;
+	u64 seq_no;
+	u32 flags;
 } __packed;
 
 /**

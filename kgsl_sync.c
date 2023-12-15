@@ -77,7 +77,7 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 	return -EINVAL;
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
 {
 	struct synx_import_params params;
 	u32 handle = 0;
@@ -98,10 +98,14 @@ int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence
 
 	/* release reference held by synx_import */
 	ret = synx_release(kgsl_synx.handle, handle);
-	if (ret)
+	if (ret) {
 		dev_err_ratelimited(device->dev,
 			"Failed to release wait fences ret:%d fence ctx:%llu ts:%llu\n",
 			ret, fence->context, fence->seqno);
+	} else {
+		if (hash_index)
+			*hash_index = handle;
+	}
 
 	return ret;
 }
@@ -207,14 +211,20 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 	return 0;
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
 {
-	int ret = msm_hw_fence_wait_update(kgsl_msm_hw_fence.handle, &fence, 1, true);
+	u64 handle = 0;
+	int ret = msm_hw_fence_wait_update_v2(kgsl_msm_hw_fence.handle, &fence, &handle, NULL, 1,
+			true);
 
 	if (ret)
 		dev_err_ratelimited(device->dev,
 			"Failed to add GMU as waiter ret:%d fence ctx:%llu ts:%llu\n",
 			ret, fence->context, fence->seqno);
+	else {
+		if (hash_index)
+			*hash_index = (u32)handle;
+	}
 
 	return ret;
 }

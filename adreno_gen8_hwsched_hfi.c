@@ -3092,7 +3092,8 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			if (is_kgsl_fence(fences[j])) {
 				populate_kgsl_fence(obj, fences[j]);
 			} else {
-				int ret = kgsl_hw_fence_add_waiter(device, fences[j]);
+				int ret = kgsl_hw_fence_add_waiter(device, fences[j],
+					&obj->hash_index);
 
 				if (ret) {
 					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
@@ -3110,6 +3111,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 				obj->seq_no, obj->flags, fences[j]->ops->get_timeline_name ?
 				fences[j]->ops->get_timeline_name(fences[j]) : "unknown");
 
+			obj->header = FIELD_PREP(GENMASK(15, 0), sizeof(*obj) >> 2);
 			obj++;
 		}
 	}

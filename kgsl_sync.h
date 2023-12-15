@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2014,2018-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SYNC_H
 #define __KGSL_SYNC_H
@@ -121,7 +121,7 @@ void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *
 
 int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence);
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count);
 
@@ -241,7 +241,7 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 	return -EINVAL;
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
 {
 	return -EINVAL;
 }

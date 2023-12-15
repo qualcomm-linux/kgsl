@@ -468,6 +468,31 @@ static int gmu_clock_set_rate(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
+{
+	struct device_node *node = NULL;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	u32 shadow_num_entries = 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
+		return;
+
+	node = of_find_node_by_name(NULL, "qcom,hw-fence");
+	if (!node)
+		return;
+
+	if (of_property_read_u32(node, "qcom,hw-fence-table-entries",
+		&shadow_num_entries)) {
+		dev_err(&gmu->pdev->dev, "qcom,hw-fence-table-entries property not found\n");
+		shadow_num_entries = 8192;
+	}
+
+	of_node_put(node);
+
+	gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_HW_FENCE_SHADOW_NUM_ENTRIES,
+		shadow_num_entries);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -502,6 +527,8 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
+	_get_hw_fence_entries(adreno_dev);
+
 	gen8_gmu_register_config(adreno_dev);
 
 	ret = gen8_gmu_version_info(adreno_dev);
@@ -518,7 +545,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
-	adreno_hwsched_register_hw_fence(adreno_dev);
+	/* This is the minimum GMU FW HFI version required to enable hw fences */
+	if (GMU_VER_MINOR(gmu->ver.hfi) >= 7)
+		adreno_hwsched_register_hw_fence(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)

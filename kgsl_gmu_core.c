@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -246,6 +246,14 @@ static void stream_trace_data(struct gmu_trace_packet *pkt)
 
 		trace_adreno_preempt_done(data->prev_rb, data->next_rb,
 			data->ctx_switch_cntl, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL: {
+		struct trace_ext_hw_fence_signal *data =
+				(struct trace_ext_hw_fence_signal *)pkt->payload;
+
+		trace_adreno_ext_hw_fence_signal(data->context, data->seq_no,
+			data->flags, pkt->ticks);
 		break;
 		}
 	default: {
