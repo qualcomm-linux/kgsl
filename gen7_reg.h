@@ -911,7 +911,12 @@
 #define GEN7_SP_PERFCTR_SP_SEL_35           0xaea3
 
 /* TP registers */
+#define GEN7_TPL1_DBG_ECO_CNTL1             0xb602
 #define GEN7_TPL1_NC_MODE_CNTL              0xb604
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_1   0xb609
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_2   0xb60a
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_3   0xb60b
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4   0xb60c
 #define GEN7_TPL1_PERFCTR_TP_SEL_0          0xb610
 #define GEN7_TPL1_PERFCTR_TP_SEL_1          0xb611
 #define GEN7_TPL1_PERFCTR_TP_SEL_2          0xb612
