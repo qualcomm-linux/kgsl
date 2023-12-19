@@ -2708,7 +2708,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 			ADRENO_IFPC,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
-		.uche_gmem_alignment = SZ_16M,
+		.uche_gmem_alignment = SZ_64M,
 		.gmem_size = 12 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
