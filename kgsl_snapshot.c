@@ -403,7 +403,7 @@ static size_t kgsl_snapshot_dump_indexed_regs_v2(struct kgsl_device *device,
 		(struct kgsl_snapshot_indexed_regs_v2 *)buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
 
-	if (remain < (iregs->count * 4 * 3) + sizeof(*header)) {
+	if (remain < ((iregs->count * 4) + sizeof(*header))) {
 		SNAPSHOT_ERR_NOMEM(device, "INDEXED REGS");
 		return 0;
 	}
@@ -418,7 +418,7 @@ static size_t kgsl_snapshot_dump_indexed_regs_v2(struct kgsl_device *device,
 	kgsl_regmap_read_indexed_interleaved(&device->regmap, iregs->index,
 		iregs->data, data, iregs->start, iregs->count);
 
-	return (iregs->count * 4 * 3) + sizeof(*header);
+	return (iregs->count * 4) + sizeof(*header);
 }
 
 void kgsl_snapshot_indexed_registers_v2(struct kgsl_device *device,
