@@ -598,13 +598,16 @@ void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
-		regulator_set_mode(pwr->cx_gdsc, REGULATOR_MODE_IDLE);
+	/* ADRENO_QUIRK_CX_GDSC quirk is not supported for genpd */
+	WARN_ON_ONCE(pwr->cx_pd && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC));
+
+	if (pwr->cx_regulator && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
+		regulator_set_mode(pwr->cx_regulator, REGULATOR_MODE_IDLE);
 
 	kgsl_pwrctrl_disable_cx_gdsc(device);
 
-	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
-		regulator_set_mode(pwr->cx_gdsc, REGULATOR_MODE_NORMAL);
+	if (pwr->cx_regulator && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
+		regulator_set_mode(pwr->cx_regulator, REGULATOR_MODE_NORMAL);
 }
 
 int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
@@ -1836,10 +1839,8 @@ static int a6xx_gmu_init(struct adreno_device *adreno_dev)
 
 static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 {
-	int ret = 0;
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* If SPTP_RAC is on, turn off SPTP_RAC HS */
 	a6xx_gmu_sptprac_disable(adreno_dev);
@@ -1881,47 +1882,35 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/*
 	 * This is based on the assumption that GMU is the only one controlling
-	 * the GX HS. This code path is the only client voting for GX through
-	 * the regulator interface.
+	 * the GX HS. This code path is the only client voting for GX from linux
+	 * kernel.
 	 */
-	if (pwr->gx_gdsc) {
-		if (a6xx_gmu_gx_is_on(adreno_dev)) {
-			/* Switch gx gdsc control from GMU to CPU
-			 * force non-zero reference count in clk driver
-			 * so next disable call will turn
-			 * off the GDSC
-			 */
-			ret = regulator_enable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx enable %d\n", ret);
+	if (!a6xx_gmu_gx_is_on(adreno_dev))
+		return;
 
-			/*
-			 * Toggle the loop_en bit, across disabling the gx gdsc,
-			 * with a delay of 10 XO cycles before disabling gx
-			 * gdsc. This is to prevent CPR measurements from
-			 * failing.
-			 */
-			if (adreno_is_a660(adreno_dev)) {
-				gmu_core_regrmw(device, A6XX_GPU_CPR_FSM_CTL,
-					1, 0);
-				ndelay(520);
-			}
+	/*
+	 * Switch gx gdsc control from GMU to CPU force non-zero reference
+	 * count in clk driver so next disable call will turn off the GDSC
+	 */
+	kgsl_pwrctrl_enable_gx_gdsc(device);
 
-			ret = regulator_disable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx disable %d\n", ret);
-
-			if (adreno_is_a660(adreno_dev))
-				gmu_core_regrmw(device, A6XX_GPU_CPR_FSM_CTL,
-					1, 1);
-
-			if (a6xx_gmu_gx_is_on(adreno_dev))
-				dev_err(&gmu->pdev->dev,
-					"gx is stuck on\n");
-		}
+	/*
+	 * Toggle the loop_en bit, across disabling the gx gdsc, with a delay
+	 * of 10 XO cycles before disabling gx gdsc. This is to prevent CPR
+	 * measurements from failing.
+	 */
+	if (adreno_is_a660(adreno_dev)) {
+		gmu_core_regrmw(device, A6XX_GPU_CPR_FSM_CTL, 1, 0);
+		ndelay(520);
 	}
+
+	kgsl_pwrctrl_disable_gx_gdsc(device);
+
+	if (adreno_is_a660(adreno_dev))
+		gmu_core_regrmw(device, A6XX_GPU_CPR_FSM_CTL, 1, 1);
+
+	if (a6xx_gmu_gx_is_on(adreno_dev))
+		dev_err(&gmu->pdev->dev, "gx is stuck on\n");
 }
 
 /*
@@ -2904,8 +2893,8 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	/* Setup any rdpm register ranges */
 	a6xx_gmu_rdpm_probe(gmu, device);
 
-	/* Set up GMU regulators */
-	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
+	/* Set up GMU gdscs */
+	ret = kgsl_pwrctrl_probe_gdscs(device, pdev);
 	if (ret)
 		return ret;
 

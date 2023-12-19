@@ -534,7 +534,10 @@ bool a6xx_gx_is_on(struct adreno_device *adreno_dev)
 
 	clk_on = __clk_is_enabled(pwr->grp_clks[0]);
 
-	gdsc_on = regulator_is_enabled(pwr->gx_gdsc);
+	if (pwr->gx_pd)
+		gdsc_on = kgsl_genpd_is_enabled(pwr->gx_pd);
+	else
+		gdsc_on = regulator_is_enabled(pwr->gx_regulator);
 
 	return (gdsc_on & clk_on);
 }
