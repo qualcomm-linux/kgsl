@@ -331,6 +331,9 @@ static void kgsl_destroy_ion(struct kgsl_memdesc *memdesc)
 		struct kgsl_mem_entry, memdesc);
 	struct kgsl_dma_buf_meta *metadata = entry->priv_data;
 
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
 	if (metadata != NULL) {
 		remove_dmabuf_list(metadata);
 		dma_buf_unmap_attachment(metadata->attach, memdesc->sgt, DMA_BIDIRECTIONAL);
@@ -353,6 +356,9 @@ static void kgsl_destroy_anon(struct kgsl_memdesc *memdesc)
 	int i = 0, j;
 	struct scatterlist *sg;
 	struct page *page;
+
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
 
 	for_each_sg(memdesc->sgt->sgl, sg, memdesc->sgt->nents, i) {
 		page = sg_page(sg);
