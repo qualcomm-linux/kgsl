@@ -847,10 +847,12 @@ int gen7_start(struct adreno_device *adreno_dev)
 	 */
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev)
-		|| adreno_is_gen7_2_1(adreno_dev)) {
+		|| adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_11_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
-		kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
+		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
+		if (adreno_dev->lpac_enabled)
+			kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
 	}
 
 	_set_secvid(device);
@@ -1626,7 +1628,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
-	device->pwrctrl.cx_gdsc_offset = GEN7_GPU_CC_CX_GDSCR;
+	device->pwrctrl.cx_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
+					GEN7_11_0_GPU_CC_CX_GDSCR : GEN7_GPU_CC_CX_GDSCR;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
