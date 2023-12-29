@@ -1361,10 +1361,7 @@ static void _cpu_perf_vote_req_init(u32 cpu)
 
 static void _cpu_perf_vote_update(u32 cpu, u32 freq)
 {
-	cpus_read_lock();
-	if (cpu_online(cpu))
-		freq_qos_update_request(&per_cpu(qos_min_req, cpu), freq);
-	cpus_read_unlock();
+	freq_qos_update_request(&per_cpu(qos_min_req, cpu), freq);
 }
 
 /*
