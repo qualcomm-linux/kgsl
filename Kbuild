@@ -32,6 +32,9 @@ endif
 ifeq ($(CONFIG_ARCH_KONA), y)
         include $(KGSL_PATH)/config/gki_kona.conf
 endif
+ifeq ($(CONFIG_ARCH_SDM670), y)
+	include $(KGSL_PATH)/config/gki_qcs605.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
 

@@ -408,6 +408,7 @@ struct kgsl_sharedmem_bind_op {
 	void (*callback)(struct kgsl_sharedmem_bind_op *op);
 	void *data;
 	struct work_struct work;
+	struct completion comp;
 	struct kref ref;
 };
 
