@@ -518,11 +518,6 @@ struct adreno_dispatch_ops {
  * @dev: Reference to struct kgsl_device
  * @priv: Holds the private flags specific to the adreno_device
  * @chipid: Chip ID specific to the GPU
- * @cx_misc_len: Length of the CX MISC register block
- * @cx_misc_virt: Pointer where the CX MISC block is mapped
- * @isense_base: Base physical address of isense block
- * @isense_len: Length of the isense register block
- * @isense_virt: Pointer where isense block is mapped
  * @gpucore: Pointer to the adreno_gpu_core structure
  * @pfp_fw: Buffer which holds the pfp ucode
  * @pfp_fw_size: Size of pfp ucode buffer
@@ -592,11 +587,6 @@ struct adreno_device {
 	unsigned int chipid;
 	/** @uche_gmem_base: Base address of GMEM for UCHE access */
 	u64 uche_gmem_base;
-	unsigned int cx_misc_len;
-	void __iomem *cx_misc_virt;
-	unsigned long isense_base;
-	unsigned int isense_len;
-	void __iomem *isense_virt;
 	const struct adreno_gpu_core *gpucore;
 	struct adreno_firmware fw[2];
 	size_t gpmu_cmds_size;
@@ -737,8 +727,6 @@ struct adreno_device {
 	u32 ifpc_hyst;
 	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
 	u32 ifpc_hyst_floor;
-	/** @cx_misc_base: CX MISC register block base offset */
-	u32 cx_misc_base;
 	/*
 	 * @no_restore_count: Keep track of perfcounter requests that don't have
 	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
@@ -1086,15 +1074,6 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 long adreno_ioctl_perfcounter_put(struct kgsl_device_private *dev_priv,
 	unsigned int cmd, void *data);
 
-void adreno_cx_misc_regread(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int *value);
-void adreno_cx_misc_regwrite(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int value);
-void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
-		unsigned int offsetwords,
-		unsigned int mask, unsigned int bits);
-void adreno_isense_regread(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int *value);
 bool adreno_gx_is_on(struct adreno_device *adreno_dev);
 
 u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);

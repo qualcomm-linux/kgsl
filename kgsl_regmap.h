@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef KGSL_REGMAP_H
@@ -49,7 +49,7 @@ struct kgsl_regmap {
 	 */
 	struct resource *base;
 	/** @region: Array of regions for this regmap */
-	struct kgsl_regmap_region region[4];
+	struct kgsl_regmap_region region[5];
 	/** @count: Number of active regions in @region */
 	int count;
 };

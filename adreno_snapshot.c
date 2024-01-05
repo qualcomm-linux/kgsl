@@ -1299,37 +1299,3 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 	return (count * 4);
 }
 
-size_t adreno_snapshot_cx_misc_registers(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const u32 *ptr = (const u32 *)priv;
-	u32 *data = (unsigned int *)buf;
-	int count = 0, k;
-
-	/* Figure out how many registers we are going to dump */
-	count = adreno_snapshot_regs_count(ptr);
-
-	if (remain < (count * sizeof(u32))) {
-		SNAPSHOT_ERR_NOMEM(device, "CX_MISC REGISTERS");
-		return 0;
-	}
-
-	for (; ptr[0] != UINT_MAX; ptr += 2) {
-		int cnt = REG_COUNT(ptr);
-
-		if (cnt == 1)
-			*data++ = BIT(31) | ptr[0];
-		else {
-			*data++ = ptr[0];
-			*data++ = cnt;
-		}
-
-		for (k = ptr[0]; k <= ptr[1]; k++)
-			adreno_cx_misc_regread(adreno_dev,
-					k - adreno_dev->cx_misc_base, data++);
-	}
-
-	/* Return the size of the section */
-	return (count * sizeof(u32));
-}

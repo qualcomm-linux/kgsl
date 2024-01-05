@@ -1562,9 +1562,15 @@ static void gen7_cx_misc_regs_snapshot(struct kgsl_device *device,
 	}
 
 done:
+	regs_ptr = (const u32 *)gen7_snapshot_block_list->cx_misc_regs;
+
+	if (!kgsl_regmap_valid_offset(&device->regmap, regs_ptr[0])) {
+		WARN_ONCE(1, "cx_misc registers are not defined in device tree");
+		return;
+	}
+
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
-		snapshot, adreno_snapshot_cx_misc_registers,
-		(void *)gen7_snapshot_block_list->cx_misc_regs);
+		snapshot, adreno_snapshot_registers_v2, (void *)regs_ptr);
 }
 
 static void gen7_snapshot_br_roq(struct kgsl_device *device,

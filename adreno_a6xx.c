@@ -1572,9 +1572,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL1,
 			A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
 	else
-		adreno_cx_misc_regrmw(adreno_dev,
-				A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
-				A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
+		kgsl_regrmw(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
+			A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
 
 	/*
 	 * On A660, the SCID programming for UCHE traffic is done in
@@ -1614,10 +1613,8 @@ static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev)
 
 	gpuhtw_scid = llcc_get_slice_id(adreno_dev->gpuhtw_llc_slice);
 
-	adreno_cx_misc_regrmw(adreno_dev,
-			A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
-			A6XX_GPUHTW_LLC_SCID_MASK,
-			gpuhtw_scid << A6XX_GPUHTW_LLC_SCID_SHIFT);
+	kgsl_regrmw(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
+		A6XX_GPUHTW_LLC_SCID_MASK, gpuhtw_scid << A6XX_GPUHTW_LLC_SCID_SHIFT);
 }
 
 /*
@@ -1642,8 +1639,7 @@ static void a6xx_llc_enable_overrides(struct adreno_device *adreno_dev)
 	 *      writenoallocoverrideen=1
 	 *      write-no-alloc=1 - Do not allocates lines on write miss
 	 */
-	adreno_cx_misc_regwrite(adreno_dev,
-			A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0, 0x3);
+	kgsl_regwrite(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0, 0x3);
 }
 
 static const char *uche_client[7][3] = {

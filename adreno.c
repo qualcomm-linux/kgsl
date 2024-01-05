@@ -8,7 +8,6 @@
 #include <linux/firmware.h>
 #include <linux/input.h>
 #include <linux/interconnect.h>
-#include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_fdt.h>
@@ -907,40 +906,6 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static void adreno_cx_misc_probe(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct resource *res;
-
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-					   "cx_misc");
-
-	if (res == NULL)
-		return;
-
-	adreno_dev->cx_misc_len = resource_size(res);
-	adreno_dev->cx_misc_virt = devm_ioremap(&device->pdev->dev,
-					res->start, adreno_dev->cx_misc_len);
-}
-
-static void adreno_isense_probe(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct resource *res;
-
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-			"isense_cntl");
-	if (res == NULL)
-		return;
-
-	adreno_dev->isense_base = res->start - device->regmap.base->start;
-	adreno_dev->isense_len = resource_size(res);
-	adreno_dev->isense_virt = devm_ioremap(&device->pdev->dev, res->start,
-					adreno_dev->isense_len);
-	if (adreno_dev->isense_virt == NULL)
-		dev_warn(device->dev, "isense ioremap failed\n");
-}
-
 /* Read the fuse through the new and fancy nvmem method */
 static int adreno_read_speed_bin(struct platform_device *pdev)
 {
@@ -1324,9 +1289,9 @@ int adreno_device_probe(struct platform_device *pdev,
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
-	adreno_cx_misc_probe(device);
+	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
 
-	adreno_isense_probe(device);
+	kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL);
 
 	/* Allocate the memstore for storing timestamps and other useful info */
 
@@ -2708,84 +2673,11 @@ int adreno_suspend_context(struct kgsl_device *device)
 	return adreno_idle(device);
 }
 
-void adreno_cx_misc_regread(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int *value)
-{
-	unsigned int cx_misc_offset;
-
-	WARN_ONCE(!adreno_dev->cx_misc_virt,
-		  "cx_misc region is not defined in device tree");
-
-	cx_misc_offset = (offsetwords << 2);
-	if (!adreno_dev->cx_misc_virt ||
-		(cx_misc_offset >= adreno_dev->cx_misc_len))
-		return;
-
-	*value = __raw_readl(adreno_dev->cx_misc_virt + cx_misc_offset);
-
-	/*
-	 * ensure this read finishes before the next one.
-	 * i.e. act like normal readl()
-	 */
-	rmb();
-}
-
-void adreno_isense_regread(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int *value)
-{
-	unsigned int isense_offset;
-
-	isense_offset = (offsetwords << 2);
-	if (!adreno_dev->isense_virt ||
-		(isense_offset >= adreno_dev->isense_len))
-		return;
-
-	*value =  __raw_readl(adreno_dev->isense_virt + isense_offset);
-
-	/*
-	 * ensure this read finishes before the next one.
-	 * i.e. act like normal readl()
-	 */
-	rmb();
-}
-
 bool adreno_gx_is_on(struct adreno_device *adreno_dev)
 {
 	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
 
 	return gpudev->gx_is_on(adreno_dev);
-}
-
-void adreno_cx_misc_regwrite(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int value)
-{
-	unsigned int cx_misc_offset;
-
-	WARN_ONCE(!adreno_dev->cx_misc_virt,
-		  "cx_misc region is not defined in device tree");
-
-	cx_misc_offset = (offsetwords << 2);
-	if (!adreno_dev->cx_misc_virt ||
-		(cx_misc_offset >= adreno_dev->cx_misc_len))
-		return;
-
-	/*
-	 * ensure previous writes post before this one,
-	 * i.e. act like normal writel()
-	 */
-	wmb();
-	__raw_writel(value, adreno_dev->cx_misc_virt + cx_misc_offset);
-}
-
-void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
-		unsigned int offsetwords,
-		unsigned int mask, unsigned int bits)
-{
-	unsigned int val = 0;
-
-	adreno_cx_misc_regread(adreno_dev, offsetwords, &val);
-	val &= ~mask;
-	adreno_cx_misc_regwrite(adreno_dev, offsetwords, val | bits);
 }
 
 void adreno_profile_submit_time(struct adreno_submit_time *time)
