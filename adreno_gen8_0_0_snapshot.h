@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_0_0_SNAPSHOT_H
@@ -1888,7 +1888,6 @@ static struct gen8_cp_indexed_reg gen8_0_0_cp_mempool_reg_list[] = {
 static struct gen8_reg_list gen8_0_0_reg_list[] = {
 	{ UNSLICE, gen8_0_0_gpu_registers },
 	{ SLICE, gen8_0_0_gpu_slice_registers },
-	{ UNSLICE, gen8_0_0_cx_misc_registers },
 	{ UNSLICE, gen8_0_0_dbgc_registers },
 	{ SLICE, gen8_0_0_dbgc_slice_registers },
 	{ UNSLICE, gen8_0_0_cx_dbgc_registers },
