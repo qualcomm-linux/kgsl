@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
@@ -921,7 +921,7 @@ static void gen8_process_syncobj_query_work(struct kthread_work *work)
 			dev_err(&gmu->pdev->dev, "Missing sync object ctx:%d ts:%d retired:%d\n",
 				context->id, cmd->sync_obj_ts, hdr->sync_obj_ts);
 			gmu_core_fault_snapshot(device);
-			gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 		}
 	}
 
@@ -1379,7 +1379,7 @@ static irqreturn_t gen8_hwsched_hfi_handler(int irq, void *data)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"GMU CM3 fault interrupt received\n");
 
-		gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+		gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	/* Ignore OOB bits */
@@ -2954,7 +2954,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -2966,7 +2966,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -4020,7 +4020,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		 * Make sure we send all fences from this context to the TxQueue after recovery
 		 */
 		move_detached_context_hardware_fences(adreno_dev, drawctxt);
-		gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+		gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		goto done;
 	}
