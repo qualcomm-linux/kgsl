@@ -444,9 +444,6 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 
 	}
 
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return;
-
 	read_lock(&device->context_lock);
 	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
 	read_unlock(&device->context_lock);
@@ -520,6 +517,8 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
+
+	adreno_hwsched_register_hw_fence(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)

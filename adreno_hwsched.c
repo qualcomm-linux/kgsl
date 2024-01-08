@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
@@ -2232,10 +2232,6 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	int ret;
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
-		return;
-
-	/* Enable hardware fences only if context queues are enabled */
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
 		return;
 
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags))
