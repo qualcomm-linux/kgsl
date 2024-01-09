@@ -493,6 +493,52 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 		shadow_num_entries);
 }
 
+static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+
+	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
+		return;
+
+	if (hw_hfi->hw_fence.soccp_rproc)
+		return;
+
+	hw_hfi->hw_fence.soccp_rproc = gmu_core_soccp_vote_init(&gmu->pdev->dev);
+	if (!IS_ERR(hw_hfi->hw_fence.soccp_rproc))
+		return;
+
+	/* Disable hw fences */
+	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
+}
+
+static void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+
+	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
+		return;
+
+	if (!gmu_core_soccp_vote(&gmu->pdev->dev, &gmu->flags, hw_hfi->hw_fence.soccp_rproc,
+		pwr_on))
+		return;
+
+	/* Make sure no more hardware fences are created */
+	spin_lock(&hw_hfi->hw_fence.lock);
+	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hw_hfi->hw_fence.flags);
+	spin_unlock(&hw_hfi->hw_fence.lock);
+
+	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
+
+	/*
+	 * It is possible that some hardware fences were created while we were in slumber. Since
+	 * soccp power vote failed, these hardware fences may never be signaled. Hence, log them
+	 * for debug purposes.
+	 */
+	adreno_hwsched_log_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -549,6 +595,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (GMU_VER_MINOR(gmu->ver.hfi) >= 7)
 		adreno_hwsched_register_hw_fence(adreno_dev);
 
+	gen8_hwsched_soccp_vote_init(adreno_dev);
+
+	gen8_hwsched_soccp_vote(adreno_dev, true);
+
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -580,6 +630,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 err:
 	gen8_gmu_irq_disable(adreno_dev);
+	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
 		gen8_gmu_suspend(adreno_dev);
@@ -626,6 +677,8 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 
 	gen8_gmu_irq_enable(adreno_dev);
 
+	gen8_hwsched_soccp_vote(adreno_dev, true);
+
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -647,6 +700,7 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	return 0;
 err:
 	gen8_gmu_irq_disable(adreno_dev);
+	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
 		gen8_gmu_suspend(adreno_dev);
@@ -1231,6 +1285,8 @@ no_gx_power:
 	kgsl_pwrscale_sleep(device);
 
 	kgsl_pwrctrl_clear_l3_vote(device);
+
+	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 
