@@ -1499,6 +1499,9 @@ static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	if (gen7_gmu_gx_is_on(adreno_dev))
 		kgsl_regwrite(device, GEN7_RBBM_SW_RESET_CMD, 0x1);
 
+	/* Make sure above writes are posted before turning off power resources */
+	wmb();
+
 	/* Allow the software reset to complete */
 	udelay(100);
 
