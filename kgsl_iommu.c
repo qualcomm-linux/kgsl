@@ -185,6 +185,61 @@ static struct page *iommu_get_guard_page(struct kgsl_memdesc *memdesc)
 	return kgsl_guard_page;
 }
 
+static size_t iommu_pgsize(unsigned long pgsize_bitmap, unsigned long iova,
+		phys_addr_t paddr, size_t size, size_t *count)
+{
+	unsigned int pgsize_idx, pgsize_idx_next;
+	unsigned long pgsizes;
+	size_t offset, pgsize, pgsize_next;
+	unsigned long addr_merge = paddr | iova;
+
+	/* Page sizes supported by the hardware and small enough for @size */
+	pgsizes = pgsize_bitmap & GENMASK(__fls(size), 0);
+
+	/* Constrain the page sizes further based on the maximum alignment */
+	if (likely(addr_merge))
+		pgsizes &= GENMASK(__ffs(addr_merge), 0);
+
+	/* Make sure we have at least one suitable page size */
+	if (!pgsizes)
+		return 0;
+
+	/* Pick the biggest page size remaining */
+	pgsize_idx = __fls(pgsizes);
+	pgsize = BIT(pgsize_idx);
+	if (!count)
+		return pgsize;
+
+	/* Find the next biggest support page size, if it exists */
+	pgsizes = pgsize_bitmap & ~GENMASK(pgsize_idx, 0);
+	if (!pgsizes)
+		goto out_set_count;
+
+	pgsize_idx_next = __ffs(pgsizes);
+	pgsize_next = BIT(pgsize_idx_next);
+
+	/*
+	 * There's no point trying a bigger page size unless the virtual
+	 * and physical addresses are similarly offset within the larger page.
+	 */
+	if ((iova ^ paddr) & (pgsize_next - 1))
+		goto out_set_count;
+
+	/* Calculate the offset to the next page size alignment boundary */
+	offset = pgsize_next - (addr_merge & (pgsize_next - 1));
+
+	/*
+	 * If size is big enough to accommodate the larger page, reduce
+	 * the number of smaller pages.
+	 */
+	if (offset + pgsize_next <= size)
+		size = offset;
+
+out_set_count:
+	*count = size >> pgsize_idx;
+	return pgsize;
+}
+
 static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
@@ -199,10 +254,27 @@ static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t unmapped;
+	size_t unmapped = 0;
 
-	unmapped = ops->unmap_pages(ops, gpuaddr, PAGE_SIZE,
-				    size >> PAGE_SHIFT, NULL);
+	while (unmapped < size) {
+		size_t ret, size_to_unmap, remaining, pgcount;
+
+		remaining = (size - unmapped);
+		size_to_unmap = iommu_pgsize(pt->cfg.pgsize_bitmap,
+				gpuaddr, gpuaddr, remaining, &pgcount);
+		if (size_to_unmap == 0)
+			break;
+
+		ret = ops->unmap_pages(ops, gpuaddr, size_to_unmap,
+				pgcount, NULL);
+
+		if (ret == 0)
+			break;
+
+		gpuaddr += ret;
+		unmapped += ret;
+	}
+
 	if (unmapped != size)
 		return -EINVAL;
 
