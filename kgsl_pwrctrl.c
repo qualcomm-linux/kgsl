@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -700,6 +700,9 @@ static ssize_t __force_on_store(struct device *dev,
 	unsigned int val = 0;
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	int ret;
+
+	if (gmu_core_gpmu_isenabled(device))
+		return -EOPNOTSUPP;
 
 	ret = kstrtou32(buf, 0, &val);
 	if (ret)
@@ -1438,8 +1441,12 @@ int kgsl_register_gdsc_notifier(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
-	return devm_regulator_register_notifier(pwr->cx_gdsc, &pwr->cx_gdsc_nb);
+	if (!IS_ERR_OR_NULL(pwr->cx_gdsc)) {
+		pwr->cx_gdsc_nb.notifier_call = kgsl_cx_gdsc_event;
+		return devm_regulator_register_notifier(pwr->cx_gdsc, &pwr->cx_gdsc_nb);
+	}
+
+	return 0;
 }
 
 static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
@@ -1462,7 +1469,16 @@ static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
 			&pwr->power_flags)) {
 			kgsl_mmu_send_tlb_hint(&device->mmu, true);
 			trace_kgsl_rail(device, state);
+
+			/* Set the parent in retention voltage to disable CPR interrupts */
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent,
+					pwr->gx_gdsc_parent_min_corner);
+
 			kgsl_pwrctrl_disable_gx_gdsc(device);
+
+			/* Remove the vote for the vdd parent supply */
+			kgsl_regulator_set_voltage(device->dev, pwr->gx_gdsc_parent, 0);
+
 			kgsl_pwrctrl_disable_cx_gdsc(device);
 		}
 	} else {

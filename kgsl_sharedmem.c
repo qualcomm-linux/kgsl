@@ -11,6 +11,7 @@
 #include <linux/random.h>
 #include <linux/shmem_fs.h>
 #include <linux/sched/signal.h>
+#include <linux/version.h>
 
 #include "kgsl_device.h"
 #include "kgsl_pool.h"
@@ -706,16 +707,32 @@ static void _dma_cache_op(struct device *dev, struct page *page,
 	sg_set_page(&sgl, page, PAGE_SIZE, 0);
 	sg_dma_address(&sgl) = page_to_phys(page);
 
+	/*
+	 * APIs for Cache Maintenance Operations are updated in kernel
+	 * version 6.1. Prior to 6.1, dma_sync_sg_for_device() with
+	 * DMA_FROM_DEVICE as direction triggers cache invalidate and
+	 * clean whereas in kernel version 6.1, it triggers only cache
+	 * clean. Hence use dma_sync_sg_for_cpu() for cache invalidate
+	 * for kernel version 6.1 and above.
+	 */
+
 	switch (op) {
 	case KGSL_CACHE_OP_FLUSH:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_TO_DEVICE);
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+		dma_sync_sg_for_cpu(dev, &sgl, 1, DMA_FROM_DEVICE);
+#else
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_FROM_DEVICE);
+#endif
 		break;
 	case KGSL_CACHE_OP_CLEAN:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_TO_DEVICE);
 		break;
 	case KGSL_CACHE_OP_INV:
 		dma_sync_sg_for_device(dev, &sgl, 1, DMA_FROM_DEVICE);
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+		dma_sync_sg_for_cpu(dev, &sgl, 1, DMA_FROM_DEVICE);
+#endif
 		break;
 	}
 }
@@ -993,6 +1010,9 @@ static void kgsl_contiguous_free(struct kgsl_memdesc *memdesc)
 	if (!memdesc->hostptr)
 		return;
 
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.coherent);
 
 	_kgsl_contiguous_free(memdesc);
@@ -1218,7 +1238,21 @@ void kgsl_page_sync(struct device *dev, struct page *page,
 	sg_set_page(&sg, page, size, 0);
 	sg_dma_address(&sg) = page_to_phys(page);
 
-	dma_sync_sg_for_device(dev, &sg, 1, dir);
+	/*
+	 * APIs for Cache Maintenance Operations are updated in kernel
+	 * version 6.1. Prior to 6.1, dma_sync_sg_for_device() with
+	 * DMA_BIDIRECTIONAL as direction triggers cache invalidate and
+	 * clean whereas in kernel version 6.1, it triggers only cache
+	 * clean. Hence use dma_sync_sg_for_cpu() for cache invalidate
+	 * for kernel version 6.1 and above.
+	 */
+
+	if ((dir == DMA_BIDIRECTIONAL) &&
+		KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE) {
+		dma_sync_sg_for_device(dev, &sg, 1, DMA_TO_DEVICE);
+		dma_sync_sg_for_cpu(dev, &sg, 1, DMA_FROM_DEVICE);
+	} else
+		dma_sync_sg_for_device(dev, &sg, 1, dir);
 }
 
 void kgsl_zero_page(struct page *p, unsigned int order,
@@ -1327,6 +1361,9 @@ static void kgsl_free_pages(struct kgsl_memdesc *memdesc)
 	kgsl_paged_unmap_kernel(memdesc);
 	WARN_ON(memdesc->hostptr);
 
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
 
 	_kgsl_free_pages(memdesc);
@@ -1343,6 +1380,9 @@ static void kgsl_free_system_pages(struct kgsl_memdesc *memdesc)
 
 	kgsl_paged_unmap_kernel(memdesc);
 	WARN_ON(memdesc->hostptr);
+
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
 
 	atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
 
@@ -1420,7 +1460,12 @@ static void kgsl_free_secure_system_pages(struct kgsl_memdesc *memdesc)
 {
 	int i;
 	struct scatterlist *sg;
-	int ret = kgsl_unlock_sgt(memdesc->sgt);
+	int ret;
+
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
+	ret = kgsl_unlock_sgt(memdesc->sgt);
 
 	if (ret) {
 		/*
@@ -1450,8 +1495,12 @@ static void kgsl_free_secure_system_pages(struct kgsl_memdesc *memdesc)
 
 static void kgsl_free_secure_pages(struct kgsl_memdesc *memdesc)
 {
-	int ret = kgsl_unlock_sgt(memdesc->sgt);
+	int ret;
 
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
+
+	ret = kgsl_unlock_sgt(memdesc->sgt);
 	if (ret) {
 		/*
 		 * Unlock of the secure buffer failed. This buffer will

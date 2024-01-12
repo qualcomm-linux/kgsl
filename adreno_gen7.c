@@ -68,6 +68,7 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_SP_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -123,6 +124,7 @@ static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -426,6 +428,7 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	adreno_dev->feature_fuse = feature_fuse;
 }
 
+#define GEN7_PROTECT_DEFAULT (BIT(0) | BIT(1) | BIT(3))
 static void gen7_protect_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -438,8 +441,10 @@ static void gen7_protect_init(struct adreno_device *adreno_dev)
 	 * protect violation and select the last span to protect from the start
 	 * address all the way to the end of the register address space
 	 */
-	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL,
-		BIT(0) | BIT(1) | BIT(3));
+	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
+
+	if (adreno_dev->lpac_enabled)
+		kgsl_regwrite(device, GEN7_CP_LPAC_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
 
 	/* Program each register defined by the core definition */
 	for (i = 0; regs[i].reg; i++) {
@@ -828,13 +833,17 @@ int gen7_start(struct adreno_device *adreno_dev)
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
 		kgsl_regwrite(device, GEN7_CP_AQE_APRIV_CNTL, BIT(0));
 
+	if (adreno_is_gen7_9_x(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 1));
+
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
 	 * the prefetch granularity size.
 	 */
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev)
-		|| adreno_is_gen7_2_1(adreno_dev)) {
+		|| adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_11_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
@@ -1610,7 +1619,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	device->pwrscale.avoid_ddr_stall = true;
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
-	device->pwrctrl.cx_gdsc_offset = GEN7_GPU_CC_CX_GDSCR;
+	device->pwrctrl.cx_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
+					GEN7_11_0_GPU_CC_CX_GDSCR : GEN7_GPU_CC_CX_GDSCR;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)

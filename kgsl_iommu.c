@@ -2441,11 +2441,12 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 
 	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->info.cfg);
 
-	ret = set_smmu_lpac_aperture(device, &iommu->lpac_context);
-	/* LPAC is optional, ignore setup failures in absence of LPAC feature */
-	if ((ret < 0) && ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
-		kgsl_iommu_detach_context(&iommu->lpac_context);
-		goto err;
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
+		ret = set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (ret < 0) {
+			kgsl_iommu_detach_context(&iommu->lpac_context);
+			goto err;
+		}
 	}
 
 	return 0;

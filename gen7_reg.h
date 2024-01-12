@@ -141,6 +141,7 @@
 #define GEN7_CP_LPAC_RB_BASE_HI          0xb01
 #define GEN7_CP_LPAC_RB_RPTR             0xb06
 #define GEN7_CP_LPAC_RB_WPTR             0xb07
+#define GEN7_CP_LPAC_PROTECT_CNTL        0xb09
 #define GEN7_CP_LPAC_DRAW_STATE_ADDR     0xb0a
 #define GEN7_CP_LPAC_DRAW_STATE_DATA     0xb0b
 #define GEN7_CP_LPAC_ROQ_DBG_ADDR        0xb0c
@@ -1013,6 +1014,7 @@
 #define GBIF_AXI1_WRITE_DATA_TOTAL_BEATS   47
 
 /* GBIF registers */
+#define GEN7_GBIF_CX_CONFIG               0x3c00
 #define GEN7_GBIF_SCACHE_CNTL0            0x3c01
 #define GEN7_GBIF_SCACHE_CNTL1            0x3c02
 #define GEN7_GBIF_QSB_SIDE0               0x3c03
@@ -1253,6 +1255,7 @@
 /* GPUCC registers */
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541
 #define GEN7_GPU_CC_CX_GDSCR			0x26442
+#define GEN7_11_0_GPU_CC_CX_GDSCR		0x26423
 
 /* GPU RSC sequencer registers */
 #define GEN7_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
