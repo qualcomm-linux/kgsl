@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -703,6 +703,9 @@ static ssize_t __force_on_store(struct device *dev,
 	unsigned int val = 0;
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	int ret;
+
+	if (gmu_core_gpmu_isenabled(device))
+		return -EOPNOTSUPP;
 
 	ret = kstrtou32(buf, 0, &val);
 	if (ret)
