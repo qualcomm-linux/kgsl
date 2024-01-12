@@ -70,6 +70,10 @@
 	((dev)->memstore->gpuaddr + \
 	 KGSL_MEMSTORE_OFFSET(((rb)->id + KGSL_MEMSTORE_MAX), field))
 
+#define KGSL_CONTEXT_PRIORITY_HIGH 0
+/* Last context id is reserved for global context */
+#define KGSL_GLOBAL_CTXT_ID (KGSL_MEMSTORE_MAX - 1)
+
 /*
  * SCRATCH MEMORY: The scratch memory is one page worth of data that
  * is mapped into the GPU. This allows for some 'shared' data between
@@ -559,6 +563,9 @@ enum kgsl_mmutype kgsl_mmu_get_mmutype(struct kgsl_device *device);
 
 /* Helper functions */
 int kgsl_request_irq(struct platform_device *pdev, const  char *name,
+		irq_handler_t handler, void *data);
+
+int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
 		irq_handler_t handler, void *data);
 
 int __init kgsl_core_init(void);

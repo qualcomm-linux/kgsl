@@ -68,6 +68,7 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_SP_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -123,6 +124,7 @@ static const u32 gen7_0_0_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -426,6 +428,7 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	adreno_dev->feature_fuse = feature_fuse;
 }
 
+#define GEN7_PROTECT_DEFAULT (BIT(0) | BIT(1) | BIT(3))
 static void gen7_protect_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -438,8 +441,10 @@ static void gen7_protect_init(struct adreno_device *adreno_dev)
 	 * protect violation and select the last span to protect from the start
 	 * address all the way to the end of the register address space
 	 */
-	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL,
-		BIT(0) | BIT(1) | BIT(3));
+	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
+
+	if (adreno_dev->lpac_enabled)
+		kgsl_regwrite(device, GEN7_CP_LPAC_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
 
 	/* Program each register defined by the core definition */
 	for (i = 0; regs[i].reg; i++) {
