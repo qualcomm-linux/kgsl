@@ -16,6 +16,8 @@ static const struct adreno_gpu_core adreno_gpu_core_##_name = { \
 	.features = ADRENO_DEPRECATED, \
 }
 
+#define MHZ_TO_KBPS(mhz, w) ((u64)(mhz * 1000000ULL * w) / (1024))
+
 DEFINE_DEPRECATED_CORE(a304, ADRENO_REV_A304, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a306, ADRENO_REV_A306, 4, 0, 5, ANY_ID);
 DEFINE_DEPRECATED_CORE(a306a, ADRENO_REV_A306A, 4, 0, 5, ANY_ID);
@@ -2316,6 +2318,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.gen7_snapshot_block_list = &gen7_9_0_snapshot_block_list,
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.ctxt_record_size = (3572 * SZ_1K),
 	.preempt_level = 1,
 	.fast_bus_hint = true,
@@ -2353,6 +2356,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 	.gen7_snapshot_block_list = &gen7_9_0_snapshot_block_list,
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.ctxt_record_size = (3572 * SZ_1K),
 	.preempt_level = 1,
 	.fast_bus_hint = true,
