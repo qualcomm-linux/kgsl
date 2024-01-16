@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -21,7 +21,6 @@
 #include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
-#include <soc/qcom/boot_stats.h>
 #include <linux/suspend.h>
 
 #include "adreno.h"
@@ -1294,7 +1293,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	int status;
 	u32 size;
 
-	place_marker("M - DRIVER GPU Init");
+	KGSL_BOOT_MARKER("GPU Init");
 
 	/* Initialize the adreno device structure */
 	adreno_setup_device(adreno_dev);
@@ -1452,7 +1451,7 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	kgsl_qcom_va_md_register(device);
 
-	place_marker("M - DRIVER GPU Ready");
+	KGSL_BOOT_MARKER("GPU Ready");
 
 	return 0;
 err:
@@ -1581,6 +1580,10 @@ static int adreno_pm_resume(struct device *dev)
 #endif
 
 	mutex_lock(&device->mutex);
+
+#if IS_ENABLED(CONFIG_DEEPSLEEP_AU)
+	gmu_core_dev_force_first_boot(device);
+#endif
 	ops->pm_resume(adreno_dev);
 	mutex_unlock(&device->mutex);
 

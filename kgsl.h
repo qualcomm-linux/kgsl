@@ -13,11 +13,19 @@
 #include <linux/mm.h>
 #include <uapi/linux/msm_kgsl.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrscale.h"
 
 #define KGSL_L3_DEVICE "kgsl-l3"
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+#include <soc/qcom/boot_stats.h>
+#define KGSL_BOOT_MARKER(str)          place_marker("M - DRIVER " str)
+#else
+#define KGSL_BOOT_MARKER(str)          pr_info("boot_kpi: M - DRIVER " str)
+#endif
 
 /*
  * --- kgsl drawobj flags ---
@@ -285,6 +293,10 @@ struct kgsl_memdesc {
 	struct mutex ranges_lock;
 	/** @gmuaddr: GMU VA if this is mapped in GMU */
 	u32 gmuaddr;
+	/*@kgsl_dev: kgsl device dev instance */
+	struct device *kgsl_dev;
+	/*@shmem_page_list: shmem pages list */
+	struct list_head shmem_page_list;
 };
 
 /**

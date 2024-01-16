@@ -733,6 +733,12 @@ static size_t gen7_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN7_SP_READ_SEL, read_sel);
 
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+
 	for (ptr = cluster->regs; ptr[0] != UINT_MAX; ptr += 2) {
 		unsigned int count = REG_COUNT(ptr);
 
@@ -1314,17 +1320,17 @@ static size_t gen7_snapshot_sqe(struct kgsl_device *device, u8 *buf,
 	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
 	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
 
-	if (remain < DEBUG_SECTION_SZ(1)) {
+	if (remain < DEBUG_SECTION_SZ(GEN7_SQE_FW_SNAPSHOT_DWORDS)) {
 		SNAPSHOT_ERR_NOMEM(device, "SQE VERSION DEBUG");
 		return 0;
 	}
 
 	/* Dump the SQE firmware version */
 	header->type = SNAPSHOT_DEBUG_SQE_VERSION;
-	header->size = 1;
-	*data = fw->version;
+	header->size = GEN7_SQE_FW_SNAPSHOT_DWORDS;
+	memcpy(data, fw->memdesc->hostptr, (GEN7_SQE_FW_SNAPSHOT_DWORDS * sizeof(u32)));
 
-	return DEBUG_SECTION_SZ(1);
+	return DEBUG_SECTION_SZ(GEN7_SQE_FW_SNAPSHOT_DWORDS);
 }
 
 /* gen7_snapshot_aqe() - Dump AQE data in snapshot */

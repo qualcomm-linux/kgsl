@@ -12,6 +12,32 @@
 	((HFI_MAX_MSG_SIZE - offsetof(struct hfi_issue_cmd_cmd, ibs)) \
 		/ sizeof(struct hfi_issue_ib))
 
+/*
+ * This is used to put userspace threads to sleep when hardware fence unack count reaches a
+ * threshold. This bit is cleared in two scenarios:
+ * 1. If the hardware fence unack count drops to a desired threshold.
+ * 2. If there is a GMU/GPU fault. Because we don't want the threads to keep sleeping through fault
+ *    recovery, which can easily take 100s of milliseconds to complete.
+ */
+#define GEN7_HWSCHED_HW_FENCE_SLEEP_BIT	0x0
+
+/*
+ * This is used to avoid creating any more hardware fences until the hardware fence unack count
+ * drops to a desired threshold. This bit is required in cases where GEN7_HWSCHED_HW_FENCE_SLEEP_BIT
+ * will be cleared, but we still want to avoid creating any more hardware fences. For example, if
+ * hardware fence unack count reaches a maximum threshold, both GEN7_HWSCHED_HW_FENCE_SLEEP_BIT and
+ * GEN7_HWSCHED_HW_FENCE_MAX_BIT will be set. Say, a GMU/GPU fault happens and
+ * GEN7_HWSCHED_HW_FENCE_SLEEP_BIT will be cleared to wake up any sleeping threads. But,
+ * GEN7_HWSCHED_HW_FENCE_MAX_BIT will remain set to avoid creating any new hardware fences until
+ * recovery is complete and deferred drawctxt (if any) is handled.
+ */
+#define GEN7_HWSCHED_HW_FENCE_MAX_BIT	0x1
+
+/*
+ * This is used to avoid creating any more hardware fences until concurrent reset/recovery completes
+ */
+#define GEN7_HWSCHED_HW_FENCE_ABORT_BIT 0x2
+
 struct gen7_hwsched_hfi {
 	struct hfi_mem_alloc_entry mem_alloc_table[32];
 	u32 mem_alloc_entries;
@@ -31,6 +57,46 @@ struct gen7_hwsched_hfi {
 	struct kgsl_memdesc *big_ib_recurring;
 	/** @msg_mutex: Mutex for accessing the msgq */
 	struct mutex msgq_mutex;
+	struct {
+		/** @lock: Spinlock for managing hardware fences */
+		spinlock_t lock;
+		/**
+		 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
+		 * by GMU
+		 */
+		u32 unack_count;
+		/**
+		 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
+		 * a desired threshold
+		 */
+		wait_queue_head_t unack_wq;
+		/**
+		 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
+		 * hardware fences drops to a desired threshold
+		 */
+		struct adreno_context *defer_drawctxt;
+		/**
+		 * @defer_ts: The timestamp of the hardware fence which got deferred
+		 */
+		u32 defer_ts;
+		/**
+		 * @flags: Flags to control the creation of new hardware fences
+		 */
+		unsigned long flags;
+	} hw_fence;
+	/**
+	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop
+	 * to a desired threshold in given amount of time
+	 */
+	struct timer_list hw_fence_timer;
+	/**
+	 * @hw_fence_ws: Work struct that gets scheduled when hw_fence_timer expires
+	 */
+	struct work_struct hw_fence_ws;
+	/** @detached_hw_fences_list: List of hardware fences belonging to detached contexts */
+	struct list_head detached_hw_fence_list;
+	/** @defer_hw_fence_work: The work structure to send deferred hardware fences to GMU */
+	struct kthread_work defer_hw_fence_work;
 };
 
 struct kgsl_drawobj_cmd;
@@ -107,13 +173,14 @@ int gen7_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
  * gen7_hfi_send_cmd_async - Send an hfi packet
  * @adreno_dev: Pointer to adreno device structure
  * @data: Data to be sent in the hfi packet
+ * @size_bytes: Size of the packet in bytes
  *
  * Send data in the form of an HFI packet to gmu and wait for
  * it's ack asynchronously
  *
  * Return: 0 on success and negative error on failure.
  */
-int gen7_hfi_send_cmd_async(struct adreno_device *adreno_dev, void *data);
+int gen7_hfi_send_cmd_async(struct adreno_device *adreno_dev, void *data, u32 size_bytes);
 
 /**
  * gen7_hwsched_submit_drawobj - Dispatch IBs to dispatch queues
@@ -204,31 +271,30 @@ void gen7_hwsched_context_destroy(struct adreno_device *adreno_dev,
 u32 gen7_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop);
 
 /**
- * gen7_hwsched_send_hw_fence - Send hardware fence info to GMU
+ * gen7_send_hw_fence_hfi_wait_ack - Send hardware fence info to GMU
  * @adreno_dev: Pointer to adreno device
  * @entry: Pointer to the adreno hardware fence entry
+ * @flags: Flags for this hardware fence
  *
- * Send the hardware fence info to the GMU
+ * Send the hardware fence info to the GMU and wait for the ack
  *
- * Return: Zero on success or negative error on failure
+ * Return: 0 on success or negative error on failure
  */
-int gen7_hwsched_send_hw_fence(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
+int gen7_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
+	struct adreno_hw_fence_entry *entry, u64 flags);
 
 /**
- * gen7_hwsched_trigger_hw_fence - Trigger hardware fence via GMU
+ * gen7_hwsched_create_hw_fence - Create a hardware fence
  * @adreno_dev: Pointer to adreno device
- * @entry: Pointer to the hardware fence entry
+ * @kfence: Pointer to the kgsl fence
  *
- * Send HFI request to trigger a hardware fence into TxQueue
- *
- * Return: Zero on success or negative error on failure
+ * Create a hardware fence, set up hardware fence info and send it to GMU if required
  */
-int gen7_hwsched_trigger_hw_fence(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
+void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
+	struct kgsl_sync_fence *kfence);
 
 /**
- * gen7_hwsched_drain_context_hw_fences - Drain context's hardware fences
+ * gen7_hwsched_drain_context_hw_fences - Drain context's hardware fences via GMU
  * @adreno_dev: Pointer to adreno device
  * @drawctxt: Pointer to the adreno context which is to be flushed
  *
@@ -238,5 +304,57 @@ int gen7_hwsched_trigger_hw_fence(struct adreno_device *adreno_dev,
  */
 int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 		struct adreno_context *drawctxt);
+
+/**
+ * gen7_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
+ * from a context have been sent to the TxQueue or not
+ * @adreno_dev: Pointer to adreno device
+ * @drawctxt: Pointer to the adreno context which is to be flushed
+ *
+ * Check if all hardware fences from this context have been sent to the
+ * TxQueue. If not, log an error and return error code.
+ *
+ * Return: Zero on success or negative error on failure
+ */
+int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt);
+
+/**
+ * gen7_remove_hw_fence_entry - Remove hardware fence entry
+ * @adreno_dev: pointer to the adreno device
+ * @entry: Pointer to the hardware fence entry
+ */
+void gen7_remove_hw_fence_entry(struct adreno_device *adreno_dev,
+	struct adreno_hw_fence_entry *entry);
+
+/**
+ * gen7_trigger_hw_fence_cpu - Trigger hardware fence from cpu
+ * @adreno_dev: pointer to the adreno device
+ * @fence: hardware fence entry to be triggered
+ *
+ * Trigger the hardware fence by sending it to GMU's TxQueue and raise the
+ * interrupt from GMU to APPS
+ */
+void gen7_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
+	struct adreno_hw_fence_entry *fence);
+
+/**
+ * gen7_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset
+ * @adreno_dev: pointer to the adreno device
+ *
+ * After device reset, clear hardware fence related data structures and send any hardware fences
+ * that got deferred (prior to reset) and re-open the gates for hardware fence creation
+ *
+ * Return: Zero on success or negative error on failure
+ */
+int gen7_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_hwsched_process_msgq - Process msgq
+ * @adreno_dev: pointer to the adreno device
+ *
+ * This function grabs the msgq mutex and processes msgq for any outstanding hfi packets
+ */
+void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev);
 
 #endif

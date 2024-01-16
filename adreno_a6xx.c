@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -633,7 +633,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	if (adreno_is_a660(adreno_dev))
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 
-	if (adreno_is_a663(adreno_dev)) {
+	if (adreno_is_a663(adreno_dev) || adreno_is_a623(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_RBBM_GBIF_CLIENT_QOS_CNTL, 0x0);
 		kgsl_regwrite(device, A6XX_RBBM_LPAC_GBIF_CLIENT_QOS_CNTL, 0x0);
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
@@ -706,7 +706,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	 * overwrite to 1: 8 channels for A680
 	 */
 	if (adreno_is_a680(adreno_dev) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a623(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_NC_MODE_CNTL, 1);
 
 	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
@@ -1580,7 +1581,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 	 * GFO allows it allocate partial cache lines
 	 */
 	if (adreno_is_a660(adreno_dev) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a623(adreno_dev))
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL0, (0x1f << 10) |
 				BIT(8), (gpu_scid << 10) | BIT(8));
 }
@@ -2359,7 +2361,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.preemption_context_init = a6xx_preemption_context_init,
 		.context_detach = a6xx_hwsched_context_detach,
 		.read_alwayson = a6xx_read_alwayson,
-		.reset = a6xx_hwsched_reset,
+		.reset = a6xx_hwsched_reset_replay,
 		.power_ops = &a6xx_hwsched_power_ops,
 		.power_stats = a6xx_power_stats,
 		.setproperty = a6xx_setproperty,

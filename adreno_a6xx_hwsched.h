@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_A6XX_HWSCHED_H_
@@ -33,12 +33,14 @@ int a6xx_hwsched_probe(struct platform_device *pdev,
 	u32 chipid, const struct adreno_gpu_core *gpucore);
 
 /**
- * a6xx_hwsched_reset - Restart the gmu and gpu
+ * a6xx_hwsched_reset_replay - Restart the gmu and gpu
  * @adreno_dev: Pointer to the adreno device
  *
+ * Restart the GMU and GPU and replay the inflight commands
+
  * Return: 0 on success or negative error on failure
  */
-int a6xx_hwsched_reset(struct adreno_device *adreno_dev);
+int a6xx_hwsched_reset_replay(struct adreno_device *adreno_dev);
 
 /**
  * a6xx_hwsched_snapshot - take a6xx hwsched snapshot

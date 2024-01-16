@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2014,2018-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SYNC_H
 #define __KGSL_SYNC_H
@@ -90,9 +90,9 @@ void kgsl_sync_timeline_detach(struct kgsl_sync_timeline *ktimeline);
 
 void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline);
 
-struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
-					bool (*func)(void *priv), void *priv,
-					struct event_fence_info *info_ptr);
+struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd, bool (*func)(void *priv), void *priv);
+
+void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event);
 
 void kgsl_sync_fence_async_cancel(struct kgsl_sync_fence_cb *kcb);
 
@@ -111,6 +111,9 @@ void kgsl_syncsource_process_release_syncsources(
 		struct kgsl_process_private *private);
 
 bool is_kgsl_fence(struct dma_fence *f);
+
+void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+		u32 timestamp);
 
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
@@ -135,9 +138,12 @@ static inline void kgsl_sync_timeline_put(struct kgsl_sync_timeline *ktimeline)
 }
 
 
+static inline void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
+{
+}
+
 static inline struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
-					bool (*func)(void *priv), void *priv,
-					struct event_fence_info *info_ptr)
+	bool (*func)(void *priv), void *priv);
 {
 	return NULL;
 }
@@ -187,6 +193,12 @@ static inline void kgsl_syncsource_process_release_syncsources(
 }
 
 bool is_kgsl_fence(struct dma_fence *f)
+{
+
+}
+
+void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
+		u32 timestamp)
 {
 
 }

@@ -22,6 +22,9 @@ endif
 ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
 	include $(KGSL_PATH)/config/gki_pineapple.conf
 endif
+ifeq ($(CONFIG_ARCH_BLAIR), y)
+	include $(KGSL_PATH)/config/gki_blair.conf
+endif
 ifeq ($(CONFIG_ARCH_SA8155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
@@ -29,6 +32,9 @@ ifeq ($(CONFIG_ARCH_KHAJE), y)
 	include $(KGSL_PATH)/config/gki_khajedisp.conf
 endif
 ifeq ($(CONFIG_ARCH_SA8195), y)
+	include $(KGSL_PATH)/config/gki_sa8155.conf
+endif
+ifeq ($(CONFIG_ARCH_SA6155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
 ifeq ($(CONFIG_ARCH_MONACO), y)
@@ -40,8 +46,11 @@ endif
 ifeq ($(CONFIG_ARCH_KONA), y)
         include $(KGSL_PATH)/config/gki_kona.conf
 endif
+ifeq ($(CONFIG_ARCH_MONACO_AUTO), y)
+	include $(KGSL_PATH)/config/gki_monaco_auto.conf
+endif
 
-ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu -I$(KERNEL_SRC)/include/linux
+ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 
 obj-$(CONFIG_QCOM_KGSL) += msm_kgsl.o
 

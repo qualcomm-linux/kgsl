@@ -853,6 +853,12 @@ static size_t a6xx_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	read_sel = ((cur_cluster->statetype + info->ctxt_id * 2) & 0xff) << 8;
 	kgsl_regwrite(device, A6XX_HLSQ_DBG_READ_SEL, read_sel);
 
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+
 	for (i = 0; i < cur_cluster->num_sets; i++) {
 		unsigned int start = cur_cluster->regs[2 * i];
 		unsigned int end = cur_cluster->regs[2 * i + 1];
@@ -2260,7 +2266,8 @@ void a6xx_crashdump_init(struct adreno_device *adreno_dev)
 	/* Program the capturescript for the MVC regsiters */
 	ptr += _a6xx_crashdump_init_mvc(adreno_dev, ptr, &offset);
 
-	if (!adreno_is_a663(adreno_dev)) {
+	if (!(adreno_is_a663(adreno_dev) ||
+				adreno_is_a623(adreno_dev))) {
 		ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
 
 		ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
