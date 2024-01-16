@@ -40,6 +40,11 @@
 
 static void adreno_input_work(struct work_struct *work);
 static int adreno_soft_reset(struct kgsl_device *device);
+
+#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP_AU))
+static int adreno_secure_pt_hibernate(struct adreno_device *adreno_dev);
+static int adreno_secure_pt_restore(struct adreno_device *adreno_dev);
+#endif
 static unsigned int counter_delta(struct kgsl_device *device,
 	unsigned int reg, unsigned int *counter);
 static struct device_node *
@@ -1501,21 +1506,24 @@ static int adreno_pm_resume(struct device *dev)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
-#if IS_ENABLED(CONFIG_DEEPSLEEP)
+#if IS_ENABLED(CONFIG_DEEPSLEEP_AU)
 	if (pm_suspend_via_firmware()) {
 		struct kgsl_iommu *iommu = &device->mmu.iommu;
-		int status = kgsl_set_smmu_aperture(device, &iommu->user_context);
+		struct kgsl_pwrscale *pwrscale = &device->pwrscale;
+		int status = 0;
 
+		status = adreno_secure_pt_restore(adreno_dev);
 		if (status)
 			return status;
+		status = kgsl_set_smmu_aperture(device, &iommu->user_context);
+		if (status)
+			return status;
+
+		gmu_core_dev_force_first_boot(device);
+		msm_adreno_tz_reinit(pwrscale->devfreqptr);
 	}
 #endif
-
 	mutex_lock(&device->mutex);
-
-#if IS_ENABLED(CONFIG_DEEPSLEEP_AU)
-	gmu_core_dev_force_first_boot(device);
-#endif
 	ops->pm_resume(adreno_dev);
 	mutex_unlock(&device->mutex);
 
@@ -1544,9 +1552,17 @@ static int adreno_pm_suspend(struct device *dev)
 	mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
 
-#if IS_ENABLED(CONFIG_DEEPSLEEP)
+#if IS_ENABLED(CONFIG_DEEPSLEEP_AU)
+	/*
+	 * Unload zap shader during device hibernation and reload it
+	 * during resume as there is possibility that TZ driver
+	 * is not aware of the hibernation.
+	 */
 	if (!status && pm_suspend_via_firmware())
+	{
 		adreno_zap_shader_unload(adreno_dev);
+		status = adreno_secure_pt_hibernate(adreno_dev);
+	}
 #endif
 
 	mutex_unlock(&device->mutex);
@@ -3449,7 +3465,7 @@ static int adreno_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP_AU))
 #if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
 /*
  * Issue hyp_assign call to assign non-used internal/userspace secure
