@@ -527,7 +527,7 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 *dest = ptr + sizeof(*lock);
 
 	/* Static IFPC-only registers */
-	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
 		reglist[items].regs = gen7_0_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen7_0_0_ifpc_pwrup_reglist);
 	} else {
@@ -545,7 +545,7 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	}
 
 	/* Static IFPC + preemption registers */
-	if (adreno_is_gen7_0_x_family(adreno_dev)) {
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev)) {
 		reglist[items].regs = gen7_0_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen7_0_0_pwrup_reglist);
 	} else {
@@ -823,8 +823,12 @@ int gen7_start(struct adreno_device *adreno_dev)
 	_llc_gpuhtw_slice_activate(adreno_dev);
 
 	kgsl_regwrite(device, GEN7_CP_APRIV_CNTL, GEN7_BR_APRIV_DEFAULT);
-	kgsl_regwrite(device, GEN7_CP_BV_APRIV_CNTL, GEN7_APRIV_DEFAULT);
-	kgsl_regwrite(device, GEN7_CP_LPAC_APRIV_CNTL, GEN7_APRIV_DEFAULT);
+
+	/* gen7_14_0 does not have BV and LPAC hence skip regwrite */
+	if (!adreno_is_gen7_14_0(adreno_dev)) {
+		kgsl_regwrite(device, GEN7_CP_BV_APRIV_CNTL, GEN7_APRIV_DEFAULT);
+		kgsl_regwrite(device, GEN7_CP_LPAC_APRIV_CNTL, GEN7_APRIV_DEFAULT);
+	}
 
 	/* Marking AQE Instruction cache fetches as privileged */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
@@ -833,6 +837,9 @@ int gen7_start(struct adreno_device *adreno_dev)
 	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
 				FIELD_PREP(GENMASK(31, 29), 1));
+	else if (adreno_is_gen7_14_0(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 2));
 
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
@@ -840,10 +847,12 @@ int gen7_start(struct adreno_device *adreno_dev)
 	 */
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev)
-		|| adreno_is_gen7_2_1(adreno_dev)) {
+		|| adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_11_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
-		kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
+		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
+		if (adreno_dev->lpac_enabled)
+			kgsl_regwrite(device, GEN7_CP_LPAC_CHICKEN_DBG, 0x1);
 	}
 
 	_set_secvid(device);
@@ -1080,9 +1089,12 @@ int gen7_rb_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN7_CP_RB_RPTR_ADDR_LO, lower_32_bits(addr));
 	kgsl_regwrite(device, GEN7_CP_RB_RPTR_ADDR_HI, upper_32_bits(addr));
 
-	addr = SCRATCH_RB_GPU_ADDR(device, rb->id, bv_rptr);
-	kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_LO, lower_32_bits(addr));
-	kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_HI, upper_32_bits(addr));
+	/* gen7_14_0 does not have BV hence skip regwrite */
+	if (!adreno_is_gen7_14_0(adreno_dev)) {
+		addr = SCRATCH_RB_GPU_ADDR(device, rb->id, bv_rptr);
+		kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_LO, lower_32_bits(addr));
+		kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_HI, upper_32_bits(addr));
+	}
 
 	kgsl_regwrite(device, GEN7_CP_RB_CNTL, GEN7_CP_RB_CNTL_DEFAULT);
 
@@ -1616,7 +1628,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
-	device->pwrctrl.cx_gdsc_offset = GEN7_GPU_CC_CX_GDSCR;
+	device->pwrctrl.cx_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
+					GEN7_11_0_GPU_CC_CX_GDSCR : GEN7_GPU_CC_CX_GDSCR;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)

@@ -316,17 +316,6 @@ void gen8_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *entry);
 
 /**
- * gen8_trigger_hw_fence_cpu - Trigger hardware fence from cpu
- * @adreno_dev: pointer to the adreno device
- * @fence: hardware fence entry to be triggered
- *
- * Trigger the hardware fence by sending it to GMU's TxQueue and raise the
- * interrupt from GMU to APPS
- */
-void gen8_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *fence);
-
-/**
  * gen8_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset
  * @adreno_dev: pointer to the adreno device
  *

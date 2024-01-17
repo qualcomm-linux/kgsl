@@ -103,14 +103,18 @@ struct kgsl_pwrctrl {
 	int interrupt_num;
 	struct clk *grp_clks[KGSL_MAX_CLKS];
 	struct clk *gpu_bimc_int_clk;
-	/** @cx_gdsc: Pointer to the CX domain regulator if applicable */
-	struct regulator *cx_gdsc;
-	/** @gx_gdsc: Pointer to the GX domain regulator if applicable */
-	struct regulator *gx_gdsc;
-	/** @gx_gdsc: Pointer to the GX domain parent supply */
-	struct regulator *gx_gdsc_parent;
-	/** @gx_gdsc_parent_min_corner: Minimum supply voltage for GX parent */
-	u32 gx_gdsc_parent_min_corner;
+	/** @cx_regulator: Pointer to the CX domain regulator if applicable */
+	struct regulator *cx_regulator;
+	/** @gx_regulator: Pointer to the GX domain regulator if applicable */
+	struct regulator *gx_regulator;
+	/** @cx_pd: Power domain for controlling CX GDSC */
+	struct device *cx_pd;
+	/** @gx_pd: Power domain for controlling GX GDSC */
+	struct device *gx_pd;
+	/** @gx_regulator_parent: Pointer to the GX domain parent supply */
+	struct regulator *gx_regulator_parent;
+	/** @gx_regulator_parent_min_corner: Minimum supply voltage for GX parent */
+	u32 gx_regulator_parent_min_corner;
 	/** @cx_gdsc_nb: Notifier block for cx gdsc regulator */
 	struct notifier_block cx_gdsc_nb;
 	/** @cx_gdsc_gate: Completion to signal cx gdsc collapse status */
@@ -292,12 +296,25 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device);
 void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device);
 
 /**
- * kgsl_pwrctrl_probe_regulators - Probe regulators
+ * kgsl_pwrctrl_enable_gx_gdsc - Enable gx gdsc
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int kgsl_pwrctrl_enable_gx_gdsc(struct kgsl_device *device);
+
+/**
+ * kgsl_pwrctrl_disable_gx_gdsc - Disable gx gdsc
+ * @device: Pointer to the kgsl device
+ */
+void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device);
+
+/**
+ * kgsl_pwrctrl_probe_gdscs - Probe gdscs
  * @device: Pointer to the kgsl device
  * @pdev: Pointer to the platform device
  *
  * Return: 0 on success or negative error on failure
  */
-int kgsl_pwrctrl_probe_regulators(struct kgsl_device *device,
-		struct platform_device *pdev);
+int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device *pdev);
 #endif /* __KGSL_PWRCTRL_H */

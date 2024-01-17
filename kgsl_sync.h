@@ -54,8 +54,6 @@ struct kgsl_sync_fence {
 	unsigned int timestamp;
 	/** @hw_fence_index: Index of hw fence in hw fence table */
 	u64 hw_fence_index;
-	/** @hw_fence_handle: Handle to the hw fence client */
-	void *hw_fence_handle;
 };
 
 /**
@@ -114,6 +112,26 @@ bool is_kgsl_fence(struct dma_fence *f);
 
 void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 		u32 timestamp);
+
+int kgsl_hw_fence_init(struct kgsl_device *device);
+
+void kgsl_hw_fence_close(struct kgsl_device *device);
+
+void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *md);
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence);
+
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count);
+
+void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence);
+
+void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+
+bool kgsl_hw_fence_signaled(struct dma_fence *fence);
+
+bool kgsl_is_hw_fence(struct dma_fence *fence);
 
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
@@ -201,6 +219,56 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 		u32 timestamp)
 {
 
+}
+
+int kgsl_hw_fence_init(struct kgsl_device *device)
+{
+	return -EINVAL;
+}
+
+void kgsl_hw_fence_close(struct kgsl_device *device)
+{
+
+}
+
+void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *md)
+{
+
+}
+
+int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+	return -EINVAL;
+}
+
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+{
+	return -EINVAL;
+}
+
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count)
+{
+	return false;
+}
+
+void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
+{
+
+}
+
+void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
+{
+
+}
+
+bool kgsl_hw_fence_signaled(struct dma_fence *fence)
+{
+	return false;
+}
+
+bool kgsl_is_hw_fence(struct dma_fence *fence)
+{
+	return false;
 }
 
 #endif /* CONFIG_SYNC_FILE */

@@ -242,6 +242,7 @@ struct adreno_device *gen7_gmu_to_adreno(struct gen7_gmu_device *gmu)
 }
 
 #define RSC_CMD_OFFSET 2
+#define GEN7_PDC_ENABLE_REG_VALUE 0x80000001
 
 static void _regwrite(void __iomem *regbase,
 		unsigned int offsetwords, unsigned int value)
@@ -289,24 +290,32 @@ void gen7_load_rsc_ucode(struct adreno_device *adreno_dev)
 int gen7_load_pdc_ucode(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct resource *res_cfg;
-	void __iomem *cfg = NULL;
 
-	res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
+	if (gmu->pdc_cfg_base == NULL) {
+		struct resource *res_cfg;
+
+		res_cfg = platform_get_resource_byname(gmu->pdev, IORESOURCE_MEM,
 			"gmu_pdc");
-	if (res_cfg)
-		cfg = ioremap(res_cfg->start, resource_size(res_cfg));
 
-	if (!cfg) {
-		dev_err(&gmu->pdev->dev, "Failed to map PDC CFG\n");
-		return -ENODEV;
+		if (res_cfg)
+			gmu->pdc_cfg_base = devm_ioremap(&gmu->pdev->dev,
+				res_cfg->start, resource_size(res_cfg));
+
+		if (!gmu->pdc_cfg_base) {
+			dev_err(&gmu->pdev->dev, "Failed to map PDC CFG\n");
+			return -ENODEV;
+		}
 	}
 
 	/* Setup GPU PDC */
-	_regwrite(cfg, GEN7_PDC_GPU_SEQ_START_ADDR, 0);
-	_regwrite(cfg, GEN7_PDC_GPU_ENABLE_PDC, 0x80000001);
+	_regwrite(gmu->pdc_cfg_base, GEN7_PDC_GPU_SEQ_START_ADDR, 0);
+	_regwrite(gmu->pdc_cfg_base, GEN7_PDC_GPU_ENABLE_PDC,
+			GEN7_PDC_ENABLE_REG_VALUE);
 
-	iounmap(cfg);
+	if (!IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)) {
+		devm_iounmap(&gmu->pdev->dev, gmu->pdc_cfg_base);
+		gmu->pdc_cfg_base = NULL;
+	}
 
 	return 0;
 }
@@ -1459,10 +1468,8 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
 
 static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 {
-	int ret = 0;
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
@@ -1497,31 +1504,21 @@ static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/*
 	 * This is based on the assumption that GMU is the only one controlling
-	 * the GX HS. This code path is the only client voting for GX through
-	 * the regulator interface.
+	 * the GX HS. This code path is the only client voting for GX from linux
+	 * kernel.
 	 */
-	if (pwr->gx_gdsc) {
-		if (gen7_gmu_gx_is_on(adreno_dev)) {
-			/* Switch gx gdsc control from GMU to CPU
-			 * force non-zero reference count in clk driver
-			 * so next disable call will turn
-			 * off the GDSC
-			 */
-			ret = regulator_enable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx enable %d\n", ret);
+	if (!gen7_gmu_gx_is_on(adreno_dev))
+		return;
 
-			ret = regulator_disable(pwr->gx_gdsc);
-			if (ret)
-				dev_err(&gmu->pdev->dev,
-					"suspend fail: gx disable %d\n", ret);
+	/*
+	 * Switch gx gdsc control from GMU to CPU force non-zero reference
+	 * count in clk driver so next disable call will turn off the GDSC
+	 */
+	kgsl_pwrctrl_enable_gx_gdsc(device);
+	kgsl_pwrctrl_disable_gx_gdsc(device);
 
-			if (gen7_gmu_gx_is_on(adreno_dev))
-				dev_err(&gmu->pdev->dev,
-					"gx is stuck on\n");
-		}
-	}
+	if (gen7_gmu_gx_is_on(adreno_dev))
+		dev_err(&gmu->pdev->dev, "gx is stuck on\n");
 }
 
 /*
@@ -1617,7 +1614,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	ret = gen7_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
-			"Failed to set GPU perf idx %d, bw idx %d\n",
+			"Failed to set GPU perf idx %u, bw idx %u\n",
 			req.freq, req.bw);
 
 		/*
@@ -1893,6 +1890,34 @@ int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+static void gen7_gmu_force_first_boot(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	u32 val = 0;
+
+	if (gmu->pdc_cfg_base) {
+		kgsl_pwrctrl_enable_cx_gdsc(device);
+		gen7_gmu_enable_clks(adreno_dev, 0);
+
+		val = __raw_readl(gmu->pdc_cfg_base + (GEN7_PDC_GPU_ENABLE_PDC << 2));
+
+		/* Make sure we read val before disabling clks. */
+		mb();
+
+		clk_bulk_disable_unprepare(gmu->num_clks, gmu->clks);
+		kgsl_pwrctrl_disable_cx_gdsc(device);
+		gen7_rdpm_cx_freq_update(gmu, 0);
+	}
+
+	if (val != GEN7_PDC_ENABLE_REG_VALUE) {
+		clear_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags);
+		clear_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
+	}
+}
+#endif
+
 static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2149,6 +2174,9 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.bcl_sid_set = gen7_bcl_sid_set,
 	.bcl_sid_get = gen7_bcl_sid_get,
 	.send_nmi = gen7_gmu_send_nmi,
+#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+	.force_first_boot = gen7_gmu_force_first_boot,
+#endif
 };
 
 static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
@@ -2526,8 +2554,8 @@ int gen7_gmu_probe(struct kgsl_device *device,
 	/* Setup any rdpm register ranges */
 	gen7_gmu_rdpm_probe(gmu, device);
 
-	/* Set up GMU regulators */
-	ret = kgsl_pwrctrl_probe_regulators(device, pdev);
+	/* Set up GMU gdscs */
+	ret = kgsl_pwrctrl_probe_gdscs(device, pdev);
 	if (ret)
 		return ret;
 
@@ -2815,6 +2843,7 @@ static int gen7_boot(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool bcl_state = adreno_dev->bcl_enabled;
 	int ret;
 
 	if (WARN_ON(test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags)))
@@ -2822,7 +2851,23 @@ static int gen7_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
-	ret = gen7_gmu_boot(adreno_dev);
+	if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) &&
+		!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
+		/*
+		 * During hibernation entry ZAP was unloaded and
+		 * CBCAST BCL register is in reset state.
+		 * Set bcl_enabled to false to skip KMD's HFI request
+		 * to GMU for BCL feature, send BCL feature request to
+		 * GMU after ZAP load at GPU boot. This ensures that
+		 * Central Broadcast register was programmed before
+		 * enabling BCL.
+		 */
+		adreno_dev->bcl_enabled = false;
+		ret = gen7_gmu_first_boot(adreno_dev);
+	} else {
+		ret = gen7_gmu_boot(adreno_dev);
+	}
+
 	if (ret)
 		return ret;
 
@@ -2834,6 +2879,9 @@ static int gen7_boot(struct adreno_device *adreno_dev)
 	kgsl_pwrscale_wake(device);
 
 	set_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
+
+	if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION))
+		adreno_dev->bcl_enabled = bcl_state;
 
 	device->pwrctrl.last_stat_updated = ktime_get();
 

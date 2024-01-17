@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/io.h>
@@ -84,7 +84,7 @@ int kgsl_regmap_add_region(struct kgsl_regmap *regmap, struct platform_device *p
 	return ret;
 }
 
-#define in_range(a, base, len) \
+#define kgsl_regmap_in_range(a, base, len) \
 	(((a) >= (base)) && ((a) < ((base) + (len))))
 
 struct kgsl_regmap_region *kgsl_regmap_get_region(struct kgsl_regmap *regmap,
@@ -95,7 +95,7 @@ struct kgsl_regmap_region *kgsl_regmap_get_region(struct kgsl_regmap *regmap,
 	for (i = 0; i < regmap->count; i++) {
 		struct kgsl_regmap_region *region = &regmap->region[i];
 
-		if (in_range(offset, region->offset, region->size))
+		if (kgsl_regmap_in_range(offset, region->offset, region->size))
 			return region;
 	}
 

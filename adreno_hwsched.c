@@ -1297,17 +1297,16 @@ static const struct attribute *_hwsched_attr_list[] = {
 void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
-	struct adreno_hw_fence *hw_fence = &hwsched->hw_fence;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags))
 		return;
 
-	msm_hw_fence_deregister(hwsched->hw_fence.handle);
+	kgsl_hw_fence_close(KGSL_DEVICE(adreno_dev));
 
-	if (hw_fence->memdesc.sgt)
-		sg_free_table(hw_fence->memdesc.sgt);
+	if (hwsched->hw_fence_md.sgt)
+		sg_free_table(hwsched->hw_fence_md.sgt);
 
-	memset(&hw_fence->memdesc, 0x0, sizeof(hw_fence->memdesc));
+	memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
 
 	kmem_cache_destroy(hwsched->hw_fence_cache);
 
@@ -1940,27 +1939,6 @@ void adreno_hwsched_fault(struct adreno_device *adreno_dev,
 	adreno_hwsched_trigger(adreno_dev);
 }
 
-static bool is_tx_slot_available(struct adreno_device *adreno_dev)
-{
-	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
-	void *ptr = hwsched->hw_fence.mem_descriptor.virtual_addr;
-	struct msm_hw_fence_hfi_queue_header *hdr = (struct msm_hw_fence_hfi_queue_header *)
-		(ptr + sizeof(struct msm_hw_fence_hfi_queue_table_header));
-	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
-	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
-	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
-	u32 reserved_dwords = atomic_read(&hwsched->hw_fence_count) * payload_size_dwords;
-
-	free_dwords = read_idx <= write_idx ?
-		queue_size_dwords - (write_idx - read_idx) :
-		read_idx - write_idx;
-
-	if (free_dwords - reserved_dwords <= payload_size_dwords)
-		return false;
-
-	return true;
-}
-
 static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence)
 {
@@ -1976,7 +1954,8 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	if (!is_tx_slot_available(adreno_dev))
+	if (!kgsl_hw_fence_tx_slot_available(KGSL_DEVICE(adreno_dev),
+		&adreno_dev->hwsched.hw_fence_count))
 		return;
 
 	hwsched_ops->create_hw_fence(adreno_dev, kfence);
@@ -2249,7 +2228,6 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
-	struct adreno_hw_fence *hw_fence = &hwsched->hw_fence;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
@@ -2263,32 +2241,23 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags))
 		return;
 
-	hw_fence->handle = msm_hw_fence_register(HW_FENCE_CLIENT_ID_CTX0,
-				&hw_fence->mem_descriptor);
-	if (IS_ERR_OR_NULL(hw_fence->handle)) {
-		dev_err(device->dev, "HW fences not supported: %d\n",
-			PTR_ERR_OR_ZERO(hw_fence->handle));
-		hw_fence->handle = NULL;
+	if (kgsl_hw_fence_init(device))
 		return;
-	}
 
 	/*
 	 * We need to set up the memory descriptor with the physical address of the Tx/Rx Queues so
 	 * that these buffers can be imported in to GMU VA space
 	 */
-	kgsl_memdesc_init(device, &hw_fence->memdesc, 0);
-	hw_fence->memdesc.physaddr = hw_fence->mem_descriptor.device_addr;
-	hw_fence->memdesc.size = hw_fence->mem_descriptor.size;
-	hw_fence->memdesc.hostptr = hw_fence->mem_descriptor.virtual_addr;
+	kgsl_memdesc_init(device, &hwsched->hw_fence_md, 0);
+	kgsl_hw_fence_populate_md(device, &hwsched->hw_fence_md);
 
-	ret = kgsl_memdesc_sg_dma(&hw_fence->memdesc, hw_fence->memdesc.physaddr,
-		hw_fence->memdesc.size);
+	ret = kgsl_memdesc_sg_dma(&hwsched->hw_fence_md, hwsched->hw_fence_md.physaddr,
+		hwsched->hw_fence_md.size);
 	if (ret) {
 		dev_err(device->dev, "Failed to setup HW fences memdesc: %d\n",
 			ret);
-		msm_hw_fence_deregister(hw_fence->handle);
-		hw_fence->handle = NULL;
-		memset(&hw_fence->memdesc, 0x0, sizeof(hw_fence->memdesc));
+		kgsl_hw_fence_close(device);
+		memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
 		return;
 	}
 

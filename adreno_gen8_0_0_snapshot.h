@@ -362,7 +362,7 @@ static const u32 gen8_0_0_cp_cp_pipe_none_registers[] = {
 	 0x00800, 0x0081e, 0x00820, 0x0082d, 0x00838, 0x0083e, 0x00840, 0x00847,
 	 0x0084b, 0x0084c, 0x00850, 0x0088f, 0x008b5, 0x008b6, 0x008c0, 0x008cb,
 	 0x008d0, 0x008e4, 0x008e7, 0x008ee, 0x008fa, 0x008fd, 0x00928, 0x00929,
-	 0x00958, 0x0095b, 0x00980, 0x009ff, 0x0f000, 0x0f002,
+	 0x00958, 0x0095b, 0x00980, 0x009ff,
 	 UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_0_0_cp_cp_pipe_none_registers), 8));
@@ -638,12 +638,12 @@ static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_rb_slice_pipe_br_rbp_regist
  * Location: HLSQ_STATE
  * pairs   : 8 (Regs:34)
  */
-static const u32 gen8_0_0_non_context_sp_pipe_none_hlsq_state_registers[] = {
+static const u32 gen8_0_0_non_context_sp_pipe_br_hlsq_state_registers[] = {
 	 0x0ae05, 0x0ae05, 0x0ae10, 0x0ae13, 0x0ae15, 0x0ae16, 0x0ae52, 0x0ae52,
 	 0x0ae60, 0x0ae67, 0x0ae69, 0x0ae6e, 0x0ae70, 0x0ae75, 0x0aec0, 0x0aec5,
 	 UINT_MAX, UINT_MAX,
 };
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_hlsq_state_registers), 8));
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_hlsq_state_registers), 8));
 
 /*
  * Block   : ['SP']
@@ -653,12 +653,12 @@ static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_hlsq_state_reg
  * Location: SP_TOP
  * pairs   : 6 (Regs:60)
  */
-static const u32 gen8_0_0_non_context_sp_pipe_none_sp_top_registers[] = {
+static const u32 gen8_0_0_non_context_sp_pipe_br_sp_top_registers[] = {
 	 0x0ae00, 0x0ae0c, 0x0ae0f, 0x0ae0f, 0x0ae35, 0x0ae35, 0x0ae3a, 0x0ae3f,
 	 0x0ae50, 0x0ae52, 0x0ae80, 0x0aea3,
 	 UINT_MAX, UINT_MAX,
 };
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_sp_top_registers), 8));
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_sp_top_registers), 8));
 
 /*
  * Block   : ['SP']
@@ -668,13 +668,13 @@ static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_sp_top_registe
  * Location: USPTP
  * pairs   : 9 (Regs:64)
  */
-static const u32 gen8_0_0_non_context_sp_pipe_none_usptp_registers[] = {
+static const u32 gen8_0_0_non_context_sp_pipe_br_usptp_registers[] = {
 	 0x0ae00, 0x0ae0c, 0x0ae0f, 0x0ae0f, 0x0ae17, 0x0ae19, 0x0ae30, 0x0ae32,
 	 0x0ae35, 0x0ae35, 0x0ae3a, 0x0ae3b, 0x0ae3e, 0x0ae3f, 0x0ae50, 0x0ae52,
 	 0x0ae80, 0x0aea3,
 	 UINT_MAX, UINT_MAX,
 };
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_usptp_registers), 8));
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_usptp_registers), 8));
 
 /*
  * Block   : ['SP']
@@ -684,12 +684,12 @@ static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_usptp_register
  * Location: HLSQ_DP_STR
  * pairs   : 5 (Regs:18)
  */
-static const u32 gen8_0_0_non_context_sp_pipe_none_hlsq_dp_str_registers[] = {
+static const u32 gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers[] = {
 	 0x0ae05, 0x0ae05, 0x0ae60, 0x0ae65, 0x0ae6b, 0x0ae6c, 0x0ae73, 0x0ae75,
 	 0x0aec0, 0x0aec5,
 	 UINT_MAX, UINT_MAX,
 };
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_hlsq_dp_str_registers), 8));
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers), 8));
 
 /*
  * Block   : ['TPL1']
@@ -699,12 +699,12 @@ static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_none_hlsq_dp_str_re
  * Location: USPTP
  * pairs   : 5 (Regs:48)
  */
-static const u32 gen8_0_0_non_context_tpl1_pipe_none_usptp_registers[] = {
+static const u32 gen8_0_0_non_context_tpl1_pipe_br_usptp_registers[] = {
 	 0x0b600, 0x0b600, 0x0b602, 0x0b602, 0x0b604, 0x0b604, 0x0b606, 0x0b61e,
 	 0x0b620, 0x0b633,
 	 UINT_MAX, UINT_MAX,
 };
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_tpl1_pipe_none_usptp_registers), 8));
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_tpl1_pipe_br_usptp_registers), 8));
 
 /*
  * Block   : ['GRAS']
@@ -1666,16 +1666,16 @@ static struct gen8_cluster_registers gen8_0_0_mvc_clusters[] = {
 };
 
 static struct gen8_sptp_cluster_registers gen8_0_0_sptp_clusters[] = {
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_NONE, 0, HLSQ_STATE,
-		gen8_0_0_non_context_sp_pipe_none_hlsq_state_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_NONE, 0, SP_TOP,
-		gen8_0_0_non_context_sp_pipe_none_sp_top_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_NONE, 0, USPTP,
-		gen8_0_0_non_context_sp_pipe_none_usptp_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_NONE, 0, HLSQ_DP_STR,
-		gen8_0_0_non_context_sp_pipe_none_hlsq_dp_str_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, TP0_NCTX_REG, PIPE_NONE, 0, USPTP,
-		gen8_0_0_non_context_tpl1_pipe_none_usptp_registers, 0xb600},
+	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, HLSQ_STATE,
+		gen8_0_0_non_context_sp_pipe_br_hlsq_state_registers, 0xae00},
+	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, SP_TOP,
+		gen8_0_0_non_context_sp_pipe_br_sp_top_registers, 0xae00},
+	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, USPTP,
+		gen8_0_0_non_context_sp_pipe_br_usptp_registers, 0xae00},
+	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, HLSQ_DP_STR,
+		gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers, 0xae00},
+	{ CLUSTER_NONE, UNSLICE, 2, 2, TP0_NCTX_REG, PIPE_BR, 0, USPTP,
+		gen8_0_0_non_context_tpl1_pipe_br_usptp_registers, 0xb600},
 	{ CLUSTER_SP_VS, SLICE, 2, 2, SP_CTX0_3D_CVS_REG, PIPE_BR, 0, HLSQ_STATE,
 		gen8_0_0_sp_slice_pipe_br_cluster_sp_vs_hlsq_state_registers, 0xa800},
 	{ CLUSTER_SP_VS, SLICE, 2, 2, SP_CTX0_3D_CVS_REG, PIPE_BR, 0, HLSQ_STATE,

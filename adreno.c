@@ -1296,10 +1296,12 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/*
 	 * Force no write allocate for A5x, A6x and all gen7 targets
-	 * except gen_7_9_x. gen_7_9_x uses write allocate
+	 * except gen_7_9_x and gen_7_14_0. gen_7_9_x and gen_7_14_0
+	 * use write allocate.
 	 */
 	if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev) ||
-		(adreno_is_gen7(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev)))
+		(adreno_is_gen7(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev) &&
+		!adreno_is_gen7_14_0(adreno_dev)))
 		kgsl_mmu_set_feature(device, KGSL_MMU_FORCE_LLCC_NWA);
 
 	 /* Bind the components before doing the KGSL platform probe. */
@@ -1646,19 +1648,24 @@ static int adreno_init(struct kgsl_device *device)
 	return 0;
 }
 
-static bool regulators_left_on(struct kgsl_device *device)
+static bool gdscs_left_on(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	if (gmu_core_gpmu_isenabled(device))
 		return false;
 
-	if (!IS_ERR_OR_NULL(pwr->cx_gdsc))
-		if (regulator_is_enabled(pwr->cx_gdsc))
-			return true;
+	if (pwr->cx_regulator)
+		return regulator_is_enabled(pwr->cx_regulator);
 
-	if (!IS_ERR_OR_NULL(pwr->gx_gdsc))
-		return regulator_is_enabled(pwr->gx_gdsc);
+	if (pwr->gx_regulator)
+		return regulator_is_enabled(pwr->gx_regulator);
+
+	if (pwr->cx_pd)
+		return kgsl_genpd_is_enabled(pwr->cx_pd);
+
+	if (pwr->gx_pd)
+		return kgsl_genpd_is_enabled(pwr->gx_pd);
 
 	return false;
 }
@@ -1878,12 +1885,12 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int status;
 	unsigned int state = device->state;
-	bool regulator_left_on;
+	bool gdsc_left_on;
 
 	/* make sure ADRENO_DEVICE_STARTED is not set here */
 	WARN_ON(test_bit(ADRENO_DEVICE_STARTED, &adreno_dev->priv));
 
-	regulator_left_on = regulators_left_on(device);
+	gdsc_left_on = gdscs_left_on(device);
 
 	/* Clear any GPU faults that might have been left over */
 	adreno_clear_gpu_fault(adreno_dev);
@@ -1903,7 +1910,7 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	memset(&adreno_dev->busy_data, 0, sizeof(adreno_dev->busy_data));
 
 	/* Soft reset the GPU if a regulator is stuck on*/
-	if (regulator_left_on)
+	if (gdsc_left_on)
 		_soft_reset(adreno_dev);
 
 	/* Start the GPU */
