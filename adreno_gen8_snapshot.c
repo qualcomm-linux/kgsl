@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -1438,13 +1438,8 @@ static size_t snapshot_preemption_record(struct kgsl_device *device,
 	struct kgsl_snapshot_gpu_object_v2 *header =
 		(struct kgsl_snapshot_gpu_object_v2 *)buf;
 	u8 *ptr = buf + sizeof(*header);
-	const struct adreno_gen8_core *gpucore = to_gen8_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
-
-	if (gpucore->ctxt_record_size)
-		ctxt_record_size = gpucore->ctxt_record_size;
-
-	ctxt_record_size = min_t(u64, ctxt_record_size, device->snapshot_ctxt_record_size);
+	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
+					device->snapshot_ctxt_record_size);
 
 	if (remain < (ctxt_record_size + sizeof(*header))) {
 		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");

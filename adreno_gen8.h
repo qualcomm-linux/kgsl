@@ -201,7 +201,9 @@ struct gen8_cp_smmu_info {
 
 #define GEN8_CP_CTXRECORD_MAGIC_REF		0xae399d6eUL
 /* Size of each CP preemption record */
-#define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(4192 * 1024)
+#define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(13536 * SZ_1K)
+/* Size of preemption record to be dumped in snapshot */
+#define GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES	(128 * 1024)
 /* Size of the user context record block (in bytes) */
 #define GEN8_CP_CTXRECORD_USER_RESTORE_SIZE	(192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */

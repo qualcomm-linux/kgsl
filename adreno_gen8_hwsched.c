@@ -98,14 +98,9 @@ static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
 	u8 *dest = snapshot->ptr + sizeof(*section_header);
 	struct kgsl_snapshot_gpu_object_v2 *header =
 		(struct kgsl_snapshot_gpu_object_v2 *)dest;
-	const struct adreno_gen8_core *gen8_core = to_gen8_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
+				device->snapshot_ctxt_record_size);
 	size_t section_size;
-
-	if (gen8_core->ctxt_record_size)
-		ctxt_record_size = gen8_core->ctxt_record_size;
-
-	ctxt_record_size = min_t(u64, ctxt_record_size, device->snapshot_ctxt_record_size);
 
 	section_size = sizeof(*section_header) + sizeof(*header) + ctxt_record_size;
 	if (snapshot->remain < section_size) {
@@ -135,13 +130,10 @@ static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
 static void snapshot_preemption_records(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
 {
-	const struct adreno_gen8_core *gen8_core =
-		to_gen8_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+	u64 ctxt_record_size = md->size;
 	u64 offset;
 
-	if (gen8_core->ctxt_record_size)
-		ctxt_record_size = gen8_core->ctxt_record_size;
+	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
 
 	/* All preemption records exist as a single mem alloc entry */
 	for (offset = 0; offset < md->size; offset += ctxt_record_size)

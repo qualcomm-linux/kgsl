@@ -1839,9 +1839,10 @@ int gen8_probe_common(struct platform_device *pdev,
 	/* debugfs node for ACD calibration */
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
 
-	/* Dump additional AQE 16KB data on top of default 96KB(48(BR)+48(BV)) */
+	/* Dump additional AQE 16KB data on top of default 128KB(64(BR)+64(BV)) */
 	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
-					112 * SZ_1K : 96 * SZ_1K;
+			(GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES + SZ_16K) :
+			GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES;
 
 	return 0;
 }
