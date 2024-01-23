@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_H_
@@ -215,7 +215,8 @@ struct gen7_cp_smmu_info {
 	 (1 << GEN7_INT_ATBASYNCFIFOOVERFLOW) |		\
 	 (1 << GEN7_INT_ATBBUSOVERFLOW) |		\
 	 (1 << GEN7_INT_OUTOFBOUNDACCESS) |		\
-	 (1 << GEN7_INT_UCHETRAPINTERRUPT))
+	 (1 << GEN7_INT_UCHETRAPINTERRUPT) |		\
+	 (1 << GEN7_INT_TSBWRITEERROR))
 
 /**
  * to_gen7_core - return the gen7 specific GPU core struct

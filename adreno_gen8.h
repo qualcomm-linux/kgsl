@@ -257,7 +257,8 @@ struct gen8_cp_smmu_info {
 	 (1 << GEN8_INT_ATBASYNCFIFOOVERFLOW) |		\
 	 (1 << GEN8_INT_ATBBUSOVERFLOW) |		\
 	 (1 << GEN8_INT_OUTOFBOUNDACCESS) |		\
-	 (1 << GEN8_INT_UCHETRAPINTERRUPT))
+	 (1 << GEN8_INT_UCHETRAPINTERRUPT) |		\
+	 (1 << GEN8_INT_TSBWRITEERROR))
 
 /**
  * to_gen8_core - return the gen8 specific GPU core struct
