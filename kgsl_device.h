@@ -344,6 +344,11 @@ struct kgsl_device {
 	int freq_limiter_intr_num;
 	/** @cx_host_irq_num: Interrupt number for cx_host_irq */
 	int cx_host_irq_num;
+	/**
+	 * @max_syncobj_hw_fence_count: Maximum number of hardware fences that are allowed in a sync
+	 * object
+	 */
+	u32 max_syncobj_hw_fence_count;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

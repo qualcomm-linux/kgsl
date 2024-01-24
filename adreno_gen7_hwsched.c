@@ -1859,6 +1859,10 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 
 	kgsl_mmu_set_feature(device, KGSL_MMU_PAGEFAULT_TERMINATE);
 
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
+		device->max_syncobj_hw_fence_count = min_t(u32, HFI_SYNCOBJ_LEGACY_HW_FENCE_MAX,
+			MAX_SYNCOBJ_QUERY_BITS);
+
 	ret = adreno_hwsched_init(adreno_dev, &gen7_hwsched_ops);
 	if (ret)
 		dev_err(&pdev->dev, "adreno hardware scheduler init failed ret %d\n", ret);

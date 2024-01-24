@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __KGSL_DRAWOBJ_H
@@ -116,6 +116,8 @@ struct kgsl_drawobj_sync {
 	u32 flags;
 	/** @num_hw_fence: number of hw fences in this syncobj */
 	u32 num_hw_fence;
+	/** @hw_fences: Array to hold pointers to hardware fences that are in this syncobj */
+	struct dma_fence **hw_fences;
 };
 
 #define KGSL_BINDOBJ_STATE_START 0
