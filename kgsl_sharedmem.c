@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -1430,6 +1430,9 @@ static void kgsl_free_pages_from_sgt(struct kgsl_memdesc *memdesc)
 	int i;
 	struct scatterlist *sg;
 
+	if (WARN_ON(!memdesc->sgt))
+		return;
+
 	for_each_sg(memdesc->sgt->sgl, sg, memdesc->sgt->nents, i) {
 		/*
 		 * sg_alloc_table_from_pages() will collapse any physically
@@ -1689,16 +1692,17 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 	/* Now that we've moved to a sg table don't need the pages anymore */
 	kvfree(pages);
 
+	memdesc->sgt = sgt;
+
 	ret = kgsl_lock_sgt(sgt, size);
 	if (ret) {
 		if (ret != -EADDRNOTAVAIL)
 			kgsl_free_pages_from_sgt(memdesc);
 		sg_free_table(sgt);
 		kfree(sgt);
+		memdesc->sgt = NULL;
 		return ret;
 	}
-
-	memdesc->sgt = sgt;
 
 	KGSL_STATS_ADD(size, &kgsl_driver.stats.secure,
 		&kgsl_driver.stats.secure_max);
