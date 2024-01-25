@@ -1177,7 +1177,6 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 			return false;
 
 		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
 		kgsl_drawobj_destroy(drawobj);
 		return true;
 	}
@@ -1371,7 +1370,6 @@ static bool drawobj_replay(struct adreno_device *adreno_dev,
 			return true;
 
 		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
-		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
 		kgsl_drawobj_destroy(drawobj);
 		return false;
 	}
