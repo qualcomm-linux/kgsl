@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -1901,9 +1901,9 @@ int a6xx_probe_common(struct platform_device *pdev,
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
 	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
-		device->pwrctrl.cx_gdsc_offset = (adreno_is_a662(adreno_dev) ||
-			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_GDSCR :
-			A6XX_GPU_CC_CX_GDSCR;
+		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
+			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
+			A6XX_GPU_CC_CX_CFG_GDSCR;
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;

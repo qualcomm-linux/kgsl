@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_PWRCTRL_H
 #define __KGSL_PWRCTRL_H
@@ -121,8 +121,8 @@ struct kgsl_pwrctrl {
 	struct completion cx_gdsc_gate;
 	/** @cx_gdsc_wait: Whether to wait for cx gdsc to turn off */
 	bool cx_gdsc_wait;
-	/** @cx_gdsc_offset: Offset of CX GDSC register */
-	u32 cx_gdsc_offset;
+	/** @cx_cfg_gdsc_offset: Offset of CX CFG GDSC register */
+	u32 cx_cfg_gdsc_offset;
 	int isense_clk_indx;
 	int isense_clk_on_level;
 	unsigned long power_flags;
