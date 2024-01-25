@@ -3311,7 +3311,7 @@ static int a6xx_boot(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 
-	if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) &&
+	if ((IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP_AU)) &&
 		!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags))
 		ret = a6xx_gmu_first_boot(adreno_dev);
 	else
