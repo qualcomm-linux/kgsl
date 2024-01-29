@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -1521,7 +1521,8 @@ static const char *const uche_client[] = {
 	"BR_VFD", "BR_SP", "BR_VSC", "BR_VPC",
 	"BR_HLSQ", "BR_PC", "BR_LRZ", "BR_TP",
 	"BV_VFD", "BV_SP", "BV_VSC", "BV_VPC",
-	"BV_HLSQ", "BV_PC", "BV_LRZ", "BV_TP"
+	"BV_HLSQ", "BV_PC", "BV_LRZ", "BV_TP",
+	"STCHE",
 };
 
 static const char *const uche_lpac_client[] = {
