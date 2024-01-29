@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -1408,11 +1408,6 @@ static inline void adreno_set_gpu_fault(struct adreno_device *adreno_dev,
 
 	/* make sure other CPUs see the update */
 	smp_wmb();
-}
-
-static inline bool adreno_gmu_gpu_fault(struct adreno_device *adreno_dev)
-{
-	return adreno_gpu_fault(adreno_dev) & ADRENO_GMU_FAULT;
 }
 
 /**

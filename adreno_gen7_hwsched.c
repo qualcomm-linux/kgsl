@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -1406,7 +1406,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	if (req.freq != INVALID_DCVS_IDX)
@@ -1572,7 +1572,7 @@ void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
 
-	gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static void gen7_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
