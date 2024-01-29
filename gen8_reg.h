@@ -997,6 +997,7 @@
 #define GEN8_RB_UFC_DBG_CNTL                0x8f29
 
 /* VPC registers */
+#define GEN8_VPC_DBG_ECO_CNTL_2                  0x9604
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_0             0x9670
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_1             0x9671
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_2             0x9672
@@ -1009,6 +1010,7 @@
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_9             0x9679
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_10            0x967a
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_11            0x967b
+#define GEN8_VPC_DBG_ECO_CNTL                    0x9680
 #define GEN8_VPC_PERFCTR_VPC_SEL_0               0x9690 /* Indexed Register */
 #define GEN8_VPC_PERFCTR_VPC_SEL_1               0x9691 /* Indexed Register */
 #define GEN8_VPC_PERFCTR_VPC_SEL_2               0x9692 /* Indexed Register */
@@ -1024,6 +1026,7 @@
 #define GEN8_VPC_LB_MODE_CNTL                    0x9740
 #define GEN8_VPC_FLATSHADE_MODE_CNTL             0x9741
 #define GEN8_VPC_DBG_ECO_CNTL_1                  0x9742
+#define GEN8_VPC_DBG_ECO_CNTL_3                  0x9745
 #define GEN8_VPC_PERFCTR_VPC_SEL_1_0             0x9750
 #define GEN8_VPC_PERFCTR_VPC_SEL_1_1             0x9751
 #define GEN8_VPC_PERFCTR_VPC_SEL_1_2             0x9752
@@ -1040,7 +1043,6 @@
 /* PC registers:*/
 #define GEN8_PC_AUTO_VERTEX_STRIDE          0x9e0a
 #define GEN8_PC_VIS_STREAM_CNTL             0x9e0d
-#define GEN8_PC_CHICKEN_BITS_2              0x9f20
 #define GEN8_PC_CHICKEN_BITS_3              0x9e22
 #define GEN8_PC_CHICKEN_BITS_4              0x9e23
 #define GEN8_PC_PERFCTR_PC_SEL_0            0x9e30
@@ -1061,6 +1063,8 @@
 #define GEN8_PC_PERFCTR_PC_SEL_15           0x9e3f
 #define GEN8_PC_CHICKEN_BITS_1              0x9e50
 #define GEN8_PC_DBG_ECO_CNTL                0x9e53
+#define GEN8_PC_CHICKEN_BITS_2              0x9f20
+#define GEN8_PC_CHICKEN_BITS_5              0x9f23
 
 #define GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1 0x9e64
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_0      0x9f00
