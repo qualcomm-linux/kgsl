@@ -294,6 +294,7 @@ void gen8_gmu_snapshot(struct adreno_device *adreno_dev,
 	 * register in snapshot to analyze the system state even in partial
 	 * snapshot dump
 	 */
+	dev_err(device->dev, "Snapshot capture started \n");
 	gen8_snapshot_external_core_regs(device, snapshot);
 
 	gen8_gmu_device_snapshot(device, snapshot);
