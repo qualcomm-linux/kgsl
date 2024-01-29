@@ -815,7 +815,7 @@ static void gen8_syncobj_query_reply(struct adreno_device *adreno_dev,
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
 	for (i = 0; i < syncobj->num_hw_fence; i++) {
-		struct dma_fence *fence = syncobj->hw_fences[i];
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
 
 		if (!fence_is_queried(cmd, i))
 			continue;
@@ -2995,25 +2995,25 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *dr
 	return 0;
 }
 
-static void populate_kgsl_fence(struct hfi_syncobj *obj,
-	struct dma_fence *fence)
+static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
+	struct hfi_syncobj *obj)
 {
-	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
+	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)hw_fence->fence;
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	unsigned long flags;
 
 	obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
 
 	spin_lock_irqsave(&ktimeline->lock, flags);
-	/* If the context is going away or the dma fence is signaled, mark the fence as triggered */
-	if (!ktimeline->context || dma_fence_is_signaled_locked(fence)) {
-		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
-		spin_unlock_irqrestore(&ktimeline->lock, flags);
-		return;
-	}
-	obj->ctxt_id = ktimeline->context->id;
+
+	if (dma_fence_is_signaled_locked(&kfence->fence) || !_kgsl_context_get(ktimeline->context))
+		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
+	else
+		hw_fence->context = ktimeline->context;
+
 	spin_unlock_irqrestore(&ktimeline->lock, flags);
 
+	obj->ctxt_id = kfence->context_id;
 	obj->seq_no =  kfence->timestamp;
 }
 
@@ -3042,15 +3042,16 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	obj = (struct hfi_syncobj *)&cmd[1];
 
 	for (i = 0; i < syncobj->num_hw_fence; i++) {
-		struct dma_fence *fence = syncobj->hw_fences[i];
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
 
 		if (is_kgsl_fence(fence)) {
-			populate_kgsl_fence(obj, fence);
+			populate_kgsl_fence(&syncobj->hw_fences[i], obj);
 		} else {
 			int ret = kgsl_hw_fence_add_waiter(device, fence,
 				&obj->hash_index);
 
 			if (ret) {
+				adreno_hwsched_syncobj_kfence_put(syncobj);
 				syncobj->flags &= ~KGSL_SYNCOBJ_HW;
 				return ret;
 			}

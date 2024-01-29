@@ -94,6 +94,15 @@ struct kgsl_drawobj_cmd {
 /* This sync object can be sent to hardware */
 #define KGSL_SYNCOBJ_HW BIT(1)
 
+struct kgsl_drawobj_sync_hw_fence {
+	/** @fence: Pointer to hardware fence */
+	struct dma_fence *fence;
+	/**
+	 * context: Pointer to kgsl context if this hardware fence is owned by a kgsl context
+	 */
+	struct kgsl_context *context;
+};
+
 /**
  * struct kgsl_drawobj_sync - KGSL sync object
  * @base: Base kgsl_drawobj, this needs to be the first entry
@@ -116,8 +125,10 @@ struct kgsl_drawobj_sync {
 	u32 flags;
 	/** @num_hw_fence: number of hw fences in this syncobj */
 	u32 num_hw_fence;
-	/** @hw_fences: Array to hold pointers to hardware fences that are in this syncobj */
-	struct dma_fence **hw_fences;
+	/**
+	 * @hw_fences: Array to hold information regarding hardware fences that are in this syncobj
+	 */
+	struct kgsl_drawobj_sync_hw_fence *hw_fences;
 };
 
 #define KGSL_BINDOBJ_STATE_START 0

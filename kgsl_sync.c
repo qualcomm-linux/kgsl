@@ -729,7 +729,7 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	}
 
 	if (syncobj->num_hw_fence < max_hw_fence)
-		syncobj->hw_fences[syncobj->num_hw_fence++] = fence;
+		syncobj->hw_fences[syncobj->num_hw_fence++].fence = fence;
 	else
 		syncobj->flags |= KGSL_SYNCOBJ_SW;
 }

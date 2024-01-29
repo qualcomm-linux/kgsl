@@ -1151,6 +1151,16 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	kgsl_drawobj_destroy(drawobj);
 }
 
+void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
+{
+	int i;
+
+	for (i = 0; i < syncobj->num_hw_fence; i++) {
+		kgsl_context_put(syncobj->hw_fences[i].context);
+		syncobj->hw_fences[i].context = NULL;
+	}
+}
+
 static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
@@ -1166,6 +1176,7 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 		if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
 			return false;
 
+		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
 		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
 		kgsl_drawobj_destroy(drawobj);
 		return true;
@@ -1359,6 +1370,7 @@ static bool drawobj_replay(struct adreno_device *adreno_dev,
 		if (kgsl_drawobj_events_pending(SYNCOBJ(drawobj)))
 			return true;
 
+		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
 		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
 		kgsl_drawobj_destroy(drawobj);
 		return false;
@@ -1642,7 +1654,7 @@ static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	for (i = 0; i < syncobj->num_hw_fence; i++) {
-		struct dma_fence *fence = syncobj->hw_fences[i];
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
 		bool kgsl = is_kgsl_fence(fence);
 		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 		char value[32] = "unknown";

@@ -243,4 +243,11 @@ u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
  */
 void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, struct device *dev);
 
+/**
+ * adreno_hwsched_syncobj_kfence_put - Put back kfence context refcounts for this sync object
+ * @syncobj: Pointer to the sync object
+ *
+ */
+void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj);
+
 #endif
