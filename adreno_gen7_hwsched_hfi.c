@@ -1115,19 +1115,13 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 {
 	struct gen7_hwsched_hfi *hfi = container_of(work,
 						struct gen7_hwsched_hfi, defer_hw_fence_work);
-	struct adreno_context *drawctxt = NULL;
-	struct kgsl_device *device;
-	struct adreno_device *adreno_dev;
+	struct gen7_hwsched_device *gen7_hwsched = container_of(hfi, struct gen7_hwsched_device,
+							hwsched_hfi);
+	struct adreno_context *drawctxt;
+	struct adreno_device *adreno_dev = &gen7_hwsched->gen7_dev.adreno_dev;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 ts;
 	int ret;
-
-	spin_lock(&hfi->hw_fence.lock);
-	drawctxt = hfi->hw_fence.defer_drawctxt;
-	ts = hfi->hw_fence.defer_ts;
-	spin_unlock(&hfi->hw_fence.lock);
-
-	device = drawctxt->base.device;
-	adreno_dev = ADRENO_DEVICE(device);
 
 	/*
 	 * Grab the dispatcher and device mutex as we don't want to race with concurrent fault
@@ -1135,6 +1129,14 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 	 */
 	mutex_lock(&adreno_dev->hwsched.mutex);
 	mutex_lock(&device->mutex);
+
+	spin_lock(&hfi->hw_fence.lock);
+	drawctxt = hfi->hw_fence.defer_drawctxt;
+	ts = hfi->hw_fence.defer_ts;
+	spin_unlock(&hfi->hw_fence.lock);
+
+	if (!drawctxt)
+		goto unlock;
 
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 	if (ret) {
