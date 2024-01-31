@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -327,8 +327,12 @@ static int a6xx_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
 	if (rc)
 		return rc;
 
-	rc = poll_gmu_reg(adreno_dev, A6XX_GMU_GMU2HOST_INTR_INFO,
-		HFI_IRQ_MSGQ_MASK, HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT);
+	if (adreno_is_a615_family(adreno_dev))
+		rc = gmu_core_timed_poll_check(device, A6XX_GMU_GMU2HOST_INTR_INFO,
+			HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
+	else
+		rc = poll_gmu_reg(adreno_dev, A6XX_GMU_GMU2HOST_INTR_INFO,
+			HFI_IRQ_MSGQ_MASK, HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT);
 
 	if (rc) {
 		gmu_core_fault_snapshot(device);
