@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -2329,6 +2329,21 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_HFI_USE_REG)) {
+		/*
+		 * For A6x GPU with GMU that set this quirk will
+		 * need PDC and RSC ucode loaded before turning
+		 * on GFX rail to avoid oob set timeout for
+		 * oob_boot_slumber request during GMU first boot
+		 */
+		if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
+			ret = a6xx_load_pdc_ucode(adreno_dev);
+			if (ret)
+				goto err;
+
+			a6xx_load_rsc_ucode(adreno_dev);
+			set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
+		}
+
 		ret = a6xx_gmu_gfx_rail_on(adreno_dev);
 		if (ret) {
 			a6xx_gmu_oob_clear(device, oob_boot_slumber);
