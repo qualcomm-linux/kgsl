@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -247,7 +247,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
 						gpucore->gen8_snapshot_block_list;
 	u32 i, slice, j;
-	struct gen8_reg_list_info info;
+	struct gen8_reg_list_info info = {0};
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
 		snapshot, gen8_gmu_snapshot_itcm, gmu);
@@ -256,28 +256,32 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 
 	gen8_gmu_snapshot_memories(device, gmu, snapshot);
 
-	for (i = 0 ; i < gen8_snapshot_block_list->num_gmu_regs; i++) {
-		struct gen8_reg_list *regs = &gen8_snapshot_block_list->gmu_regs[i];
-
-		slice = regs->slice_region ? MAX_PHYSICAL_SLICES : 1;
-		for (j = 0 ; j < slice; j++) {
-			info.regs = regs;
-			info.slice_id = (slice > 1) ? j : UINT_MAX;
-			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,
-				gen8_legacy_snapshot_registers, &info);
-		}
-	}
-
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		gen8_snapshot_rscc_registers, (void *) gen8_snapshot_block_list->rscc_regs);
+
+	/* Capture GMU registers which are on CX domain and unsliced */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
+		adreno_snapshot_registers_v2,
+		(void *) gen8_snapshot_block_list->gmu_cx_unsliced_regs);
 
 	if (!gen8_gmu_gx_is_on(adreno_dev))
 		goto dtcm;
 
 	/* Set fence to ALLOW mode so registers can be read */
 	kgsl_regwrite(device, GEN8_GMUAO_AHB_FENCE_CTRL, 0);
-	/* Make sure the previous write posted before reading */
-	wmb();
+
+	/* Capture GMU registers which are on GX domain */
+	for (i = 0 ; i < gen8_snapshot_block_list->num_gmu_gx_regs; i++) {
+		struct gen8_reg_list *regs = &gen8_snapshot_block_list->gmu_gx_regs[i];
+
+		slice = regs->slice_region ? MAX_PHYSICAL_SLICES : 1;
+		for (j = 0 ; j < slice; j++) {
+			info.regs = regs;
+			info.slice_id = j;
+			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,
+				gen8_legacy_snapshot_registers, &info);
+		}
+	}
 
 dtcm:
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,

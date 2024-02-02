@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN8_SNAPSHOT_H
 #define __ADRENO_GEN8_SNAPSHOT_H
@@ -610,10 +610,12 @@ struct gen8_snapshot_block_list {
 	const u32 **external_core_regs;
 	/* num_external_core_regs : length of external core registers list */
 	size_t num_external_core_regs;
-	/* gmu_registers : List of GMU registers */
-	struct gen8_reg_list *gmu_regs;
-	/* num_gmu_regs : Length of GMU registers list */
-	size_t num_gmu_regs;
+	/* gmu_cx_unsliced_regs : List of GMU CX unsliced registers */
+	const u32 *gmu_cx_unsliced_regs;
+	/* gmu_gx_registers : List of GMU registers */
+	struct gen8_reg_list *gmu_gx_regs;
+	/* num_gmu_gx_regs : Length of GMU registers list */
+	size_t num_gmu_gx_regs;
 	/* rscc_regs : List of RSCC registers */
 	const u32 *rscc_regs;
 	/* reg_list : List of GPU internal registers */
