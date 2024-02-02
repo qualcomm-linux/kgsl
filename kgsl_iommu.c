@@ -976,6 +976,92 @@ static void kgsl_iommu_add_fault_info(struct kgsl_context *context,
 		kfree(report);
 }
 
+static void _increment_pf_counts(struct kgsl_iommu *iommu,
+		struct kgsl_process_private *proc_priv, int flags)
+{
+	u32 type;
+	int cur_idx = -1;
+	int new_idx = -1;
+	int i;
+
+	write_lock(&iommu->pf_stats_lock);
+	iommu->pf_type_counts[!!(flags & IOMMU_FAULT_WRITE)]++;
+
+	type = ffs(flags & ~IOMMU_FAULT_WRITE) - 1;
+	if (type < ARRAY_SIZE(iommu->pf_type_counts))
+		iommu->pf_type_counts[type]++;
+
+	if (!proc_priv)
+		goto unlock;
+
+	/*
+	 * Add the process to array of pagefaulting processes. This array is sorted (processes with
+	 * more pagefaults are higher ranked).
+	 */
+	proc_priv->pf_count++;
+	proc_priv->pf_type_counts[!!(flags & IOMMU_FAULT_WRITE)]++;
+	if (type < ARRAY_SIZE(proc_priv->pf_type_counts))
+		proc_priv->pf_type_counts[type]++;
+
+	for (i = ARRAY_SIZE(iommu->pf_procs) - 1; i >= 0; i--) {
+		struct kgsl_iommu_pf_proc *proc = &iommu->pf_procs[i];
+
+		/* Check whether this process is already tracked in the array */
+		if (!strcmp(proc->comm, proc_priv->comm)) {
+			proc_priv->pf_count = ++proc->pf_count;
+			proc_priv->pf_type_counts[!!(flags & IOMMU_FAULT_WRITE)] =
+				++proc->pf_type_counts[!!(flags & IOMMU_FAULT_WRITE)];
+			if (type < ARRAY_SIZE(proc_priv->pf_type_counts))
+				proc_priv->pf_type_counts[type] = ++proc->pf_type_counts[type];
+
+			cur_idx = i;
+			break;
+		}
+
+		/* Find left most entry with lower fault count than current process */
+		if (proc->pf_count < proc_priv->pf_count)
+			new_idx = i;
+	}
+
+	/*
+	 * If the process is not currently tracked, we can place it at the left most index that has
+	 * a fault count less than its fault count. If such an index does not exist, the array is
+	 * already full.
+	 */
+	if (cur_idx < 0) {
+		if (new_idx >= 0)
+			goto write_new_idx;
+		goto unlock;
+	}
+
+	/* Find the left most entry (if any) with a lower pf_count */
+	for (new_idx = 0; new_idx < cur_idx; new_idx++) {
+		if (iommu->pf_procs[new_idx].pf_count < proc_priv->pf_count)
+			break;
+	}
+
+	/* Check if the current process is already at its correct position */
+	if (new_idx == cur_idx)
+		goto unlock;
+
+	/* Swap the two entries */
+	iommu->pf_procs[cur_idx].pf_count = iommu->pf_procs[new_idx].pf_count;
+	memcpy(iommu->pf_procs[cur_idx].pf_type_counts, iommu->pf_procs[new_idx].pf_type_counts,
+		sizeof(iommu->pf_procs[cur_idx].pf_type_counts));
+	strscpy(iommu->pf_procs[cur_idx].comm, iommu->pf_procs[new_idx].comm,
+		sizeof(iommu->pf_procs[cur_idx].comm));
+
+write_new_idx:
+	iommu->pf_procs[new_idx].pf_count = proc_priv->pf_count;
+	memcpy(iommu->pf_procs[new_idx].pf_type_counts, proc_priv->pf_type_counts,
+		sizeof(iommu->pf_procs[new_idx].pf_type_counts));
+	strscpy(iommu->pf_procs[new_idx].comm, proc_priv->comm,
+		sizeof(iommu->pf_procs[new_idx].comm));
+
+unlock:
+	write_unlock(&iommu->pf_stats_lock);
+}
+
 static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 		struct kgsl_iommu_context *ctxt, unsigned long addr,
 		u64 ptbase, u32 contextid,
@@ -1011,6 +1097,7 @@ static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 	else
 		fault_type = "unknown";
 
+	_increment_pf_counts(&mmu->iommu, private, flags);
 
 	/* FIXME: This seems buggy */
 	if (test_bit(KGSL_FT_PAGEFAULT_LOG_ONE_PER_PAGE, &mmu->pfpolicy))
@@ -2721,6 +2808,8 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 	if (!kgsl_vbo_zero_page)
 		clear_bit(KGSL_MMU_SUPPORT_VBO, &mmu->features);
 
+	rwlock_init(&iommu->pf_stats_lock);
+
 	return 0;
 
 err:
@@ -2731,6 +2820,124 @@ err:
 	addr_entry_cache = NULL;
 
 	return ret;
+}
+
+/* Update this array if KGSL_IOMMU_PAGEFAULT_TYPES increases */
+static const char *pf_types[KGSL_IOMMU_PAGEFAULT_TYPES] = {
+	[0] = "READ",				/* Read fault */
+	[1] = "WRITE",				/* Write fault */
+	[ilog2(IOMMU_FAULT_TRANSLATION)] = "TRANS",
+	[ilog2(IOMMU_FAULT_PERMISSION)] = "PERM",
+	[ilog2(IOMMU_FAULT_EXTERNAL)] = "EXT",
+	[ilog2(IOMMU_FAULT_TRANSACTION_STALLED)] = "STALL",
+};
+
+static ssize_t pagefaults_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
+	int i;
+	size_t num_chars = 0;
+
+	/* Print out a header */
+	num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2,
+				"%10s", "Total");
+
+	for (i = 0; i < ARRAY_SIZE(pf_types); i++) {
+		num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2,
+				"|%10s", pf_types[i]);
+	}
+	buf[num_chars++] = '\n';
+
+	read_lock(&iommu->pf_stats_lock);
+
+	/* Sum of R and W pagefaults is the total */
+	num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2, "%10u",
+				iommu->pf_type_counts[0] + iommu->pf_type_counts[1]);
+
+	/* Print out count of each pagefault type */
+	for (i = 0; i < ARRAY_SIZE(iommu->pf_type_counts); i++) {
+		num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2,
+				" %10u", iommu->pf_type_counts[i]);
+
+		if (num_chars >= PAGE_SIZE - 2)
+			break;
+	}
+
+	read_unlock(&iommu->pf_stats_lock);
+
+	buf[num_chars++] = '\n';
+	return num_chars;
+}
+
+static ssize_t pagefault_procs_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
+	size_t num_chars = 0;
+	int i;
+
+	/* Print out a header */
+	num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2,
+				"%16s|%10s", "Process", "Total");
+
+	for (i = 0; i < ARRAY_SIZE(pf_types); i++) {
+		num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 2,
+				"|%10s", pf_types[i]);
+	}
+	buf[num_chars++] = '\n';
+
+	read_lock(&iommu->pf_stats_lock);
+	for (i = 0; i < ARRAY_SIZE(iommu->pf_procs); i++) {
+		struct kgsl_iommu_pf_proc *proc = &iommu->pf_procs[i];
+		int j;
+
+		/* Array is sorted, so break on first 0 */
+		if (!proc->pf_count)
+			break;
+
+		num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 1, "%16s %10u",
+				proc->comm, proc->pf_count);
+
+		for (j = 0; j < ARRAY_SIZE(proc->pf_type_counts); j++)
+			num_chars += scnprintf(buf + num_chars,
+				PAGE_SIZE - num_chars - 1, " %10u",
+				proc->pf_type_counts[j]);
+
+		if (num_chars < PAGE_SIZE - 1)
+			buf[num_chars++] = '\n';
+
+		if (num_chars >= PAGE_SIZE - 1)
+			break;
+	}
+	read_unlock(&iommu->pf_stats_lock);
+
+	return num_chars;
+}
+
+static DEVICE_ATTR_RO(pagefaults);
+static DEVICE_ATTR_RO(pagefault_procs);
+
+static const struct attribute *iommu_sysfs_attr_list[] = {
+	&dev_attr_pagefaults.attr,
+	&dev_attr_pagefault_procs.attr,
+	NULL
+};
+
+static void kgsl_iommu_sysfs_init(struct kgsl_mmu *mmu)
+{
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
+
+	WARN_ON(sysfs_create_files(&device->dev->kobj, iommu_sysfs_attr_list));
 }
 
 static const struct kgsl_mmu_ops kgsl_iommu_ops = {
@@ -2745,6 +2952,7 @@ static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_getpagetable = kgsl_iommu_getpagetable,
 	.mmu_map_global = kgsl_iommu_map_global,
 	.mmu_send_tlb_hint = kgsl_iommu_send_tlb_hint,
+	.mmu_sysfs_init = kgsl_iommu_sysfs_init,
 };
 
 static const struct kgsl_mmu_pt_ops iopgtbl_pt_ops = {

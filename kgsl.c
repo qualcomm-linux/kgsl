@@ -5220,6 +5220,7 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 
 	/* Initialize common sysfs entries */
 	kgsl_pwrctrl_init_sysfs(device);
+	kgsl_mmu_sysfs_init(&device->mmu);
 
 	timer_setup(&device->work_period_timer, kgsl_work_period_timer, 0);
 	spin_lock_init(&device->work_period_lock);

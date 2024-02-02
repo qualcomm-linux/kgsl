@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_MMU_H
 #define __KGSL_MMU_H
@@ -116,6 +116,7 @@ struct kgsl_mmu_ops {
 	void (*mmu_map_global)(struct kgsl_mmu *mmu,
 		struct kgsl_memdesc *memdesc, u32 padding);
 	void (*mmu_send_tlb_hint)(struct kgsl_mmu *mmu, bool hint);
+	void (*mmu_sysfs_init)(struct kgsl_mmu *mmu);
 };
 
 struct kgsl_mmu_pt_ops {
@@ -432,4 +433,14 @@ static inline int kgsl_iommu_bind(struct kgsl_device *device, struct platform_de
 ssize_t kgsl_mmu_map_sg(struct iommu_domain *domain,
 				unsigned long iova, struct scatterlist *sg,
 				unsigned int nents, int prot);
+
+/**
+ * kgsl_mmu_sysfs_init - Initialize sysfs nodes for the MMU
+ * @mmu: A KGSL MMU handle
+ */
+static inline void kgsl_mmu_sysfs_init(struct kgsl_mmu *mmu)
+{
+	if (MMU_OP_VALID(mmu, mmu_sysfs_init))
+		mmu->mmu_ops->mmu_sysfs_init(mmu);
+}
 #endif /* __KGSL_MMU_H */
