@@ -110,6 +110,9 @@ static bool _gen8_do_crashdump(struct kgsl_device *device)
 	u32 reg = 0;
 	ktime_t timeout;
 
+	if (CD_SCRIPT_CHECK(device))
+		return false;
+
 	kgsl_regwrite(device, GEN8_CP_CRASH_DUMP_SCRIPT_BASE_LO,
 			lower_32_bits(gen8_capturescript->gpuaddr));
 	kgsl_regwrite(device, GEN8_CP_CRASH_DUMP_SCRIPT_BASE_HI,
@@ -886,6 +889,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 					/* Marker for end of script */
 					CD_FINISH(ptr, offset);
 
+					func = gen8_legacy_snapshot_cluster_dbgahb;
 					/* Try to run the crash dumper */
 					if (_gen8_do_crashdump(device))
 						func = gen8_snapshot_cluster_dbgahb;
@@ -1062,6 +1066,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 			/* Marker for end of script */
 			CD_FINISH(ptr, offset);
 
+			func = gen8_legacy_snapshot_mvc;
 			/* Try to run the crash dumper */
 			if (_gen8_do_crashdump(device))
 				func = gen8_snapshot_mvc;
@@ -1513,6 +1518,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 			/* Marker for end of script */
 			CD_FINISH(ptr, offset);
 
+			func = gen8_legacy_snapshot_registers;
 			/* Try to run the crash dumper */
 			if (_gen8_do_crashdump(device))
 				func = gen8_snapshot_registers;
