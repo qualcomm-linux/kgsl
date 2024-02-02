@@ -599,6 +599,14 @@ void gen8_gmu_irq_enable(struct adreno_device *adreno_dev)
 	/* Enable all IRQs on host */
 	enable_irq(hfi->irq);
 	enable_irq(gmu->irq);
+
+	if (device->cx_host_irq_num <= 0)
+		return;
+
+	/* Clear pending IRQs, unmask needed interrupts and enable CX host IRQ */
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_0_MASK, GEN8_CX_MISC_INT_MASK);
+	enable_irq(device->cx_host_irq_num);
 }
 
 void gen8_gmu_irq_disable(struct adreno_device *adreno_dev)
@@ -617,6 +625,14 @@ void gen8_gmu_irq_disable(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR, UINT_MAX);
 	gmu_core_regwrite(device, GEN8_GMUAO_AO_HOST_INTERRUPT_CLR, UINT_MAX);
+
+	if (device->cx_host_irq_num <= 0)
+		return;
+
+	/* Disable CX host IRQ, mask all interrupts and clear pending IRQs */
+	disable_irq(device->cx_host_irq_num);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_0_MASK, UINT_MAX);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
 }
 
 static int gen8_gmu_hfi_start_msg(struct adreno_device *adreno_dev)

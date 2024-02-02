@@ -1802,6 +1802,25 @@ done:
 	return ret;
 }
 
+static irqreturn_t gen8_cx_host_irq_handler(int irq, void *data)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 status;
+
+	adreno_cx_misc_regread(adreno_dev, GEN8_GPU_CX_MISC_INT_0_STATUS, &status);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, status);
+
+	if (status & BIT(GEN8_CX_MISC_GPU_CC_IRQ))
+		KGSL_PWRCTRL_LOG_FREQLIM(device);
+
+	if (status & ~GEN8_CX_MISC_INT_MASK)
+		dev_err_ratelimited(device->dev, "Unhandled CX MISC interrupts 0x%lx\n",
+			status & ~GEN8_CX_MISC_INT_MASK);
+
+	return IRQ_HANDLED;
+}
+
 int gen8_probe_common(struct platform_device *pdev,
 	struct adreno_device *adreno_dev, u32 chipid,
 	const struct adreno_gpu_core *gpucore)
@@ -1824,6 +1843,9 @@ int gen8_probe_common(struct platform_device *pdev,
 	device->pwrctrl.cx_gdsc_offset = GEN8_GPU_CC_CX_GDSCR;
 
 	device->pwrctrl.rt_bus_hint = gen8_core->rt_bus_hint;
+
+	device->cx_host_irq_num = kgsl_request_irq_optional(pdev,
+		"cx_host_irq", gen8_cx_host_irq_handler, device);
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)

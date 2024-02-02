@@ -239,6 +239,11 @@ struct gen8_cp_smmu_info {
 	 (1 << GEN8_INT_OUTOFBOUNDACCESS) |		\
 	 (1 << GEN8_INT_UCHETRAPINTERRUPT))
 
+/* GEN8 CX MISC interrupt bits */
+#define GEN8_CX_MISC_GPU_CC_IRQ	31
+
+#define GEN8_CX_MISC_INT_MASK	BIT(GEN8_CX_MISC_GPU_CC_IRQ)
+
 /**
  * to_gen8_core - return the gen8 specific GPU core struct
  * @adreno_dev: An Adreno GPU device handle

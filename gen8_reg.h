@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN8_REG_H
@@ -1591,6 +1591,9 @@
 #define GEN8_SMMU_BASE				0x28000
 
 /* GPU CX_MISC registers */
+#define GEN8_GPU_CX_MISC_INT_CLEAR_CMD		0x31
+#define GEN8_GPU_CX_MISC_INT_0_MASK		0x33
+#define GEN8_GPU_CX_MISC_INT_0_STATUS		0x34
 #define GEN8_GPU_CX_MISC_AO_COUNTER_LO		0x80
 #define GEN8_GPU_CX_MISC_AO_COUNTER_HI		0x81
 #define GEN8_GPU_CX_MISC_SW_FUSE_VALUE		0x400
