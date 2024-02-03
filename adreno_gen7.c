@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -2130,32 +2130,40 @@ static void gen7_lpac_fault_header(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_context *drawctxt_lpac;
-	u32 status;
-	u32 lpac_rptr, lpac_wptr, lpac_ib1sz, lpac_ib2sz;
-	u64 lpac_ib1base, lpac_ib2base;
-
-	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
-	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
-	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI, GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
-	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI, GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
-	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
+	u32 status = 0, lpac_rptr = 0, lpac_wptr = 0, lpac_ib1sz = 0, lpac_ib2sz = 0;
+	u64 lpac_ib1base = 0, lpac_ib2base = 0;
+	bool gx_on = adreno_gx_is_on(adreno_dev);
 
 	drawctxt_lpac = ADRENO_CONTEXT(drawobj_lpac->context);
 	drawobj_lpac->context->last_faulted_cmd_ts = drawobj_lpac->timestamp;
 	drawobj_lpac->context->total_fault_count++;
 
 	pr_context(device, drawobj_lpac->context,
-		"LPAC ctx %d ctx_type %s ts %d status %8.8X dispatch_queue=%d rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+		"LPAC ctx %d ctx_type %s ts %d dispatch_queue=%d\n",
 		drawobj_lpac->context->id, kgsl_context_type(drawctxt_lpac->type),
-		drawobj_lpac->timestamp, status,
-		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
-		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
+		drawobj_lpac->timestamp, drawobj_lpac->context->gmu_dispatch_queue);
 
 	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
 			drawctxt_lpac->base.proc_priv->cmdline);
+	if (!gx_on)
+		goto done;
 
+	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
+	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
+	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
+		       GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
+	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
+		       GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
+	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
+
+	pr_context(device, drawobj_lpac->context,
+		"LPAC: status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+		status, lpac_rptr, lpac_wptr, lpac_ib1base,
+		lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
+
+done:
 	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
 		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
 		adreno_get_level(drawobj_lpac->context));
