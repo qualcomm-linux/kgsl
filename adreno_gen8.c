@@ -397,7 +397,7 @@ void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	adreno_dev->feature_fuse = feature_fuse;
 }
 
-static void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
+void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id)
 {
 	struct gen8_device *gen8_dev = container_of(adreno_dev,

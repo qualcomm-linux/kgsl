@@ -688,7 +688,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-	u32 reg, reg1, reg2, reg3, reg4, reg5,/* reg6,*/ reg7, reg8;
+	u32 reg, reg1, reg2, reg3, reg4, reg5;
 	unsigned long t;
 	u64 ts1, ts2;
 
@@ -750,14 +750,15 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 
 	/* Access GX registers only when GX is ON */
 	if (is_on(reg1)) {
-		//kgsl_regread(device, GEN8_CP_STATUS_1, &reg6);// fEIXME
-		kgsl_regread(device, GEN8_CP_CP2GMU_STATUS, &reg7);
-		kgsl_regread(device, GEN8_CP_CONTEXT_SWITCH_CNTL, &reg8);
+		gen8_regread_aperture(device, GEN8_CP_PIPE_STATUS_PIPE, &reg, PIPE_BV, 0, 0);
+		gen8_regread_aperture(device, GEN8_CP_PIPE_STATUS_PIPE, &reg1, PIPE_BR, 0, 0);
+		/* Clear aperture register */
+		gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+		kgsl_regread(device, GEN8_CP_CP2GMU_STATUS, &reg2);
+		kgsl_regread(device, GEN8_CP_CONTEXT_SWITCH_CNTL, &reg3);
 
-		//dev_err(&gmu->pdev->dev, "GEN8_CP_STATUS_1=%x\n", reg6);
-		dev_err(&gmu->pdev->dev,
-			"CP2GMU_STATUS=%x CONTEXT_SWITCH_CNTL=%x\n",
-			reg7, reg8);
+		dev_err(&gmu->pdev->dev, "GEN8_CP_PIPE_STATUS_PIPE BV:%x BR:%x\n", reg, reg1);
+		dev_err(&gmu->pdev->dev, "CP2GMU_STATUS=%x CONTEXT_SWITCH_CNTL=%x\n", reg2, reg3);
 	}
 
 	WARN_ON(1);

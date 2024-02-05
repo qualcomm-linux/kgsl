@@ -556,4 +556,16 @@ void gen8_regread64_aperture(struct kgsl_device *device,
 void gen8_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id);
 
+
+/**
+ * gen8_host_aperture_set - Program CP aperture register
+ * @adreno_dev: Handle to the adreno device
+ * @pipe_id: Pipe for which the register is to be set
+ * @slice_id: Slice for which the register is to be set
+ * @use_slice_id: Set if the value to be read is from a sliced register
+ *
+ * This function programs CP aperture register
+ */
+void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
+		u32 slice_id, u32 use_slice_id);
 #endif
