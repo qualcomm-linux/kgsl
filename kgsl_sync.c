@@ -133,6 +133,12 @@ bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t 
 void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
 {
 	synx_release(kgsl_synx.handle, kfence->hw_fence_index);
+
+	/*
+	 * synx_release() doesn't have a way to get to the dma fence. Hence, the client must clear
+	 * this bit from the dma fence flags.
+	 */
+	clear_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &kfence->fence.flags);
 }
 
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
