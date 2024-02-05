@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -462,7 +462,7 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct rpmh_bw_votes *ddr, *cnoc = NULL;
 	u32 perfmode_vote = gen7_core->acv_perfmode_vote;
-	u32 perfmode_lvl = adreno_is_gen7_9_x(adreno_dev) ? GEN7_9_0_DDR_NOM_IDX : 1;
+	u32 perfmode_lvl = (perfmode_vote) ? GEN7_9_0_DDR_NOM_IDX : 1;
 	u32 *cnoc_table;
 	u32 count;
 	int ret;

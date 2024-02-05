@@ -5,9 +5,11 @@
  */
 
 #include <linux/clk/qcom.h>
+#include <linux/clk-provider.h>
 #include <linux/firmware.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 
 #include "adreno.h"
@@ -1122,6 +1124,19 @@ static void a3xx_protect_init(struct kgsl_device *device)
 	}
 }
 
+bool a3xx_gx_is_on(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	bool gdsc_on, clk_on;
+
+	clk_on = __clk_is_enabled(pwr->grp_clks[0]);
+
+	gdsc_on = regulator_is_enabled(pwr->gx_gdsc);
+
+	return (gdsc_on & clk_on);
+}
+
 static int a3xx_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1495,4 +1510,5 @@ const struct adreno_gpudev adreno_a3xx_gpudev = {
 	.power_stats = a3xx_power_stats,
 	.setproperty = a3xx_setproperty,
 	.remove = a3xx_remove,
+	.gx_is_on = a3xx_gx_is_on,
 };

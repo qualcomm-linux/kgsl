@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -700,6 +700,9 @@ static ssize_t __force_on_store(struct device *dev,
 	unsigned int val = 0;
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	int ret;
+
+	if (gmu_core_gpmu_isenabled(device))
+		return -EOPNOTSUPP;
 
 	ret = kstrtou32(buf, 0, &val);
 	if (ret)
@@ -1495,11 +1498,15 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 			&pwr->power_flags)) {
 			trace_kgsl_irq(device, state);
 			enable_irq(pwr->interrupt_num);
+			if (device->freq_limiter_intr_num > 0)
+				enable_irq(device->freq_limiter_intr_num);
 		}
 	} else {
 		if (test_and_clear_bit(KGSL_PWRFLAGS_IRQ_ON,
 			&pwr->power_flags)) {
 			trace_kgsl_irq(device, state);
+			if (device->freq_limiter_intr_num > 0)
+				disable_irq(device->freq_limiter_intr_num);
 			if (in_interrupt())
 				disable_irq_nosync(pwr->interrupt_num);
 			else
