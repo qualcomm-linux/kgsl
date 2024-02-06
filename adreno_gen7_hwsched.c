@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -1466,7 +1466,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
-			"Failed to set GPU perf idx %d, bw idx %d\n",
+			"Failed to set GPU perf idx %u, bw idx %u\n",
 			req.freq, req.bw);
 
 		/*
@@ -1528,12 +1528,13 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 static int gen7_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	u32 ab)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
-	/* Target gen7_9_x votes for perfmode through ACV. Skip icc path for same */
-	if (!adreno_is_gen7_9_x(adreno_dev))
+	/* Skip icc path for targets that supports ACV vote from GMU */
+	if (!gen7_core->acv_perfmode_vote)
 		kgsl_icc_set_tag(pwr, buslevel);
 
 	if (buslevel == pwr->cur_buslevel)
@@ -1748,6 +1749,7 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 {
 	struct adreno_hw_fence_entry *entry, *tmp;
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
+	struct kgsl_context *context = NULL;
 	int ret = 0;
 
 	list_for_each_entry_safe(entry, tmp, &hfi->detached_hw_fence_list, node) {
@@ -1761,7 +1763,11 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 		if (ret)
 			return ret;
 
+		context = &entry->drawctxt->base;
+
 		gen7_remove_hw_fence_entry(adreno_dev, entry);
+
+		kgsl_context_put(context);
 	}
 
 	return ret;

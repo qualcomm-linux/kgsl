@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -1617,7 +1617,7 @@ static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
 	ret = gen7_hfi_send_generic_req(adreno_dev, &req, sizeof(req));
 	if (ret) {
 		dev_err_ratelimited(&gmu->pdev->dev,
-			"Failed to set GPU perf idx %d, bw idx %d\n",
+			"Failed to set GPU perf idx %u, bw idx %u\n",
 			req.freq, req.bw);
 
 		/*
@@ -2154,12 +2154,13 @@ static const struct gmu_dev_ops gen7_gmudev = {
 static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	u32 ab)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
-	/* Target gen7_9_x votes for perfmode through ACV. Skip icc path for same */
-	if (!adreno_is_gen7_9_x(adreno_dev))
+	/* Skip icc path for targets that supports ACV vote from GMU */
+	if (!gen7_core->acv_perfmode_vote)
 		kgsl_icc_set_tag(pwr, buslevel);
 
 	if (buslevel == pwr->cur_buslevel)
@@ -2194,34 +2195,41 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 {
 	u16 vote = 0;
+	u32 max_bw, max_ab;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	if (!adreno_dev->gmu_ab || (ab == INVALID_AB_VALUE))
 		return (FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE));
 
-	if (pwr->ddr_table[pwr->ddr_table_count - 1]) {
-		/*
-		 * if ab is calculated as higher than theoretical max bandwidth, set ab as
-		 * theoretical max to prevent truncation during quantization.
-		 *
-		 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
-		 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
-		 */
-		u32 max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
-		u32 max_ab = max_bw / 1000;
+	/*
+	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
+	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
+	 */
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+	max_ab = max_bw / 1000;
 
-		ab = min_t(u32, ab, max_ab);
-
-		/*
-		 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
-		 * range to a 16 bit space and the quantized value can be used to vote for AB though
-		 * GMU. Quantization can be performed as below.
-		 *
-		 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
-		 */
+	/*
+	 * If requested AB is higher than theoretical max bandwidth, set AB vote as max
+	 * allowable quantized AB value.
+	 *
+	 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
+	 * range to a 16 bit space and the quantized value can be used to vote for AB though
+	 * GMU. Quantization can be performed as below.
+	 *
+	 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
+	 */
+	if (ab >= max_ab)
+		vote = MAX_AB_VALUE;
+	else
 		vote = (u16)(((u64)ab * 1000 * (1 << 16)) / max_bw);
-	}
+
+	/*
+	 * Vote will be calculated as 0 for smaller AB values.
+	 * Set a minimum non-zero vote in such cases.
+	 */
+	if (ab && !vote)
+		vote = 0x1;
 
 	/*
 	 * Set ab enable mask and valid AB vote. req.bw is 32 bit value 0xABABENIB
