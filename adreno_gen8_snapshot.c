@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -1566,7 +1566,7 @@ static void gen8_cx_misc_regs_snapshot(struct kgsl_device *device,
 	u64 *ptr, offset = 0;
 	const u32 *regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
 
-	if (CD_SCRIPT_CHECK(device))
+	if (CD_SCRIPT_CHECK(device) || !adreno_gx_is_on(ADRENO_DEVICE(device)))
 		goto legacy_snapshot;
 
 	/* Build the crash script */
