@@ -1991,6 +1991,8 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	if (!(fault & ADRENO_GMU_FAULT_SKIP_SNAPSHOT))
 		do_header_and_snapshot(device, fault, hung_rb, cmdobj);
 
+	adreno_gpufault_stats(adreno_dev, cmdobj ? DRAWOBJ(cmdobj) : NULL, NULL, fault);
+
 	/* Turn off the KEEPALIVE vote from the ISR for hard fault */
 	if (gpudev->gpu_keepalive && fault & ADRENO_HARD_FAULT)
 		gpudev->gpu_keepalive(adreno_dev, false);

@@ -257,6 +257,7 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
+#define ADRENO_FAULT_TYPES 8
 
 /**
  * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
@@ -515,6 +516,18 @@ struct adreno_dispatch_ops {
 };
 
 /**
+ * struct adreno_fault_proc - Structure to hold data on faulting processes
+ */
+struct adreno_fault_proc {
+	/** @comm: Task name of the faulting process */
+	char comm[TASK_COMM_LEN];
+	/** @fault_count: Count of the GPU faults from this process */
+	u32 fault_count;
+};
+
+#define ADRENO_MAX_FAULTING_PROCS 10
+
+/**
  * struct adreno_device - The mothership structure for all adreno related info
  * @dev: Reference to struct kgsl_device
  * @priv: Holds the private flags specific to the adreno_device
@@ -729,6 +742,15 @@ struct adreno_device {
 	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
 	 */
 	u32 ahb_timeout_val;
+	/** @fault_counts: Keep track of GPU faults */
+	u32 fault_counts[ADRENO_FAULT_TYPES];
+	/**
+	 * @fault_procs: Array to keep track of per process GPU fault count sorted by the number
+	 * of GPU faults
+	 */
+	struct adreno_fault_proc fault_procs[ADRENO_MAX_FAULTING_PROCS];
+	/** @fault_stats_lock: A R/W lock to protect GPU fault statistics */
+	rwlock_t fault_stats_lock;
 };
 
 /**
@@ -1988,4 +2010,16 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
 }
+
+/**
+ * adreno_gpufault_stats - Update GPU fault statistics
+ * @adreno_dev: Adreno device handle
+ * @drawobj: GC drawobj that caused the fault
+ * @drawobj_lpac: LPAC drawobj that caused the fault
+ * @fault: Fault type
+ *
+ * Update statistics about GPU faults
+ */
+void adreno_gpufault_stats(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
 #endif /*__ADRENO_H */

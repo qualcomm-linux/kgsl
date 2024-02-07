@@ -1729,6 +1729,8 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 			drawobj = NULL;
 	}
 
+	adreno_gpufault_stats(adreno_dev, drawobj, NULL, fault);
+
 	if (!drawobj) {
 		if (fault & ADRENO_GMU_FAULT)
 			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
@@ -1822,6 +1824,8 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		else
 			kgsl_device_snapshot(device, NULL, NULL, false);
+
+		adreno_gpufault_stats(adreno_dev, NULL, NULL, fault);
 		goto done;
 	}
 
@@ -1837,6 +1841,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	}
 
 	kgsl_device_snapshot(device, context, context_lpac, false);
+	adreno_gpufault_stats(adreno_dev, drawobj, drawobj_lpac, fault);
 
 	if (drawobj) {
 		force_retire_timestamp(device, drawobj);

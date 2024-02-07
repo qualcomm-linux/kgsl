@@ -316,6 +316,50 @@ static int _lpac_store(struct adreno_device *adreno_dev, bool val)
 		return -EINVAL;
 }
 
+static ssize_t gpufaults_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	size_t count = 0;
+	int i;
+
+	read_lock(&adreno_dev->fault_stats_lock);
+	for (i = 0; i < ARRAY_SIZE(adreno_dev->fault_counts); i++)
+		count += scnprintf(buf + count, PAGE_SIZE - 2 - count, "%u ",
+			adreno_dev->fault_counts[i]);
+	read_unlock(&adreno_dev->fault_stats_lock);
+
+	buf[count++] = '\n';
+	return count;
+}
+
+static ssize_t gpufault_procs_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	size_t count = 0;
+	int i;
+
+	read_lock(&adreno_dev->fault_stats_lock);
+	for (i = 0; i < ARRAY_SIZE(adreno_dev->fault_procs); i++) {
+		struct adreno_fault_proc *proc = &adreno_dev->fault_procs[i];
+
+		if (!proc->fault_count)
+			break;
+
+		count += scnprintf(buf + count, PAGE_SIZE - 1 - count, "%s %u\n",
+			proc->comm, proc->fault_count);
+
+		if (count >= PAGE_SIZE - 1)
+			break;
+	}
+	read_unlock(&adreno_dev->fault_stats_lock);
+
+	return count;
+}
+
 ssize_t adreno_sysfs_store_u32(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -403,6 +447,8 @@ static ADRENO_SYSFS_BOOL(touch_wake);
 static ADRENO_SYSFS_BOOL(gmu_ab);
 
 static DEVICE_ATTR_RO(gpu_model);
+static DEVICE_ATTR_RO(gpufaults);
+static DEVICE_ATTR_RO(gpufault_procs);
 
 static const struct attribute *_attr_list[] = {
 	&adreno_attr_ft_policy.attr.attr,
@@ -429,6 +475,8 @@ static const struct attribute *_attr_list[] = {
 	&adreno_attr_touch_wake.attr.attr,
 	&adreno_attr_gmu_ab.attr.attr,
 	&adreno_attr_clx.attr.attr,
+	&dev_attr_gpufaults.attr,
+	&dev_attr_gpufault_procs.attr,
 	NULL,
 };
 

@@ -1138,6 +1138,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 
 	INIT_LIST_HEAD(&adreno_dev->active_list);
 	spin_lock_init(&adreno_dev->active_list_lock);
+	rwlock_init(&adreno_dev->fault_stats_lock);
 
 	for (i = 0; i < ARRAY_SIZE(adreno_dev->ringbuffers); i++) {
 		struct adreno_ringbuffer *rb = &adreno_dev->ringbuffers[i];
@@ -3318,6 +3319,94 @@ u64 adreno_read_cx_timer(struct adreno_device *adreno_dev)
 
 	/* Since the GPU CX and CPU timers are synchronized return the CPU timer */
 	return arch_timer_read_counter();
+}
+
+static void add_proc_fault_list(struct adreno_device *adreno_dev,
+			struct kgsl_process_private *proc_priv)
+{
+	int cur_idx = -1;
+	int new_idx = -1;
+	int i;
+
+	/*
+	 * Add the process to array of faulting processes. This array is sorted (processes with
+	 * more faults are higher ranked).
+	 */
+	write_lock(&adreno_dev->fault_stats_lock);
+	proc_priv->fault_count++;
+
+	for (i = ARRAY_SIZE(adreno_dev->fault_procs) - 1; i >= 0; i--) {
+		struct adreno_fault_proc *proc = &adreno_dev->fault_procs[i];
+
+		/* Check whether this process is already tracked in the array */
+		if (!strcmp(proc->comm, proc_priv->comm)) {
+			proc_priv->fault_count = ++proc->fault_count;
+			cur_idx = i;
+			break;
+		}
+
+		/* Find left most entry with lower fault count than current process */
+		if (proc->fault_count < proc_priv->fault_count)
+			new_idx = i;
+	}
+
+	/*
+	 * If the process is not currently tracked, we can place it at the left most index that has
+	 * a fault count less than its fault count. If such an index does not exist, the array is
+	 * already full.
+	 */
+	if (cur_idx < 0) {
+		if (new_idx >= 0)
+			goto write_new_idx;
+		goto unlock;
+	}
+
+	/* Find the left most entry (if any) with a lower fault_count */
+	for (new_idx = 0; new_idx < cur_idx; new_idx++) {
+		if (adreno_dev->fault_procs[new_idx].fault_count < proc_priv->fault_count)
+			break;
+	}
+
+	/* Check if the current process is already at its correct position */
+	if (new_idx == cur_idx)
+		goto unlock;
+
+	/* Swap the two entries */
+	adreno_dev->fault_procs[cur_idx].fault_count =
+			adreno_dev->fault_procs[new_idx].fault_count;
+	strscpy(adreno_dev->fault_procs[cur_idx].comm, adreno_dev->fault_procs[new_idx].comm,
+			sizeof(adreno_dev->fault_procs[cur_idx].comm));
+
+write_new_idx:
+	adreno_dev->fault_procs[new_idx].fault_count = proc_priv->fault_count;
+	strscpy(adreno_dev->fault_procs[new_idx].comm, proc_priv->comm,
+		sizeof(adreno_dev->fault_procs[new_idx].comm));
+
+unlock:
+	write_unlock(&adreno_dev->fault_stats_lock);
+}
+
+void adreno_gpufault_stats(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault)
+{
+	int i;
+	struct kgsl_process_private *proc_priv = NULL, *proc_priv_lpac;
+
+	write_lock(&adreno_dev->fault_stats_lock);
+	for (i = 0; i < ARRAY_SIZE(adreno_dev->fault_counts); i++)
+		if (fault & BIT(i))
+			adreno_dev->fault_counts[i]++;
+	write_unlock(&adreno_dev->fault_stats_lock);
+
+	if (drawobj) {
+		proc_priv = drawobj->context->proc_priv;
+		add_proc_fault_list(adreno_dev, proc_priv);
+	}
+	if (drawobj_lpac) {
+		proc_priv_lpac = drawobj_lpac->context->proc_priv;
+		if (proc_priv_lpac != proc_priv)
+			add_proc_fault_list(adreno_dev, proc_priv_lpac);
+	}
 }
 
 static const struct kgsl_functable adreno_functable = {
