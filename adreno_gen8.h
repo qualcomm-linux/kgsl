@@ -135,8 +135,6 @@ struct adreno_gen8_core {
 	 * If not specified, vote perfmode for highest DDR level only.
 	 */
 	u32 acv_perfmode_ddr_freq;
-	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
-	u32 acv_perfmode_vote;
 	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */
 	const u32 rt_bus_hint;
 	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
