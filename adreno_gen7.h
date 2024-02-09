@@ -126,6 +126,8 @@ struct adreno_gen7_core {
 	const u32 rt_bus_hint;
 	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
 	bool fast_bus_hint;
+	/** @noc_timeout_us: GPU config NOC port timeout in usec */
+	u32 noc_timeout_us;
 };
 
 /**
@@ -472,6 +474,14 @@ to_gen7_gpudev(const struct adreno_gpudev *gpudev)
  * Reset the preemption records at the time of hard reset
  */
 void gen7_reset_preempt_records(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_enable_ahb_timeout_detection - Program AHB control registers
+ * @adreno_dev: An Adreno GPU handle
+ *
+ * Program AHB control registers to enable AHB timeout detection.
+ */
+void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev);
 
 /**
  * gen7_rdpm_mx_freq_update - Update the mx frequency

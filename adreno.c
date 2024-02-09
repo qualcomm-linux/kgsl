@@ -19,6 +19,7 @@
 #include <linux/reset.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/trace.h>
+#include <linux/units.h>
 #include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
@@ -1862,6 +1863,47 @@ void adreno_get_bus_counters(struct adreno_device *adreno_dev)
 	if (ret)
 		dev_err(KGSL_DEVICE(adreno_dev)->dev,
 			"Unable to get perf counters for bus DCVS\n");
+}
+
+#define ADRENO_AHB_MIN_TIMEOUT_VAL_USEC 1000
+
+u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us)
+{
+	u64 cycles, hub_clk_freq = adreno_dev->gmu_hub_clk_freq;
+	u32 timeout_val;
+
+	if (!noc_timeout_us)
+		return 0;
+
+	do_div(hub_clk_freq, HZ_PER_MHZ);
+	cycles = hub_clk_freq * noc_timeout_us;
+
+	/*
+	 * Get max possible AHB timeout value which is less than the GPU NOC timeout value.
+	 * When cycles are exact power of two, the calculated AHB timeout value will be same
+	 * as GPU config NOC timeout. Just reduce one cycle to make sure we do not program AHB
+	 * timeout same as GPU config NOC timeout.
+	 */
+	if (is_power_of_2(cycles))
+		cycles -= 1;
+
+	timeout_val = ilog2(cycles);
+
+	/*
+	 * Make sure, AHB timeout value fits into bit fields and it is not too low
+	 * which can cause false timeouts.
+	 */
+	if ((timeout_val > GENMASK(4, 0)) ||
+		((ADRENO_AHB_MIN_TIMEOUT_VAL_USEC * hub_clk_freq) > (1 << timeout_val))) {
+		dev_warn(adreno_dev->dev.dev, "Invalid AHB timeout_val %u\n", timeout_val);
+		return 0;
+	}
+
+	/*
+	 * Return (timeout_val - 1). Based on timeout_val programmed, a timeout will occur if
+	 * an AHB transaction is not completed in 2 ^ (timeout_val + 1) cycles.
+	 */
+	return (timeout_val - 1);
 }
 
 /**

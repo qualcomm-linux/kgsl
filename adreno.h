@@ -254,6 +254,15 @@ enum adreno_gpurev {
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
 
+/**
+ * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
+ * AHB_TXFRTIMEOUTRELEASE	[8:8]
+ * AHB_TXFRTIMEOUTENABLE	[9:9]
+ * AHB_RESPONDERROR		[11:11]
+ * AHB_ERRORSTATUSENABLE	[12:12]
+ */
+#define ADRENO_AHB_CNTL_DEFAULT (BIT(12) | BIT(11) | BIT(9) | BIT(8))
+
 enum adreno_pipe_type {
 	PIPE_NONE = 0,
 	PIPE_BR = 1,
@@ -732,6 +741,11 @@ struct adreno_device {
 	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
 	 */
 	u32 no_restore_count;
+	/*
+	 * @ahb_timeout_val: AHB transaction timeout value.
+	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
+	 */
+	u32 ahb_timeout_val;
 };
 
 /**
@@ -1979,4 +1993,13 @@ void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
  * Return - True if smmu is stalled or false otherwise
  */
 bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_get_ahb_timeout_val() - Get the ahb_timeout value
+ * @adreno_dev: Adreno device handle
+ * @noc_timeout_us: GPU config NOC timeout value in usec
+ *
+ * Return - AHB timeout value to be programmed in AHB CNTL registers
+ */
+u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us);
 #endif /*__ADRENO_H */

@@ -462,6 +462,8 @@ int gen8_init(struct adreno_device *adreno_dev)
 
 	adreno_dev->highest_bank_bit = gen8_core->highest_bank_bit;
 	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
+	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
+			gen8_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen8_core->bcl_data;
 
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
@@ -998,6 +1000,22 @@ static const struct kgsl_regmap_list gen8_0_0_bicubic_regs[] = {
 	{ GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_18, 0x3f9193f7 },
 	{ GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_19, 0x3f7227f7 },
 };
+
+void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
+{
+	u32 val;
+
+	if (!adreno_dev->ahb_timeout_val)
+		return;
+
+	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+			adreno_dev->ahb_timeout_val));
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+}
 
 #define MIN_HBB 13
 int gen8_start(struct adreno_device *adreno_dev)
