@@ -288,7 +288,6 @@ static void funnel_gfx_disable(struct coresight_device *csdev, struct coresight_
 	adreno_active_count_put(adreno_dev);
 err:
 	mutex_unlock(&device->mutex);
-	return;
 }
 
 struct coresight_ops_link funnel_link_gfx_ops = {
@@ -354,8 +353,8 @@ void adreno_coresight_add_device(struct adreno_device *adreno_dev, const char *n
 		return;
 
 	/* Set the funnel ops as graphics ops to bring GPU up before enabling funnel */
-	if (funnel_gfx !=NULL && funnel_gfx->funnel_csdev != NULL
-						&& funnel_gfx->funnel_csdev->ops == NULL)
+	if ((funnel_gfx != NULL) && (funnel_gfx->funnel_csdev != NULL)
+						&& (funnel_gfx->funnel_csdev->ops == NULL))
 		funnel_gfx->funnel_csdev->ops = &funnel_gfx_ops;
 
 	adreno_coresight_dev_probe(device, coresight, adreno_csdev, node);

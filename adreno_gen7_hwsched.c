@@ -246,7 +246,6 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 err:
 	snprintf(str, sizeof(str), "RB addr:0x%llx", gpuaddr);
 	SNAPSHOT_ERR_NOMEM(device, str);
-	return;
 }
 
 static bool parse_payload_rb_legacy(struct adreno_device *adreno_dev,
@@ -1527,7 +1526,7 @@ static int gen7_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
 
-	/**
+	/*
 	 * Wait for the dispatcher to retire everything by waiting
 	 * for the active count to go to zero.
 	 */
@@ -1655,7 +1654,7 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct list_head hw_fence_list;
 	struct adreno_hw_fence_entry *entry, *tmp;
 
-	/**
+	/*
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
 	 * cannot send them from within atomic context. Hence, walk list of such hardware fences
 	 * for each context and add it to this local list and then walk this list to send all these

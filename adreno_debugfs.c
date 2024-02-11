@@ -290,7 +290,7 @@ static void drawobj_print(struct seq_file *s,
 		cmdobj_print(s, CMDOBJ(drawobj));
 
 	seq_puts(s, " flags: ");
-	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS),
+	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS);
 	kgsl_drawobj_put(drawobj);
 	seq_puts(s, "\n");
 }

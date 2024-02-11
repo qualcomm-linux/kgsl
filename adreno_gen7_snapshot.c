@@ -413,7 +413,7 @@ static size_t gen7_snapshot_trace_buffer_gfx_trace(struct kgsl_device *device,
 	struct kgsl_snapshot_trace_buffer *header =
 			(struct kgsl_snapshot_trace_buffer *) buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct gen7_trace_buffer_info* info =
+	struct gen7_trace_buffer_info *info =
 				(struct gen7_trace_buffer_info *) priv;
 
 	if (remain < SZ_2K + sizeof(*header)) {
@@ -445,8 +445,8 @@ static size_t gen7_snapshot_trace_buffer_gfx_trace(struct kgsl_device *device,
 	}
 
 	/* Number of times the circular buffer has wrapped around */
-	wrap_count = FIELD_GET(GENMASK(31,12), status);
-	write_ptr = FIELD_GET(GENMASK(8,0), status);
+	wrap_count = FIELD_GET(GENMASK(31, 12), status);
+	write_ptr = FIELD_GET(GENMASK(8, 0), status);
 
 	/* Read partial buffer starting from 0 */
 	if (!wrap_count) {
@@ -474,7 +474,7 @@ static size_t gen7_snapshot_trace_buffer_etb(struct kgsl_device *device,
 	u32 read_ptr, count, write_ptr, val, idx = 0;
 	struct kgsl_snapshot_trace_buffer *header = (struct kgsl_snapshot_trace_buffer *) buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct gen7_trace_buffer_info* info = (struct gen7_trace_buffer_info *) priv;
+	struct gen7_trace_buffer_info *info = (struct gen7_trace_buffer_info *) priv;
 
 	/* Unlock ETB buffer */
 	qdss_regwrite(tmc_virt, QDSS_AOSS_APB_TMC_LAR, 0xC5ACCE55);
@@ -607,8 +607,8 @@ static void gen7_snapshot_trace_buffer(struct kgsl_device *device,
 		kgsl_regread(device, GEN7_CX_DBGC_CFG_DBGBUS_CNTLT, &val);
 	}
 
-	info.granularity = FIELD_GET(GENMASK(14,12), val);
-	info.segment = FIELD_GET(GENMASK(31,28), val);
+	info.granularity = FIELD_GET(GENMASK(14, 12), val);
+	info.segment = FIELD_GET(GENMASK(31, 28), val);
 
 	val_tmc_ctrl = qdss_regread(tmc_virt, QDSS_AOSS_APB_TMC_CTRL);
 

@@ -415,7 +415,7 @@ struct a6xx_reglist_list {
 };
 
 #define REGLIST(_a) \
-	 (struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), }
+	 ((struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), })
 
 static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
@@ -2068,7 +2068,7 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	 */
 	data[offset] = reg->select;
 	data[offset + 1] = reg->countable;
-	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL,
+	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL;
 	data[offset + 3] = 1;
 
 	lock->list_length += 2;
