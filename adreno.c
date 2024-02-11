@@ -1501,6 +1501,7 @@ static int adreno_pm_resume(struct device *dev)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
+	mutex_lock(&device->mutex);
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
 	if (pm_suspend_via_firmware()) {
 		struct kgsl_iommu *iommu = &device->mmu.iommu;
@@ -1508,14 +1509,11 @@ static int adreno_pm_resume(struct device *dev)
 
 		if (status)
 			return status;
+
+		gmu_core_dev_force_first_boot(device);
 	}
 #endif
 
-	mutex_lock(&device->mutex);
-
-#if IS_ENABLED(CONFIG_DEEPSLEEP_AU)
-	gmu_core_dev_force_first_boot(device);
-#endif
 	ops->pm_resume(adreno_dev);
 	mutex_unlock(&device->mutex);
 
