@@ -189,6 +189,9 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
 			(info->slice_id, 0, 0, 0));
 
+	/* Make sure the previous writes are posted before reading */
+	mb();
+
 	for (ptr = info->regs->regs; ptr[0] != UINT_MAX; ptr += 2) {
 		count = REG_COUNT(ptr);
 
@@ -675,6 +678,14 @@ done:
 	kgsl_regrmw(device, GEN8_SP_DBG_CNTL, GENMASK(1, 0), 0x0);
 }
 
+static void gen8_rmw_aperture(struct kgsl_device *device,
+	u32 offsetwords, u32 mask, u32 val, u32 pipe, u32 slice_id, u32 use_slice_id)
+{
+	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, slice_id, use_slice_id);
+
+	kgsl_regmap_rmw(&device->regmap, offsetwords, mask, val);
+}
+
 static void gen8_snapshot_mempool(struct kgsl_device *device,
 				struct kgsl_snapshot *snapshot)
 {
@@ -688,21 +699,17 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 		for (j = 0; j < slice; j++) {
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
-
 			/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4);
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, j, 1);
 
 			kgsl_snapshot_indexed_registers_v2(device, snapshot,
 				cp_indexed_reg->addr, cp_indexed_reg->data,
 				0, cp_indexed_reg->size, cp_indexed_reg->pipe_id,
-				((slice > 1) ? j : UINT_MAX));
+				((cp_indexed_reg->slice_region == SLICE) ? j : UINT_MAX));
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
-
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0);
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, j, 1);
 		}
 	}
 }
@@ -933,6 +940,9 @@ static size_t gen8_legacy_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 
 	if (info->cluster->sel)
 		kgsl_regwrite(device, info->cluster->sel->host_reg, info->cluster->sel->val);
+
+	/* Make sure the previous writes are posted before reading */
+	mb();
 
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
