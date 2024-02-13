@@ -146,6 +146,8 @@ struct kgsl_pwrctrl {
 	unsigned int throttle_mask;
 	u32 interval_timeout;
 	u64 clock_times[KGSL_MAX_PWRLEVELS];
+	/** @thermal_time: Time in usecs the GPU is limited by thermal constraints */
+	u64 thermal_time;
 	struct kgsl_clk_stats clk_stats;
 	bool bus_control;
 	int bus_mod;
