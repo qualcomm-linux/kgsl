@@ -701,6 +701,9 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 			/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
 			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, 0, 0);
+
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x4,
 				cp_indexed_reg->pipe_id, j, 1);
 
 			kgsl_snapshot_indexed_registers_v2(device, snapshot,
@@ -708,7 +711,11 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 				0, cp_indexed_reg->size, cp_indexed_reg->pipe_id,
 				((cp_indexed_reg->slice_region == SLICE) ? j : UINT_MAX));
 
+			/* Reset CP_CHICKEN_DBG[StabilizeMVC] once we are done */
 			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, 0, 0);
+
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x0,
 				cp_indexed_reg->pipe_id, j, 1);
 		}
 	}
