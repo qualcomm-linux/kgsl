@@ -229,8 +229,6 @@ struct gen8_cp_smmu_info {
 #define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(13536 * SZ_1K)
 /* Size of preemption record to be dumped in snapshot */
 #define GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES	(128 * 1024)
-/* Size of the user context record block (in bytes) */
-#define GEN8_CP_CTXRECORD_USER_RESTORE_SIZE	(192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
 #define GEN8_CP_PERFCOUNTER_SAVE_RESTORE_SIZE	(4 * 1024)
 
@@ -300,8 +298,6 @@ u32 gen8_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 u32 gen8_set_marker(u32 *cmds, enum adreno_cp_marker_type type);
 
 void gen8_preemption_callback(struct adreno_device *adreno_dev, int bit);
-
-int gen8_preemption_context_init(struct kgsl_context *context);
 
 void gen8_preemption_context_destroy(struct kgsl_context *context);
 

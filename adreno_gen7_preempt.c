@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -768,35 +768,4 @@ int gen7_preemption_init(struct adreno_device *adreno_dev)
 done:
 	clear_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
 	return ret;
-}
-
-int gen7_preemption_context_init(struct kgsl_context *context)
-{
-	struct kgsl_device *device = context->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	u64 flags = 0;
-
-	if (!adreno_preemption_feature_set(adreno_dev))
-		return 0;
-
-	if (context->flags & KGSL_CONTEXT_SECURE)
-		flags |= KGSL_MEMFLAGS_SECURE;
-
-	if (is_compat_task())
-		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
-
-	/*
-	 * gpumem_alloc_entry takes an extra refcount. Put it only when
-	 * destroying the context to keep the context record valid
-	 */
-	context->user_ctxt_record = gpumem_alloc_entry(context->dev_priv,
-			GEN7_CP_CTXRECORD_USER_RESTORE_SIZE, flags);
-	if (IS_ERR(context->user_ctxt_record)) {
-		int ret = PTR_ERR(context->user_ctxt_record);
-
-		context->user_ctxt_record = NULL;
-		return ret;
-	}
-
-	return 0;
 }
