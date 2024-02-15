@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -115,7 +115,10 @@ struct adreno_hwsched {
 	 * dispatch queues
 	 */
 	atomic_t submission_seqnum;
-
+	/** @global_ctxtq: Memory descriptor for global context queue */
+	struct kgsl_memdesc global_ctxtq;
+	/** @global_ctxt_gmu_registered: Whether global context is registered with gmu */
+	bool global_ctxt_gmu_registered;
 };
 
 /*

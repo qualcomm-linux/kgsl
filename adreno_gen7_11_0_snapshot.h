@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_11_0_SNAPSHOT_H
 #define __ADRENO_GEN7_11_0_SNAPSHOT_H
@@ -209,8 +209,7 @@ static const u32 gen7_11_0_gpu_registers[] = {
 	0x0ed47, 0x0ed47, 0x0ed4a, 0x0ed4a, 0x0ed52, 0x0ed52, 0x0ed66, 0x0ed68,
 	0x0ed6b, 0x0ed6d, 0x0ed6f, 0x0ed6f, 0x0ed80, 0x0ed81, 0x0ed85, 0x0ed85,
 	0x0ed87, 0x0ed87, 0x0ed8a, 0x0ed8a, 0x0ed92, 0x0ed92, 0x0eda6, 0x0eda8,
-	0x0edab, 0x0edad, 0x0edaf, 0x0edaf, 0x0f000, 0x0f002, 0x0f400, 0x0f400,
-	0x0f800, 0x0f803, 0x0fc00, 0x0fc01,
+	0x0edab, 0x0edad, 0x0edaf, 0x0edaf,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen7_11_0_gpu_registers), 8));

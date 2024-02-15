@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_A6XX_H_
@@ -166,9 +166,6 @@ struct a6xx_cp_smmu_info {
 
 /* Size of the CP_INIT pm4 stream in dwords */
 #define A6XX_CP_INIT_DWORDS 11
-
-/* Size of the perf counter enable pm4 stream in dwords */
-#define A6XX_PERF_COUNTER_ENABLE_DWORDS 3
 
 #define A6XX_INT_MASK \
 	((1 << A6XX_INT_CP_AHB_ERROR) |			\
