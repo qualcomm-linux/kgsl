@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -21,6 +21,7 @@
 #define MAX_BW_CMDS		8
 #define INVALID_DCVS_IDX	0xFF
 #define INVALID_AB_VALUE	0xFFFF
+#define MAX_AB_VALUE		(0xFFFF - 1)
 #define INVALID_BW_VOTE		(INVALID_DCVS_IDX | \
 					(FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE)))
 #if MAX_CNOC_LEVELS > MAX_GX_LEVELS

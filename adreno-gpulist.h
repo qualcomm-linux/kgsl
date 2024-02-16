@@ -2368,7 +2368,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_14_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
 			ADRENO_PREEMPTION | ADRENO_IFPC | ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
-		.perfcounters = &adreno_gen7_perfcounters,
+		.perfcounters = &adreno_gen7_no_cb_perfcounters,
 		.uche_gmem_alignment = 0,
 		.gmem_size = SZ_1M,
 		.bus_width = 32,
@@ -2708,7 +2708,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 			ADRENO_IFPC,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
-		.uche_gmem_alignment = SZ_16M,
+		.uche_gmem_alignment = SZ_64M,
 		.gmem_size = 12 * SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_8M,
