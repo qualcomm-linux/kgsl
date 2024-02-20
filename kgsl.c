@@ -336,7 +336,12 @@ static void kgsl_destroy_ion(struct kgsl_memdesc *memdesc)
 
 	if (metadata != NULL) {
 		remove_dmabuf_list(metadata);
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+		dma_buf_unmap_attachment_unlocked(metadata->attach, memdesc->sgt,
+				DMA_BIDIRECTIONAL);
+#else
 		dma_buf_unmap_attachment(metadata->attach, memdesc->sgt, DMA_BIDIRECTIONAL);
+#endif
 		dma_buf_detach(metadata->dmabuf, metadata->attach);
 		dma_buf_put(metadata->dmabuf);
 		kfree(metadata);
@@ -3343,8 +3348,11 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 	entry->memdesc.flags &= ~((uint64_t) KGSL_MEMFLAGS_USE_CPU_MAP);
 	entry->memdesc.flags |= (uint64_t)KGSL_MEMFLAGS_USERMEM_ION;
 
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+	sg_table = dma_buf_map_attachment_unlocked(attach, DMA_BIDIRECTIONAL);
+#else
 	sg_table = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
-
+#endif
 	if (IS_ERR_OR_NULL(sg_table)) {
 		ret = PTR_ERR(sg_table);
 		goto out;
@@ -3373,8 +3381,11 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 out:
 	if (ret) {
 		if (!IS_ERR_OR_NULL(sg_table))
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+			dma_buf_unmap_attachment_unlocked(attach, sg_table, DMA_BIDIRECTIONAL);
+#else
 			dma_buf_unmap_attachment(attach, sg_table, DMA_BIDIRECTIONAL);
-
+#endif
 		if (!IS_ERR_OR_NULL(attach))
 			dma_buf_detach(dmabuf, attach);
 
@@ -4043,6 +4054,14 @@ static u64 cap_alignment(struct kgsl_device *device, u64 flags)
 	return flags | FIELD_PREP(KGSL_MEMALIGN_MASK, align);
 }
 
+static u64 gpumem_max_va_size(struct kgsl_pagetable *pt, u64 flags)
+{
+	if (flags & KGSL_MEMFLAGS_FORCE_32BIT)
+		return pt->compat_va_end - pt->compat_va_start;
+
+	return pt->va_end - pt->va_start;
+}
+
 static struct kgsl_mem_entry *
 gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 		u64 size, u64 flags)
@@ -4051,6 +4070,7 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_memdesc *memdesc;
 	struct kgsl_mem_entry *entry;
+	struct kgsl_pagetable *pt;
 	int ret;
 
 	/* Disallow specific flags */
@@ -4070,6 +4090,12 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 
 	if ((flags & KGSL_MEMFLAGS_SECURE) && !check_and_warn_secured(device))
 		return ERR_PTR(-EOPNOTSUPP);
+
+	pt = (flags & KGSL_MEMFLAGS_SECURE) ?
+			device->mmu.securepagetable : private->pagetable;
+
+	if (!size || (size > gpumem_max_va_size(pt, flags)))
+		return ERR_PTR(-EINVAL);
 
 	flags = cap_alignment(device, flags);
 
@@ -5036,6 +5062,27 @@ int kgsl_request_irq(struct platform_device *pdev, const  char *name,
 		irq_handler_t handler, void *data)
 {
 	int ret, num = platform_get_irq_byname(pdev, name);
+
+	if (num < 0)
+		return num;
+
+	ret = devm_request_irq(&pdev->dev, num, handler, IRQF_TRIGGER_HIGH,
+		name, data);
+
+	if (ret) {
+		dev_err(&pdev->dev, "Unable to get interrupt %s: %d\n",
+			name, ret);
+		return ret;
+	}
+
+	disable_irq(num);
+	return num;
+}
+
+int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
+		irq_handler_t handler, void *data)
+{
+	int ret, num = platform_get_irq_byname_optional(pdev, name);
 
 	if (num < 0)
 		return num;

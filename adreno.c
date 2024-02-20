@@ -16,6 +16,7 @@
 #include <linux/msm_kgsl.h>
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
+#include <linux/reset.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/trace.h>
 #include <linux/version.h>
@@ -419,6 +420,23 @@ static irqreturn_t adreno_irq_handler(int irq, void *data)
 	return ret;
 }
 
+static irqreturn_t adreno_freq_limiter_irq_handler(int irq, void *data)
+{
+	struct kgsl_device *device = data;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	dev_err_ratelimited(device->dev,
+		"GPU req freq %u from prev freq %u unsupported for speed_bin: %d, soc_code: 0x%x\n",
+		pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq,
+		pwr->pwrlevels[pwr->previous_pwrlevel].gpu_freq,
+		device->speed_bin,
+		device->soc_code);
+
+	reset_control_reset(device->freq_limiter_irq_clear);
+
+	return IRQ_HANDLED;
+}
+
 irqreturn_t adreno_irq_callbacks(struct adreno_device *adreno_dev,
 		const struct adreno_irq_funcs *funcs, u32 status)
 {
@@ -766,7 +784,6 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct device_node *node, *child;
 	int feature_code, pcode;
-	u32 soc_code;
 
 	node = of_find_node_by_name(parent, "qcom,gpu-pwrlevel-bins");
 	if (node == NULL)
@@ -776,7 +793,8 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 	pcode = (feature_code >= SOCINFO_FC_Y0 && feature_code < SOCINFO_FC_INT_RESERVE) ?
 		max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) : SOCINFO_PCODE_UNKNOWN;
 
-	soc_code = FIELD_PREP(GENMASK(31, 16), pcode) | FIELD_PREP(GENMASK(15, 0), feature_code);
+	device->soc_code = FIELD_PREP(GENMASK(31, 16), pcode) |
+					FIELD_PREP(GENMASK(15, 0), feature_code);
 
 	for_each_child_of_node(node, child) {
 		bool match = false;
@@ -805,7 +823,7 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 			for (i = 0; i < num_codes; i++) {
 				if (!of_property_read_u32_index(child, "qcom,sku-codes",
 								i, &sku_code) &&
-					(sku_code == 0 || soc_code == sku_code)) {
+					(sku_code == 0 || device->soc_code == sku_code)) {
 					match = true;
 					break;
 				}
@@ -837,7 +855,7 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 
 	dev_err(&device->pdev->dev,
 		"No match for speed_bin:%d and soc_code:0x%x\n",
-		device->speed_bin, soc_code);
+		device->speed_bin, device->soc_code);
 	return -ENODEV;
 }
 
@@ -1289,6 +1307,12 @@ int adreno_device_probe(struct platform_device *pdev,
 		goto err_unbind;
 
 	device->pwrctrl.interrupt_num = status;
+
+	device->freq_limiter_intr_num = kgsl_request_irq_optional(pdev, "freq_limiter_irq",
+				adreno_freq_limiter_irq_handler, device);
+
+	device->freq_limiter_irq_clear =
+		devm_reset_control_get(&pdev->dev, "freq_limiter_irq_clear");
 
 	status = kgsl_device_platform_probe(device);
 	if (status)
