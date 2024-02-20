@@ -1234,7 +1234,7 @@ static int check_inflight_hw_fences(struct adreno_device *adreno_dev)
 	read_unlock(&device->context_lock);
 
 	if (ret)
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 
 	return ret;
 }
@@ -1323,7 +1323,7 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 
 	dev_err(&gmu->pdev->dev, "hardware fence unack_count(%d) isn't zero before SLUMBER\n",
 		unack_count);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 }
 
 static void hwsched_idle_check(struct work_struct *work)
@@ -1356,7 +1356,7 @@ static void hwsched_idle_check(struct work_struct *work)
 
 	if (!gen8_hw_isidle(adreno_dev)) {
 		dev_err(device->dev, "GPU isn't idle before SLUMBER\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	}
 
 	check_hw_fence_unack_count(adreno_dev);
@@ -1625,7 +1625,7 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN8_GMUAO_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen8_gmu_send_nmi(device, false);
+	gen8_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");

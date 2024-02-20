@@ -292,7 +292,7 @@ int gen8_gmu_device_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN8_GMUCX_CM3_FW_INIT_RESULT,
 			BIT(8), 100, GENMASK(8, 0))) {
 		dev_err(&gmu->pdev->dev, "GMU failed to come out of reset\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_DEVICE_START);
 		return -ETIMEDOUT;
 	}
 
@@ -313,7 +313,7 @@ int gen8_gmu_hfi_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN8_GMUCX_HFI_CTRL_STATUS,
 			BIT(0), 100, BIT(0))) {
 		dev_err(&gmu->pdev->dev, "GMU HFI init failed\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_INIT);
 		return -ETIMEDOUT;
 	}
 
@@ -549,9 +549,9 @@ int gen8_gmu_oob_set(struct kgsl_device *device,
 				100, check)) {
 		if (req == oob_perfcntr)
 			gmu->num_oob_perfcntr--;
-		gmu_core_fault_snapshot(device);
-		ret = -ETIMEDOUT;
 		WARN(1, "OOB request %s timed out\n", oob_to_str(req));
+		ret = -ETIMEDOUT;
+		gmu_core_fault_snapshot(device, GMU_FAULT_OOB_SET);
 		trigger_reset_recovery(adreno_dev, req);
 	}
 
@@ -778,7 +778,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	}
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_LOWEST_IDLE);
 	return -ETIMEDOUT;
 }
 
@@ -801,7 +801,7 @@ int gen8_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 				"GMU not idling: status2=0x%x %llx %llx\n",
 				status2, ts1,
 				gpudev->read_alwayson(adreno_dev));
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_IDLE);
 		return -ETIMEDOUT;
 	}
 
@@ -1582,9 +1582,12 @@ static u32 gen8_gmu_ifpc_isenabled(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void gen8_gmu_send_nmi(struct kgsl_device *device, bool force)
+void gen8_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	u32 result;
 
@@ -1595,7 +1598,7 @@ void gen8_gmu_send_nmi(struct kgsl_device *device, bool force)
 	if (gen8_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
-		return;
+		goto done;
 	}
 
 	if (force)
@@ -1635,6 +1638,9 @@ nmi:
 
 	/* Wait for the NMI to be handled */
 	udelay(200);
+
+done:
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, gmu->pdev, ticks, gf_policy);
 }
 
 static void gen8_gmu_cooperative_reset(struct kgsl_device *device)
@@ -1661,7 +1667,7 @@ static void gen8_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	gen8_gmu_send_nmi(device, true);
+	gen8_gmu_send_nmi(device, true, GMU_FAULT_PANIC_NONE);
 
 	gmu_core_regread(device, GEN8_GMUCX_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -1703,7 +1709,7 @@ void gen8_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN8_GMUAO_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen8_gmu_send_nmi(device, false);
+	gen8_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -2494,6 +2500,7 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 
 	device->gmu_core.dev_ops = &gen8_gmudev;
+	device->gmu_core.gf_panic = GMU_FAULT_PANIC_NONE;
 
 	/* Set default GMU attributes */
 	gmu->log_stream_enable = false;
