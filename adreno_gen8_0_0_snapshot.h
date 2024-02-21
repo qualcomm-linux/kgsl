@@ -677,21 +677,6 @@ static const u32 gen8_0_0_non_context_sp_pipe_br_usptp_registers[] = {
 static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_usptp_registers), 8));
 
 /*
- * Block   : ['SP']
- * REGION  : UNSLICE
- * Pipeline: PIPE_NONE
- * Cluster : CLUSTER_NONE
- * Location: HLSQ_DP_STR
- * pairs   : 5 (Regs:18)
- */
-static const u32 gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers[] = {
-	 0x0ae05, 0x0ae05, 0x0ae60, 0x0ae65, 0x0ae6b, 0x0ae6c, 0x0ae73, 0x0ae75,
-	 0x0aec0, 0x0aec5,
-	 UINT_MAX, UINT_MAX,
-};
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers), 8));
-
-/*
  * Block   : ['TPL1']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
@@ -1672,8 +1657,6 @@ static struct gen8_sptp_cluster_registers gen8_0_0_sptp_clusters[] = {
 		gen8_0_0_non_context_sp_pipe_br_sp_top_registers, 0xae00},
 	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, USPTP,
 		gen8_0_0_non_context_sp_pipe_br_usptp_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, HLSQ_DP_STR,
-		gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers, 0xae00},
 	{ CLUSTER_NONE, UNSLICE, 2, 2, TP0_NCTX_REG, PIPE_BR, 0, USPTP,
 		gen8_0_0_non_context_tpl1_pipe_br_usptp_registers, 0xb600},
 	{ CLUSTER_SP_VS, SLICE, 2, 2, SP_CTX0_3D_CVS_REG, PIPE_BR, 0, HLSQ_STATE,
