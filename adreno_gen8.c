@@ -159,6 +159,48 @@ static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
 	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BR) | BIT(PIPE_BV)},
 };
 
+struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
+	{ GEN8_UCHE_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_UCHE_CACHE_WAYS, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_UCHE_CLIENT_PF, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_UCHE_DBG_ECO_CNTL_0, BIT(PIPE_NONE), 0, 0, 2, },
+	{ GEN8_UCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
+	{ GEN8_UCHE_CCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
+	{ GEN8_RB_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_RB_CCU_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_CCU_NC_MODE_CNTL, BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_SLICE_UFC_PREFETCH_CNTL, BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_RB_SLICE_UFC_DBG_CNTL, BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_RB_CMP_NC_MODE_CNTL, BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_UFC_DBG_CNTL, BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_PC_CHICKEN_BITS_2, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_PC_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
+	{ GEN8_VFD_CB_LP_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
+	{ GEN8_VFD_CB_BUSY_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
+	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
+	{ GEN8_SP_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_NC_MODE_CNTL_2, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_CHICKEN_BITS_1, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_2, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_3, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_SP_CHICKEN_BITS_4, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_DISPATCH_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_SP_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_TPL1_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
+	{ GEN8_TPL1_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
+	{ GEN8_TPL1_DBG_ECO_CNTL1, BIT(PIPE_NONE), 0, 0, 0, },
+	{ 0 }
+};
+
 static int acd_calibrate_set(void *data, u64 val)
 {
 	struct kgsl_device *device = data;
@@ -195,6 +237,121 @@ static int acd_calibrate_get(void *data, u64 *val)
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(acd_cal_fops, acd_calibrate_get, acd_calibrate_set, "%llu\n");
+
+static ssize_t nc_override_get(struct file *filep,
+		char __user *user_buf, size_t len, loff_t *off)
+{
+	struct kgsl_device *device = (struct kgsl_device *) filep->private_data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
+	u32 i, max_size = PAGE_SIZE;
+	char *buf, *pos;
+	ssize_t size = 0;
+
+	if (!gen8_dev->nc_overrides_enabled || !nc_overrides)
+		return 0;
+
+	buf = kzalloc(max_size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	pos = buf;
+
+	mutex_lock(&gen8_dev->nc_mutex);
+	/* Copy all assignments from list to str */
+	for (i = 0; nc_overrides[i].offset; i++) {
+		if (nc_overrides[i].set) {
+			len = scnprintf(pos, max_size, "0x%x:0x%8.8x\n",
+					nc_overrides[i].offset, nc_overrides[i].val);
+			/* If we run out of space len will be zero */
+			if (len == 0)
+				break;
+			max_size -= len;
+			pos += len;
+		}
+	}
+	mutex_unlock(&gen8_dev->nc_mutex);
+
+	size = simple_read_from_buffer(user_buf, len, off, buf, pos - buf);
+
+	kfree(buf);
+	return size;
+}
+
+static void nc_override_cb(struct adreno_device *adreno_dev, void *priv)
+{
+	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
+
+	gen8_dev->nc_overrides_enabled = true;
+}
+
+static ssize_t nc_override_set(struct file *filep,
+		const char __user *user_buf, size_t len, loff_t *off)
+{
+	struct kgsl_device *device = (struct kgsl_device *) filep->private_data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
+	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
+	u32 i, offset, val;
+	int ret = -EINVAL;
+	ssize_t size = 0;
+	char *buf;
+
+	if (!nc_overrides)
+		return 0;
+
+	if ((len >= PAGE_SIZE) || (len == 0))
+		return -EINVAL;
+
+	buf = kzalloc(len + 1, GFP_KERNEL);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(buf, user_buf, len)) {
+		ret = -EFAULT;
+		goto err;
+	}
+
+	/* For sanity and parsing, ensure it is null terminated */
+	buf[len] = '\0';
+
+	size = sscanf(buf, "0x%x:0x%x", &offset, &val);
+	if (size == 0)
+		goto err;
+
+	size = 0;
+
+	mutex_lock(&gen8_dev->nc_mutex);
+	for (i = 0; nc_overrides[i].offset; i++) {
+		if (nc_overrides[i].offset == offset) {
+			nc_overrides[i].val = val;
+			nc_overrides[i].set = true;
+			size = len;
+			break;
+		}
+	}
+	mutex_unlock(&gen8_dev->nc_mutex);
+
+	if (size > 0) {
+		ret = adreno_power_cycle(ADRENO_DEVICE(device), nc_override_cb, NULL);
+		if (!ret)
+			ret = size;
+	}
+
+err:
+	kfree(buf);
+	return ret;
+}
+
+static const struct file_operations nc_override_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = nc_override_get,
+	.write = nc_override_set,
+	.llseek = noop_llseek,
+};
 
 void gen8_cp_init_cmds(struct adreno_device *adreno_dev, u32 *cmds)
 {
@@ -299,6 +456,8 @@ int gen8_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 int gen8_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	u64 freq = gen8_core->gmu_hub_clk_freq;
 
@@ -314,6 +473,12 @@ int gen8_init(struct adreno_device *adreno_dev)
 		adreno_dev->highest_bank_bit = 14;
 
 	gen8_crashdump_init(adreno_dev);
+
+	gen8_dev->nc_overrides = gen8_nc_overrides;
+	mutex_init(&gen8_dev->nc_mutex);
+
+	/* Debugfs node for noncontext registers override */
+	debugfs_create_file("nc_override", 0644, device->d_debugfs, device, &nc_override_fops);
 
 	return adreno_allocate_global(device, &adreno_dev->pwrup_reglist,
 		PAGE_SIZE, 0, 0, KGSL_MEMDESC_PRIVILEGED,
@@ -515,6 +680,8 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	const struct gen8_nonctxt_regs *regs = gen8_core->nonctxt_regs;
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
 	u32 i, pipe_id;
 	unsigned long pipe;
 
@@ -533,6 +700,32 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 				gen8_regwrite_aperture(device, regs[i].offset,
 					regs[i].val, pipe_id, 0, 0);
 		}
+	}
+
+	/* Program non context registers overrides for all pipes */
+	if (gen8_dev->nc_overrides_enabled) {
+		struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
+
+		mutex_lock(&gen8_dev->nc_mutex);
+		for (pipe_id = PIPE_NONE; pipe_id <= PIPE_AQE1; pipe_id++) {
+
+			if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+				continue;
+			else if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+				 !ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+				continue;
+
+			for (i = 0; nc_overrides[i].offset; i++) {
+				if (!nc_overrides[i].set)
+					continue;
+
+				pipe = (unsigned long)nc_overrides[i].pipelines;
+				if (test_bit(pipe_id, &pipe))
+					gen8_regwrite_aperture(device, nc_overrides[i].offset,
+							nc_overrides[i].val, pipe_id, 0, 0);
+			}
+		}
+		mutex_unlock(&gen8_dev->nc_mutex);
 	}
 
 	/* Clear aperture register */
@@ -592,6 +785,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	struct cpu_gpu_lock *lock = ptr;
 	u32 items = 0, i, j, pipe_id;
 	u32 *dest = ptr + sizeof(*lock);
+	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
 
 	/* Static IFPC restore only registers */
 	reglist[items].regs = gen8_ifpc_pwrup_reglist;
@@ -616,6 +810,29 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			*dest++ = r[j];
 			kgsl_regread(device, r[j], dest++);
 		}
+
+		mutex_lock(&gen8_dev->nc_mutex);
+		for (j = 0; j < nc_overrides[j].offset; j++) {
+			unsigned long pipe = (unsigned long)nc_overrides[j].pipelines;
+
+			if (!(test_bit(PIPE_NONE, &pipe) && nc_overrides[j].set &&
+				nc_overrides[j].list_type))
+				continue;
+
+			if ((reglist[i].regs == gen8_ifpc_pwrup_reglist) &&
+				(nc_overrides[j].list_type == 1)) {
+				*dest++ = nc_overrides[j].offset;
+				kgsl_regread(device, nc_overrides[j].offset, dest++);
+				lock->ifpc_list_len++;
+			} else if ((reglist[i].regs == gen8_pwrup_reglist) &&
+				(nc_overrides[j].list_type == 2)) {
+				*dest++ = nc_overrides[j].offset;
+				kgsl_regread(device, nc_overrides[j].offset, dest++);
+				lock->preemption_list_len++;
+			}
+		}
+		mutex_unlock(&gen8_dev->nc_mutex);
+
 	}
 
 	/*
@@ -659,6 +876,28 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			gen8_dev->ext_pwrup_list_len++;
 		}
 	}
+
+	/*
+	 * Write noncontext override pipe specific regs (<aperture> <address> <value> - triplets)
+	 * offset and the current value into GPU buffer
+	 */
+	mutex_lock(&gen8_dev->nc_mutex);
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_BV; pipe_id++) {
+		for (i = 0; i < nc_overrides[i].offset; i++) {
+			unsigned long pipe = (unsigned long)nc_overrides[i].pipelines;
+
+			if (!(test_bit(pipe_id, &pipe) && nc_overrides[i].set &&
+				nc_overrides[i].list_type))
+				continue;
+
+			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
+			*dest++ = nc_overrides[i].offset;
+			gen8_regread_aperture(device, nc_overrides[i].offset,
+					dest++, pipe_id, 0, 0);
+			gen8_dev->ext_pwrup_list_len++;
+		}
+	}
+	mutex_unlock(&gen8_dev->nc_mutex);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }

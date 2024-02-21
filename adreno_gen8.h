@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_H_
@@ -29,6 +29,24 @@ struct gen8_gpudev {
 extern const struct gen8_gpudev adreno_gen8_gmu_gpudev;
 extern const struct gen8_gpudev adreno_gen8_hwsched_gpudev;
 
+struct gen8_nonctxt_overrides {
+	/** offset: Dword offset of the register to write */
+	u32 offset;
+	/** pipelines: Pipelines to write */
+	u32 pipelines;
+	/** val: Value to be written to the register */
+	u32 val;
+	/** set: True for user override request */
+	bool set;
+	/**
+	 * list_type: 0 If the register already present in any of exisiting static pwrup list
+			1 if the register fits into IFPC static pwrup only list
+			2 if the register fits into IFPC + preemption static list
+			3 if the register fits into external powerup list
+	 */
+	u32 list_type;
+};
+
 /**
  * struct gen8_device - Container for the gen8_device
  */
@@ -41,6 +59,15 @@ struct gen8_device {
 	u32 aperture;
 	/** @ext_pwrup_list_len: External pwrup reglist length */
 	u16 ext_pwrup_list_len;
+	/**
+	 * @nc_overrides: Noncontext registers overrides whitelist if defined,
+	 * must be null terminated
+	 */
+	struct gen8_nonctxt_overrides *nc_overrides;
+	/** @nc_mutex: Mutex to protect nc_overrides updates */
+	struct mutex nc_mutex;
+	/** @nc_overrides_enabled: Set through debugfs path when any override is enabled */
+	bool nc_overrides_enabled;
 };
 
 /**
@@ -230,7 +257,8 @@ struct gen8_cp_smmu_info {
 	 (1 << GEN8_INT_ATBASYNCFIFOOVERFLOW) |		\
 	 (1 << GEN8_INT_ATBBUSOVERFLOW) |		\
 	 (1 << GEN8_INT_OUTOFBOUNDACCESS) |		\
-	 (1 << GEN8_INT_UCHETRAPINTERRUPT))
+	 (1 << GEN8_INT_UCHETRAPINTERRUPT) |		\
+	 (1 << GEN8_INT_TSBWRITEERROR))
 
 /**
  * to_gen8_core - return the gen8 specific GPU core struct

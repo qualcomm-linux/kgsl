@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN8_REG_H
@@ -956,6 +956,8 @@
 #define GEN8_GRAS_PERFCTR_LRZ_SEL_3         0x8733
 
 /* RB registers */
+#define GEN8_RB_DBG_ECO_CNTL                0x8e04
+#define GEN8_RB_CCU_DBG_ECO_CNTL            0x8e06
 #define GEN8_RB_CCU_CNTL                    0x8e07
 #define GEN8_RB_CCU_NC_MODE_CNTL            0x8e08
 #define GEN8_RB_GC_GMEM_PROTECT             0x8e09
@@ -976,6 +978,8 @@
 #define GEN8_RB_SUB_BLOCK_SEL_CNTL_HOST     0x8e3b
 #define GEN8_RB_SUB_BLOCK_SEL_CNTL_CD       0x8e3d
 #define GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE 0x8e50
+#define GEN8_RB_SLICE_UFC_PREFETCH_CNTL     0x8e77
+#define GEN8_RB_SLICE_UFC_DBG_CNTL          0x8e78
 #define GEN8_RB_CMP_NC_MODE_CNTL            0x8f00
 #define GEN8_RB_RESOLVE_PREFETCH_CNTL       0x8f01
 #define GEN8_RB_CMP_DBG_ECO_CNTL            0x8f02
@@ -990,6 +994,7 @@
 #define GEN8_RB_PERFCTR_UFC_SEL_3           0x8f13
 #define GEN8_RB_PERFCTR_UFC_SEL_4           0x8f14
 #define GEN8_RB_PERFCTR_UFC_SEL_5           0x8f15
+#define GEN8_RB_UFC_DBG_CNTL                0x8f29
 
 /* VPC registers */
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_0             0x9670
@@ -1055,6 +1060,8 @@
 #define GEN8_PC_PERFCTR_PC_SEL_14           0x9e3e
 #define GEN8_PC_PERFCTR_PC_SEL_15           0x9e3f
 #define GEN8_PC_CHICKEN_BITS_1              0x9e50
+#define GEN8_PC_DBG_ECO_CNTL                0x9e53
+
 #define GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1 0x9e64
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_0      0x9f00
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_1      0x9f01
@@ -1132,6 +1139,7 @@
 #define GEN8_SP_ISDB_DEBUG_ADDR_LO               0xae3e
 #define GEN8_SP_ISDB_DEBUG_ADDR_HI               0xae3f
 #define GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP        0xae6b
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL                0xae6c
 #define GEN8_SP_READ_SEL                         0xae6d
 #define GEN8_SP_DBG_CNTL                         0xae71
 
