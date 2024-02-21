@@ -3254,6 +3254,7 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 		struct gmu_context_queue_header *hdr =  drawctxt->gmu_context_queue.hostptr;
 
 		if ((timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)) {
+			_kgsl_context_get(&drawctxt->base);
 			list_move_tail(&entry->node, &hfi->detached_hw_fence_list);
 			continue;
 		}
@@ -3263,6 +3264,7 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 
 	/* Also grab all the hardware fences which were never sent to GMU */
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
+		_kgsl_context_get(&drawctxt->base);
 		list_move_tail(&entry->node, &hfi->detached_hw_fence_list);
 	}
 }
