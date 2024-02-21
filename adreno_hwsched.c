@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
@@ -2234,10 +2234,6 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
 		return;
 
-	/* Enable hardware fences only if context queues are enabled */
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return;
-
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &hwsched->flags))
 		return;
 
@@ -2327,4 +2323,40 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	}
 
 	return 0;
+}
+
+void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, struct device *dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_hw_fence_entry entries[5];
+	struct adreno_hw_fence_entry *entry, *next;
+	struct kgsl_context *context;
+	int id, i;
+	u32 count = 0;
+
+	read_lock(&device->context_lock);
+	idr_for_each_entry(&device->context_idr, context, id) {
+		struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+
+		spin_lock(&drawctxt->lock);
+
+		list_for_each_entry_safe(entry, next, &drawctxt->hw_fence_list, node) {
+			if (count < ARRAY_SIZE(entries))
+				memcpy(&entries[count], entry, sizeof(*entry));
+			count++;
+		}
+
+		spin_unlock(&drawctxt->lock);
+	}
+	read_unlock(&device->context_lock);
+
+	if (!count)
+		return;
+
+	dev_err(dev, "%d hw fences may not be signaled. %s are:\n", count,
+		count > 5 ? "First 5" : "They");
+
+	for (i = 0; (i < count) && (i < ARRAY_SIZE(entries)); i++)
+		dev_err(dev, "%d: ctx=%llu seqno=%llu\n", i, entries[i].cmd.ctxt_id,
+			entries[i].cmd.ts);
 }

@@ -21,7 +21,7 @@
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
-#define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT + HFI_QUEUE_DISPATCH_MAX_CNT)
+#define HFI_QUEUE_MAX (HFI_QUEUE_DEFAULT_CNT)
 
 #define DEFINE_QHDR(gmuaddr, id, prio) \
 	{\
@@ -38,26 +38,6 @@
 		.read_index = 0, \
 		.write_index = 0, \
 }
-
-static struct dq_info {
-	/** @max_dq: Maximum number of dispatch queues per RB level */
-	u32 max_dq;
-	/** @base_dq_id: Base dqid for level */
-	u32 base_dq_id;
-	/** @offset: Next dqid to use for roundrobin context assignment */
-	u32 offset;
-} gen8_hfi_dqs[KGSL_PRIORITY_MAX_RB_LEVELS] = {
-	{ 4, 0, }, /* RB0 */
-	{ 4, 4, }, /* RB1 */
-	{ 3, 8, }, /* RB2 */
-	{ 3, 11, }, /* RB3 */
-}, gen8_hfi_dqs_lpac[KGSL_PRIORITY_MAX_RB_LEVELS + 1] = {
-	{ 4, 0, }, /* RB0 */
-	{ 4, 4, }, /* RB1 */
-	{ 3, 8, }, /* RB2 */
-	{ 2, 11, }, /* RB3 */
-	{ 1, 13, }, /* RB LPAC */
-};
 
 struct pending_cmd gen8_hw_fence_ack;
 
@@ -1459,25 +1439,6 @@ static void init_queues(struct gen8_hfi *hfi)
 			DEFINE_QHDR(gmuaddr, HFI_CMD_ID, 0),
 			DEFINE_QHDR(gmuaddr, HFI_MSG_ID, 0),
 			DEFINE_QHDR(gmuaddr, HFI_DBG_ID, 0),
-			/* 4 DQs for RB priority 0 */
-			DEFINE_QHDR(gmuaddr, 3, 0),
-			DEFINE_QHDR(gmuaddr, 4, 0),
-			DEFINE_QHDR(gmuaddr, 5, 0),
-			DEFINE_QHDR(gmuaddr, 6, 0),
-			/* 4 DQs for RB priority 1 */
-			DEFINE_QHDR(gmuaddr, 7, 1),
-			DEFINE_QHDR(gmuaddr, 8, 1),
-			DEFINE_QHDR(gmuaddr, 9, 1),
-			DEFINE_QHDR(gmuaddr, 10, 1),
-			/* 3 DQs for RB priority 2 */
-			DEFINE_QHDR(gmuaddr, 11, 2),
-			DEFINE_QHDR(gmuaddr, 12, 2),
-			DEFINE_QHDR(gmuaddr, 13, 2),
-			/* 2 DQs for RB priority 3 */
-			DEFINE_QHDR(gmuaddr, 14, 3),
-			DEFINE_QHDR(gmuaddr, 15, 3),
-			/* 1 DQ for LPAC RB priority 4 */
-			DEFINE_QHDR(gmuaddr, 16, 4),
 		},
 	};
 
@@ -2057,16 +2018,6 @@ done:
 	return pending_ack.results[2];
 }
 
-static void _context_queue_enable(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-
-	if (GMU_VER_MINOR(gmu->ver.hfi) >= 3) {
-		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_CONTEXT_QUEUE, 0) == 1)
-			set_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
-	}
-}
-
 static int gen8_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2443,15 +2394,6 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	/*
-	 * HFI_VALUE_CONTEXT_QUEUE can only be queried after GMU has initialized some of the
-	 * required resources as part of handling gen8_hfi_send_core_fw_start()
-	 */
-	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)) {
-		_context_queue_enable(adreno_dev);
-		adreno_hwsched_register_hw_fence(adreno_dev);
-	}
-
 	ret = gen8_hfi_send_hw_fence_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
@@ -2822,31 +2764,10 @@ static void init_gmu_context_queue(struct adreno_context *drawctxt)
 	hdr->hw_fence_buffer_size = drawctxt->gmu_hw_fence_queue.size;
 }
 
-static u32 get_dq_id(struct adreno_device *adreno_dev, struct kgsl_context *context)
-{
-	struct dq_info *info;
-	u32 next;
-	u32 priority = adreno_get_level(context);
-
-	if (adreno_dev->lpac_enabled)
-		info = &gen8_hfi_dqs_lpac[priority];
-	else
-		info = &gen8_hfi_dqs[priority];
-
-	next = info->base_dq_id + info->offset;
-
-	info->offset = (info->offset + 1) % info->max_dq;
-
-	return next;
-}
-
 static int allocate_context_queues(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
 	int ret = 0;
-
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return 0;
 
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags) &&
 		!drawctxt->gmu_hw_fence_queue.gmuaddr) {
@@ -2931,8 +2852,7 @@ static int send_context_pointers(struct adreno_device *adreno_dev,
 		cmd.user_ctxt_record_addr =
 			context->user_ctxt_record->memdesc.gpuaddr;
 
-	if (adreno_hwsched_context_queue_enabled(adreno_dev))
-		cmd.gmu_context_queue_addr = drawctxt->gmu_context_queue.gmuaddr;
+	cmd.gmu_context_queue_addr = drawctxt->gmu_context_queue.gmuaddr;
 
 	return gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
 }
@@ -2972,10 +2892,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 	}
 
 	context->gmu_registered = true;
-	if (adreno_hwsched_context_queue_enabled(adreno_dev))
-		context->gmu_dispatch_queue = UINT_MAX;
-	else
-		context->gmu_dispatch_queue = get_dq_id(adreno_dev, context);
+	context->gmu_dispatch_queue = UINT_MAX;
 
 	return 0;
 }
@@ -3085,9 +3002,6 @@ done:
 
 static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
 {
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return drawobj->context->gmu_dispatch_queue;
-
 	if (adreno_is_preemption_enabled(adreno_dev))
 		return adreno_get_level(drawobj->context);
 
@@ -3178,7 +3092,8 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			if (is_kgsl_fence(fences[j])) {
 				populate_kgsl_fence(obj, fences[j]);
 			} else {
-				int ret = kgsl_hw_fence_add_waiter(device, fences[j]);
+				int ret = kgsl_hw_fence_add_waiter(device, fences[j],
+					&obj->hash_index);
 
 				if (ret) {
 					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
@@ -3196,6 +3111,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 				obj->seq_no, obj->flags, fences[j]->ops->get_timeline_name ?
 				fences[j]->ops->get_timeline_name(fences[j]) : "unknown");
 
+			obj->header = FIELD_PREP(GENMASK(15, 0), sizeof(*obj) >> 2);
 			obj++;
 		}
 	}
@@ -3655,64 +3571,6 @@ static void process_hw_fence_queue(struct adreno_device *adreno_dev,
 	}
 }
 
-/* Size in below functions are in unit of dwords */
-static int gen8_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, u32 queue_idx,
-	u32 *msg, u32 size_bytes, struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct hfi_queue_table *tbl = gmu->hfi.hfi_mem->hostptr;
-	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
-	u32 *queue;
-	u32 i, write, empty_space;
-	u32 size_dwords = size_bytes >> 2;
-	u32 align_size = ALIGN(size_dwords, SZ_4);
-	u32 id = MSG_HDR_GET_ID(*msg);
-
-	if (hdr->status == HFI_QUEUE_STATUS_DISABLED || !IS_ALIGNED(size_bytes, sizeof(u32)))
-		return -EINVAL;
-
-	queue = HOST_QUEUE_START_ADDR(gmu->hfi.hfi_mem, queue_idx);
-
-	empty_space = (hdr->write_index >= hdr->read_index) ?
-			(hdr->queue_size - (hdr->write_index - hdr->read_index))
-			: (hdr->read_index - hdr->write_index);
-
-	if (empty_space <= align_size)
-		return -ENOSPC;
-
-	write = hdr->write_index;
-
-	for (i = 0; i < size_dwords; i++) {
-		queue[write] = msg[i];
-		write = (write + 1) % hdr->queue_size;
-	}
-
-	/* Cookify any non used data at the end of the write buffer */
-	for (; i < align_size; i++) {
-		queue[write] = 0xfafafafa;
-		write = (write + 1) % hdr->queue_size;
-	}
-
-	/* Ensure packet is written out before proceeding */
-	wmb();
-
-	gen8_add_profile_events(adreno_dev, cmdobj, time);
-
-	/*
-	 * Put the profiling information in the user profiling buffer.
-	 * The hfi_update_write_idx below has a wmb() before the actual
-	 * write index update to ensure that the GMU does not see the
-	 * packet before the profile data is written out.
-	 */
-	adreno_profile_submit_time(time);
-
-	trace_kgsl_hfi_send(id, size_dwords, MSG_HDR_GET_SEQNUM(*msg));
-
-	hfi_update_write_idx(&hdr->write_index, write);
-
-	return 0;
-}
-
 int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
 {
 	int ret = 0;
@@ -3801,13 +3659,8 @@ skipib:
 	seqnum = atomic_inc_return(&adreno_dev->hwsched.submission_seqnum);
 	cmd->hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd->hdr, seqnum, cmd_sizebytes >> 2);
 
-	if (adreno_hwsched_context_queue_enabled(adreno_dev))
-		ret = gen8_gmu_context_queue_write(adreno_dev,
-			drawctxt, (u32 *)cmd, cmd_sizebytes, drawobj, &time);
-	else
-		ret = gen8_hfi_dispatch_queue_write(adreno_dev,
-			HFI_DSP_ID_0 + drawobj->context->gmu_dispatch_queue,
-			(u32 *)cmd, cmd_sizebytes, cmdobj, &time);
+	ret = gen8_gmu_context_queue_write(adreno_dev, drawctxt, (u32 *)cmd, cmd_sizebytes, drawobj,
+		&time);
 	if (ret)
 		return ret;
 
@@ -4084,9 +3937,6 @@ u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return;
-
 	if (drawctxt->gmu_context_queue.gmuaddr)
 		gen8_free_gmu_block(to_gen8_gmu(adreno_dev), &drawctxt->gmu_context_queue);
 

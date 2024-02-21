@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_ADRENO_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -948,6 +948,26 @@ TRACE_EVENT(adreno_preempt_done,
 	),
 	TP_printk("done switch to id=%d from id=%d level=%x ticks=%llu",
 		__entry->next, __entry->cur, __entry->level, __entry->ticks
+	)
+);
+
+TRACE_EVENT(adreno_ext_hw_fence_signal,
+	TP_PROTO(u64 context, u64 seq_no, u32 flags, u64 gmu_ticks),
+	TP_ARGS(context, seq_no, flags, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u64, context)
+		__field(u64, seq_no)
+		__field(u32, flags)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->context = context;
+		__entry->seq_no = seq_no;
+		__entry->flags = flags;
+		__entry->ticks = gmu_ticks;
+	),
+	TP_printk("ctx=%llu seqno=%llu flags=0x%x ticks=%llu",
+		__entry->context, __entry->seq_no, __entry->flags, __entry->ticks
 	)
 );
 

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -235,4 +235,12 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
  * Returns zero for hwsched fault else non zero value
  */
 u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_hwsched_log_pending_fences - Log any pending hardware fences if soccp vote failed
+ * @adreno_dev: pointer to the adreno device
+ * @dev: Pointer to the gmu pdev device
+ */
+void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, struct device *dev);
+
 #endif

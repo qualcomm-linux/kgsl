@@ -291,7 +291,8 @@ struct syncobj_flags {
 	const char *name;
 };
 
-static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj *syncobj, u32 index)
+static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj_legacy *syncobj,
+	u32 index)
 {
 	u32 count = scnprintf(str, max_size, "syncobj[%d] ctxt_id:%llu seqno:%llu flags:", index,
 			syncobj->ctxt_id, syncobj->seq_no);
@@ -315,7 +316,7 @@ static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj *syn
 
 static void log_syncobj(struct gen7_gmu_device *gmu, struct hfi_submit_syncobj *cmd)
 {
-	struct hfi_syncobj *syncobj = (struct hfi_syncobj *)&cmd[1];
+	struct hfi_syncobj_legacy *syncobj = (struct hfi_syncobj_legacy *)&cmd[1];
 	char str[128];
 	u32 i = 0;
 
@@ -2045,13 +2046,14 @@ done:
 	return pending_ack.results[2];
 }
 
-static void _context_queue_enable(struct adreno_device *adreno_dev)
+static void _context_queue_hw_fence_enable(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 
 	if (GMU_VER_MINOR(gmu->ver.hfi) >= 3) {
 		if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_CONTEXT_QUEUE, 0) == 1) {
 			set_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
+			adreno_hwsched_register_hw_fence(adreno_dev);
 		}
 	}
 }
@@ -2440,10 +2442,8 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	 * HFI_VALUE_CONTEXT_QUEUE can only be queried after GMU has initialized some of the
 	 * required resources as part of handling gen7_hfi_send_core_fw_start()
 	 */
-	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags)) {
-		_context_queue_enable(adreno_dev);
-		adreno_hwsched_register_hw_fence(adreno_dev);
-	}
+	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))
+		_context_queue_hw_fence_enable(adreno_dev);
 
 	ret = gen7_hfi_send_hw_fence_feature_ctrl(adreno_dev);
 	if (ret)
@@ -3093,7 +3093,7 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *dr
 	return 0;
 }
 
-static void populate_kgsl_fence(struct hfi_syncobj *obj,
+static void populate_kgsl_fence(struct hfi_syncobj_legacy *obj,
 	struct dma_fence *fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
@@ -3123,7 +3123,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	u32 cmd_sizebytes;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct hfi_submit_syncobj *cmd;
-	struct hfi_syncobj *obj = NULL;
+	struct hfi_syncobj_legacy *obj = NULL;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 seqnum;
 
@@ -3138,7 +3138,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	memset(cmdbuf, 0x0, cmd_sizebytes);
 	cmd = cmdbuf;
 	cmd->num_syncobj = syncobj->num_hw_fence;
-	obj = (struct hfi_syncobj *)&cmd[1];
+	obj = (struct hfi_syncobj_legacy *)&cmd[1];
 
 	for (i = 0; i < syncobj->numsyncs; i++) {
 		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
@@ -3175,7 +3175,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 			if (is_kgsl_fence(fences[j])) {
 				populate_kgsl_fence(obj, fences[j]);
 			} else {
-				int ret = kgsl_hw_fence_add_waiter(device, fences[j]);
+				int ret = kgsl_hw_fence_add_waiter(device, fences[j], NULL);
 
 				if (ret) {
 					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
