@@ -17,7 +17,6 @@
 #include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
@@ -3410,11 +3409,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -3707,6 +3702,8 @@ int a6xx_gmu_reset(struct adreno_device *adreno_dev)
 	a6xx_gmu_suspend(adreno_dev);
 
 	a6xx_reset_preempt_records(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
