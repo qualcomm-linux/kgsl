@@ -275,7 +275,7 @@ __get_rbbm_clock_cntl_on(struct adreno_device *adreno_dev)
 {
 	if (adreno_is_a630(adreno_dev))
 		return 0x8AA8AA02;
-	else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev))
+	else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev))
 		return 0xAAA8AA82;
 	else if (adreno_is_a702(adreno_dev))
 		return 0xAAAAAA82;
@@ -378,7 +378,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 */
 
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 1, 0);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -398,7 +398,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Hence skip GMU_GX registers for A612.
 	 */
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 0, 1);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -624,8 +624,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		       !adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
-	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev) ||
-			adreno_is_a702(adreno_dev)) {
+	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev) ||
+		adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x00800060);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x40201b16);
 	} else {
@@ -642,7 +642,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 	}
 
-	if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev)) {
+	if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev)) {
 		/* For A612 and A610 Mem pool size is reduced to 48 */
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 48);
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 47);
