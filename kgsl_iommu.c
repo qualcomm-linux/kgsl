@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitfield.h>
@@ -304,19 +304,17 @@ static size_t _iopgtbl_map_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 		struct page **pages, int npages, int prot)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0, size = 0;
+	size_t mapped = 0;
 	u64 addr = gpuaddr;
 	int ret, i;
 
 	for (i = 0; i < npages; i++) {
 		ret = ops->map_pages(ops, addr, page_to_phys(pages[i]), PAGE_SIZE, 1,
-			prot, GFP_KERNEL, &size);
+			prot, GFP_KERNEL, &mapped);
 		if (ret) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
-
-		mapped += PAGE_SIZE;
 		addr += PAGE_SIZE;
 	}
 
@@ -333,17 +331,29 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	int ret, i;
 
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
-		size_t size = sg->length, map_size = 0;
+		size_t size = sg->length;
 		phys_addr_t phys = sg_phys(sg);
 
-		ret = ops->map_pages(ops, addr, phys, PAGE_SIZE, size >> PAGE_SHIFT,
-				     prot, GFP_KERNEL, &map_size);
-		if (ret) {
-			_iopgtbl_unmap(pt, gpuaddr, mapped);
-			return 0;
+		while (size) {
+			size_t count, map_size = 0;
+			size_t pgsize = iommu_pgsize(pt->cfg.pgsize_bitmap,
+					addr, phys, size, &count);
+
+			ret = ops->map_pages(ops, addr, phys, pgsize, count,
+					     prot, GFP_KERNEL, &map_size);
+
+			mapped += map_size;
+
+			if (ret) {
+				_iopgtbl_unmap(pt, gpuaddr, mapped);
+				return 0;
+			}
+
+			addr += map_size;
+			phys += map_size;
+			size -= map_size;
 		}
-		addr += size;
-		mapped += map_size;
+
 	}
 
 	return mapped;
@@ -413,19 +423,18 @@ static size_t _iopgtbl_map_page_to_range(struct kgsl_iommu_pt *pt,
 		struct page *page, u64 gpuaddr, size_t range, int prot)
 {
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
-	size_t mapped = 0, map_size = 0;
+	size_t mapped = 0;
 	u64 addr = gpuaddr;
 	int ret;
 
 	while (range) {
 		ret = ops->map_pages(ops, addr, page_to_phys(page), PAGE_SIZE,
-				     1, prot, GFP_KERNEL, &map_size);
+				     1, prot, GFP_KERNEL, &mapped);
 		if (ret) {
 			_iopgtbl_unmap(pt, gpuaddr, mapped);
 			return 0;
 		}
 
-		mapped += map_size;
 		addr += PAGE_SIZE;
 		range -= PAGE_SIZE;
 	}
