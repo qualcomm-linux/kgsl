@@ -3464,6 +3464,7 @@ void kgsl_get_egl_counts(struct kgsl_mem_entry *entry,
 
 		switch (kgsl_memdesc_get_memtype(&scan_mem_entry->memdesc)) {
 		case KGSL_MEMTYPE_EGL_SURFACE:
+		case KGSL_MEMTYPE_SURFACE:
 			(*egl_surface_count)++;
 			break;
 		case KGSL_MEMTYPE_EGL_IMAGE:
