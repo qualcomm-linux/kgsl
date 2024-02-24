@@ -259,6 +259,7 @@ static struct kgsl_mem_entry *kgsl_mem_entry_create(void)
 		/* put this ref in userspace memory alloc and map ioctls */
 		kref_get(&entry->refcount);
 		atomic_set(&entry->map_count, 0);
+		atomic_set(&entry->vbo_count, 0);
 	}
 
 	return entry;
@@ -4002,6 +4003,9 @@ gpumem_alloc_vbo_entry(struct kgsl_device_private *dev_priv,
 	struct kgsl_mem_entry *entry;
 	struct kgsl_pagetable *pt;
 	int ret;
+
+	if (!size)
+		return ERR_PTR(-EINVAL);
 
 	/* Disallow specific flags */
 	if (flags & (KGSL_MEMFLAGS_GPUREADONLY | KGSL_CACHEMODE_MASK))
