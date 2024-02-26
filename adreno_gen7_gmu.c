@@ -2154,12 +2154,13 @@ static const struct gmu_dev_ops gen7_gmudev = {
 static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	u32 ab)
 {
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret = 0;
 
-	/* Target gen7_9_x votes for perfmode through ACV. Skip icc path for same */
-	if (!adreno_is_gen7_9_x(adreno_dev))
+	/* Skip icc path for targets that supports ACV vote from GMU */
+	if (!gen7_core->acv_perfmode_vote)
 		kgsl_icc_set_tag(pwr, buslevel);
 
 	if (buslevel == pwr->cur_buslevel)
@@ -2185,7 +2186,7 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel, ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
 	return ret;
 }
 

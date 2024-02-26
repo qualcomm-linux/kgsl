@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -677,8 +677,6 @@ struct adreno_device {
 	 * @soft_ft_vals: number of elements in @soft_ft_regs and @soft_ft_vals
 	 */
 	int soft_ft_count;
-	/** @wake_on_touch: If true our last wakeup was due to a touch event */
-	bool wake_on_touch;
 	/* @dispatch_ops: A pointer to a set of adreno dispatch ops */
 	const struct adreno_dispatch_ops *dispatch_ops;
 	/** @hwsched: Container for the hardware dispatcher */

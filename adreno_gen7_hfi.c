@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -573,13 +573,39 @@ int gen7_hfi_send_bcl_feature_ctrl(struct adreno_device *adreno_dev)
 	return gen7_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_BCL, 1, adreno_dev->bcl_data);
 }
 
-int gen7_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
+static int gen7_hfi_send_clx_v1_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	int ret;
+	struct hfi_clx_table_v1_cmd cmd = {0};
+
+	/* Make sure the table is valid before enabling feature */
+	ret = CMD_MSG_HDR(cmd, H2F_MSG_CLX_TBL);
+	if (ret)
+		return ret;
+
+	ret = gen7_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_CLX, 1, 0);
+	if (ret)
+		return ret;
+
+	/* GMU supports HW CLX V2 only with both HFI V1 and V2 data formats */
+	cmd.data0 = FIELD_PREP(GENMASK(31, 16), 0x2) | FIELD_PREP(GENMASK(15, 0), 0x1);
+	cmd.data1 = FIELD_PREP(GENMASK(31, 29), 1) |
+				FIELD_PREP(GENMASK(28, 28), 1) |
+				FIELD_PREP(GENMASK(27, 22), 1) |
+				FIELD_PREP(GENMASK(21, 16), 40) |
+				FIELD_PREP(GENMASK(15, 0), 0);
+	cmd.clxt = 0;
+	cmd.clxh = 0;
+	cmd.urgmode = 1;
+	cmd.lkgen = 0;
+
+	return gen7_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+}
+
+static int gen7_hfi_send_clx_v2_feature_ctrl(struct adreno_device *adreno_dev)
 {
 	int ret = 0;
 	struct hfi_clx_table_v2_cmd cmd = {0};
-
-	if (!adreno_dev->clx_enabled)
-		return 0;
 
 	/* Make sure the table is valid before enabling feature */
 	ret = CMD_MSG_HDR(cmd, H2F_MSG_CLX_TBL);
@@ -604,6 +630,18 @@ int gen7_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 	cmd.domain[1].currbudget = 50;
 
 	return gen7_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+}
+
+int gen7_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	if (!adreno_dev->clx_enabled)
+		return 0;
+
+	/* gen7_11_0 GPU uses HFI CLX data version 1 */
+	if (adreno_is_gen7_11_0(adreno_dev))
+		return gen7_hfi_send_clx_v1_feature_ctrl(adreno_dev);
+
+	return gen7_hfi_send_clx_v2_feature_ctrl(adreno_dev);
 }
 
 #define EVENT_PWR_ACD_THROTTLE_PROF 44

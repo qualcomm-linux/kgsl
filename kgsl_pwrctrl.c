@@ -2133,6 +2133,9 @@ void kgsl_pwrctrl_set_state(struct kgsl_device *device,
 	device->state = state;
 	device->requested_state = KGSL_STATE_NONE;
 
+	if (state == KGSL_STATE_SLUMBER)
+		device->pwrctrl.wake_on_touch = false;
+
 	spin_lock(&device->submit_lock);
 	if (state == KGSL_STATE_ACTIVE)
 		device->skip_inline_submit = false;
