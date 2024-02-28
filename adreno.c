@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -2125,7 +2125,7 @@ static int adreno_prop_gpu_model(struct kgsl_device *device,
 {
 	struct kgsl_gpu_model model = {0};
 
-	strlcpy(model.gpu_model, adreno_get_gpu_model(device),
+	strscpy(model.gpu_model, adreno_get_gpu_model(device),
 			sizeof(model.gpu_model));
 
 	return copy_prop(param, &model, sizeof(model));
