@@ -2505,10 +2505,12 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 		goto err_device_put;
 	}
 
-	ret = qcom_iommu_set_secure_vmid(context->domain, secure_vmid);
-	if (ret) {
-		dev_err(&device->pdev->dev, "Unable to set the secure VMID: %d\n", ret);
-		goto err_domain_free;
+	if (!of_property_read_bool(node, "qcom,iommu-vmid")) {
+		ret = qcom_iommu_set_secure_vmid(context->domain, secure_vmid);
+		if (ret) {
+			dev_err(&device->pdev->dev, "Unable to set the secure VMID: %d\n", ret);
+			goto err_domain_free;
+		}
 	}
 
 	_enable_gpuhtw_llc(mmu, context->domain);
