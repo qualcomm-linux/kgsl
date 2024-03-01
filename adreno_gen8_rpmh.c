@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -452,8 +452,6 @@ static void build_bw_table_cmd(struct hfi_bwtable_cmd *cmd,
 			cmd->cnoc_cmd_data[i][j] = (u32) cnoc->cmds[i][j];
 }
 
-#define GEN8_DDR_NOM_IDX 6
-
 static int build_bw_table(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -462,7 +460,8 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct rpmh_bw_votes *ddr, *cnoc = NULL;
 	u32 perfmode_vote = gen8_core->acv_perfmode_vote;
-	u32 perfmode_lvl = GEN8_DDR_NOM_IDX;
+	u32 perfmode_lvl = perfmode_vote ? kgsl_pwrctrl_get_acv_perfmode_lvl(device,
+					gen8_core->acv_perfmode_ddr_freq) : 1;
 	u32 *cnoc_table;
 	u32 count;
 	int ret;

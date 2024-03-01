@@ -157,6 +157,11 @@ struct adreno_gen8_core {
 	u32 preempt_level;
 	/** @qos_value: GPU qos value to set for each RB. */
 	const u32 *qos_value;
+	/**
+	 * @acv_perfmode_ddr_freq: Vote perfmode when DDR frequency >= acv_perfmode_ddr_freq.
+	 * If not specified, vote perfmode for highest DDR level only.
+	 */
+	u32 acv_perfmode_ddr_freq;
 	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
 	u32 acv_perfmode_vote;
 	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_PWRCTRL_H
 #define __KGSL_PWRCTRL_H
@@ -317,4 +317,13 @@ void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device);
  * Return: 0 on success or negative error on failure
  */
 int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device *pdev);
+
+/**
+ * kgsl_pwrctrl_get_acv_perfmode_lvl - Retrieve DDR level for GPU performance mode
+ * @device: Pointer to the kgsl device
+ * @ddr_freq: Target specific DDR frequency from where GPU needs to vote for perf mode
+ *
+ * Return: DDR vote level from where GPU should vote for performance mode
+ */
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq);
 #endif /* __KGSL_PWRCTRL_H */
