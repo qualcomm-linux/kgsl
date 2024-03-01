@@ -701,10 +701,8 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	int level;
 
 	/* Get and set the initial power level */
-	if (of_property_read_u32(node, "qcom,initial-pwrlevel", &level))
-		level = 1;
-
-	if (level < 0 || level >= pwr->num_pwrlevels)
+	if (WARN_ON(of_property_read_u32(node, "qcom,initial-pwrlevel", &level) ||
+		level < 0 || level >= pwr->num_pwrlevels))
 		level = 1;
 
 	pwr->active_pwrlevel = level;
