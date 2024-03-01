@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -342,6 +342,8 @@ struct kgsl_device {
 	struct reset_control *freq_limiter_irq_clear;
 	/** @freq_limiter_intr_num: The interrupt number for freq limiter */
 	int freq_limiter_intr_num;
+	/** @cx_host_irq_num: Interrupt number for cx_host_irq */
+	int cx_host_irq_num;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

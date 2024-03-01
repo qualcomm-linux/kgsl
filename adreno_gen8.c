@@ -562,7 +562,7 @@ void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	adreno_dev->feature_fuse = feature_fuse;
 }
 
-static void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
+void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id)
 {
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
@@ -2041,6 +2041,25 @@ done:
 	return ret;
 }
 
+static irqreturn_t gen8_cx_host_irq_handler(int irq, void *data)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 status;
+
+	adreno_cx_misc_regread(adreno_dev, GEN8_GPU_CX_MISC_INT_0_STATUS, &status);
+	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, status);
+
+	if (status & BIT(GEN8_CX_MISC_GPU_CC_IRQ))
+		KGSL_PWRCTRL_LOG_FREQLIM(device);
+
+	if (status & ~GEN8_CX_MISC_INT_MASK)
+		dev_err_ratelimited(device->dev, "Unhandled CX MISC interrupts 0x%lx\n",
+			status & ~GEN8_CX_MISC_INT_MASK);
+
+	return IRQ_HANDLED;
+}
+
 int gen8_probe_common(struct platform_device *pdev,
 	struct adreno_device *adreno_dev, u32 chipid,
 	const struct adreno_gpu_core *gpucore)
@@ -2064,6 +2083,9 @@ int gen8_probe_common(struct platform_device *pdev,
 
 	device->pwrctrl.rt_bus_hint = gen8_core->rt_bus_hint;
 
+	device->cx_host_irq_num = kgsl_request_irq_optional(pdev,
+		"cx_host_irq", gen8_cx_host_irq_handler, device);
+
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
 		return ret;
@@ -2078,9 +2100,10 @@ int gen8_probe_common(struct platform_device *pdev,
 	/* debugfs node for ACD calibration */
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
 
-	/* Dump additional AQE 16KB data on top of default 96KB(48(BR)+48(BV)) */
+	/* Dump additional AQE 16KB data on top of default 128KB(64(BR)+64(BV)) */
 	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
-					112 * SZ_1K : 96 * SZ_1K;
+			(GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES + SZ_16K) :
+			GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES;
 
 	return 0;
 }

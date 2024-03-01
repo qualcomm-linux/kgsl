@@ -228,7 +228,9 @@ struct gen8_cp_smmu_info {
 
 #define GEN8_CP_CTXRECORD_MAGIC_REF		0xae399d6eUL
 /* Size of each CP preemption record */
-#define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(4192 * 1024)
+#define GEN8_CP_CTXRECORD_SIZE_IN_BYTES		(13536 * SZ_1K)
+/* Size of preemption record to be dumped in snapshot */
+#define GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES	(128 * 1024)
 /* Size of the user context record block (in bytes) */
 #define GEN8_CP_CTXRECORD_USER_RESTORE_SIZE	(192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
@@ -264,6 +266,11 @@ struct gen8_cp_smmu_info {
 	 (1 << GEN8_INT_OUTOFBOUNDACCESS) |		\
 	 (1 << GEN8_INT_UCHETRAPINTERRUPT) |		\
 	 (1 << GEN8_INT_TSBWRITEERROR))
+
+/* GEN8 CX MISC interrupt bits */
+#define GEN8_CX_MISC_GPU_CC_IRQ	31
+
+#define GEN8_CX_MISC_INT_MASK	BIT(GEN8_CX_MISC_GPU_CC_IRQ)
 
 /**
  * to_gen8_core - return the gen8 specific GPU core struct
@@ -584,4 +591,16 @@ void gen8_regread64_aperture(struct kgsl_device *device,
 void gen8_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id);
 
+
+/**
+ * gen8_host_aperture_set - Program CP aperture register
+ * @adreno_dev: Handle to the adreno device
+ * @pipe_id: Pipe for which the register is to be set
+ * @slice_id: Slice for which the register is to be set
+ * @use_slice_id: Set if the value to be read is from a sliced register
+ *
+ * This function programs CP aperture register
+ */
+void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
+		u32 slice_id, u32 use_slice_id);
 #endif

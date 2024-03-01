@@ -30,6 +30,13 @@
 #define KGSL_XO_CLK_FREQ	19200000
 #define KGSL_ISENSE_CLK_FREQ	200000000
 
+#define KGSL_PWRCTRL_LOG_FREQLIM(device) dev_err_ratelimited(device->dev,	\
+	"GPU req freq %u from prev freq %u unsupported for speed_bin: %d, soc_code: 0x%x\n",	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.active_pwrlevel].gpu_freq,	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.previous_pwrlevel].gpu_freq,	\
+	device->speed_bin,	\
+	device->soc_code)
+
 struct platform_device;
 struct icc_path;
 
