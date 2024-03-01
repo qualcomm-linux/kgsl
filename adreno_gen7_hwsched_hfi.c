@@ -749,17 +749,37 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 	}
 }
 
-static u32 peek_next_header(struct gen7_gmu_device *gmu, uint32_t queue_idx)
+static bool is_queue_empty(struct adreno_device *adreno_dev, u32 queue_idx)
+{
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_memdesc *mem_addr = gmu->hfi.hfi_mem;
+	struct hfi_queue_table *tbl = mem_addr->hostptr;
+	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
+
+	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
+		return true;
+
+	if (hdr->read_index == hdr->write_index)
+		return true;
+
+	/*
+	 * This is to ensure that the queue is not read speculatively before the queue empty
+	 * condition is evaluated
+	 */
+	rmb();
+
+	return false;
+}
+
+static u32 peek_next_header(struct adreno_device *adreno_dev, struct gen7_gmu_device *gmu,
+	u32 queue_idx)
 {
 	struct kgsl_memdesc *mem_addr = gmu->hfi.hfi_mem;
 	struct hfi_queue_table *tbl = mem_addr->hostptr;
 	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
 	u32 *queue;
 
-	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
-		return 0;
-
-	if (hdr->read_index == hdr->write_index)
+	if (is_queue_empty(adreno_dev, queue_idx))
 		return 0;
 
 	queue = HOST_QUEUE_START_ADDR(mem_addr, queue_idx);
@@ -1229,7 +1249,7 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 	mutex_lock(&hw_hfi->msgq_mutex);
 
 	for (;;) {
-		next_hdr = peek_next_header(gmu, HFI_MSG_ID);
+		next_hdr = peek_next_header(adreno_dev, gmu, HFI_MSG_ID);
 
 		if (!next_hdr)
 			break;
@@ -2606,22 +2626,6 @@ int gen7_hwsched_lpac_cp_init(struct adreno_device *adreno_dev)
 
 	return submit_lpac_raw_cmds(adreno_dev, cmds, sizeof(cmds),
 			"LPAC CP initialization failed to idle\n");
-}
-
-static bool is_queue_empty(struct adreno_device *adreno_dev, u32 queue_idx)
-{
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct kgsl_memdesc *mem_addr = gmu->hfi.hfi_mem;
-	struct hfi_queue_table *tbl = mem_addr->hostptr;
-	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
-
-	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
-		return true;
-
-	if (hdr->read_index == hdr->write_index)
-		return true;
-
-	return false;
 }
 
 static int hfi_f2h_main(void *arg)
