@@ -1561,7 +1561,7 @@ static void gen8_cx_misc_regs_snapshot(struct kgsl_device *device,
 	u64 *ptr, offset = 0;
 	const u32 *regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
 
-	if (CD_SCRIPT_CHECK(device))
+	if (CD_SCRIPT_CHECK(device) || !adreno_gx_is_on(ADRENO_DEVICE(device)))
 		goto legacy_snapshot;
 
 	/* Build the crash script */
