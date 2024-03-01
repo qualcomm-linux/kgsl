@@ -2736,6 +2736,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.gen8_snapshot_block_list = &gen8_0_0_snapshot_block_list,
 	.fast_bus_hint = true,
 	.bcl_data = 1,
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 };
 
 /* GEN8_4_0 noncontext register list */
