@@ -210,7 +210,7 @@ static void adreno_input_work(struct work_struct *work)
 
 	mutex_lock(&device->mutex);
 
-	adreno_dev->wake_on_touch = true;
+	device->pwrctrl.wake_on_touch = true;
 
 	ops->touch_wakeup(adreno_dev);
 
@@ -227,7 +227,7 @@ void adreno_touch_wake(struct kgsl_device *device)
 	 * here before
 	 */
 
-	if (adreno_dev->wake_on_touch)
+	if (device->pwrctrl.wake_on_touch)
 		return;
 
 	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
@@ -3098,7 +3098,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 			 * been submitted since the last time we set it.
 			 * But only clear it when we have rendering commands.
 			 */
-			ADRENO_DEVICE(device)->wake_on_touch = false;
+			device->pwrctrl.wake_on_touch = false;
 		}
 	}
 

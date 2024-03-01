@@ -680,8 +680,6 @@ struct adreno_device {
 	struct kgsl_memdesc *critpkts_secure;
 	/** @irq_mask: The current interrupt mask for the GPU device */
 	u32 irq_mask;
-	/** @wake_on_touch: If true our last wakeup was due to a touch event */
-	bool wake_on_touch;
 	/* @dispatch_ops: A pointer to a set of adreno dispatch ops */
 	const struct adreno_dispatch_ops *dispatch_ops;
 	/** @hwsched: Container for the hardware dispatcher */
