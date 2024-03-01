@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -1572,6 +1572,28 @@ static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	if (gen7_irq_poll_fence(adreno_dev)) {
+		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+		return ret;
+	}
+
+	kgsl_regread(device, GEN7_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
+
+	trace_kgsl_gen7_irq_status(adreno_dev, status);
+
+	return ret;
+}
+
 static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2166,7 +2188,7 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,
@@ -2196,7 +2218,7 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,
