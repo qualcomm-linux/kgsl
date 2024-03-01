@@ -3289,6 +3289,7 @@ int gen8_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
 
 	entry->cmd.flags |= flags;
 	seqnum = atomic_inc_return(&hfi->hw_fence.seqnum);
+	entry->cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(entry->cmd.hdr, seqnum, sizeof(entry->cmd) >> 2);
 
 	gen8_hw_fence_ack.sent_hdr = entry->cmd.hdr;
 
