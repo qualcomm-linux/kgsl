@@ -2801,6 +2801,10 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	{ 0 },
 };
 
+static const u32 gen8_4_0_gbif_client_qos_values[KGSL_PRIORITY_MAX_RB_LEVELS] = {
+	0x33233323,
+};
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_4_0,
@@ -2829,6 +2833,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
 	.gen8_snapshot_block_list = &gen8_0_0_snapshot_block_list,
+	.qos_value = gen8_4_0_gbif_client_qos_values,
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
