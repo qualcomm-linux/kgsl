@@ -211,6 +211,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A619 = 619,
 	ADRENO_REV_A620 = 620,
 	ADRENO_REV_A621 = 621,
+	ADRENO_REV_A623 = 623,
 	ADRENO_REV_A630 = 630,
 	ADRENO_REV_A635 = 635,
 	ADRENO_REV_A640 = 640,
@@ -1155,6 +1156,7 @@ ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
 ADRENO_TARGET(a621, ADRENO_REV_A621)
+ADRENO_TARGET(a623, ADRENO_REV_A623)
 ADRENO_TARGET(a630, ADRENO_REV_A630)
 ADRENO_TARGET(a635, ADRENO_REV_A635)
 ADRENO_TARGET(a662, ADRENO_REV_A662)
@@ -1200,7 +1202,7 @@ static inline int adreno_is_a640_family(struct adreno_device *adreno_dev)
  * Derived GPUs from A650 needs to be added to this list.
  * A650 is derived from A640 but register specs has been
  * changed hence do not belongs to A640 family. A620, A621,
- * A660, A663, A690 follows the register specs of A650.
+ * A623, A660, A663, A690 follows the register specs of A650.
  *
  */
 static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
@@ -1210,7 +1212,7 @@ static inline int adreno_is_a650_family(struct adreno_device *adreno_dev)
 	return (rev == ADRENO_REV_A650 || rev == ADRENO_REV_A620 ||
 		rev == ADRENO_REV_A660 || rev == ADRENO_REV_A635 ||
 		rev == ADRENO_REV_A662 || rev == ADRENO_REV_A621 ||
-		rev == ADRENO_REV_A663);
+		rev == ADRENO_REV_A623 || rev == ADRENO_REV_A663);
 }
 
 static inline int adreno_is_a619_holi(struct adreno_device *adreno_dev)

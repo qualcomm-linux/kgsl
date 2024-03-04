@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/file.h>
@@ -43,7 +43,17 @@ static struct kgsl_memdesc_bind_range *bind_range_create(u64 start, u64 last,
 		return ERR_PTR(-EINVAL);
 	}
 
+	atomic_inc(&entry->vbo_count);
 	return range;
+}
+
+static void bind_range_destroy(struct kgsl_memdesc_bind_range *range)
+{
+	struct kgsl_mem_entry *entry = range->entry;
+
+	atomic_dec(&entry->vbo_count);
+	kgsl_mem_entry_put(entry);
+	kfree(range);
 }
 
 static u64 bind_range_len(struct kgsl_memdesc_bind_range *range)
@@ -101,20 +111,20 @@ static void kgsl_memdesc_remove_range(struct kgsl_mem_entry *target,
 		 * the entire range between start and last in this case.
 		 */
 		if (!entry || range->entry->id == entry->id) {
+			if (kgsl_mmu_unmap_range(memdesc->pagetable,
+				memdesc, range->range.start, bind_range_len(range)))
+				continue;
+
 			interval_tree_remove(node, &memdesc->ranges);
 			trace_kgsl_mem_remove_bind_range(target,
 				range->range.start, range->entry,
 				bind_range_len(range));
 
-			kgsl_mmu_unmap_range(memdesc->pagetable,
-				memdesc, range->range.start, bind_range_len(range));
-
 			if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
 				kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
 					memdesc, range->range.start, bind_range_len(range));
 
-			kgsl_mem_entry_put(range->entry);
-			kfree(range);
+			bind_range_destroy(range);
 		}
 	}
 
@@ -128,6 +138,7 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 	struct kgsl_memdesc *memdesc = &target->memdesc;
 	struct kgsl_memdesc_bind_range *range =
 		bind_range_create(start, last, entry);
+	int ret = 0;
 
 	if (IS_ERR(range))
 		return PTR_ERR(range);
@@ -139,9 +150,12 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 	 * in one call. Otherwise we have to figure out what ranges to unmap
 	 * while walking the interval tree.
 	 */
-	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
-		kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
+	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)) {
+		ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
 			last - start + 1);
+		if (ret)
+			goto error;
+	}
 
 	next = interval_tree_iter_first(&memdesc->ranges, start, last);
 
@@ -160,21 +174,30 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		if (start <= cur->range.start) {
 			if (last >= cur->range.last) {
 				/* Unmap the entire cur range */
-				if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-					kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+				if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+					ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 						cur->range.start,
 						cur->range.last - cur->range.start + 1);
+					if (ret) {
+						interval_tree_insert(node, &memdesc->ranges);
+						goto error;
+					}
+				}
 
-				kgsl_mem_entry_put(cur->entry);
-				kfree(cur);
+				bind_range_destroy(cur);
 				continue;
 			}
 
 			/* Unmap the range overlapping cur */
-			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-				kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 					cur->range.start,
 					last - cur->range.start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
+			}
 
 			/* Adjust the start of the mapping */
 			cur->range.start = last + 1;
@@ -205,10 +228,15 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 			}
 
 			/* Unmap the range overlapping cur */
-			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-				kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 					start,
 					min_t(u64, cur->range.last, last) - start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
+			}
 
 			cur->range.last = start - 1;
 			interval_tree_insert(node, &memdesc->ranges);
@@ -218,6 +246,11 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		}
 	}
 
+	ret = kgsl_mmu_map_child(memdesc->pagetable, memdesc, start,
+			&entry->memdesc, offset, last - start + 1);
+	if (ret)
+		goto error;
+
 	/* Add the new range */
 	interval_tree_insert(&range->range, &memdesc->ranges);
 
@@ -225,22 +258,30 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		range->entry, bind_range_len(range));
 	mutex_unlock(&memdesc->ranges_lock);
 
-	return kgsl_mmu_map_child(memdesc->pagetable, memdesc, start,
-			&entry->memdesc, offset, last - start + 1);
+	return ret;
+
+error:
+	bind_range_destroy(range);
+	mutex_unlock(&memdesc->ranges_lock);
+	return ret;
 }
 
 static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 {
 	struct interval_tree_node *node, *next;
 	struct kgsl_memdesc_bind_range *range;
+	int ret = 0;
+	bool unmap_fail;
 
 	/*
 	 * If the VBO maps the zero range then we can unmap the entire
 	 * pagetable region in one call.
 	 */
 	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
-		kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+		ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 			0, memdesc->size);
+
+	unmap_fail = ret;
 
 	/*
 	 * FIXME: do we have a use after free potential here?  We might need to
@@ -259,13 +300,21 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 
 		/* Unmap this range */
 		if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-			kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 				range->range.start,
 				range->range.last - range->range.start + 1);
 
-		kgsl_mem_entry_put(range->entry);
-		kfree(range);
+		/* Put the child's refcount if unmap succeeds */
+		if (!ret)
+			bind_range_destroy(range);
+		else
+			kfree(range);
+
+		unmap_fail = unmap_fail || ret;
 	}
+
+	if (unmap_fail)
+		return;
 
 	/* Put back the GPU address */
 	kgsl_mmu_put_gpuaddr(memdesc->pagetable, memdesc);
@@ -316,8 +365,12 @@ static void kgsl_sharedmem_free_bind_op(struct kgsl_sharedmem_bind_op *op)
 	if (IS_ERR_OR_NULL(op))
 		return;
 
-	for (i = 0; i < op->nr_ops; i++)
+	for (i = 0; i < op->nr_ops; i++) {
+		/* Decrement the vbo_count we added when creating the bind_op */
+		if (op->ops[i].entry)
+			atomic_dec(&op->ops[i].entry->vbo_count);
 		kgsl_mem_entry_put(op->ops[i].entry);
+	}
 
 	kgsl_mem_entry_put(op->target);
 
@@ -422,6 +475,9 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 			ret = -ENOENT;
 			goto err;
 		}
+
+		/* Keep the child pinned in memory */
+		atomic_inc(&entry->vbo_count);
 
 		/* Make sure the child is not a VBO */
 		if ((entry->memdesc.flags & KGSL_MEMFLAGS_VBO)) {

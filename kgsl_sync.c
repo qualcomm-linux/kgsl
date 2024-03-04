@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/file.h>
@@ -229,10 +229,11 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		ret = -EFAULT;
 		goto out;
 	}
-	fd_install(priv.fence_fd, kfence->sync_file->file);
 
 	if (!retired)
 		device->ftbl->create_hw_fence(device, kfence);
+
+	fd_install(priv.fence_fd, kfence->sync_file->file);
 
 out:
 	kgsl_context_put(context);
@@ -451,17 +452,17 @@ static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct d
 	}
 }
 
-static void kgsl_get_fence_info(struct dma_fence *fence,
-	struct event_fence_info *info_ptr, void *priv)
+void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 {
 	unsigned int num_fences;
-	struct dma_fence **fences;
+	struct dma_fence *fence, **fences;
 	struct dma_fence_array *array;
-	struct kgsl_drawobj_sync_event *event = priv;
+	struct event_fence_info *info_ptr = event->priv;
 	int i;
 
-	array = to_dma_fence_array(fence);
+	fence = event->handle->fence;
 
+	array = to_dma_fence_array(fence);
 	if (array != NULL) {
 		num_fences = array->num_fences;
 		fences = array->fences;
@@ -506,7 +507,7 @@ count:
 }
 
 struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
-	bool (*func)(void *priv), void *priv, struct event_fence_info *info_ptr)
+	bool (*func)(void *priv), void *priv)
 {
 	struct kgsl_sync_fence_cb *kcb;
 	struct dma_fence *fence;
@@ -526,8 +527,6 @@ struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
 	kcb->fence = fence;
 	kcb->priv = priv;
 	kcb->func = func;
-
-	kgsl_get_fence_info(fence, info_ptr, priv);
 
 	/* if status then error or signaled */
 	status = dma_fence_add_callback(fence, &kcb->fence_cb,

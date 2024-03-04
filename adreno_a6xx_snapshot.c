@@ -2266,7 +2266,8 @@ void a6xx_crashdump_init(struct adreno_device *adreno_dev)
 	/* Program the capturescript for the MVC regsiters */
 	ptr += _a6xx_crashdump_init_mvc(adreno_dev, ptr, &offset);
 
-	if (!adreno_is_a663(adreno_dev)) {
+	if (!(adreno_is_a663(adreno_dev) ||
+				adreno_is_a623(adreno_dev))) {
 		ptr += _a6xx_crashdump_init_ctx_dbgahb(ptr, &offset);
 
 		ptr += _a6xx_crashdump_init_non_ctx_dbgahb(ptr, &offset);
