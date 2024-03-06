@@ -2012,10 +2012,10 @@ u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout
  */
 static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev)
 {
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
+	if (adreno_dev->gpu_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
+	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
 		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
 }
 #endif /*__ADRENO_H */
