@@ -15,6 +15,7 @@
 #include <linux/msm_kgsl.h>
 #include <soc/qcom/dcvs.h>
 
+#include "a6xx_reg.h"
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
 #include "kgsl_pwrscale.h"
@@ -1865,6 +1866,7 @@ void kgsl_pwrctrl_clear_l3_vote(struct kgsl_device *device)
 
 static void kgsl_pwrctrl_disable(struct kgsl_device *device)
 {
+	kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
 	kgsl_pwrctrl_clear_l3_vote(device);
 
 	/* Order pwrrail/clk sequence based upon platform */
