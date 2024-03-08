@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/interconnect.h>
@@ -1370,14 +1370,17 @@ static int kgsl_pwrctrl_pwrrail(struct kgsl_device *device, bool state)
 	if (!state) {
 		if (test_and_clear_bit(KGSL_PWRFLAGS_POWER_ON,
 			&pwr->power_flags)) {
+			kgsl_mmu_send_tlb_hint(&device->mmu, true);
 			trace_kgsl_rail(device, state);
 			if (!kgsl_regulator_disable_wait(pwr->gx_gdsc, 200))
 				dev_err(device->dev, "Regulator vdd is stuck on\n");
 			if (!kgsl_regulator_disable_wait(pwr->cx_gdsc, 200))
 				dev_err(device->dev, "Regulator vddcx is stuck on\n");
 		}
-	} else
+	} else {
 		status = enable_regulators(device);
+		kgsl_mmu_send_tlb_hint(&device->mmu, false);
+	}
 
 	return status;
 }

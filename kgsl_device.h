@@ -335,6 +335,8 @@ struct kgsl_device {
 	} gpu_period;
 	/** @idle_jiffies: Latest idle jiffies */
 	unsigned long idle_jiffies;
+	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
+	bool dump_all_ibs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

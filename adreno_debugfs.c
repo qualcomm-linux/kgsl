@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -594,6 +594,8 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		device, &_ctxt_record_size_fops);
 	debugfs_create_file("gpu_client_pf", 0644, snapshot_dir,
 		device, &_gpu_client_pf_fops);
+	debugfs_create_bool("dump_all_ibs", 0644, snapshot_dir,
+		&device->dump_all_ibs);
 
 	adreno_dev->bcl_debugfs_dir = debugfs_create_dir("bcl", device->d_debugfs);
 	if (!IS_ERR_OR_NULL(adreno_dev->bcl_debugfs_dir)) {
