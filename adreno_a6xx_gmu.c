@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -510,6 +510,7 @@ int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 		dev_err(&gmu->pdev->dev,
 			"Failed to enable GMU CX gdsc, error %d\n", ret);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	return ret;
 }
@@ -517,7 +518,9 @@ int a6xx_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, true);
 	reinit_completion(&gmu->gdsc_gate);
 
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
@@ -2401,13 +2404,6 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_gmu_enable_clks(adreno_dev, 0);
 	if (ret)
 		goto gdsc_off;
-
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
 
 	ret = a6xx_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
