@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -713,7 +713,6 @@ static int kgsl_of_parse_mempool(struct kgsl_page_pool *pool,
 void kgsl_probe_page_pools(void)
 {
 	struct device_node *node, *child;
-	int index = 0;
 
 	node = of_find_compatible_node(NULL, NULL, "qcom,gpu-mempools");
 	if (!node)
@@ -726,16 +725,18 @@ void kgsl_probe_page_pools(void)
 	kgsl_pool_cache_init();
 
 	for_each_child_of_node(node, child) {
-		if (!kgsl_of_parse_mempool(&kgsl_pools[index], child))
-			index++;
+		u32 index;
 
-		if (index == ARRAY_SIZE(kgsl_pools)) {
-			of_node_put(child);
-			break;
+		if (of_property_read_u32(child, "reg", &index) ||
+				index >= ARRAY_SIZE(kgsl_pools)) {
+			pr_err("kgsl: %pOF: pool index error\n", child);
+			continue;
 		}
+
+		if (!kgsl_of_parse_mempool(&kgsl_pools[index], child))
+			kgsl_num_pools++;
 	}
 
-	kgsl_num_pools = index;
 	of_node_put(node);
 
 	/* Initialize shrinker */
