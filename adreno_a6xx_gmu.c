@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -2405,6 +2405,21 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	/*
+	 * Load PDC and RSC ucode before turning on
+	 * GFX rail. This avoids oob set timeout
+	 * for oob_boot_slumber request during
+	 * GMU first boot
+	 */
+	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
+		ret = a6xx_load_pdc_ucode(adreno_dev);
+		if (ret)
+			goto err;
+
+		a6xx_load_rsc_ucode(adreno_dev);
+		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
+	}
+
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_HFI_USE_REG)) {
 		ret = a6xx_gmu_gfx_rail_on(adreno_dev);
 		if (ret) {
@@ -2417,15 +2432,6 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 		ret = a6xx_gmu_sptprac_enable(adreno_dev);
 		if (ret)
 			goto err;
-	}
-
-	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
-		ret = a6xx_load_pdc_ucode(adreno_dev);
-		if (ret)
-			goto err;
-
-		a6xx_load_rsc_ucode(adreno_dev);
-		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
 	}
 
 	ret = a6xx_gmu_hfi_start(adreno_dev);
