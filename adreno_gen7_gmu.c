@@ -3318,6 +3318,8 @@ int gen7_gmu_device_probe(struct platform_device *pdev,
 
 	adreno_dev = &gen7_dev->adreno_dev;
 
+	adreno_dev->irq_mask = GEN7_INT_MASK;
+
 	ret = gen7_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -3338,8 +3340,6 @@ int gen7_gmu_device_probe(struct platform_device *pdev,
 		set_bit(ADRENO_DEVICE_DMS, &adreno_dev->priv);
 		adreno_dev->dms_enabled = true;
 	}
-
-	adreno_dev->irq_mask = GEN7_INT_MASK;
 
 	return 0;
 }

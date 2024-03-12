@@ -2022,4 +2022,20 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
  */
 void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
+
+/**
+ * adreno_irq_free - Free an interrupt allocated for GPU
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_irq_free(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!(adreno_dev->irq_mask || device->pwrctrl.interrupt_num))
+		return;
+
+	devm_free_irq(&device->pdev->dev, device->pwrctrl.interrupt_num, device);
+	adreno_dev->irq_mask = 0;
+	device->pwrctrl.interrupt_num = 0;
+}
 #endif /*__ADRENO_H */

@@ -258,4 +258,16 @@ void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, stru
  */
 void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj);
 
+/**
+ * adreno_hwsched_log_nonfatal_gpu_fault - Logs non fatal GPU error from context bad hfi packet
+ * @adreno_dev: pointer to the adreno device
+ * @dev: Pointer to the struct device for the GMU platform device
+ * @error: Types of error that triggered from context bad HFI
+ *
+ * This function parses context bad hfi packet and logs error information.
+ *
+ * Return: True for non fatal error code else false.
+ */
+bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
+		struct device *dev, u32 error);
 #endif

@@ -357,6 +357,9 @@ void adreno_irqctrl(struct adreno_device *adreno_dev, int state)
 {
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
+	if (!adreno_dev->irq_mask)
+		return;
+
 	adreno_writereg(adreno_dev, ADRENO_REG_RBBM_INT_0_MASK,
 		state ? adreno_dev->irq_mask : 0);
 
@@ -1169,6 +1172,15 @@ static const struct of_device_id adreno_component_match[] = {
 	{},
 };
 
+static int adreno_irq_setup(struct platform_device *pdev,
+		struct adreno_device *adreno_dev)
+{
+	if (!adreno_dev->irq_mask)
+		return 0;
+
+	return kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, KGSL_DEVICE(adreno_dev));
+}
+
 int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
@@ -1268,7 +1280,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (status)
 		goto err_remove_llcc;
 
-	status = kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, device);
+	status = adreno_irq_setup(pdev, adreno_dev);
 	if (status < 0)
 		goto err_unbind;
 

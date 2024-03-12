@@ -1929,6 +1929,8 @@ static int a6xx_probe(struct platform_device *pdev,
 
 	memset(adreno_dev, 0, sizeof(*adreno_dev));
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1942,8 +1944,6 @@ static int a6xx_probe(struct platform_device *pdev,
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }
