@@ -1877,6 +1877,9 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	if (a6xx_gmu_gx_is_on(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
 
+	/* Make sure above writes are posted before turning off power resources */
+	wmb();
+
 	/* Allow the software reset to complete */
 	udelay(100);
 
