@@ -133,6 +133,12 @@ bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t 
 void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
 {
 	synx_release(kgsl_synx.handle, kfence->hw_fence_index);
+
+	/*
+	 * synx_release() doesn't have a way to get to the dma fence. Hence, the client must clear
+	 * this bit from the dma fence flags.
+	 */
+	clear_bit(SYNX_HW_FENCE_FLAG_ENABLED_BIT, &kfence->fence.flags);
 }
 
 void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fence *kfence)
@@ -704,22 +710,47 @@ bool is_kgsl_fence(struct dma_fence *f)
 
 static void kgsl_count_hw_fences(struct kgsl_drawobj_sync_event *event, struct dma_fence *fence)
 {
-	/*
-	 * Even one unsignaled sw-only fence in this sync object means we can't send this sync
-	 * object to the hardware
-	 */
-	if (event->syncobj->flags & KGSL_SYNCOBJ_SW)
+	struct kgsl_drawobj_sync *syncobj = event->syncobj;
+	u32 max_hw_fence = event->device->max_syncobj_hw_fence_count;
+
+	if (syncobj->flags & KGSL_SYNCOBJ_SW)
 		return;
 
 	if (!kgsl_is_hw_fence(fence)) {
-		/* Ignore software fences that are already signaled */
+		/*
+		 * Ignore software fences that are already signaled. Even one unsignaled sw-only
+		 * fence in this sync object means we can't send this sync object to the hardware
+		 */
 		if (!dma_fence_is_signaled(fence))
-			event->syncobj->flags |= KGSL_SYNCOBJ_SW;
-	} else {
-		event->syncobj->num_hw_fence++;
+			syncobj->flags |= KGSL_SYNCOBJ_SW;
+		return;
 	}
+
+	if (!syncobj->hw_fences) {
+		syncobj->hw_fences = kcalloc(max_hw_fence, sizeof(*syncobj->hw_fences), GFP_KERNEL);
+		if (!syncobj->hw_fences) {
+			syncobj->flags |= KGSL_SYNCOBJ_SW;
+			return;
+		}
+	}
+
+	if (syncobj->num_hw_fence < max_hw_fence)
+		syncobj->hw_fences[syncobj->num_hw_fence++].fence = fence;
+	else
+		syncobj->flags |= KGSL_SYNCOBJ_SW;
 }
 
+void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)
+{
+	int len = scnprintf(name, max_size, "%s %s", f->ops->get_driver_name(f),
+			f->ops->get_timeline_name(f));
+
+	if (f->ops->fence_value_str) {
+		len += scnprintf(name + len, max_size - len, ": ");
+		f->ops->fence_value_str(f, name + len, max_size - len);
+	}
+
+}
 void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 {
 	unsigned int num_fences;
@@ -752,18 +783,8 @@ void kgsl_get_fence_info(struct kgsl_drawobj_sync_event *event)
 	for (i = 0; i < num_fences; i++) {
 		struct dma_fence *f = fences[i];
 		struct fence_info *fi = &info_ptr->fences[i];
-		int len;
 
-		len =  scnprintf(fi->name, sizeof(fi->name), "%s %s",
-			f->ops->get_driver_name(f),
-			f->ops->get_timeline_name(f));
-
-		if (f->ops->fence_value_str) {
-			len += scnprintf(fi->name + len, sizeof(fi->name) - len,
-				": ");
-			f->ops->fence_value_str(f, fi->name + len,
-				sizeof(fi->name) - len);
-		}
+		kgsl_get_fence_name(f, fi->name, sizeof(fi->name));
 
 		kgsl_count_hw_fences(event, f);
 	}

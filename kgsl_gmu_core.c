@@ -256,6 +256,13 @@ static void stream_trace_data(struct gmu_trace_packet *pkt)
 			data->flags, pkt->ticks);
 		break;
 		}
+	case GMU_TRACE_SYNCOBJ_RETIRE: {
+		struct trace_syncobj_retire *data =
+				(struct trace_syncobj_retire *)pkt->payload;
+
+		trace_adreno_syncobj_retired(data->gmu_ctxt_id, data->timestamp, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 

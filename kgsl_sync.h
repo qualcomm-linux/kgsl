@@ -133,6 +133,8 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence);
 
 bool kgsl_is_hw_fence(struct dma_fence *fence);
 
+void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size);
+
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
@@ -269,6 +271,11 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 bool kgsl_is_hw_fence(struct dma_fence *fence)
 {
 	return false;
+}
+
+void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)
+{
+
 }
 
 #endif /* CONFIG_SYNC_FILE */

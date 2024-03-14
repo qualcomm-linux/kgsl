@@ -4,9 +4,6 @@
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <linux/dma-fence-array.h>
-#include <soc/qcom/msm_performance.h>
-
 #include "adreno.h"
 #include "adreno_hfi.h"
 #include "adreno_snapshot.h"
@@ -14,6 +11,7 @@
 #include "adreno_trace.h"
 #include "kgsl_timeline.h"
 #include <linux/msm_kgsl.h>
+#include <soc/qcom/msm_performance.h>
 
 /*
  * Number of commands that can be queued in a context before it sleeps
@@ -1153,6 +1151,16 @@ void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	kgsl_drawobj_destroy(drawobj);
 }
 
+void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj)
+{
+	int i;
+
+	for (i = 0; i < syncobj->num_hw_fence; i++) {
+		kgsl_context_put(syncobj->hw_fences[i].context);
+		syncobj->hw_fences[i].context = NULL;
+	}
+}
+
 static bool drawobj_retired(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
@@ -1168,7 +1176,7 @@ static bool drawobj_retired(struct adreno_device *adreno_dev,
 		if (timestamp_cmp(drawobj->timestamp, hdr->sync_obj_ts) > 0)
 			return false;
 
-		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
+		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
 		kgsl_drawobj_destroy(drawobj);
 		return true;
 	}
@@ -1361,7 +1369,7 @@ static bool drawobj_replay(struct adreno_device *adreno_dev,
 		if (kgsl_drawobj_events_pending(SYNCOBJ(drawobj)))
 			return true;
 
-		trace_adreno_syncobj_retired(drawobj->context->id, drawobj->timestamp);
+		adreno_hwsched_syncobj_kfence_put(SYNCOBJ(drawobj));
 		kgsl_drawobj_destroy(drawobj);
 		return false;
 	}
@@ -1639,39 +1647,22 @@ static bool context_is_throttled(struct kgsl_device *device,
 
 static void _print_syncobj(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
 {
-	int i, j, fence_index = 0;
+	int i;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	for (i = 0; i < syncobj->numsyncs; i++) {
-		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
-		struct kgsl_sync_fence_cb *kcb = event->handle;
-		struct dma_fence **fences;
-		struct dma_fence_array *array;
-		u32 num_fences;
+	for (i = 0; i < syncobj->num_hw_fence; i++) {
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
+		bool kgsl = is_kgsl_fence(fence);
+		bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
+		char value[32] = "unknown";
 
-		array = to_dma_fence_array(kcb->fence);
-		if (array != NULL) {
-			num_fences = array->num_fences;
-			fences = array->fences;
-		} else {
-			num_fences = 1;
-			fences = &kcb->fence;
-		}
+		if (fence->ops->timeline_value_str)
+			fence->ops->timeline_value_str(fence, value, sizeof(value));
 
-		for (j = 0; j < num_fences; j++, fence_index++) {
-			bool kgsl = is_kgsl_fence(fences[j]);
-			bool signaled = test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags);
-			char value[32] = "unknown";
-
-			if (fences[j]->ops->timeline_value_str)
-				fences[j]->ops->timeline_value_str(fences[j], value, sizeof(value));
-
-			dev_err(device->dev,
-				"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
-				fence_index, signaled, kgsl, fences[j]->context, fences[j]->seqno,
-				value);
-		}
+		dev_err(device->dev,
+			"dma fence[%d] signaled:%d kgsl:%d ctx:%llu seqno:%llu value:%s\n",
+			i, signaled, kgsl, fence->context, fence->seqno, value);
 	}
 
 }

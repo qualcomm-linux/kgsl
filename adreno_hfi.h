@@ -992,6 +992,14 @@ struct hfi_submit_syncobj {
 	u32 num_syncobj;
 } __packed;
 
+#define HFI_SYNCOBJ_LEGACY_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj_legacy))
+
+#define HFI_SYNCOBJ_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj))
+
 struct hfi_log_block {
 	u32 hdr;
 	u32 version;

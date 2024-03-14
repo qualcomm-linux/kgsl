@@ -4,7 +4,6 @@
  * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include <linux/dma-fence-array.h>
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
@@ -791,13 +790,13 @@ static bool fence_is_queried(struct hfi_syncobj_query_cmd *cmd, u32 fence_index)
 }
 
 static void set_fence_signal_bit(struct adreno_device *adreno_dev,
-	struct hfi_syncobj_query_cmd *reply, struct dma_fence *fence, u32 fence_index,
-	char *name)
+	struct hfi_syncobj_query_cmd *reply, struct dma_fence *fence, u32 fence_index)
 {
 	u32 index = GET_QUERIED_FENCE_INDEX(fence_index);
 	u32 bit = GET_QUERIED_FENCE_BIT(fence_index);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	u64 flags = ADRENO_HW_FENCE_SW_STATUS_PENDING;
+	char name[KGSL_FENCE_NAME_LEN];
 	char value[32] = "unknown";
 
 	if (fence->ops->timeline_value_str)
@@ -810,6 +809,9 @@ static void set_fence_signal_bit(struct adreno_device *adreno_dev,
 		reply->queries[index].query_bitmask |= BIT(bit);
 		flags = ADRENO_HW_FENCE_SW_STATUS_SIGNALED;
 	}
+
+	kgsl_get_fence_name(fence, name, sizeof(name));
+
 	trace_adreno_hw_fence_query(fence->context, fence->seqno, flags, name, value);
 }
 
@@ -817,34 +819,17 @@ static void gen7_syncobj_query_reply(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct hfi_syncobj_query_cmd *cmd)
 {
 	struct hfi_syncobj_query_cmd reply = {0};
-	int i, j, fence_index = 0;
+	int i;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
-	for (i = 0; i < syncobj->numsyncs; i++) {
-		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
-		struct kgsl_sync_fence_cb *kcb = event->handle;
-		struct dma_fence **fences;
-		struct dma_fence_array *array;
-		struct event_fence_info *info = event->priv;
-		u32 num_fences;
+	for (i = 0; i < syncobj->num_hw_fence; i++) {
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
 
-		array = to_dma_fence_array(kcb->fence);
-		if (array != NULL) {
-			num_fences = array->num_fences;
-			fences = array->fences;
-		} else {
-			num_fences = 1;
-			fences = &kcb->fence;
-		}
+		if (!fence_is_queried(cmd, i))
+			continue;
 
-		for (j = 0; j < num_fences; j++, fence_index++) {
-			if (!fence_is_queried(cmd, fence_index))
-				continue;
-
-			set_fence_signal_bit(adreno_dev, &reply, fences[j], fence_index,
-				info ? info->fences[j].name : "unknown");
-		}
+		set_fence_signal_bit(adreno_dev, &reply, fence, i);
 	}
 
 	reply.hdr = CREATE_MSG_HDR(F2H_MSG_SYNCOBJ_QUERY, HFI_MSG_CMD);
@@ -1130,19 +1115,13 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 {
 	struct gen7_hwsched_hfi *hfi = container_of(work,
 						struct gen7_hwsched_hfi, defer_hw_fence_work);
-	struct adreno_context *drawctxt = NULL;
-	struct kgsl_device *device;
-	struct adreno_device *adreno_dev;
+	struct gen7_hwsched_device *gen7_hwsched = container_of(hfi, struct gen7_hwsched_device,
+							hwsched_hfi);
+	struct adreno_context *drawctxt;
+	struct adreno_device *adreno_dev = &gen7_hwsched->gen7_dev.adreno_dev;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 ts;
 	int ret;
-
-	spin_lock(&hfi->hw_fence.lock);
-	drawctxt = hfi->hw_fence.defer_drawctxt;
-	ts = hfi->hw_fence.defer_ts;
-	spin_unlock(&hfi->hw_fence.lock);
-
-	device = drawctxt->base.device;
-	adreno_dev = ADRENO_DEVICE(device);
 
 	/*
 	 * Grab the dispatcher and device mutex as we don't want to race with concurrent fault
@@ -1150,6 +1129,14 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 	 */
 	mutex_lock(&adreno_dev->hwsched.mutex);
 	mutex_lock(&device->mutex);
+
+	spin_lock(&hfi->hw_fence.lock);
+	drawctxt = hfi->hw_fence.defer_drawctxt;
+	ts = hfi->hw_fence.defer_ts;
+	spin_unlock(&hfi->hw_fence.lock);
+
+	if (!drawctxt)
+		goto unlock;
 
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 	if (ret) {
@@ -3055,7 +3042,7 @@ int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 		struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 
 		trace_adreno_syncobj_submitted(drawobj->context->id, drawobj->timestamp,
-			syncobj->numsyncs, gpudev->read_alwayson(adreno_dev));
+			syncobj->num_hw_fence, gpudev->read_alwayson(adreno_dev));
 		goto done;
 	}
 
@@ -3093,25 +3080,25 @@ static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *dr
 	return 0;
 }
 
-static void populate_kgsl_fence(struct hfi_syncobj_legacy *obj,
-	struct dma_fence *fence)
+static void populate_kgsl_fence(struct kgsl_drawobj_sync_hw_fence *hw_fence,
+	struct hfi_syncobj_legacy *obj)
 {
-	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
+	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)hw_fence->fence;
 	struct kgsl_sync_timeline *ktimeline = kfence->parent;
 	unsigned long flags;
 
 	obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
 
 	spin_lock_irqsave(&ktimeline->lock, flags);
-	/* If the context is going away or the dma fence is signaled, mark the fence as triggered */
-	if (!ktimeline->context || dma_fence_is_signaled_locked(fence)) {
-		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
-		spin_unlock_irqrestore(&ktimeline->lock, flags);
-		return;
-	}
-	obj->ctxt_id = ktimeline->context->id;
+
+	if (dma_fence_is_signaled_locked(&kfence->fence) || !_kgsl_context_get(ktimeline->context))
+		obj->flags |= BIT(GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT);
+	else
+		hw_fence->context = ktimeline->context;
+
 	spin_unlock_irqrestore(&ktimeline->lock, flags);
 
+	obj->ctxt_id = kfence->context_id;
 	obj->seq_no =  kfence->timestamp;
 }
 
@@ -3119,7 +3106,7 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, void *cmdbuf)
 {
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(drawobj->context);
-	int i, j;
+	int i;
 	u32 cmd_sizebytes;
 	struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
 	struct hfi_submit_syncobj *cmd;
@@ -3140,61 +3127,32 @@ static int _submit_hw_fence(struct adreno_device *adreno_dev,
 	cmd->num_syncobj = syncobj->num_hw_fence;
 	obj = (struct hfi_syncobj_legacy *)&cmd[1];
 
-	for (i = 0; i < syncobj->numsyncs; i++) {
-		struct kgsl_drawobj_sync_event *event = &syncobj->synclist[i];
-		struct kgsl_sync_fence_cb *kcb = event->handle;
-		struct dma_fence **fences;
-		struct dma_fence_array *array;
-		u32 num_fences;
+	for (i = 0; i < syncobj->num_hw_fence; i++) {
+		struct dma_fence *fence = syncobj->hw_fences[i].fence;
 
-		if (!kcb)
-			return -EINVAL;
-
-		array = to_dma_fence_array(kcb->fence);
-		if (array != NULL) {
-			num_fences = array->num_fences;
-			fences = array->fences;
+		if (is_kgsl_fence(fence)) {
+			populate_kgsl_fence(&syncobj->hw_fences[i], obj);
 		} else {
-			num_fences = 1;
-			fences = &kcb->fence;
-		}
+			int ret = kgsl_hw_fence_add_waiter(device, fence, NULL);
 
-		for (j = 0; j < num_fences; j++) {
-
-			/*
-			 * If this sync object has a software only fence, make sure that it is
-			 * already signaled so that we can skip sending this fence to the GMU.
-			 */
-			if (!kgsl_is_hw_fence(fences[j])) {
-				if (WARN(!dma_fence_is_signaled(fences[j]),
-					"sync object has unsignaled software fence"))
-					return -EINVAL;
-				continue;
+			if (ret) {
+				adreno_hwsched_syncobj_kfence_put(syncobj);
+				syncobj->flags &= ~KGSL_SYNCOBJ_HW;
+				return ret;
 			}
 
-			if (is_kgsl_fence(fences[j])) {
-				populate_kgsl_fence(obj, fences[j]);
-			} else {
-				int ret = kgsl_hw_fence_add_waiter(device, fences[j], NULL);
+			if (kgsl_hw_fence_signaled(fence) ||
+				test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags))
+				obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
 
-				if (ret) {
-					syncobj->flags &= ~KGSL_SYNCOBJ_HW;
-					return ret;
-				}
-
-				if (kgsl_hw_fence_signaled(fences[j]) ||
-					test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fences[j]->flags))
-					obj->flags |= BIT(GMU_SYNCOBJ_FLAG_SIGNALED_BIT);
-
-				obj->ctxt_id = fences[j]->context;
-				obj->seq_no =  fences[j]->seqno;
-			}
-			trace_adreno_input_hw_fence(drawobj->context->id, obj->ctxt_id,
-				obj->seq_no, obj->flags, fences[j]->ops->get_timeline_name ?
-				fences[j]->ops->get_timeline_name(fences[j]) : "unknown");
-
-			obj++;
+			obj->ctxt_id = fence->context;
+			obj->seq_no =  fence->seqno;
 		}
+		trace_adreno_input_hw_fence(drawobj->context->id, obj->ctxt_id,
+			obj->seq_no, obj->flags, fence->ops->get_timeline_name ?
+			fence->ops->get_timeline_name(fence) : "unknown");
+
+		obj++;
 	}
 
 	/*

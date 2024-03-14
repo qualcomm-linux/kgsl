@@ -65,6 +65,7 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 		}
 	}
 
+	kfree(syncobj->hw_fences);
 	kfree(syncobj->synclist);
 	kfree(syncobj);
 }

@@ -277,6 +277,7 @@ enum gmu_trace_id {
 	GMU_TRACE_PREEMPT_TRIGGER = 1,
 	GMU_TRACE_PREEMPT_DONE = 2,
 	GMU_TRACE_EXTERNAL_HW_FENCE_SIGNAL = 3,
+	GMU_TRACE_SYNCOBJ_RETIRE = 4,
 	GMU_TRACE_MAX,
 };
 
@@ -296,6 +297,11 @@ struct trace_ext_hw_fence_signal {
 	u64 context;
 	u64 seq_no;
 	u32 flags;
+} __packed;
+
+struct trace_syncobj_retire {
+	u32 gmu_ctxt_id;
+	u32 timestamp;
 } __packed;
 
 /**

@@ -166,18 +166,20 @@ TRACE_EVENT(adreno_syncobj_submitted,
 );
 
 TRACE_EVENT(adreno_syncobj_retired,
-	TP_PROTO(u32 id, u32 timestamp),
-	TP_ARGS(id, timestamp),
+	TP_PROTO(u32 id, u32 timestamp, u64 ticks),
+	TP_ARGS(id, timestamp, ticks),
 	TP_STRUCT__entry(
 		__field(u32, id)
 		__field(u32, timestamp)
+		__field(u64, ticks)
 	),
 	TP_fast_assign(
 		__entry->id = id;
 		__entry->timestamp = timestamp;
+		__entry->ticks = ticks;
 	),
 	TP_printk(
-		"ctx=%u ts=%u", __entry->id, __entry->timestamp)
+		"ctx=%u ts=%u ticks=%llu", __entry->id, __entry->timestamp, __entry->ticks)
 );
 
 TRACE_EVENT(adreno_cmdbatch_submitted,
