@@ -1579,8 +1579,8 @@
 #define GEN8_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
+#define GEN8_GPU_CC_CX_CFG_GDSCR		0x26421
 #define GEN8_GPU_CC_GX_DOMAIN_MISC3		0x26541
-#define GEN8_GPU_CC_CX_GDSCR			0x26420
 
 /* GPU RSC sequencer registers */
 #define GEN8_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
