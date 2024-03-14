@@ -32,6 +32,9 @@
 /* Index to preemption scratch buffer to store current QOS value */
 #define QOS_VALUE_IDX KGSL_PRIORITY_MAX_RB_LEVELS
 
+/* Size of the user context record block (in bytes) */
+#define ADRENO_CP_CTXRECORD_USER_RESTORE_SIZE (192 * SZ_1K)
+
 /* ADRENO_DEVICE - Given a kgsl_device return the adreno device struct */
 #define ADRENO_DEVICE(device) \
 		container_of(device, struct adreno_device, dev)
@@ -924,7 +927,6 @@ struct adreno_gpudev {
 				unsigned int prelevel, unsigned int postlevel,
 				bool post);
 	void (*preemption_schedule)(struct adreno_device *adreno_dev);
-	int (*preemption_context_init)(struct kgsl_context *context);
 	void (*context_detach)(struct adreno_context *drawctxt);
 	void (*pre_reset)(struct adreno_device *adreno_dev);
 	void (*gpu_keepalive)(struct adreno_device *adreno_dev,
