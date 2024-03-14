@@ -155,6 +155,14 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 void adreno_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
 
 /**
+ * adreno_hwsched_clear_fault() - Clear the hwsched fault
+ * @adreno_dev: A pointer to an adreno_device structure
+ *
+ * Clear the hwsched fault status for adreno device
+ */
+void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
+
+/**
  * adreno_hwsched_parse_fault_ib - Parse the faulty submission
  * @adreno_dev: pointer to the adreno device
  * @snapshot: Pointer to the snapshot structure

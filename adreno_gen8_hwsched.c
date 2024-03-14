@@ -598,6 +598,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	gen8_hwsched_soccp_vote(adreno_dev, true);
 
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
+
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -684,6 +687,9 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen8_gmu_irq_enable(adreno_dev);
 
 	gen8_hwsched_soccp_vote(adreno_dev, true);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
@@ -855,9 +861,6 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
 	if (ret)
