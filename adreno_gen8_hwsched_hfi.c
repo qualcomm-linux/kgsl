@@ -219,65 +219,6 @@ u32 gen8_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	return 0;
 }
 
-/* Look up a particular key's value for a given type of payload */
-static u32 gen8_hwsched_lookup_key_value_legacy(struct adreno_device *adreno_dev,
-	u32 type, u32 key)
-{
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-
-	if (!cmd->hdr)
-		return 0;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd_legacy, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == type)
-			return gen8_hwsched_parse_payload(payload, key);
-
-		i += struct_size(payload, data, payload->dwords);
-	}
-
-	return 0;
-}
-
-static u32 get_payload_rb_key_legacy(struct adreno_device *adreno_dev,
-	u32 rb_id, u32 key)
-{
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-
-	if (!cmd->hdr)
-		return 0;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd_legacy, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == PAYLOAD_RB) {
-			u32 id = gen8_hwsched_parse_payload(payload, KEY_RB_ID);
-
-			if (id == rb_id)
-				return gen8_hwsched_parse_payload(payload, key);
-		}
-
-		i += struct_size(payload, data, payload->dwords);
-	}
-
-	return 0;
-}
-
 struct syncobj_flags {
 	unsigned long mask;
 	const char *name;
@@ -363,148 +304,6 @@ static void find_timeout_syncobj(struct adreno_device *adreno_dev, u32 ctxt_id, 
 			ctxt_id, ts);
 
 	kgsl_context_put(context);
-}
-
-static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct device *dev = &gmu->pdev->dev;
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-
-	switch (cmd->error) {
-	case GMU_GPU_HW_HANG:
-		dev_crit_ratelimited(dev, "MISC: GPU hang detected\n");
-		break;
-	case GMU_GPU_SW_HANG:
-		dev_crit_ratelimited(dev, "gpu timeout ctx %d ts %u\n",
-			cmd->ctxt_id, cmd->ts);
-		break;
-	case GMU_CP_OPCODE_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP opcode error interrupt | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-			KEY_CP_OPCODE_ERROR));
-		break;
-	case GMU_CP_PROTECTED_ERROR: {
-		u32 status = gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_PROTECTED_ERROR);
-
-		dev_crit_ratelimited(dev,
-			"CP | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
-			status & (1 << 20) ? "READ" : "WRITE",
-			status & 0x3FFFF, status);
-		}
-		break;
-	case GMU_CP_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "CP Illegal instruction error\n");
-		break;
-	case GMU_CP_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "CP ucode error interrupt\n");
-		break;
-	case GMU_CP_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP | Ringbuffer HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
-		break;
-	case GMU_GPU_PREEMPT_TIMEOUT: {
-		u32 cur, next, cur_rptr, cur_wptr, next_rptr, next_wptr;
-
-		cur = gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-			PAYLOAD_PREEMPT_TIMEOUT, KEY_PREEMPT_TIMEOUT_CUR_RB_ID);
-		next = gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-			PAYLOAD_PREEMPT_TIMEOUT,
-			KEY_PREEMPT_TIMEOUT_NEXT_RB_ID);
-		cur_rptr = get_payload_rb_key_legacy(adreno_dev, cur, KEY_RB_RPTR);
-		cur_wptr = get_payload_rb_key_legacy(adreno_dev, cur, KEY_RB_WPTR);
-		next_rptr = get_payload_rb_key_legacy(adreno_dev, next, KEY_RB_RPTR);
-		next_wptr = get_payload_rb_key_legacy(adreno_dev, next, KEY_RB_WPTR);
-
-		dev_crit_ratelimited(dev,
-			"Preemption Fault: cur=%d R/W=0x%x/0x%x, next=%d R/W=0x%x/0x%x\n",
-			cur, cur_rptr, cur_wptr, next, next_rptr, next_wptr);
-		}
-		break;
-	case GMU_CP_GPC_ERROR:
-		dev_crit_ratelimited(dev, "RBBM: GPC error\n");
-		break;
-	case GMU_CP_BV_OPCODE_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP BV opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-			KEY_CP_BV_OPCODE_ERROR));
-		break;
-	case GMU_CP_BV_PROTECTED_ERROR: {
-		u32 status = gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_BV_PROTECTED_ERROR);
-
-		dev_crit_ratelimited(dev,
-			"CP BV | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
-			status & (1 << 20) ? "READ" : "WRITE",
-			status & 0x3FFFF, status);
-		}
-		break;
-	case GMU_CP_BV_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP BV | Ringbuffer HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
-		break;
-	case GMU_CP_BV_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "CP BV Illegal instruction error\n");
-		break;
-	case GMU_CP_BV_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "CP BV ucode error interrupt\n");
-		break;
-	case GMU_GPU_SW_FUSE_VIOLATION:
-		dev_crit_ratelimited(dev, "RBBM: SW Feature Fuse violation status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_SWFUSE_VIOLATION_FAULT));
-		break;
-	case GMU_GPU_AQE0_OPCODE_ERRROR:
-		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
-		break;
-	case GMU_GPU_AQE0_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 ucode error interrupt\n");
-		break;
-	case GMU_GPU_AQE0_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE0_HW_FAULT));
-		break;
-	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
-		break;
-	case GMU_GPU_AQE1_OPCODE_ERRROR:
-		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
-		break;
-	case GMU_GPU_AQE1_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 ucode error interrupt\n");
-		break;
-	case GMU_GPU_AQE1_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE1_HW_FAULT));
-		break;
-	case GMU_GPU_AQE1_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 Illegal instruction error\n");
-		break;
-	case GMU_SYNCOBJ_TIMEOUT_ERROR:
-		dev_crit_ratelimited(dev, "syncobj timeout ctx %d ts %u\n",
-			cmd->ctxt_id, cmd->ts);
-		find_timeout_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		break;
-	case GMU_CP_UNKNOWN_ERROR:
-		fallthrough;
-	default:
-		dev_crit_ratelimited(dev, "Unknown GPU fault: %u\n",
-			cmd->error);
-		break;
-	}
 }
 
 /* Look up a particular key's value for a given type of payload */
@@ -787,20 +586,12 @@ static u32 peek_next_header(struct adreno_device *adreno_dev, struct gen8_gmu_de
 
 static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2) {
-		log_gpu_fault_legacy(adreno_dev);
-		goto done;
-	}
-
 	/* Non fatal RBBM error interrupts don't go through reset and recovery */
 	if (!log_gpu_fault(adreno_dev)) {
 		memset(adreno_dev->hwsched.ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
 		return;
 	}
 
-done:
 	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
