@@ -1149,6 +1149,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN8_SP_NC_MODE_CNTL,
 		      FIELD_PREP(GENMASK(11, 10), hbb_hi) |
+		      FIELD_PREP(GENMASK(5, 4), 2) |
 		      FIELD_PREP(GENMASK(3, 3), mal) |
 		      FIELD_PREP(GENMASK(2, 1), hbb_lo));
 
