@@ -42,6 +42,9 @@ enum location_id {
 
 #define MAX_PHYSICAL_SLICES     3
 
+#define NUMBER_OF_SLICES(region) ((region == SLICE) ? MAX_PHYSICAL_SLICES : 1)
+#define SLICE_ID(region, j) ((region == SLICE) ? j : UINT_MAX)
+
 #define GEN8_DEBUGBUS_BLOCK_SIZE 0x100
 
 /* Number of dword to dump in snapshot for CP SQE */
