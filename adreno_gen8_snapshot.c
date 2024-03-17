@@ -696,7 +696,7 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 	for (i = 0; i < mempool_index_registers_len; i++) {
 		cp_indexed_reg = &gen8_snapshot_block_list->mempool_index_registers[i];
-		slice = NUMBER_OF_SLICES(cp_indexed_reg->slice_region);
+		slice = NUMBER_OF_SLICES(cp_indexed_reg->slice_region, ADRENO_DEVICE(device));
 
 		for (j = 0; j < slice; j++) {
 
@@ -842,7 +842,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 		for (i = 0; i < num_sptp_clusters; i++) {
 			struct gen8_sptp_cluster_registers *cluster = &sptp_clusters[i];
 
-			slice = NUMBER_OF_SLICES(cluster->slice_region);
+			slice = NUMBER_OF_SLICES(cluster->slice_region, ADRENO_DEVICE(device));
 			for (sp = 0; sp < cluster->num_sps; sp++) {
 				for (usptp = 0; usptp < cluster->num_usptps; usptp++) {
 					for (j = 0; j < slice; j++) {
@@ -870,7 +870,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 	for (i = 0; i < num_sptp_clusters; i++) {
 		struct gen8_sptp_cluster_registers *cluster = &sptp_clusters[i];
 
-		slice = NUMBER_OF_SLICES(cluster->slice_region);
+		slice = NUMBER_OF_SLICES(cluster->slice_region, ADRENO_DEVICE(device));
 
 		cluster->offset = offset;
 
@@ -1036,7 +1036,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 		for (i = 0; i < num_cluster; i++) {
 			struct gen8_cluster_registers *cluster = &clusters[i];
 
-			slice = NUMBER_OF_SLICES(cluster->slice_region);
+			slice = NUMBER_OF_SLICES(cluster->slice_region, ADRENO_DEVICE(device));
 			for (j = 0; j < slice; j++) {
 				info.cluster = cluster;
 				info.pipe_id = cluster->pipe_id;
@@ -1056,7 +1056,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 	for (i = 0; i < num_cluster; i++) {
 		struct gen8_cluster_registers *cluster = &clusters[i];
 
-		slice = NUMBER_OF_SLICES(cluster->slice_region);
+		slice = NUMBER_OF_SLICES(cluster->slice_region, ADRENO_DEVICE(device));
 		cluster->offset = offset;
 
 		for (j = 0; j < slice; j++) {
@@ -1497,7 +1497,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 		for (i = 0; reg_list[i].regs; i++) {
 			struct gen8_reg_list *regs = &reg_list[i];
 
-			slices = NUMBER_OF_SLICES(regs->slice_region);
+			slices = NUMBER_OF_SLICES(regs->slice_region, ADRENO_DEVICE(device));
 			for (j = 0; j < slices; j++) {
 				info.regs = regs;
 				info.slice_id = SLICE_ID(regs->slice_region, j);
@@ -1514,7 +1514,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 	for (i = 0; reg_list[i].regs; i++) {
 		struct gen8_reg_list *regs = &reg_list[i];
 
-		slices = NUMBER_OF_SLICES(regs->slice_region);
+		slices = NUMBER_OF_SLICES(regs->slice_region, ADRENO_DEVICE(device));
 		regs->offset = offset;
 
 		for (j = 0; j < slices; j++) {
@@ -1721,7 +1721,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		struct gen8_reg_list_info info = {0};
 		u32 j, slices;
 
-		slices = NUMBER_OF_SLICES(regs->slice_region);
+		slices = NUMBER_OF_SLICES(regs->slice_region, adreno_dev);
 
 		for (j = 0; j < slices; j++) {
 			info.regs = regs;
