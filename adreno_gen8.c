@@ -412,9 +412,6 @@ static void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id
 
 	kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_CP_APERTURE_CNTL_HOST, aperture_val);
 
-	/* Add a barrier for memory writes to complete */
-	mb();
-
 	gen8_dev->aperture = aperture_val;
 }
 
