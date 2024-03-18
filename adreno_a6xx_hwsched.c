@@ -393,6 +393,13 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	/* Switch to min GMU clock */
+	ret = a6xx_gmu_clock_set_rate(adreno_dev, gmu->freqs[0]);
+	if (ret) {
+		a6xx_hwsched_hfi_stop(adreno_dev);
+		goto err;
+	}
+
 	icc_set_bw(pwr->icc_path, 0, 0);
 
 	device->gmu_fault = false;
@@ -459,6 +466,13 @@ static int a6xx_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_hwsched_hfi_start(adreno_dev);
 	if (ret)
 		goto err;
+
+	/* Switch to min GMU clock */
+	ret = a6xx_gmu_clock_set_rate(adreno_dev, gmu->freqs[0]);
+	if (ret) {
+		a6xx_hwsched_hfi_stop(adreno_dev);
+		goto err;
+	}
 
 	device->gmu_fault = false;
 
@@ -1061,8 +1075,8 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	static unsigned long prev_freq;
-	unsigned long freq = gmu->freqs[0];
+	u32 cur_freq = gmu->cur_freq;
+	u32 req_freq = gmu->freqs[0];
 
 	if (!gmu->perf_ddr_bw)
 		return;
@@ -1072,22 +1086,13 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 	 * a higher frequency
 	 */
 	if (pwr->ddr_table[buslevel] >= gmu->perf_ddr_bw)
-		freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
+		req_freq = gmu->freqs[GMU_MAX_PWRLEVELS - 1];
 
-	if (prev_freq == freq)
+	if (cur_freq == req_freq)
 		return;
 
-	if (kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk", freq)) {
-		dev_err(&gmu->pdev->dev, "Unable to set the GMU clock to %ld\n",
-			freq);
-		return;
-	}
-
-	a6xx_rdpm_cx_freq_update(gmu, freq / 1000);
-
-	trace_kgsl_gmu_pwrlevel(freq, prev_freq);
-
-	prev_freq = freq;
+	a6xx_gmu_clock_set_rate(adreno_dev, req_freq);
+	return;
 }
 
 static int a6xx_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,

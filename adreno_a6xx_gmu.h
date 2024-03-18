@@ -107,6 +107,8 @@ struct a6xx_gmu_device {
 	u32 stats_interval;
 	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
 	struct kobject stats_kobj;
+	/** @cur_freq: Tracks current frequency for GMU */
+	u32 cur_freq;
 };
 
 /* Helper function to get to a6xx gmu device from adreno device */
@@ -449,5 +451,14 @@ void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force,
  * @adreno_dev: Pointer to the adreno device
  */
 int a6xx_gmu_add_to_minidump(struct adreno_device *adreno_dev);
+
+/**
+ * a6xx_gmu_clock_set_rate - Set the gmu clock rate
+ * @adreno_dev: Handle to the adreno device
+ * @req_freq: Requested freq to set gmu to
+ *
+ * Returns 0 on success or error on clock set rate failure
+ */
+int a6xx_gmu_clock_set_rate(struct adreno_device *adreno_dev, u32 req_freq);
 
 #endif

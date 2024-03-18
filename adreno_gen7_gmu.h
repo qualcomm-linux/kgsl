@@ -123,6 +123,8 @@ struct gen7_gmu_device {
 	u32 switch_to_unsec_hdr;
 	/** @dcvs_table: Table for gpu dcvs levels */
 	struct gen7_dcvs_table dcvs_table;
+	/** @cur_freq: Tracks scaled frequency for GMU */
+	u32 cur_freq;
 };
 
 /* Helper function to get to gen7 gmu device from adreno device */
@@ -511,4 +513,12 @@ size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
  */
 u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
+/**
+ * gen7_gmu_clock_set_rate - Set the gmu clock rate
+ * @adreno_dev: Handle to the adreno device
+ * @req_freq: Requested freq to set gmu to
+ *
+ * Returns 0 on success or error on clock set rate failure
+ */
+int gen7_gmu_clock_set_rate(struct adreno_device *adreno_dev, u32 req_freq);
 #endif
