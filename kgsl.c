@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <uapi/linux/sched/types.h>
@@ -3826,6 +3826,8 @@ static int kgsl_update_fault_details(struct kgsl_context *context,
 		memcpy(&faults[fault.type], &fault, sizeof(fault));
 	}
 
+	mutex_lock(&context->fault_lock);
+
 	list_for_each_entry(fault_node, &context->faults, node) {
 		u32 fault_type = fault_node->type;
 
@@ -3843,11 +3845,14 @@ static int kgsl_update_fault_details(struct kgsl_context *context,
 			cur_idx[fault_type] * faults[fault_type].size),
 			fault_node->priv, size)) {
 			ret = -EFAULT;
-			goto err;
+			goto release_lock;
 		}
 
 		cur_idx[fault_type] += 1;
 	}
+
+release_lock:
+	mutex_unlock(&context->fault_lock);
 
 err:
 	kfree(faults);
@@ -3862,8 +3867,10 @@ static int kgsl_update_fault_count(struct kgsl_context *context,
 	struct kgsl_fault_node *fault_node;
 	int i, j;
 
+	mutex_lock(&context->fault_lock);
 	list_for_each_entry(fault_node, &context->faults, node)
 		faultcount[fault_node->type]++;
+	mutex_unlock(&context->fault_lock);
 
 	/* KGSL_FAULT_TYPE_NO_FAULT (i.e. 0) is not an actual fault type */
 	for (i = 0, j = 1; i < faultnents && j < KGSL_FAULT_TYPE_MAX; j++) {
