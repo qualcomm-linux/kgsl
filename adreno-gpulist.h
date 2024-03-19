@@ -1573,6 +1573,31 @@ static const struct adreno_a6xx_core adreno_gpu_core_a610 = {
 	.highest_bank_bit = 14,
 };
 
+static const struct adreno_a6xx_core adreno_gpu_core_a611 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_A611, 6, 1, 1, ANY_ID),
+		.compatible = "qcom,adreno-gpu-a611",
+		.features = ADRENO_CONTENT_PROTECTION |
+			ADRENO_PREEMPTION,
+		.gpudev = &adreno_a6xx_gpudev,
+		.perfcounters = &adreno_a6xx_legacy_perfcounters,
+		.uche_gmem_alignment = SZ_1M,
+		.gmem_size = (SZ_128K + SZ_4K),
+		.bus_width = 32,
+		.snapshot_size = SZ_1M,
+	},
+	.prim_fifo_threshold = 0x00080000,
+	.sqefw_name = "a630_sqe.fw",
+	.zap_name = "a610_zap.mbn",
+	.hwcg = a612_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(a612_hwcg_regs),
+	.vbif = a640_vbif_regs,
+	.vbif_count = ARRAY_SIZE(a640_vbif_regs),
+	.hang_detect_cycles = 0x3ffff,
+	.protected_regs = a630_protected_regs,
+	.highest_bank_bit = 14,
+};
+
 static const struct kgsl_regmap_list a660_hwcg_regs[] = {
 	{A6XX_RBBM_CLOCK_CNTL_SP0, 0x02222222},
 	{A6XX_RBBM_CLOCK_CNTL2_SP0, 0x02222220},
@@ -2631,6 +2656,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a612.base,
 	&adreno_gpu_core_a616.base,
 	&adreno_gpu_core_a610.base,
+	&adreno_gpu_core_a611.base,
 	&adreno_gpu_core_a660_shima.base,
 	&adreno_gpu_core_a702.base,
 	&adreno_gpu_core_gen7_0_0.base,
