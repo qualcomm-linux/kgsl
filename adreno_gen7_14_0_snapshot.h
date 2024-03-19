@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_14_0_SNAPSHOT_H
 #define __ADRENO_GEN7_14_0_SNAPSHOT_H
@@ -443,7 +443,6 @@ static struct gen7_shader_block gen7_14_0_shader_blocks[] = {
 
 static struct gen7_reg_list gen7_14_0_reg_list[] = {
 	{ gen7_14_0_gpu_registers, NULL },
-	{ gen7_14_0_cx_misc_registers, NULL },
 	{ gen7_14_0_dbgc_registers, NULL },
 	{ NULL, NULL },
 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -19,6 +19,7 @@
 #include <linux/reset.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/trace.h>
+#include <linux/units.h>
 #include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
@@ -210,7 +211,7 @@ static void adreno_input_work(struct work_struct *work)
 
 	mutex_lock(&device->mutex);
 
-	adreno_dev->wake_on_touch = true;
+	device->pwrctrl.wake_on_touch = true;
 
 	ops->touch_wakeup(adreno_dev);
 
@@ -227,7 +228,7 @@ void adreno_touch_wake(struct kgsl_device *device)
 	 * here before
 	 */
 
-	if (adreno_dev->wake_on_touch)
+	if (device->pwrctrl.wake_on_touch)
 		return;
 
 	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
@@ -419,14 +420,8 @@ static irqreturn_t adreno_irq_handler(int irq, void *data)
 static irqreturn_t adreno_freq_limiter_irq_handler(int irq, void *data)
 {
 	struct kgsl_device *device = data;
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	dev_err_ratelimited(device->dev,
-		"GPU req freq %u from prev freq %u unsupported for speed_bin: %d, soc_code: 0x%x\n",
-		pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq,
-		pwr->pwrlevels[pwr->previous_pwrlevel].gpu_freq,
-		device->speed_bin,
-		device->soc_code);
+	KGSL_PWRCTRL_LOG_FREQLIM(device);
 
 	reset_control_reset(device->freq_limiter_irq_clear);
 
@@ -707,10 +702,8 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	int level;
 
 	/* Get and set the initial power level */
-	if (of_property_read_u32(node, "qcom,initial-pwrlevel", &level))
-		level = 1;
-
-	if (level < 0 || level >= pwr->num_pwrlevels)
+	if (WARN_ON(of_property_read_u32(node, "qcom,initial-pwrlevel", &level) ||
+		level < 0 || level >= pwr->num_pwrlevels))
 		level = 1;
 
 	pwr->active_pwrlevel = level;
@@ -1872,6 +1865,47 @@ void adreno_get_bus_counters(struct adreno_device *adreno_dev)
 			"Unable to get perf counters for bus DCVS\n");
 }
 
+#define ADRENO_AHB_MIN_TIMEOUT_VAL_USEC 1000
+
+u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us)
+{
+	u64 cycles, hub_clk_freq = adreno_dev->gmu_hub_clk_freq;
+	u32 timeout_val;
+
+	if (!noc_timeout_us)
+		return 0;
+
+	do_div(hub_clk_freq, HZ_PER_MHZ);
+	cycles = hub_clk_freq * noc_timeout_us;
+
+	/*
+	 * Get max possible AHB timeout value which is less than the GPU NOC timeout value.
+	 * When cycles are exact power of two, the calculated AHB timeout value will be same
+	 * as GPU config NOC timeout. Just reduce one cycle to make sure we do not program AHB
+	 * timeout same as GPU config NOC timeout.
+	 */
+	if (is_power_of_2(cycles))
+		cycles -= 1;
+
+	timeout_val = ilog2(cycles);
+
+	/*
+	 * Make sure, AHB timeout value fits into bit fields and it is not too low
+	 * which can cause false timeouts.
+	 */
+	if ((timeout_val > GENMASK(4, 0)) ||
+		((ADRENO_AHB_MIN_TIMEOUT_VAL_USEC * hub_clk_freq) > (1 << timeout_val))) {
+		dev_warn(adreno_dev->dev.dev, "Invalid AHB timeout_val %u\n", timeout_val);
+		return 0;
+	}
+
+	/*
+	 * Return (timeout_val - 1). Based on timeout_val programmed, a timeout will occur if
+	 * an AHB transaction is not completed in 2 ^ (timeout_val + 1) cycles.
+	 */
+	return (timeout_val - 1);
+}
+
 /**
  * _adreno_start - Power up the GPU and prepare to accept commands
  * @adreno_dev: Pointer to an adreno_device structure
@@ -2125,7 +2159,7 @@ static int adreno_prop_gpu_model(struct kgsl_device *device,
 {
 	struct kgsl_gpu_model model = {0};
 
-	strlcpy(model.gpu_model, adreno_get_gpu_model(device),
+	strscpy(model.gpu_model, adreno_get_gpu_model(device),
 			sizeof(model.gpu_model));
 
 	return copy_prop(param, &model, sizeof(model));
@@ -3106,7 +3140,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 			 * been submitted since the last time we set it.
 			 * But only clear it when we have rendering commands.
 			 */
-			ADRENO_DEVICE(device)->wake_on_touch = false;
+			device->pwrctrl.wake_on_touch = false;
 		}
 	}
 

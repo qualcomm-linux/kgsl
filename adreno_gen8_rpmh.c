@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -452,7 +452,8 @@ static void build_bw_table_cmd(struct hfi_bwtable_cmd *cmd,
 			cmd->cnoc_cmd_data[i][j] = (u32) cnoc->cmds[i][j];
 }
 
-#define GEN8_DDR_NOM_IDX 6
+/* BIT(2) is used to vote for GPU performance mode through GMU */
+#define ACV_GPU_PERFMODE_VOTE	BIT(2)
 
 static int build_bw_table(struct adreno_device *adreno_dev)
 {
@@ -461,18 +462,14 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct rpmh_bw_votes *ddr, *cnoc = NULL;
-	u32 perfmode_vote = gen8_core->acv_perfmode_vote;
-	u32 perfmode_lvl = GEN8_DDR_NOM_IDX;
+	u32 perfmode_lvl = kgsl_pwrctrl_get_acv_perfmode_lvl(device,
+			gen8_core->acv_perfmode_ddr_freq);
 	u32 *cnoc_table;
 	u32 count;
 	int ret;
 
-	/* If perfmode vote is not defined, use default value as 0x8 */
-	if (!perfmode_vote)
-		perfmode_vote = BIT(3);
-
 	ddr = build_rpmh_bw_votes(gen8_ddr_bcms, ARRAY_SIZE(gen8_ddr_bcms),
-		pwr->ddr_table, pwr->ddr_table_count, perfmode_vote, perfmode_lvl);
+		pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl);
 	if (IS_ERR(ddr))
 		return PTR_ERR(ddr);
 

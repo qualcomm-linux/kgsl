@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_HFI_H_
@@ -85,6 +85,8 @@ struct gen8_hwsched_hfi {
 		unsigned long flags;
 		/** @seqnum: Sequence number for hardware fence packet header */
 		atomic_t seqnum;
+		/** @soccp_rproc: rproc handle for soccp */
+		struct rproc *soccp_rproc;
 	} hw_fence;
 	/**
 	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop

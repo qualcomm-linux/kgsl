@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_H_
@@ -115,12 +115,19 @@ struct adreno_gen7_core {
 	u32 preempt_level;
 	/** @qos_value: GPU qos value to set for each RB. */
 	const u32 *qos_value;
+	/**
+	 * @acv_perfmode_ddr_freq: Vote perfmode when DDR frequency >= acv_perfmode_ddr_freq.
+	 * If not specified, vote perfmode for highest DDR level only.
+	 */
+	u32 acv_perfmode_ddr_freq;
 	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
 	u32 acv_perfmode_vote;
 	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */
 	const u32 rt_bus_hint;
 	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
 	bool fast_bus_hint;
+	/** @noc_timeout_us: GPU config NOC port timeout in usec */
+	u32 noc_timeout_us;
 };
 
 /**
@@ -182,8 +189,6 @@ struct gen7_cp_smmu_info {
 #define GEN7_CP_CTXRECORD_MAGIC_REF		0xae399d6eUL
 /* Size of each CP preemption record */
 #define GEN7_CP_CTXRECORD_SIZE_IN_BYTES		(4192 * 1024)
-/* Size of the user context record block (in bytes) */
-#define GEN7_CP_CTXRECORD_USER_RESTORE_SIZE	(192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
 #define GEN7_CP_PERFCOUNTER_SAVE_RESTORE_SIZE	(4 * 1024)
 
@@ -215,7 +220,8 @@ struct gen7_cp_smmu_info {
 	 (1 << GEN7_INT_ATBASYNCFIFOOVERFLOW) |		\
 	 (1 << GEN7_INT_ATBBUSOVERFLOW) |		\
 	 (1 << GEN7_INT_OUTOFBOUNDACCESS) |		\
-	 (1 << GEN7_INT_UCHETRAPINTERRUPT))
+	 (1 << GEN7_INT_UCHETRAPINTERRUPT) |		\
+	 (1 << GEN7_INT_TSBWRITEERROR))
 
 /**
  * to_gen7_core - return the gen7 specific GPU core struct
@@ -248,8 +254,6 @@ unsigned int gen7_set_marker(unsigned int *cmds,
 		enum adreno_cp_marker_type type);
 
 void gen7_preemption_callback(struct adreno_device *adreno_dev, int bit);
-
-int gen7_preemption_context_init(struct kgsl_context *context);
 
 void gen7_preemption_context_destroy(struct kgsl_context *context);
 
@@ -466,6 +470,14 @@ to_gen7_gpudev(const struct adreno_gpudev *gpudev)
  * Reset the preemption records at the time of hard reset
  */
 void gen7_reset_preempt_records(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_enable_ahb_timeout_detection - Program AHB control registers
+ * @adreno_dev: An Adreno GPU handle
+ *
+ * Program AHB control registers to enable AHB timeout detection.
+ */
+void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev);
 
 /**
  * gen7_rdpm_mx_freq_update - Update the mx frequency

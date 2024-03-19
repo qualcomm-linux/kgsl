@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/utsname.h>
@@ -983,8 +983,8 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 
 	header->osid = KGSL_SNAPSHOT_OS_LINUX_V4;
 
-	strlcpy(header->release, init_utsname()->release, sizeof(header->release));
-	strlcpy(header->version, init_utsname()->version, sizeof(header->version));
+	strscpy(header->release, init_utsname()->release, sizeof(header->release));
+	strscpy(header->version, init_utsname()->version, sizeof(header->version));
 
 	header->seconds = ktime_get_real_seconds();
 	header->power_flags = device->pwrctrl.power_flags;
@@ -1001,14 +1001,14 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 	if (guilty) {
 		header->current_context = guilty->id;
 		header->pid = guilty->tid;
-		strlcpy(header->comm, guilty->proc_priv->comm,
+		strscpy(header->comm, guilty->proc_priv->comm,
 			sizeof(header->comm));
 	}
 
 	if (guilty_lpac) {
 		header->current_context_lpac = guilty_lpac->id;
 		header->pid_lpac = guilty_lpac->tid;
-		strlcpy(header->comm_lpac, guilty_lpac->proc_priv->comm,
+		strscpy(header->comm_lpac, guilty_lpac->proc_priv->comm,
 			sizeof(header->comm_lpac));
 	}
 

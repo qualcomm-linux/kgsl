@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_0_0_SNAPSHOT_H
@@ -193,8 +193,7 @@ static const u32 gen8_0_0_gpu_registers[] = {
 	 0x0ed4a, 0x0ed4a, 0x0ed52, 0x0ed52, 0x0ed66, 0x0ed68, 0x0ed6b, 0x0ed6d,
 	 0x0ed6f, 0x0ed6f, 0x0ed80, 0x0ed81, 0x0ed85, 0x0ed85, 0x0ed87, 0x0ed87,
 	 0x0ed8a, 0x0ed8a, 0x0ed92, 0x0ed92, 0x0eda6, 0x0eda8, 0x0edab, 0x0edad,
-	 0x0edaf, 0x0edaf, 0x0f400, 0x0f400, 0x0f800, 0x0f803, 0x0fc00, 0x0fc01,
-	 UINT_MAX, UINT_MAX,
+	 0x0edaf, 0x0edaf, UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_0_0_gpu_registers), 8));
 
@@ -675,21 +674,6 @@ static const u32 gen8_0_0_non_context_sp_pipe_br_usptp_registers[] = {
 	 UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_usptp_registers), 8));
-
-/*
- * Block   : ['SP']
- * REGION  : UNSLICE
- * Pipeline: PIPE_NONE
- * Cluster : CLUSTER_NONE
- * Location: HLSQ_DP_STR
- * pairs   : 5 (Regs:18)
- */
-static const u32 gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers[] = {
-	 0x0ae05, 0x0ae05, 0x0ae60, 0x0ae65, 0x0ae6b, 0x0ae6c, 0x0ae73, 0x0ae75,
-	 0x0aec0, 0x0aec5,
-	 UINT_MAX, UINT_MAX,
-};
-static_assert(IS_ALIGNED(sizeof(gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers), 8));
 
 /*
  * Block   : ['TPL1']
@@ -1672,8 +1656,6 @@ static struct gen8_sptp_cluster_registers gen8_0_0_sptp_clusters[] = {
 		gen8_0_0_non_context_sp_pipe_br_sp_top_registers, 0xae00},
 	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, USPTP,
 		gen8_0_0_non_context_sp_pipe_br_usptp_registers, 0xae00},
-	{ CLUSTER_NONE, UNSLICE, 2, 2, SP_NCTX_REG, PIPE_BR, 0, HLSQ_DP_STR,
-		gen8_0_0_non_context_sp_pipe_br_hlsq_dp_str_registers, 0xae00},
 	{ CLUSTER_NONE, UNSLICE, 2, 2, TP0_NCTX_REG, PIPE_BR, 0, USPTP,
 		gen8_0_0_non_context_tpl1_pipe_br_usptp_registers, 0xb600},
 	{ CLUSTER_SP_VS, SLICE, 2, 2, SP_CTX0_3D_CVS_REG, PIPE_BR, 0, HLSQ_STATE,
@@ -1888,7 +1870,6 @@ static struct gen8_cp_indexed_reg gen8_0_0_cp_mempool_reg_list[] = {
 static struct gen8_reg_list gen8_0_0_reg_list[] = {
 	{ UNSLICE, gen8_0_0_gpu_registers },
 	{ SLICE, gen8_0_0_gpu_slice_registers },
-	{ UNSLICE, gen8_0_0_cx_misc_registers },
 	{ UNSLICE, gen8_0_0_dbgc_registers },
 	{ SLICE, gen8_0_0_dbgc_slice_registers },
 	{ UNSLICE, gen8_0_0_cx_dbgc_registers },

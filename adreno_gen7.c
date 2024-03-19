@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -327,6 +327,8 @@ int gen7_init(struct adreno_device *adreno_dev)
 
 	adreno_dev->highest_bank_bit = gen7_core->highest_bank_bit;
 	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
+	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
+			gen7_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen7_core->bcl_data;
 
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
@@ -659,6 +661,22 @@ static u64 gen7_get_uche_trap_base(void)
 #define GEN7_APRIV_DEFAULT (BIT(3) | BIT(2) | BIT(1) | BIT(0))
 /* Add crashdumper permissions for the BR APRIV */
 #define GEN7_BR_APRIV_DEFAULT (GEN7_APRIV_DEFAULT | BIT(6) | BIT(5))
+
+void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
+{
+	u32 val;
+
+	if (!adreno_dev->ahb_timeout_val)
+		return;
+
+	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
+			adreno_dev->ahb_timeout_val));
+	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
+	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+}
 
 int gen7_start(struct adreno_device *adreno_dev)
 {
@@ -1572,6 +1590,28 @@ static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	if (gen7_irq_poll_fence(adreno_dev)) {
+		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+		return ret;
+	}
+
+	kgsl_regread(device, GEN7_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
+
+	trace_kgsl_gen7_irq_status(adreno_dev, status);
+
+	return ret;
+}
+
 static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1628,8 +1668,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
-	device->pwrctrl.cx_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
-					GEN7_11_0_GPU_CC_CX_GDSCR : GEN7_GPU_CC_CX_GDSCR;
+	device->pwrctrl.cx_cfg_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
+					GEN7_11_0_GPU_CC_CX_CFG_GDSCR : GEN7_GPU_CC_CX_CFG_GDSCR;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
@@ -2130,32 +2170,40 @@ static void gen7_lpac_fault_header(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_context *drawctxt_lpac;
-	u32 status;
-	u32 lpac_rptr, lpac_wptr, lpac_ib1sz, lpac_ib2sz;
-	u64 lpac_ib1base, lpac_ib2base;
-
-	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
-	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
-	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI, GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
-	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI, GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
-	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
+	u32 status = 0, lpac_rptr = 0, lpac_wptr = 0, lpac_ib1sz = 0, lpac_ib2sz = 0;
+	u64 lpac_ib1base = 0, lpac_ib2base = 0;
+	bool gx_on = adreno_gx_is_on(adreno_dev);
 
 	drawctxt_lpac = ADRENO_CONTEXT(drawobj_lpac->context);
 	drawobj_lpac->context->last_faulted_cmd_ts = drawobj_lpac->timestamp;
 	drawobj_lpac->context->total_fault_count++;
 
 	pr_context(device, drawobj_lpac->context,
-		"LPAC ctx %d ctx_type %s ts %d status %8.8X dispatch_queue=%d rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+		"LPAC ctx %d ctx_type %s ts %d dispatch_queue=%d\n",
 		drawobj_lpac->context->id, kgsl_context_type(drawctxt_lpac->type),
-		drawobj_lpac->timestamp, status,
-		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
-		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
+		drawobj_lpac->timestamp, drawobj_lpac->context->gmu_dispatch_queue);
 
 	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
 			drawctxt_lpac->base.proc_priv->cmdline);
+	if (!gx_on)
+		goto done;
 
+	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
+	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
+	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
+		       GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
+	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
+		       GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
+	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
+
+	pr_context(device, drawobj_lpac->context,
+		"LPAC: status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+		status, lpac_rptr, lpac_wptr, lpac_ib1base,
+		lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
+
+done:
 	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
 		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
 		adreno_get_level(drawobj_lpac->context));
@@ -2166,9 +2214,8 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
-		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_9_0_read_alwayson,
 		.reset = gen7_hwsched_reset_replay,
@@ -2196,9 +2243,8 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
-		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_read_alwayson,
 		.reset = gen7_hwsched_reset_replay,
@@ -2233,7 +2279,6 @@ const struct gen7_gpudev adreno_gen7_gmu_gpudev = {
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.reset = gen7_gmu_reset,
 		.preemption_schedule = gen7_preemption_schedule,
-		.preemption_context_init = gen7_preemption_context_init,
 		.read_alwayson = gen7_read_alwayson,
 		.power_ops = &gen7_gmu_power_ops,
 		.remove = gen7_remove,

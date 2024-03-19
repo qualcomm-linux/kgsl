@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -98,14 +98,9 @@ static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
 	u8 *dest = snapshot->ptr + sizeof(*section_header);
 	struct kgsl_snapshot_gpu_object_v2 *header =
 		(struct kgsl_snapshot_gpu_object_v2 *)dest;
-	const struct adreno_gen8_core *gen8_core = to_gen8_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
+				device->snapshot_ctxt_record_size);
 	size_t section_size;
-
-	if (gen8_core->ctxt_record_size)
-		ctxt_record_size = gen8_core->ctxt_record_size;
-
-	ctxt_record_size = min_t(u64, ctxt_record_size, device->snapshot_ctxt_record_size);
 
 	section_size = sizeof(*section_header) + sizeof(*header) + ctxt_record_size;
 	if (snapshot->remain < section_size) {
@@ -135,13 +130,10 @@ static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
 static void snapshot_preemption_records(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
 {
-	const struct adreno_gen8_core *gen8_core =
-		to_gen8_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = GEN8_CP_CTXRECORD_SIZE_IN_BYTES;
+	u64 ctxt_record_size = md->size;
 	u64 offset;
 
-	if (gen8_core->ctxt_record_size)
-		ctxt_record_size = gen8_core->ctxt_record_size;
+	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
 
 	/* All preemption records exist as a single mem alloc entry */
 	for (offset = 0; offset < md->size; offset += ctxt_record_size)
@@ -444,9 +436,6 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 
 	}
 
-	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
-		return;
-
 	read_lock(&device->context_lock);
 	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
 	read_unlock(&device->context_lock);
@@ -471,6 +460,77 @@ static int gmu_clock_set_rate(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
+{
+	struct device_node *node = NULL;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	u32 shadow_num_entries = 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
+		return;
+
+	node = of_find_node_by_name(NULL, "qcom,hw-fence");
+	if (!node)
+		return;
+
+	if (of_property_read_u32(node, "qcom,hw-fence-table-entries",
+		&shadow_num_entries)) {
+		dev_err(&gmu->pdev->dev, "qcom,hw-fence-table-entries property not found\n");
+		shadow_num_entries = 8192;
+	}
+
+	of_node_put(node);
+
+	gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_HW_FENCE_SHADOW_NUM_ENTRIES,
+		shadow_num_entries);
+}
+
+static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+
+	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
+		return;
+
+	if (hw_hfi->hw_fence.soccp_rproc)
+		return;
+
+	hw_hfi->hw_fence.soccp_rproc = gmu_core_soccp_vote_init(&gmu->pdev->dev);
+	if (!IS_ERR(hw_hfi->hw_fence.soccp_rproc))
+		return;
+
+	/* Disable hw fences */
+	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
+}
+
+static void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+
+	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
+		return;
+
+	if (!gmu_core_soccp_vote(&gmu->pdev->dev, &gmu->flags, hw_hfi->hw_fence.soccp_rproc,
+		pwr_on))
+		return;
+
+	/* Make sure no more hardware fences are created */
+	spin_lock(&hw_hfi->hw_fence.lock);
+	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hw_hfi->hw_fence.flags);
+	spin_unlock(&hw_hfi->hw_fence.lock);
+
+	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
+
+	/*
+	 * It is possible that some hardware fences were created while we were in slumber. Since
+	 * soccp power vote failed, these hardware fences may never be signaled. Hence, log them
+	 * for debug purposes.
+	 */
+	adreno_hwsched_log_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -490,6 +550,13 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen8_enable_ahb_timeout_detection(adreno_dev);
+
 	/* Initialize the CX timer */
 	gen8_cx_timer_init(adreno_dev);
 
@@ -504,6 +571,8 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	ret = gen8_scm_gpu_init_cx_regs(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
+
+	_get_hw_fence_entries(adreno_dev);
 
 	gen8_gmu_register_config(adreno_dev);
 
@@ -520,6 +589,17 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
+
+	/* This is the minimum GMU FW HFI version required to enable hw fences */
+	if (GMU_VER_MINOR(gmu->ver.hfi) >= 7)
+		adreno_hwsched_register_hw_fence(adreno_dev);
+
+	gen8_hwsched_soccp_vote_init(adreno_dev);
+
+	gen8_hwsched_soccp_vote(adreno_dev, true);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
@@ -552,6 +632,7 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 err:
 	gen8_gmu_irq_disable(adreno_dev);
+	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
 		gen8_gmu_suspend(adreno_dev);
@@ -586,6 +667,13 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen8_enable_ahb_timeout_detection(adreno_dev);
+
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -597,6 +685,11 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen8_gmu_register_config(adreno_dev);
 
 	gen8_gmu_irq_enable(adreno_dev);
+
+	gen8_hwsched_soccp_vote(adreno_dev, true);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
@@ -619,6 +712,7 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	return 0;
 err:
 	gen8_gmu_irq_disable(adreno_dev);
+	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
 		gen8_gmu_suspend(adreno_dev);
@@ -767,9 +861,6 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
 	if (ret)
@@ -1204,6 +1295,8 @@ no_gx_power:
 
 	kgsl_pwrctrl_clear_l3_vote(device);
 
+	gen8_hwsched_soccp_vote(adreno_dev, false);
+
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 
 	return ret;
@@ -1375,7 +1468,7 @@ static int gen8_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	if (req.freq != INVALID_DCVS_IDX)
@@ -1537,7 +1630,7 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
 
-	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static void gen8_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
@@ -1643,6 +1736,7 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 {
 	struct adreno_hw_fence_entry *entry, *tmp;
 	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct kgsl_context *context = NULL;
 	int ret = 0;
 
 	list_for_each_entry_safe(entry, tmp, &hfi->detached_hw_fence_list, node) {
@@ -1656,7 +1750,11 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 		if (ret)
 			return ret;
 
+		context = &entry->drawctxt->base;
+
 		gen8_remove_hw_fence_entry(adreno_dev, entry);
+
+		kgsl_context_put(context);
 	}
 
 	return ret;
@@ -1818,6 +1916,10 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	}
 
 	kgsl_mmu_set_feature(device, KGSL_MMU_PAGEFAULT_TERMINATE);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_HW_FENCE))
+		device->max_syncobj_hw_fence_count = min_t(u32, HFI_SYNCOBJ_HW_FENCE_MAX,
+			MAX_SYNCOBJ_QUERY_BITS);
 
 	return adreno_hwsched_init(adreno_dev, &gen8_hwsched_ops);
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -306,6 +306,38 @@ void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 	adreno_drawctxt_invalidate(device, context);
 }
 
+static int drawctxt_preemption_init(struct kgsl_context *context)
+{
+	struct kgsl_device *device = context->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u64 flags = 0;
+
+	/* User context record is needed for a6x and beyond targets only */
+	if (!adreno_preemption_feature_set(adreno_dev) || (ADRENO_GPUREV(adreno_dev) < 600))
+		return 0;
+
+	if (context->flags & KGSL_CONTEXT_SECURE)
+		flags |= KGSL_MEMFLAGS_SECURE;
+
+	if (is_compat_task())
+		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+
+	/*
+	 * gpumem_alloc_entry takes an extra refcount. Put it only when
+	 * destroying the context to keep the context record valid
+	 */
+	context->user_ctxt_record = gpumem_alloc_entry(context->dev_priv,
+			ADRENO_CP_CTXRECORD_USER_RESTORE_SIZE, flags);
+	if (IS_ERR(context->user_ctxt_record)) {
+		int ret = PTR_ERR(context->user_ctxt_record);
+
+		context->user_ctxt_record = NULL;
+		return ret;
+	}
+
+	return 0;
+}
+
 #define KGSL_CONTEXT_PRIORITY_MED	0x8
 
 /**
@@ -322,7 +354,6 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	struct adreno_context *drawctxt;
 	struct kgsl_device *device = dev_priv->device;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 	unsigned int local;
 
@@ -432,12 +463,10 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context)
 		adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
 
-	if (gpudev->preemption_context_init) {
-		ret = gpudev->preemption_context_init(&drawctxt->base);
-		if (ret != 0) {
-			kgsl_context_detach(&drawctxt->base);
-			return ERR_PTR(ret);
-		}
+	ret = drawctxt_preemption_init(&drawctxt->base);
+	if (ret) {
+		kgsl_context_detach(&drawctxt->base);
+		return ERR_PTR(ret);
 	}
 
 	/* copy back whatever flags we dediced were valid */

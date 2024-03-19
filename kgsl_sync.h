@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2014,2018-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SYNC_H
 #define __KGSL_SYNC_H
@@ -121,7 +121,7 @@ void kgsl_hw_fence_populate_md(struct kgsl_device *device, struct kgsl_memdesc *
 
 int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence);
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index);
 
 bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count);
 
@@ -132,6 +132,8 @@ void kgsl_hw_fence_trigger_cpu(struct kgsl_device *device, struct kgsl_sync_fenc
 bool kgsl_hw_fence_signaled(struct dma_fence *fence);
 
 bool kgsl_is_hw_fence(struct dma_fence *fence);
+
+void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size);
 
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
@@ -241,7 +243,7 @@ int kgsl_hw_fence_create(struct kgsl_device *device, struct kgsl_sync_fence *kfe
 	return -EINVAL;
 }
 
-int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence)
+int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence, u32 *hash_index)
 {
 	return -EINVAL;
 }
@@ -269,6 +271,11 @@ bool kgsl_hw_fence_signaled(struct dma_fence *fence)
 bool kgsl_is_hw_fence(struct dma_fence *fence)
 {
 	return false;
+}
+
+void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size)
+{
+
 }
 
 #endif /* CONFIG_SYNC_FILE */

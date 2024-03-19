@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN8_REG_H
@@ -956,6 +956,8 @@
 #define GEN8_GRAS_PERFCTR_LRZ_SEL_3         0x8733
 
 /* RB registers */
+#define GEN8_RB_DBG_ECO_CNTL                0x8e04
+#define GEN8_RB_CCU_DBG_ECO_CNTL            0x8e06
 #define GEN8_RB_CCU_CNTL                    0x8e07
 #define GEN8_RB_CCU_NC_MODE_CNTL            0x8e08
 #define GEN8_RB_GC_GMEM_PROTECT             0x8e09
@@ -976,6 +978,8 @@
 #define GEN8_RB_SUB_BLOCK_SEL_CNTL_HOST     0x8e3b
 #define GEN8_RB_SUB_BLOCK_SEL_CNTL_CD       0x8e3d
 #define GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE 0x8e50
+#define GEN8_RB_SLICE_UFC_PREFETCH_CNTL     0x8e77
+#define GEN8_RB_SLICE_UFC_DBG_CNTL          0x8e78
 #define GEN8_RB_CMP_NC_MODE_CNTL            0x8f00
 #define GEN8_RB_RESOLVE_PREFETCH_CNTL       0x8f01
 #define GEN8_RB_CMP_DBG_ECO_CNTL            0x8f02
@@ -990,6 +994,7 @@
 #define GEN8_RB_PERFCTR_UFC_SEL_3           0x8f13
 #define GEN8_RB_PERFCTR_UFC_SEL_4           0x8f14
 #define GEN8_RB_PERFCTR_UFC_SEL_5           0x8f15
+#define GEN8_RB_UFC_DBG_CNTL                0x8f29
 
 /* VPC registers */
 #define GEN8_VPC_PERFCTR_VPC_SEL_2_0             0x9670
@@ -1055,6 +1060,8 @@
 #define GEN8_PC_PERFCTR_PC_SEL_14           0x9e3e
 #define GEN8_PC_PERFCTR_PC_SEL_15           0x9e3f
 #define GEN8_PC_CHICKEN_BITS_1              0x9e50
+#define GEN8_PC_DBG_ECO_CNTL                0x9e53
+
 #define GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1 0x9e64
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_0      0x9f00
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_1      0x9f01
@@ -1132,6 +1139,7 @@
 #define GEN8_SP_ISDB_DEBUG_ADDR_LO               0xae3e
 #define GEN8_SP_ISDB_DEBUG_ADDR_HI               0xae3f
 #define GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP        0xae6b
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL                0xae6c
 #define GEN8_SP_READ_SEL                         0xae6d
 #define GEN8_SP_DBG_CNTL                         0xae71
 
@@ -1571,8 +1579,8 @@
 #define GEN8_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
+#define GEN8_GPU_CC_CX_CFG_GDSCR		0x26421
 #define GEN8_GPU_CC_GX_DOMAIN_MISC3		0x26541
-#define GEN8_GPU_CC_CX_GDSCR			0x26420
 
 /* GPU RSC sequencer registers */
 #define GEN8_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
@@ -1591,6 +1599,14 @@
 #define GEN8_SMMU_BASE				0x28000
 
 /* GPU CX_MISC registers */
+#define GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL	0x10
+#define GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL	0x11
+#define GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL		0x12
+#define GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL	0x13
+#define GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL	0x14
+#define GEN8_GPU_CX_MISC_INT_CLEAR_CMD		0x31
+#define GEN8_GPU_CX_MISC_INT_0_MASK		0x33
+#define GEN8_GPU_CX_MISC_INT_0_STATUS		0x34
 #define GEN8_GPU_CX_MISC_AO_COUNTER_LO		0x80
 #define GEN8_GPU_CX_MISC_AO_COUNTER_HI		0x81
 #define GEN8_GPU_CX_MISC_SW_FUSE_VALUE		0x400

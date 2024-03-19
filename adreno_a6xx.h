@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_A6XX_H_
@@ -156,8 +156,6 @@ struct a6xx_cp_smmu_info {
 #define A6XX_CP_CTXRECORD_MAGIC_REF     0xAE399D6EUL
 /* Size of each CP preemption record */
 #define A6XX_CP_CTXRECORD_SIZE_IN_BYTES     (2112 * 1024)
-/* Size of the user context record block (in bytes) */
-#define A6XX_CP_CTXRECORD_USER_RESTORE_SIZE (192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
 #define A6XX_CP_PERFCOUNTER_SAVE_RESTORE_SIZE   (4 * 1024)
 
@@ -238,8 +236,6 @@ unsigned int a6xx_set_marker(unsigned int *cmds,
 		enum adreno_cp_marker_type type);
 
 void a6xx_preemption_callback(struct adreno_device *adreno_dev, int bit);
-
-int a6xx_preemption_context_init(struct kgsl_context *context);
 
 void a6xx_preemption_context_destroy(struct kgsl_context *context);
 

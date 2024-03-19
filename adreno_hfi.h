@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -244,6 +244,8 @@ enum hfi_mem_kind {
 	 * between LPAC and GC
 	 */
 	HFI_MEMKIND_AQE_BUFFER,
+	/** @HFI_MEMKIND_HW_FENCE_SHADOW: Shadow memory used for caching external input fences */
+	HFI_MEMKIND_HW_FENCE_SHADOW,
 	HFI_MEMKIND_MAX,
 };
 
@@ -274,6 +276,7 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_HW_FENCE] = "GMU HW FENCE",
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
+	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -955,9 +958,29 @@ struct hfi_submit_cmd {
 	u32 big_ib_gmu_va;
 } __packed;
 
-struct hfi_syncobj {
+/* This structure is only used for hw fence feature on gen7 hwsched targets */
+struct hfi_syncobj_legacy {
+	/** @ctxt_id: dma fence context id for external fence and gmu context id for kgsl fence */
 	u64 ctxt_id;
+	/** @seq_no: Sequence number (or timestamp) of this fence */
 	u64 seq_no;
+	/** @flags: Flags for this fence */
+	u64 flags;
+} __packed;
+
+struct hfi_syncobj {
+	/**
+	 * @header: bits[0:15]: size of this packet in dwords, bits[15:23]: version,
+	 * bits[24:31] unused
+	 */
+	u32 header;
+	/** @hash_index: hash index of external input fence */
+	u32 hash_index;
+	/** @ctxt_id: dma fence context id for external fence and gmu context id for kgsl fence */
+	u64 ctxt_id;
+	/** @seq_no: Sequence number (or timestamp) of this fence */
+	u64 seq_no;
+	/** @flags: Flags for this fence */
 	u64 flags;
 } __packed;
 
@@ -968,6 +991,14 @@ struct hfi_submit_syncobj {
 	u32 timestamp;
 	u32 num_syncobj;
 } __packed;
+
+#define HFI_SYNCOBJ_LEGACY_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj_legacy))
+
+#define HFI_SYNCOBJ_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj))
 
 struct hfi_log_block {
 	u32 hdr;
