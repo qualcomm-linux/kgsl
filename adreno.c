@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -108,7 +108,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	if (!name || adreno_dev->zap_loaded)
+	if (!name || adreno_dev->zap_loaded || IS_ENABLED(CONFIG_QCOM_KVM_ENABLED))
 		return 0;
 
 	ret = kgsl_zap_shader_load(&device->pdev->dev, name);
