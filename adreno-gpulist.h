@@ -2910,6 +2910,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (13536 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
@@ -2949,6 +2950,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (13536 * SZ_1K),
+	.preempt_level = 1,
 };
 
 /* GEN8_4_0 noncontext register list */
