@@ -35,6 +35,9 @@ endif
 ifeq ($(CONFIG_ARCH_SDM670), y)
 	include $(KGSL_PATH)/config/gki_qcs605.conf
 endif
+ifeq ($(CONFIG_ARCH_BENGAL), y)
+        include $(KGSL_PATH)/config/gki_bengal.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq -I$(KERNEL_SRC)/drivers/iommu
 
