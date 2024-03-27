@@ -404,6 +404,13 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	/* If the target supports dedicated MxC rail, read the same */
+	if (cmd_db_read_addr("gmxc.lvl")) {
+		ret = rpmh_arc_cmds(&mx_arc, "gmxc.lvl");
+		if (ret)
+			return ret;
+	}
+
 	return setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &cx_arc);
 }
 
