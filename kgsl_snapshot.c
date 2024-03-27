@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -190,6 +190,7 @@ int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	mem_type = kgsl_memdesc_get_memtype(&entry->memdesc);
 	if (mem_type == KGSL_MEMTYPE_TEXTURE ||
 		mem_type == KGSL_MEMTYPE_EGL_SURFACE ||
+		mem_type == KGSL_MEMTYPE_SURFACE ||
 		mem_type == KGSL_MEMTYPE_EGL_IMAGE) {
 		ret = 0;
 		goto err_put;
