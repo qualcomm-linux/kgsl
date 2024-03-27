@@ -166,6 +166,8 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_UCHE_DBG_ECO_CNTL_0, BIT(PIPE_NONE), 0, 0, 2, },
 	{ GEN8_UCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
 	{ GEN8_UCHE_CCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
+	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_RB_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR), 0, 0, 0, },
@@ -180,10 +182,18 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_PC_CHICKEN_BITS_2, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_PC_CHICKEN_BITS_5, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 2, },
 	{ GEN8_PC_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
-	{ GEN8_VFD_CB_LP_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
-	{ GEN8_VFD_CB_BUSY_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
-	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, },
+	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_VFD_CB_BV_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR),  0, 0, 0, },
+	{ GEN8_VFD_CB_BR_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR),  0, 0, 0, },
+	{ GEN8_VFD_CB_LP_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_VFD_CB_BUSY_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_VPC_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 2, },
+	{ GEN8_VPC_DBG_ECO_CNTL_1, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 2, },
+	{ GEN8_VPC_DBG_ECO_CNTL_2, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 1, },
+	{ GEN8_VPC_DBG_ECO_CNTL_3, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 2, },
+	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_SP_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS, BIT(PIPE_NONE), 0, 0, 1, },
@@ -285,6 +295,8 @@ static void nc_override_cb(struct adreno_device *adreno_dev, void *priv)
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
 	gen8_dev->nc_overrides_enabled = true;
+	/* Force to update and make new patched reglist */
+	adreno_dev->patch_reglist = false;
 }
 
 static ssize_t nc_override_set(struct file *filep,
