@@ -200,7 +200,6 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 err:
 	snprintf(str, sizeof(str), "RB addr:0x%llx", gpuaddr);
 	SNAPSHOT_ERR_NOMEM(device, str);
-	return;
 }
 
 static bool parse_payload_rb_legacy(struct adreno_device *adreno_dev,

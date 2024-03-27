@@ -502,6 +502,7 @@ int gen8_init(struct adreno_device *adreno_dev)
 #define CX_TIMER_INIT_SAMPLES 16
 void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u64 seed_val, tmr, skew = 0;
 	int i;
 	unsigned long flags;
@@ -522,12 +523,8 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 		tmr2 = arch_timer_read_counter();
 
 		/* Write to the register and time it */
-		adreno_cx_misc_regwrite(adreno_dev,
-					GEN8_GPU_CX_MISC_AO_COUNTER_LO,
-					lower_32_bits(tmr2));
-		adreno_cx_misc_regwrite(adreno_dev,
-					GEN8_GPU_CX_MISC_AO_COUNTER_HI,
-					upper_32_bits(tmr2));
+		kgsl_regwrite(device, GEN8_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(tmr2));
+		kgsl_regwrite(device, GEN8_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(tmr2));
 
 		/* Barrier to make sure the write completes before timing it */
 		mb();
@@ -548,10 +545,8 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	seed_val = tmr + skew;
 
 	/* Seed the GPU CX counter with the adjusted timer */
-	adreno_cx_misc_regwrite(adreno_dev,
-			GEN8_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(seed_val));
-	adreno_cx_misc_regwrite(adreno_dev,
-			GEN8_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(seed_val));
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(seed_val));
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(seed_val));
 
 	local_irq_restore(flags);
 
@@ -560,11 +555,11 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 feature_fuse = 0;
 
 	/* Get HW feature soft fuse value */
-	adreno_cx_misc_regread(adreno_dev, GEN8_GPU_CX_MISC_SW_FUSE_VALUE,
-			       &feature_fuse);
+	kgsl_regread(device, GEN8_GPU_CX_MISC_SW_FUSE_VALUE, &feature_fuse);
 
 	adreno_dev->fastblend_enabled = feature_fuse & BIT(GEN8_FASTBLEND_SW_FUSE);
 	adreno_dev->raytracing_enabled = feature_fuse & BIT(GEN8_RAYTRACING_SW_FUSE);
@@ -1019,6 +1014,7 @@ static const struct kgsl_regmap_list gen8_0_0_bicubic_regs[] = {
 
 void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 val;
 
 	if (!adreno_dev->ahb_timeout_val)
@@ -1026,11 +1022,11 @@ void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 
 	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
 			adreno_dev->ahb_timeout_val));
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
 }
 
 #define MIN_HBB 13
@@ -2099,11 +2095,10 @@ done:
 static irqreturn_t gen8_cx_host_irq_handler(int irq, void *data)
 {
 	struct kgsl_device *device = data;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	u32 status;
 
-	adreno_cx_misc_regread(adreno_dev, GEN8_GPU_CX_MISC_INT_0_STATUS, &status);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, status);
+	kgsl_regread(device, GEN8_GPU_CX_MISC_INT_0_STATUS, &status);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, status);
 
 	if (status & BIT(GEN8_CX_MISC_GPU_CC_IRQ))
 		KGSL_PWRCTRL_LOG_FREQLIM(device);

@@ -1056,17 +1056,17 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 		return;
 
 	 /* Make sure that the last IB1 that was being executed is dumped.
-	 * Since this was the last IB1 that was processed, we should have
-	 * already added it to the list during the ringbuffer parse but we
-	 * want to be double plus sure.
-	 * The problem is that IB size from the register is the unprocessed size
-	 * of the buffer not the original size, so if we didn't catch this
-	 * buffer being directly used in the RB, then we might not be able to
-	 * dump the whole thing. Try to dump the maximum possible size from the
-	 * IB1 base address till the end of memdesc size so that we dont miss
-	 * what we are interested in. Print a warning message so we can try to
-	 * figure how often this really happens.
-	 */
+	  * Since this was the last IB1 that was processed, we should have
+	  * already added it to the list during the ringbuffer parse but we
+	  * want to be double plus sure.
+	  * The problem is that IB size from the register is the unprocessed size
+	  * of the buffer not the original size, so if we didn't catch this
+	  * buffer being directly used in the RB, then we might not be able to
+	  * dump the whole thing. Try to dump the maximum possible size from the
+	  * IB1 base address till the end of memdesc size so that we dont miss
+	  * what we are interested in. Print a warning message so we can try to
+	  * figure how often this really happens.
+	  */
 
 	if (ib1base && (-ENOENT == find_object(ib1base, process))) {
 		struct kgsl_mem_entry *entry;
@@ -1299,37 +1299,3 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 	return (count * 4);
 }
 
-size_t adreno_snapshot_cx_misc_registers(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const u32 *ptr = (const u32 *)priv;
-	u32 *data = (unsigned int *)buf;
-	int count = 0, k;
-
-	/* Figure out how many registers we are going to dump */
-	count = adreno_snapshot_regs_count(ptr);
-
-	if (remain < (count * sizeof(u32))) {
-		SNAPSHOT_ERR_NOMEM(device, "CX_MISC REGISTERS");
-		return 0;
-	}
-
-	for (; ptr[0] != UINT_MAX; ptr += 2) {
-		int cnt = REG_COUNT(ptr);
-
-		if (cnt == 1)
-			*data++ = BIT(31) | ptr[0];
-		else {
-			*data++ = ptr[0];
-			*data++ = cnt;
-		}
-
-		for (k = ptr[0]; k <= ptr[1]; k++)
-			adreno_cx_misc_regread(adreno_dev,
-					k - adreno_dev->cx_misc_base, data++);
-	}
-
-	/* Return the size of the section */
-	return (count * sizeof(u32));
-}

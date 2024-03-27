@@ -1293,7 +1293,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
 	 * iommu driver considers remapping an already mapped iova as fatal.
 	 */
-        if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
+	if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
 		goto free;
 
 	spin_lock(&vma->lock);
@@ -2150,20 +2150,20 @@ static int gen7_bcl_sid_set(struct kgsl_device *device, u32 sid_id, u64 sid_val)
 		return -EINVAL;
 
 	switch (sid_id) {
-		case 0:
-			adreno_dev->bcl_data &= ~BCL_SID0_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID0_MASK, val);
-			break;
-		case 1:
-			adreno_dev->bcl_data &= ~BCL_SID1_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID1_MASK, val);
-			break;
-		case 2:
-			adreno_dev->bcl_data &= ~BCL_SID2_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID2_MASK, val);
-			break;
-		default:
-			return -EINVAL;
+	case 0:
+		adreno_dev->bcl_data &= ~BCL_SID0_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID0_MASK, val);
+		break;
+	case 1:
+		adreno_dev->bcl_data &= ~BCL_SID1_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID1_MASK, val);
+		break;
+	case 2:
+		adreno_dev->bcl_data &= ~BCL_SID2_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID2_MASK, val);
+		break;
+	default:
+		return -EINVAL;
 	}
 
 	return adreno_power_cycle_u32(adreno_dev, &adreno_dev->bcl_data, bcl_data);
@@ -2178,14 +2178,14 @@ static u64 gen7_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 		return 0;
 
 	switch (sid_id) {
-		case 0:
-			return ((u64) FIELD_GET(BCL_SID0_MASK, adreno_dev->bcl_data));
-		case 1:
-			return ((u64) FIELD_GET(BCL_SID1_MASK, adreno_dev->bcl_data));
-		case 2:
-			return ((u64) FIELD_GET(BCL_SID2_MASK, adreno_dev->bcl_data));
-		default:
-			return 0;
+	case 0:
+		return ((u64) FIELD_GET(BCL_SID0_MASK, adreno_dev->bcl_data));
+	case 1:
+		return ((u64) FIELD_GET(BCL_SID1_MASK, adreno_dev->bcl_data));
+	case 2:
+		return ((u64) FIELD_GET(BCL_SID2_MASK, adreno_dev->bcl_data));
+	default:
+		return 0;
 	}
 }
 
