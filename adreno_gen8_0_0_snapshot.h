@@ -1883,8 +1883,7 @@ static struct gen8_reg_list gen8_0_0_ahb_registers[] = {
 	{ UNSLICE, gen8_0_0_ahb_secure_gpu_registers },
 };
 
-static struct gen8_reg_list gen8_gmu_registers[] = {
-	{ UNSLICE, gen8_0_0_gmu_registers },
+static struct gen8_reg_list gen8_gmu_gx_registers[] = {
 	{ UNSLICE, gen8_0_0_gmugx_registers },
 	{ SLICE, gen8_0_0_gmugx_slice_registers },
 };
