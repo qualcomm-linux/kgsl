@@ -2625,9 +2625,11 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	drawobj->context->last_faulted_cmd_ts = drawobj->timestamp;
 	drawobj->context->total_fault_count++;
 
-	pr_context(device, drawobj->context, "LPAC ctx %u ctx_type %s ts %u dispatch_queue=%d\n",
+	pr_context(device, drawobj->context,
+		   "LPAC ctx %u ctx_type %s ts %u policy %lX dispatch_queue=%d\n",
 		   drawobj->context->id, kgsl_context_type(drawctxt->type),
-		   drawobj->timestamp, drawobj->context->gmu_dispatch_queue);
+		   drawobj->timestamp, CMDOBJ(drawobj)->fault_recovery,
+		   drawobj->context->gmu_dispatch_queue);
 
 	pr_context(device, drawobj->context, "lpac cmdline: %s\n",
 		   drawctxt->base.proc_priv->cmdline);
@@ -2680,9 +2682,9 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 		ts = drawobj->timestamp;
 		rb_id = adreno_get_level(drawobj->context);
 
-		pr_context(device, drawobj->context, "ctx %u ctx_type %s ts %u\n",
+		pr_context(device, drawobj->context, "ctx %u ctx_type %s ts %u policy %lX\n",
 			   drawobj->context->id, kgsl_context_type(drawctxt->type),
-			   drawobj->timestamp);
+			   drawobj->timestamp, CMDOBJ(drawobj)->fault_recovery);
 
 		pr_context(device, drawobj->context, "cmdline: %s\n",
 			   drawctxt->base.proc_priv->cmdline);
