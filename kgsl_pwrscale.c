@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/devfreq_cooling.h>
@@ -131,6 +131,8 @@ void kgsl_pwrscale_update_stats(struct kgsl_device *device)
 		device->pwrscale.accum_stats.ram_wait += stats.ram_wait;
 		pwrctrl->clock_times[pwrctrl->active_pwrlevel] +=
 				stats.busy_time;
+		if (pwrctrl->thermal_pwrlevel)
+			pwrctrl->thermal_time += stats.busy_time;
 		pwrctrl->time_in_pwrlevel[pwrctrl->active_pwrlevel] +=
 			ktime_us_delta(cur_time, pwrctrl->last_stat_updated);
 		pwrctrl->last_stat_updated = cur_time;

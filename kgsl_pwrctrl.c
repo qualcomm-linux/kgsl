@@ -370,6 +370,14 @@ static ssize_t thermal_pwrlevel_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", pwr->thermal_pwrlevel);
 }
 
+static ssize_t thermal_time_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", device->pwrctrl.thermal_time);
+}
+
 static ssize_t max_pwrlevel_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
@@ -1093,6 +1101,7 @@ static DEVICE_ATTR_RO(gpu_clock_stats);
 static DEVICE_ATTR_RW(max_pwrlevel);
 static DEVICE_ATTR_RW(min_pwrlevel);
 static DEVICE_ATTR_RW(thermal_pwrlevel);
+static DEVICE_ATTR_RO(thermal_time);
 static DEVICE_ATTR_RO(num_pwrlevels);
 static DEVICE_ATTR_RO(reset_count);
 static DEVICE_ATTR_RW(force_clk_on);
@@ -1120,6 +1129,7 @@ static const struct attribute *pwrctrl_attr_list[] = {
 	&dev_attr_max_pwrlevel.attr,
 	&dev_attr_min_pwrlevel.attr,
 	&dev_attr_thermal_pwrlevel.attr,
+	&dev_attr_thermal_time.attr,
 	&dev_attr_num_pwrlevels.attr,
 	&dev_attr_reset_count.attr,
 	&dev_attr_force_clk_on.attr,
