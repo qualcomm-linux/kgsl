@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -45,6 +45,9 @@ static int gen7_counter_br_enable(struct adreno_device *adreno_dev,
 					FIELD_PREP(GENMASK(13, 12), PIPE_BR), group->flags);
 	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, val);
 
+	/* Ensure all writes are posted before accessing the piped register */
+	mb();
+
 	if (!ret)
 		reg->value = 0;
 
@@ -66,6 +69,9 @@ static int gen7_counter_bv_enable(struct adreno_device *adreno_dev,
 	ret = gen7_perfcounter_update(adreno_dev, reg, true,
 					FIELD_PREP(GENMASK(13, 12), PIPE_BV), group->flags);
 	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, val);
+
+	/* Ensure all writes are posted before accessing the piped register */
+	mb();
 
 	if (!ret)
 		reg->value = 0;
