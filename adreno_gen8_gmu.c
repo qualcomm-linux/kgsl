@@ -1391,42 +1391,24 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	/* Make sure above writes are committed before we proceed to recovery */
 	wmb();
 
-	gmu_core_regwrite(device, GEN8_GMUCX_CM3_SYSRESET, 1);
-
-	/* Halt GX traffic */
-	if (gen8_gmu_gx_is_on(adreno_dev))
-		_do_gbif_halt(device, GEN8_RBBM_GBIF_HALT,
-				GEN8_RBBM_GBIF_HALT_ACK,
-				GEN8_GBIF_GX_HALT_MASK,
-				"GX");
-
 	/* Halt CX traffic */
 	_do_gbif_halt(device, GEN8_GBIF_HALT, GEN8_GBIF_HALT_ACK,
 			GEN8_GBIF_ARB_HALT_MASK, "CX");
-
-	if (gen8_gmu_gx_is_on(adreno_dev))
-		kgsl_regwrite(device, GEN8_RBBM_SW_RESET_CMD, 0x1);
-
-	/* Make sure above writes are posted before turning off power resources */
-	wmb();
-
-	/* Allow the software reset to complete */
-	udelay(100);
-
-	/*
-	 * This is based on the assumption that GMU is the only one controlling
-	 * the GX HS. This code path is the only client voting for GX from linux
-	 * kernel.
-	 */
-	if (!gen8_gmu_gx_is_on(adreno_dev))
-		return;
 
 	/*
 	 * Switch gx gdsc control from GMU to CPU force non-zero reference
 	 * count in clk driver so next disable call will turn off the GDSC
 	 */
-	kgsl_pwrctrl_enable_gx_gdsc(device);
-	kgsl_pwrctrl_disable_gx_gdsc(device);
+	if (gen8_gmu_gx_is_on(adreno_dev)) {
+		kgsl_pwrctrl_enable_gx_gdsc(device);
+		kgsl_pwrctrl_disable_gx_gdsc(device);
+	}
+
+	/*
+	 * Trigger RSC slumber sequence to turn off GMU controlled domains
+	 * (GX, MXC) and remove GPU bus votes
+	 */
+	gen8_rscc_sleep_sequence(adreno_dev);
 
 	if (gen8_gmu_gx_is_on(adreno_dev))
 		dev_err(&gmu->pdev->dev, "gx is stuck on\n");
