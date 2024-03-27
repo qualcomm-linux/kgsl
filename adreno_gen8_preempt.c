@@ -58,7 +58,7 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer,
 	if (!atomic) {
 		/* If WPTR update fails, set the fault and trigger recovery */
 		if (ret) {
-			gmu_core_fault_snapshot(device);
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 			adreno_dispatcher_fault(adreno_dev,
 				ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 		}
@@ -378,7 +378,7 @@ void gen8_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 err:
 	/* If fenced write fails, take inline snapshot and trigger recovery */
 	if (!in_interrupt()) {
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		adreno_dispatcher_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	} else {

@@ -913,7 +913,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 		if (timestamp_cmp(cmd->sync_obj_ts, hdr->sync_obj_ts) > 0) {
 			dev_err(&gmu->pdev->dev, "Missing sync object ctx:%d ts:%d retired:%d\n",
 				context->id, cmd->sync_obj_ts, hdr->sync_obj_ts);
-			gmu_core_fault_snapshot(device);
+			gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 		}
 	}
@@ -1394,6 +1394,8 @@ static int check_ack_failure(struct adreno_device *adreno_dev,
 	struct pending_cmd *ack)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 
 	if (ack->results[2] != 0xffffffff)
 		return 0;
@@ -1403,6 +1405,8 @@ static int check_ack_failure(struct adreno_device *adreno_dev,
 		MSG_HDR_GET_ID(ack->sent_hdr),
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr));
 
+	KGSL_GMU_CORE_FORCE_PANIC(KGSL_DEVICE(adreno_dev)->gmu_core.gf_panic,
+				  gmu->pdev, ticks, GMU_FAULT_HFI_ACK);
 	return -EINVAL;
 }
 
@@ -1812,8 +1816,7 @@ poll:
 		dev_err(&gmu->pdev->dev,
 			"Timed out processing MSG_START seqnum: %d\n",
 			seqnum);
-		gmu_core_fault_snapshot(device);
-		return rc;
+		goto done;
 	}
 
 	/* Clear the interrupt */
@@ -1822,8 +1825,8 @@ poll:
 
 	if (gen7_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) <= 0) {
 		dev_err(&gmu->pdev->dev, "MSG_START: no payload\n");
-		gmu_core_fault_snapshot(device);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto done;
 	}
 
 	if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
@@ -1854,7 +1857,8 @@ poll:
 		MSG_HDR_GET_ID(rcvd[0]),
 		MSG_HDR_GET_TYPE(rcvd[0]));
 
-	gmu_core_fault_snapshot(device);
+done:
+	gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
 
 	return rc;
 }
@@ -3275,7 +3279,7 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 
 fault:
 	move_detached_context_hardware_fences(adreno_dev, drawctxt);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 	return ret;
@@ -3974,7 +3978,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 
 		mutex_lock(&device->mutex);
 
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_CTX_UNREGISTER);
 
 		/*
 		 * Make sure we send all fences from this context to the TxQueue after recovery

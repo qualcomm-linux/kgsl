@@ -1702,7 +1702,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		goto done;
 	}
 
@@ -1730,7 +1730,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	if (!drawobj) {
 		if (fault & ADRENO_GMU_FAULT)
-			gmu_core_fault_snapshot(device);
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		else
 			kgsl_device_snapshot(device, NULL, NULL, false);
 		goto done;
@@ -1783,7 +1783,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		goto done;
 	}
 
@@ -1816,7 +1816,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (!obj && !obj_lpac) {
 		if (fault & ADRENO_GMU_FAULT)
-			gmu_core_fault_snapshot(device);
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		else
 			kgsl_device_snapshot(device, NULL, NULL, false);
 		goto done;
@@ -2322,7 +2322,7 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 
 	dev_err(dev, "Ack timeout for id:%d sequence=%d ticks=%llu/%llu\n",
 		MSG_HDR_GET_ID(ack->sent_hdr), MSG_HDR_GET_SEQNUM(ack->sent_hdr), start, end);
-	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev));
+	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev), GMU_FAULT_WAIT_ACK_COMPLETION);
 	return -ETIMEDOUT;
 }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -254,8 +254,7 @@ int gen8_receive_ack_cmd(struct gen8_gmu_device *gmu, void *rcvd,
 	dev_err_ratelimited(&gmu->pdev->dev,
 		"HFI ACK: Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
 		req_hdr, ret_cmd->sent_hdr);
-
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HFI_RECIVE_ACK);
 
 	return -ENODEV;
 }
@@ -329,10 +328,10 @@ static int gen8_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
 		HFI_IRQ_MSGQ_MASK, HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT);
 
 	if (rc) {
-		gmu_core_fault_snapshot(device);
 		dev_err(&gmu->pdev->dev,
 		"Timed out waiting on ack for 0x%8.8x (id %d, sequence %d)\n",
 		cmd[0], MSG_HDR_GET_ID(*cmd), MSG_HDR_GET_SEQNUM(*cmd));
+		gmu_core_fault_snapshot(device, GMU_FAULT_SEND_CMD_WAIT_INLINE);
 		return rc;
 	}
 
@@ -360,11 +359,11 @@ int gen8_hfi_send_generic_req(struct adreno_device *adreno_dev, void *cmd, u32 s
 		struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-		gmu_core_fault_snapshot(device);
 		dev_err(&gmu->pdev->dev,
 				"HFI ACK failure: Req=0x%8.8X, Result=0x%8.8X\n",
 				ret_cmd.results[1],
 				ret_cmd.results[2]);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_SEND_GENERIC_REQ);
 		return -EINVAL;
 	}
 
@@ -421,11 +420,11 @@ int gen8_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 		rc = -EINVAL;
 		break;
 	default:
-		gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev));
 		dev_err(&gmu->pdev->dev,
 			"HFI ACK: Req=0x%8.8X, Result=0x%8.8X Error:0x%8.8X\n",
 			ret_cmd->results[1], ret_cmd->results[2], ret_cmd->results[3]);
 		rc = -EINVAL;
+		gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev), GMU_FAULT_HFI_SEND_GENERIC_REQ);
 		break;
 	}
 
@@ -507,12 +506,18 @@ int gen8_hfi_send_set_value(struct adreno_device *adreno_dev,
 
 void adreno_gen8_receive_err_req(struct gen8_gmu_device *gmu, void *rcvd)
 {
+	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(ADRENO_DEVICE(device));
+	u64 ticks = gpudev->read_alwayson(ADRENO_DEVICE(device));
 	struct hfi_err_cmd *cmd = rcvd;
 
 	dev_err(&gmu->pdev->dev, "HFI Error Received: %d %d %.16s\n",
 			((cmd->error_code >> 16) & 0xffff),
 			(cmd->error_code & 0xffff),
 			(char *) cmd->data);
+
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+				  gmu->pdev, ticks, GMU_FAULT_F2H_MSG_ERR);
 }
 
 void adreno_gen8_receive_debug_req(struct gen8_gmu_device *gmu, void *rcvd)

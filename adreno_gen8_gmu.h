@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_GMU_H
@@ -464,9 +464,11 @@ void gen8_gmu_handle_watchdog(struct adreno_device *adreno_dev);
 /**
  * gen8_gmu_send_nmi - Send NMI to GMU
  * @device: Pointer to the kgsl device
+ * @gf_policy: GMU fault panic setting policy
  * @force: Boolean to forcefully send NMI irrespective of GMU state
  */
-void gen8_gmu_send_nmi(struct kgsl_device *device, bool force);
+void gen8_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy);
 
 /**
  * gen8_gmu_add_to_minidump - Register gen8_device with va minidump
