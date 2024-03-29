@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -169,6 +169,14 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 void adreno_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
 
 /**
+ * adreno_hwsched_clear_fault() - Clear the hwsched fault
+ * @adreno_dev: A pointer to an adreno_device structure
+ *
+ * Clear the hwsched fault status for adreno device
+ */
+void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
+
+/**
  * adreno_hwsched_parse_fault_ib - Parse the faulty submission
  * @adreno_dev: pointer to the adreno device
  * @snapshot: Pointer to the snapshot structure
@@ -197,13 +205,6 @@ void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev);
  * Return: 0 on success or negative error on failure
  */
 int adreno_hwsched_idle(struct adreno_device *adreno_dev);
-
-static inline bool hwsched_in_fault(struct adreno_hwsched *hwsched)
-{
-	/* make sure we're reading the latest value */
-	smp_rmb();
-	return atomic_read(&hwsched->fault) != 0;
-}
 
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj);
@@ -248,4 +249,12 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev);
  * Return: The value of the key or 0 if key is not found
  */
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
+
+/**
+ * adreno_hwsched_gpu_fault - Gets hwsched gpu fault info
+ * @adreno_dev: pointer to the adreno device
+ *
+ * Returns zero for hwsched fault else non zero value
+ */
+u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
 #endif

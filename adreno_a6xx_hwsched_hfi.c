@@ -1937,7 +1937,7 @@ int a6xx_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	int ret;
 	static bool active;
 
-	if (adreno_gpu_halt(adreno_dev) || hwsched_in_fault(hwsched))
+	if (adreno_gpu_halt(adreno_dev) || adreno_hwsched_gpu_fault(adreno_dev))
 		return -EBUSY;
 
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {

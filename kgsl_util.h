@@ -14,6 +14,7 @@
 #define KGSL_A6XX_DEVICE "kgsl_a6xx_device"
 #define KGSL_GEN7_DEVICE "kgsl_gen7_device"
 #define KGSL_HWSCHED_DEVICE "kgsl_hwsched_device"
+#define KGSL_GEN8_DEVICE "kgsl_gen8_device"
 
 #define KGSL_SCRATCH_ENTRY "kgsl_scratch"
 #define KGSL_MEMSTORE_ENTRY "kgsl_memstore"

@@ -449,6 +449,9 @@ int adreno_perfcounter_get(struct adreno_device *adreno_dev,
 		return ret;
 	}
 
+	if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE))
+		adreno_dev->no_restore_count++;
+
 	/* set initial kernel and user count */
 	if (flags & PERFCOUNTER_FLAG_KERNEL) {
 		group->regs[empty].kernelcount = 1;
@@ -511,14 +514,11 @@ int adreno_perfcounter_put(struct adreno_device *adreno_dev,
 			/* mark available if not used anymore */
 			if (group->regs[i].kernelcount == 0 &&
 					group->regs[i].usercount == 0) {
-				/*
-				 * Perfcounter register is added to the power
-				 * up reglist only if group_restore flag is set.
-				 * Hence check the flag before removing the entry
-				 * from the reglist.
-				 */
-				if ((group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) &&
-						gpudev->perfcounter_remove)
+
+				if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE))
+					adreno_dev->no_restore_count--;
+
+				if (gpudev->perfcounter_remove)
 					ret = gpudev->perfcounter_remove(adreno_dev,
 							&group->regs[i], groupid);
 				if (!ret)

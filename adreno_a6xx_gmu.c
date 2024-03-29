@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -1876,6 +1876,9 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	if (a6xx_gmu_gx_is_on(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
 
+	/* Make sure above writes are posted before turning off power resources */
+	wmb();
+
 	/* Allow the software reset to complete */
 	udelay(100);
 
@@ -2111,7 +2114,7 @@ void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force)
 	 * Do not send NMI if the SMMU is stalled because GMU will not be able
 	 * to save cm3 state to DDR.
 	 */
-	if (a6xx_gmu_gx_is_on(adreno_dev) && a6xx_is_smmu_stalled(device)) {
+	if (a6xx_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
 		return;
@@ -2412,6 +2415,9 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
+
 	ret = a6xx_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -2501,6 +2507,9 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	a6xx_gmu_register_config(adreno_dev);
 
 	a6xx_gmu_irq_enable(adreno_dev);
+
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = a6xx_gmu_device_start(adreno_dev);
 	if (ret)
@@ -3134,9 +3143,6 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	adreno_set_active_ctxs_null(adreno_dev);
 

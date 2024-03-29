@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -9,7 +9,7 @@
 #include <soc/qcom/tcs.h>
 
 #include "adreno.h"
-#include "adreno_gen7.h"
+#include "adreno_gen8.h"
 #include "kgsl_bus.h"
 #include "kgsl_device.h"
 
@@ -71,7 +71,7 @@ static int rpmh_arc_cmds(struct rpmh_arc_vals *arc, const char *res_id)
 
 static int setup_volt_dependency_tbl(u32 *votes,
 		struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail,
-		u16 *vlvl, unsigned int num_entries)
+		u16 *vlvl, u32 num_entries)
 {
 	int i, j, k;
 	uint16_t cur_vlvl;
@@ -262,13 +262,13 @@ static struct rpmh_bw_votes *build_rpmh_bw_votes(struct bcm *bcms,
  * This function initializes the cx votes for all gmu frequencies
  * for gmu dcvs
  */
-static int setup_cx_arc_votes(struct gen7_gmu_device *gmu,
+static int setup_cx_arc_votes(struct gen8_gmu_device *gmu,
 	struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail)
 {
 	/* Hardcoded values of GMU CX voltage levels */
 	u16 gmu_cx_vlvl[MAX_CX_LEVELS];
 	u32 cx_votes[MAX_CX_LEVELS];
-	struct gen7_dcvs_table *table = &gmu->dcvs_table;
+	struct gen8_dcvs_table *table = &gmu->dcvs_table;
 	u32 *freqs = gmu->freqs;
 	u32 *vlvls = gmu->vlvls;
 	int ret, i;
@@ -330,9 +330,9 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	struct rpmh_arc_vals *cx_rail)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	struct gen7_dcvs_table *table = &gmu->dcvs_table;
+	struct gen8_dcvs_table *table = &gmu->dcvs_table;
 	u32 index;
 	u16 vlvl_tbl[MAX_GX_LEVELS];
 	u32 gx_votes[MAX_GX_LEVELS];
@@ -384,7 +384,7 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 
 static int build_dcvs_table(struct adreno_device *adreno_dev)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc;
 	int ret;
 
@@ -411,14 +411,14 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
  * List of Bus Control Modules (BCMs) that need to be configured for the GPU
  * to access DDR. For each bus level we will generate a vote each BC
  */
-static struct bcm gen7_ddr_bcms[] = {
+static struct bcm gen8_ddr_bcms[] = {
 	{ .name = "SH0", .buswidth = 16 },
 	{ .name = "MC0", .buswidth = 4 },
 	{ .name = "ACV", .fixed = true },
 };
 
 /* Same as above, but for the CNOC BCMs */
-static struct bcm gen7_cnoc_bcms[] = {
+static struct bcm gen8_cnoc_bcms[] = {
 	{ .name = "CN0", .buswidth = 4 },
 };
 
@@ -452,26 +452,24 @@ static void build_bw_table_cmd(struct hfi_bwtable_cmd *cmd,
 			cmd->cnoc_cmd_data[i][j] = (u32) cnoc->cmds[i][j];
 }
 
+/* BIT(2) is used to vote for GPU performance mode through GMU */
+#define ACV_GPU_PERFMODE_VOTE	BIT(2)
+
 static int build_bw_table(struct adreno_device *adreno_dev)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct rpmh_bw_votes *ddr, *cnoc = NULL;
-	u32 perfmode_vote = gen7_core->acv_perfmode_vote;
-	u32 perfmode_lvl = perfmode_vote ? kgsl_pwrctrl_get_acv_perfmode_lvl(device,
-					gen7_core->acv_perfmode_ddr_freq) : 1;
+	u32 perfmode_lvl = kgsl_pwrctrl_get_acv_perfmode_lvl(device,
+			gen8_core->acv_perfmode_ddr_freq);
 	u32 *cnoc_table;
 	u32 count;
 	int ret;
 
-	/* If perfmode vote is not defined, use default value as 0x8 */
-	if (!perfmode_vote)
-		perfmode_vote = BIT(3);
-
-	ddr = build_rpmh_bw_votes(gen7_ddr_bcms, ARRAY_SIZE(gen7_ddr_bcms),
-		pwr->ddr_table, pwr->ddr_table_count, perfmode_vote, perfmode_lvl);
+	ddr = build_rpmh_bw_votes(gen8_ddr_bcms, ARRAY_SIZE(gen8_ddr_bcms),
+		pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl);
 	if (IS_ERR(ddr))
 		return PTR_ERR(ddr);
 
@@ -479,8 +477,8 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 		&count);
 
 	if (count > 0)
-		cnoc = build_rpmh_bw_votes(gen7_cnoc_bcms,
-			ARRAY_SIZE(gen7_cnoc_bcms), cnoc_table, count, 0, 0);
+		cnoc = build_rpmh_bw_votes(gen8_cnoc_bcms,
+			ARRAY_SIZE(gen8_cnoc_bcms), cnoc_table, count, 0, 0);
 
 	kfree(cnoc_table);
 
@@ -501,7 +499,7 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int gen7_build_rpmh_tables(struct adreno_device *adreno_dev)
+int gen8_build_rpmh_tables(struct adreno_device *adreno_dev)
 {
 	int ret;
 
