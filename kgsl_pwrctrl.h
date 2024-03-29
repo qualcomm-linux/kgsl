@@ -30,6 +30,13 @@
 #define KGSL_XO_CLK_FREQ	19200000
 #define KGSL_ISENSE_CLK_FREQ	200000000
 
+#define KGSL_PWRCTRL_LOG_FREQLIM(device) dev_err_ratelimited(device->dev,	\
+	"GPU req freq %u from prev freq %u unsupported for speed_bin: %d, soc_code: 0x%x\n",	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.active_pwrlevel].gpu_freq,	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.previous_pwrlevel].gpu_freq,	\
+	device->speed_bin,	\
+	device->soc_code)
+
 struct platform_device;
 struct icc_path;
 
@@ -302,4 +309,13 @@ void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device);
  */
 int kgsl_pwrctrl_probe_regulators(struct kgsl_device *device,
 		struct platform_device *pdev);
+
+/**
+ * kgsl_pwrctrl_get_acv_perfmode_lvl - Retrieve DDR level for GPU performance mode
+ * @device: Pointer to the kgsl device
+ * @ddr_freq: Target specific DDR frequency from where GPU needs to vote for perf mode
+ *
+ * Return: DDR vote level from where GPU should vote for performance mode
+ */
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq);
 #endif /* __KGSL_PWRCTRL_H */

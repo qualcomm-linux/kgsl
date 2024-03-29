@@ -184,6 +184,9 @@
 #define ADRENO_FW_PM4 1
 #define ADRENO_FW_AQE 1
 
+#define ADRENO_GPUREV_VALUE(_major, _minor, _patchid) (((_major & 0xFF) << 16) | \
+						       ((_minor & 0xFF) << 8) | \
+						       (_patchid & 0xFF))
 enum adreno_gpurev {
 	ADRENO_REV_UNKNOWN = 0,
 	ADRENO_REV_A304 = 304,
@@ -207,6 +210,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A530 = 530,
 	ADRENO_REV_A540 = 540,
 	ADRENO_REV_A610 = 610,
+	ADRENO_REV_A611 = 611,
 	ADRENO_REV_A612 = 612,
 	ADRENO_REV_A615 = 615,
 	ADRENO_REV_A616 = 616,
@@ -229,14 +233,15 @@ enum adreno_gpurev {
 	 * Bits 8-15: Minor
 	 * Bits 0-7: Patch id
 	 */
-	ADRENO_REV_GEN7_0_0 = 0x070000,
-	ADRENO_REV_GEN7_0_1 = 0x070001,
-	ADRENO_REV_GEN7_2_0 = 0x070200,
-	ADRENO_REV_GEN7_2_1 = 0x070201,
-	ADRENO_REV_GEN7_4_0 = 0x070400,
-	ADRENO_REV_GEN7_9_0 = 0x070900,
-	ADRENO_REV_GEN7_9_1 = 0x070901,
-	ADRENO_REV_GEN7_11_0 = 0x070b00,
+	ADRENO_REV_GEN7_0_0 = ADRENO_GPUREV_VALUE(7, 0, 0),
+	ADRENO_REV_GEN7_0_1 = ADRENO_GPUREV_VALUE(7, 0, 1),
+	ADRENO_REV_GEN7_2_0 = ADRENO_GPUREV_VALUE(7, 2, 0),
+	ADRENO_REV_GEN7_2_1 = ADRENO_GPUREV_VALUE(7, 2, 1),
+	ADRENO_REV_GEN7_4_0 = ADRENO_GPUREV_VALUE(7, 4, 0),
+	ADRENO_REV_GEN7_9_0 = ADRENO_GPUREV_VALUE(7, 9, 0),
+	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
+	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
+	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -247,6 +252,25 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
+
+enum adreno_pipe_type {
+	PIPE_NONE = 0,
+	PIPE_BR = 1,
+	PIPE_BV = 2,
+	PIPE_LPAC = 3,
+	PIPE_AQE0 = 4,
+	PIPE_AQE1 = 5,
+	PIPE_DDE_BR = 6,
+	PIPE_DDE_BV = 7,
+};
+/**
+ * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
+ * AHB_TXFRTIMEOUTRELEASE	[8:8]
+ * AHB_TXFRTIMEOUTENABLE	[9:9]
+ * AHB_RESPONDERROR		[11:11]
+ * AHB_ERRORSTATUSENABLE	[12:12]
+ */
+#define ADRENO_AHB_CNTL_DEFAULT (BIT(12) | BIT(11) | BIT(9) | BIT(8))
 
 /* number of throttle counters for DCVS adjustment */
 #define ADRENO_GPMU_THROTTLE_COUNTERS 4
@@ -480,6 +504,8 @@ struct adreno_dispatch_ops {
 	void (*fault)(struct adreno_device *adreno_dev, u32 fault);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
+	/* @get_fault: Get the GPU fault status */
+	u32 (*get_fault)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -724,6 +750,16 @@ struct adreno_device {
 	u32 ifpc_hyst_floor;
 	/** @cx_misc_base: CX MISC register block base offset */
 	u32 cx_misc_base;
+	/*
+	 * @no_restore_count: Keep track of perfcounter requests that don't have
+	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
+	 */
+	u32 no_restore_count;
+	/*
+	 * @ahb_timeout_val: AHB transaction timeout value.
+	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
+	 */
+	u32 ahb_timeout_val;
 };
 
 /**
@@ -970,6 +1006,14 @@ struct adreno_gpudev {
 	 * @get_uche_trap_base: Return the UCHE_TRAP_BASE value
 	 */
 	u64 (*get_uche_trap_base)(void);
+	/**
+	 * @fault_header: Print fault header
+	 */
+	void (*fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @lpac_fault_header: Print LPAC fault header
+	 */
+	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
 };
 
 /**
@@ -1013,6 +1057,7 @@ extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
 extern const struct adreno_gpudev adreno_a619_holi_gpudev;
+extern const struct adreno_gpudev adreno_a611_gpudev;
 
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
@@ -1155,6 +1200,7 @@ static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 }
 
 ADRENO_TARGET(a610, ADRENO_REV_A610)
+ADRENO_TARGET(a611, ADRENO_REV_A611)
 ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
@@ -1230,6 +1276,13 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
 }
 
+static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
+{
+	unsigned int rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A610 || rev == ADRENO_REV_A611);
+}
+
 static inline int adreno_is_a640v2(struct adreno_device *adreno_dev)
 {
 	return (ADRENO_GPUREV(adreno_dev) == ADRENO_REV_A640) &&
@@ -1242,6 +1295,12 @@ static inline int adreno_is_gen7(struct adreno_device *adreno_dev)
 			ADRENO_GPUREV(adreno_dev) < 0x080000;
 }
 
+static inline int adreno_is_gen8(struct adreno_device *adreno_dev)
+{
+	return ADRENO_GPUREV(adreno_dev) >= 0x080000 &&
+			ADRENO_GPUREV(adreno_dev) < 0x090000;
+}
+
 ADRENO_TARGET(gen7_0_0, ADRENO_REV_GEN7_0_0)
 ADRENO_TARGET(gen7_0_1, ADRENO_REV_GEN7_0_1)
 ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
@@ -1250,6 +1309,7 @@ ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
+ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1969,4 +2029,21 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
  *
  */
 void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_smmu_is_stalled() - Check whether smmu is stalled or not
+ * @device: Pointer to adreno device
+ *
+ * Return - True if smmu is stalled or false otherwise
+ */
+bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_get_ahb_timeout_val() - Get the ahb_timeout value
+ * @adreno_dev: Adreno device handle
+ * @noc_timeout_us: GPU config NOC timeout value in usec
+ *
+ * Return - AHB timeout value to be programmed in AHB CNTL registers
+ */
+u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us);
 #endif /*__ADRENO_H */

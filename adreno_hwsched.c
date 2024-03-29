@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
@@ -707,6 +707,13 @@ static inline void _decrement_submit_now(struct kgsl_device *device)
 	spin_unlock(&device->submit_lock);
 }
 
+u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev)
+{
+	/* make sure we're reading the latest value */
+	smp_rmb();
+	return atomic_read(&adreno_dev->hwsched.fault);
+}
+
 /**
  * adreno_hwsched_issuecmds() - Issue commmands from pending contexts
  * @adreno_dev: Pointer to the adreno device struct
@@ -733,7 +740,7 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		goto done;
 	}
 
-	if (!hwsched_in_fault(hwsched))
+	if (!adreno_hwsched_gpu_fault(adreno_dev))
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
@@ -1421,54 +1428,17 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 		kgsl_process_event_groups(device);
 }
 
-static void do_fault_header_lpac(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj *drawobj_lpac)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_context *drawctxt_lpac;
-	u32 status;
-	u32 lpac_rptr, lpac_wptr, lpac_ib1sz, lpac_ib2sz;
-	u64 hi, lo, lpac_ib1base, lpac_ib2base;
-
-	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS, &status);
-	lpac_rptr = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_RB_RPTR);
-	lpac_wptr = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_RB_WPTR);
-	hi = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB1_BASE_HI);
-	lo = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB1_BASE);
-	lpac_ib1base = lo | (hi << 32);
-	lpac_ib1sz = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB1_REM_SIZE);
-	hi = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB2_BASE_HI);
-	lo = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB2_BASE);
-	lpac_ib2base = lo | (hi << 32);
-	lpac_ib2sz = kgsl_regmap_read(&device->regmap, GEN7_CP_LPAC_IB2_REM_SIZE);
-
-	drawctxt_lpac = ADRENO_CONTEXT(drawobj_lpac->context);
-	drawobj_lpac->context->last_faulted_cmd_ts = drawobj_lpac->timestamp;
-	drawobj_lpac->context->total_fault_count++;
-
-	pr_context(device, drawobj_lpac->context,
-		"LPAC ctx %d ctx_type %s ts %d status %8.8X dispatch_queue=%d rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
-		drawobj_lpac->context->id, kgsl_context_type(drawctxt_lpac->type),
-		drawobj_lpac->timestamp, status,
-		drawobj_lpac->context->gmu_dispatch_queue, lpac_rptr, lpac_wptr,
-		lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz);
-
-	pr_context(device, drawobj_lpac->context, "lpac cmdline: %s\n",
-			drawctxt_lpac->base.proc_priv->cmdline);
-
-	trace_adreno_gpu_fault(drawobj_lpac->context->id, drawobj_lpac->timestamp, status,
-		lpac_rptr, lpac_wptr, lpac_ib1base, lpac_ib1sz, lpac_ib2base, lpac_ib2sz,
-		adreno_get_level(drawobj_lpac->context));
-
-}
-
 static void do_fault_header(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_context *drawctxt;
 	u32 status, rptr, wptr, ib1sz, ib2sz;
 	u64 ib1base, ib2base;
+
+	if (gpudev->fault_header)
+		return gpudev->fault_header(adreno_dev, drawobj);
 
 	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS, &status);
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR, &rptr);
@@ -1853,7 +1823,8 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	if (obj_lpac) {
 		drawobj_lpac = obj_lpac->drawobj;
 		context_lpac  = drawobj_lpac->context;
-		do_fault_header_lpac(adreno_dev, drawobj_lpac);
+		if (gpudev->lpac_fault_header)
+			gpudev->lpac_fault_header(adreno_dev, drawobj_lpac);
 	}
 
 	kgsl_device_snapshot(device, context, context_lpac, false);
@@ -1969,6 +1940,14 @@ void adreno_hwsched_fault(struct adreno_device *adreno_dev,
 	adreno_hwsched_trigger(adreno_dev);
 }
 
+void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev)
+{
+	atomic_set(&adreno_dev->hwsched.fault, 0);
+
+	/* make sure other CPUs see the update */
+	smp_wmb();
+}
+
 static bool is_tx_slot_available(struct adreno_device *adreno_dev)
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
@@ -2017,6 +1996,7 @@ static const struct adreno_dispatch_ops hwsched_ops = {
 	.queue_context = adreno_hwsched_queue_context,
 	.fault = adreno_hwsched_fault,
 	.create_hw_fence = adreno_hwsched_create_hw_fence,
+	.get_fault = adreno_hwsched_gpu_fault,
 };
 
 static void hwsched_lsr_check(struct work_struct *work)
@@ -2238,7 +2218,6 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	unsigned long wait = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
@@ -2254,7 +2233,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 		return ret;
 
 	do {
-		if (hwsched_in_fault(hwsched))
+		if (adreno_hwsched_gpu_fault(adreno_dev))
 			return -EDEADLK;
 
 		if (gpudev->hw_isidle(adreno_dev))
@@ -2266,7 +2245,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 	 * without checking if the gpu is idle. check one last time before we
 	 * return failure.
 	 */
-	if (hwsched_in_fault(hwsched))
+	if (adreno_hwsched_gpu_fault(adreno_dev))
 		return -EDEADLK;
 
 	if (gpudev->hw_isidle(adreno_dev))

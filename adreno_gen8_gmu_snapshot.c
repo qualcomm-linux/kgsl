@@ -4,22 +4,20 @@
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
-#include "gen7_reg.h"
 #include "adreno.h"
-#include "adreno_gen7.h"
-#include "adreno_gen7_gmu.h"
+#include "adreno_gen8.h"
+#include "adreno_gen8_gmu.h"
+#include "adreno_gen8_3_0_snapshot.h"
 #include "adreno_snapshot.h"
-#include "adreno_gen7_0_0_snapshot.h"
-#include "adreno_gen7_2_0_snapshot.h"
+#include "gen8_reg.h"
 #include "kgsl_device.h"
 
-size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
+size_t gen8_snapshot_gmu_mem(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_gmu_mem *mem_hdr =
 		(struct kgsl_snapshot_gmu_mem *)buf;
-	unsigned int *data = (unsigned int *)
-		(buf + sizeof(*mem_hdr));
+	u32 *data = (u32 *)(buf + sizeof(*mem_hdr));
 	struct gmu_mem_type_desc *desc = priv;
 
 	if (priv == NULL || desc->memdesc->hostptr == NULL)
@@ -46,13 +44,12 @@ size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
 	return desc->memdesc->size + sizeof(*mem_hdr);
 }
 
-static size_t gen7_gmu_snapshot_dtcm(struct kgsl_device *device,
+static size_t gen8_gmu_snapshot_dtcm(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_gmu_mem *mem_hdr =
 		(struct kgsl_snapshot_gmu_mem *)buf;
-	struct gen7_gmu_device *gmu = (struct gen7_gmu_device *)priv;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen8_gmu_device *gmu = (struct gen8_gmu_device *)priv;
 	u32 *data = (u32 *)(buf + sizeof(*mem_hdr));
 	u32 i;
 
@@ -68,33 +65,26 @@ static size_t gen7_gmu_snapshot_dtcm(struct kgsl_device *device,
 
 	/*
 	 * Read of GMU TCMs over side-band debug controller interface is
-	 * supported on gen7_2_x family
+	 * supported on gen8 family
+	 * region [20]: Dump ITCM/DTCM. Select 1 for DTCM.
+	 * autoInc [31]: Autoincrement the address field after each
+	 * access to TCM_DBG_DATA
 	 */
-	if (adreno_is_gen7_2_x_family(adreno_dev)) {
-		/*
-		 * region [20]: Dump ITCM/DTCM. Select 1 for DTCM.
-		 * autoInc [31]: Autoincrement the address field after each
-		 * access to TCM_DBG_DATA
-		 */
-		kgsl_regwrite(device, GEN7_CX_DBGC_TCM_DBG_ADDR, BIT(20) | BIT(31));
+	kgsl_regwrite(device, GEN8_CX_DBGC_TCM_DBG_ADDR, BIT(20) | BIT(31));
 
-		for (i = 0; i < (gmu->vma[GMU_DTCM].size >> 2); i++)
-			kgsl_regread(device, GEN7_CX_DBGC_TCM_DBG_DATA, data++);
-	} else {
-		for (i = 0; i < (gmu->vma[GMU_DTCM].size >> 2); i++)
-			gmu_core_regread(device, GEN7_GMU_CM3_DTCM_START + i, data++);
-	}
+	for (i = 0; i < (gmu->vma[GMU_DTCM].size >> 2); i++)
+		kgsl_regread(device, GEN8_CX_DBGC_TCM_DBG_DATA, data++);
 
 	return gmu->vma[GMU_DTCM].size + sizeof(*mem_hdr);
 }
 
-static size_t gen7_gmu_snapshot_itcm(struct kgsl_device *device,
+static size_t gen8_gmu_snapshot_itcm(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_gmu_mem *mem_hdr =
 			(struct kgsl_snapshot_gmu_mem *)buf;
 	void *dest = buf + sizeof(*mem_hdr);
-	struct gen7_gmu_device *gmu = (struct gen7_gmu_device *)priv;
+	struct gen8_gmu_device *gmu = (struct gen8_gmu_device *)priv;
 
 	if (!gmu->itcm_shadow) {
 		dev_err(&gmu->pdev->dev, "No memory allocated for ITCM shadow capture\n");
@@ -116,8 +106,8 @@ static size_t gen7_gmu_snapshot_itcm(struct kgsl_device *device,
 	return gmu->vma[GMU_ITCM].size + sizeof(*mem_hdr);
 }
 
-static void gen7_gmu_snapshot_memories(struct kgsl_device *device,
-	struct gen7_gmu_device *gmu, struct kgsl_snapshot *snapshot)
+static void gen8_gmu_snapshot_memories(struct kgsl_device *device,
+	struct gen8_gmu_device *gmu, struct kgsl_snapshot *snapshot)
 {
 	struct gmu_mem_type_desc desc;
 	struct kgsl_memdesc *md;
@@ -147,7 +137,7 @@ static void gen7_gmu_snapshot_memories(struct kgsl_device *device,
 
 		kgsl_snapshot_add_section(device,
 			KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-			snapshot, gen7_snapshot_gmu_mem, &desc);
+			snapshot, gen8_snapshot_gmu_mem, &desc);
 	}
 }
 
@@ -156,7 +146,7 @@ struct kgsl_snapshot_gmu_version {
 	u32 value;
 };
 
-static size_t gen7_snapshot_gmu_version(struct kgsl_device *device,
+static size_t gen8_snapshot_gmu_version(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
@@ -176,8 +166,8 @@ static size_t gen7_snapshot_gmu_version(struct kgsl_device *device,
 	return DEBUG_SECTION_SZ(1);
 }
 
-static void gen7_gmu_snapshot_versions(struct kgsl_device *device,
-		struct gen7_gmu_device *gmu,
+static void gen8_gmu_snapshot_versions(struct kgsl_device *device,
+		struct gen8_gmu_device *gmu,
 		struct kgsl_snapshot *snapshot)
 {
 	int i;
@@ -197,20 +187,20 @@ static void gen7_gmu_snapshot_versions(struct kgsl_device *device,
 
 	for (i = 0; i < ARRAY_SIZE(gmu_vers); i++)
 		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-				snapshot, gen7_snapshot_gmu_version,
+				snapshot, gen8_snapshot_gmu_version,
 				&gmu_vers[i]);
 }
 
 #define RSCC_OFFSET_DWORDS 0x14000
 
-static size_t gen7_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
+static size_t gen8_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
 	size_t remain, void *priv)
 {
 	const u32 *regs = priv;
-	unsigned int *data = (unsigned int *)buf;
+	u32 *data = (u32 *)buf;
 	int count = 0, k;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
 	/* Figure out how many registers we are going to dump */
 	count = adreno_snapshot_regs_count(regs);
@@ -221,7 +211,7 @@ static size_t gen7_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
 	}
 
 	for (regs = priv; regs[0] != UINT_MAX; regs += 2) {
-		unsigned int cnt = REG_COUNT(regs);
+		u32 cnt = REG_COUNT(regs);
 
 		if (cnt == 1) {
 			*data++ = BIT(31) |  regs[0];
@@ -232,7 +222,7 @@ static size_t gen7_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
 		*data++ = regs[0];
 		*data++ = cnt;
 		for (k = regs[0]; k <= regs[1]; k++)
-			*data++ =  __raw_readl(gmu->rscc_virt +
+			*data++ = __raw_readl(gmu->rscc_virt +
 				((k - RSCC_OFFSET_DWORDS) << 2));
 	}
 
@@ -241,62 +231,60 @@ static size_t gen7_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
 }
 
 /*
- * gen7_gmu_device_snapshot() - GEN7 GMU snapshot function
+ * gen8_gmu_device_snapshot() - GEN8 GMU snapshot function
  * @device: Device being snapshotted
  * @snapshot: Pointer to the snapshot instance
  *
- * This is where all of the GEN7 GMU specific bits and pieces are grabbed
+ * This is where all of the GEN8 GMU specific bits and pieces are grabbed
  * into the snapshot memory
  */
-static void gen7_gmu_device_snapshot(struct kgsl_device *device,
+static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
-	const struct gen7_snapshot_block_list *gen7_snapshot_block_list =
-						gpucore->gen7_snapshot_block_list;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	const struct adreno_gen8_core *gpucore = to_gen8_core(ADRENO_DEVICE(device));
+	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
+						gpucore->gen8_snapshot_block_list;
+	u32 i, slice, j;
+	struct gen8_reg_list_info info;
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen7_gmu_snapshot_itcm, gmu);
+		snapshot, gen8_gmu_snapshot_itcm, gmu);
 
-	gen7_gmu_snapshot_versions(device, gmu, snapshot);
+	gen8_gmu_snapshot_versions(device, gmu, snapshot);
 
-	gen7_gmu_snapshot_memories(device, gmu, snapshot);
+	gen8_gmu_snapshot_memories(device, gmu, snapshot);
+
+	for (i = 0 ; i < gen8_snapshot_block_list->num_gmu_regs; i++) {
+		struct gen8_reg_list *regs = &gen8_snapshot_block_list->gmu_regs[i];
+
+		slice = regs->slice_region ? MAX_PHYSICAL_SLICES : 1;
+		for (j = 0 ; j < slice; j++) {
+			info.regs = regs;
+			info.slice_id = (slice > 1) ? j : UINT_MAX;
+			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,
+				gen8_legacy_snapshot_registers, &info);
+		}
+	}
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
-		adreno_snapshot_registers_v2, (void *) gen7_snapshot_block_list->gmu_regs);
+		gen8_snapshot_rscc_registers, (void *) gen8_snapshot_block_list->rscc_regs);
 
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
-		gen7_snapshot_rscc_registers, (void *) gen7_snapshot_block_list->rscc_regs);
-
-	if (!gen7_gmu_gx_is_on(adreno_dev))
+	if (!gen8_gmu_gx_is_on(adreno_dev))
 		goto dtcm;
 
 	/* Set fence to ALLOW mode so registers can be read */
-	kgsl_regwrite(device, GEN7_GMU_AO_AHB_FENCE_CTRL, 0);
+	kgsl_regwrite(device, GEN8_GMUAO_AHB_FENCE_CTRL, 0);
 	/* Make sure the previous write posted before reading */
 	wmb();
 
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
-		adreno_snapshot_registers_v2, (void *) gen7_snapshot_block_list->gmu_gx_regs);
-
-	/*
-	 * A stalled SMMU can lead to NoC timeouts when host accesses DTCM.
-	 * DTCM can be read through side-band DBGC interface on gen7_2_x family.
-	 */
-	if (adreno_smmu_is_stalled(adreno_dev) && !adreno_is_gen7_2_x_family(adreno_dev)) {
-		dev_err(&gmu->pdev->dev,
-			"Not dumping dtcm because SMMU is stalled\n");
-		return;
-	}
-
 dtcm:
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen7_gmu_snapshot_dtcm, gmu);
+		snapshot, gen8_gmu_snapshot_dtcm, gmu);
 }
 
-void gen7_gmu_snapshot(struct adreno_device *adreno_dev,
+void gen8_gmu_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -306,12 +294,12 @@ void gen7_gmu_snapshot(struct adreno_device *adreno_dev,
 	 * register in snapshot to analyze the system state even in partial
 	 * snapshot dump
 	 */
-	gen7_snapshot_external_core_regs(device, snapshot);
+	gen8_snapshot_external_core_regs(device, snapshot);
 
-	gen7_gmu_device_snapshot(device, snapshot);
+	gen8_gmu_device_snapshot(device, snapshot);
 
-	gen7_snapshot(adreno_dev, snapshot);
+	gen8_snapshot(adreno_dev, snapshot);
 
-	gmu_core_regwrite(device, GEN7_GMU_GMU2HOST_INTR_CLR, UINT_MAX);
-	gmu_core_regwrite(device, GEN7_GMU_GMU2HOST_INTR_MASK, HFI_IRQ_MASK);
+	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR, UINT_MAX);
+	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_MASK, HFI_IRQ_MASK);
 }

@@ -2227,6 +2227,23 @@ int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 	return device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
 }
 
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int i;
+
+	if (!ddr_freq)
+		return (pwr->ddr_table_count - 1);
+
+	for (i = 0; i < pwr->ddr_table_count; i++) {
+		if (pwr->ddr_table[i] >= ddr_freq)
+			return i;
+	}
+
+	/* If DDR frequency is not found, vote perfmode for highest DDR level */
+	return (pwr->ddr_table_count - 1);
+}
+
 int kgsl_gpu_num_freqs(void)
 {
 	struct kgsl_device *device = kgsl_get_device(0);
