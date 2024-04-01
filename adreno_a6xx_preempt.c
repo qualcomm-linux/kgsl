@@ -493,18 +493,19 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 *cmds)
 {
-	unsigned int *cmds_orig = cmds;
-	uint64_t gpuaddr = 0;
+	u32 *cmds_orig = cmds;
+	u64 gpuaddr = 0;
 
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return 0;
 
-	if (drawctxt) {
+	if (drawctxt && drawctxt->base.user_ctxt_record)
 		gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
+
+	if (gpuaddr)
 		*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 15);
-	} else {
+	else
 		*cmds++ = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 12);
-	}
 
 	/* NULL SMMU_INFO buffer - we track in KMD */
 	*cmds++ = SET_PSEUDO_SMMU_INFO;
@@ -517,7 +518,7 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 	cmds += cp_gpuaddr(adreno_dev, cmds,
 			rb->secure_preemption_desc->gpuaddr);
 
-	if (drawctxt) {
+	if (gpuaddr) {
 		*cmds++ = SET_PSEUDO_NON_PRIV_SAVE_ADDR;
 		cmds += cp_gpuaddr(adreno_dev, cmds, gpuaddr);
 	}
@@ -533,27 +534,17 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 	cmds += cp_gpuaddr(adreno_dev, cmds,
 			rb->perfcounter_save_restore_desc->gpuaddr);
 
-	if (drawctxt) {
-		struct adreno_ringbuffer *rb = drawctxt->rb;
-		uint64_t dest = PREEMPT_SCRATCH_ADDR(adreno_dev, rb->id);
+	if (!drawctxt)
+		goto done;
 
-		*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
-		cmds += cp_gpuaddr(adreno_dev, cmds, dest);
-		*cmds++ = lower_32_bits(gpuaddr);
-		*cmds++ = upper_32_bits(gpuaddr);
+	cmds += adreno_prepare_preib_preempt_scratch(adreno_dev, drawctxt, cmds);
 
-		/* Add a KMD post amble to clear the perf counters during preemption */
-		if (!adreno_dev->perfcounter) {
-			u64 kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
-			*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
-			*cmds++ = lower_32_bits(kmd_postamble_addr);
-			*cmds++ = upper_32_bits(kmd_postamble_addr);
-			*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
-				| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_len));
-		}
-	}
+	/* Add a KMD post amble to clear the perf counters during preemption */
+	if (!adreno_dev->perfcounter)
+		cmds += adreno_prepare_preib_postamble_scratch(adreno_dev, cmds);
 
-	return (unsigned int) (cmds - cmds_orig);
+done:
+	return (u32) (cmds - cmds_orig);
 }
 
 u32 a6xx_preemption_post_ibsubmit(struct adreno_device *adreno_dev,

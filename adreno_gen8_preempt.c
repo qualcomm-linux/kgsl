@@ -564,24 +564,8 @@ u32 gen8_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 
 done:
 	if (drawctxt) {
-		struct adreno_ringbuffer *rb = drawctxt->rb;
-		u64 dest = PREEMPT_SCRATCH_ADDR(adreno_dev, rb->id);
-		u64 gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
-
-		*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
-		cmds += cp_gpuaddr(adreno_dev, cmds, dest);
-		*cmds++ = lower_32_bits(gpuaddr);
-		*cmds++ = upper_32_bits(gpuaddr);
-
-		if (adreno_dev->preempt.postamble_len) {
-			u64 kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
-
-			*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
-			*cmds++ = lower_32_bits(kmd_postamble_addr);
-			*cmds++ = upper_32_bits(kmd_postamble_addr);
-			*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
-				| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_len));
-		}
+		cmds += adreno_prepare_preib_preempt_scratch(adreno_dev, drawctxt, cmds);
+		cmds += adreno_prepare_preib_postamble_scratch(adreno_dev, cmds);
 	}
 
 	return (u32) (cmds - cmds_orig);

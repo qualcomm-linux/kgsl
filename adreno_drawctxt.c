@@ -7,6 +7,7 @@
 #include <linux/debugfs.h>
 
 #include "adreno.h"
+#include "adreno_pm4types.h"
 #include "adreno_trace.h"
 
 static void wait_callback(struct kgsl_device *device,
@@ -306,14 +307,59 @@ void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 	adreno_drawctxt_invalidate(device, context);
 }
 
+u32 adreno_prepare_preib_preempt_scratch(struct adreno_device *adreno_dev,
+		struct adreno_context *drawctxt, u32 *cmds)
+{
+	struct adreno_ringbuffer *rb = drawctxt->rb;
+	u32 *cmds_orig = cmds;
+	u64 gpuaddr, dest;
+
+	if (!drawctxt->base.user_ctxt_record)
+		return 0;
+
+	dest = PREEMPT_SCRATCH_ADDR(adreno_dev, rb->id);
+	gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
+
+	*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
+	cmds += cp_gpuaddr(adreno_dev, cmds, dest);
+	*cmds++ = lower_32_bits(gpuaddr);
+	*cmds++ = upper_32_bits(gpuaddr);
+
+	return (u32) (cmds - cmds_orig);
+}
+
+u32 adreno_prepare_preib_postamble_scratch(struct adreno_device *adreno_dev, u32 *cmds)
+{
+	u32 *cmds_orig = cmds;
+	u64 kmd_postamble_addr;
+
+	if (!adreno_dev->preempt.postamble_len)
+		return 0;
+
+	kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
+
+	*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
+	*cmds++ = lower_32_bits(kmd_postamble_addr);
+	*cmds++ = upper_32_bits(kmd_postamble_addr);
+	*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
+		| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_len));
+
+	return (u32) (cmds - cmds_orig);
+}
+
 static int drawctxt_preemption_init(struct kgsl_context *context)
 {
 	struct kgsl_device *device = context->device;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	u64 flags = 0;
 
-	/* User context record is needed for a6x and beyond targets only */
-	if (!adreno_preemption_feature_set(adreno_dev) || (ADRENO_GPUREV(adreno_dev) < 600))
+	/*
+	 * User context record is needed for a6x and beyond targets only. Also,
+	 * highest priority ringbuffer i.e. RB0 always runs to completion without
+	 * preemption. Thus, user context records are not needed for RB0.
+	 */
+	if (!adreno_preemption_feature_set(adreno_dev) || (ADRENO_GPUREV(adreno_dev) < 600) ||
+			(adreno_get_level(context) == 0))
 		return 0;
 
 	if (context->flags & KGSL_CONTEXT_SECURE)

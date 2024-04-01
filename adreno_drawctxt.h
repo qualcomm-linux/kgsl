@@ -199,6 +199,27 @@ void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 		struct kgsl_context *context);
 
 /**
+ * adreno_prepare_preib_preempt_scratch - Update drawctxt pointer in preemption
+ * scratch buffer before IB commands
+ * @adreno_dev: Pointer to the adreno device
+ * @drawctxt: Pointer to the adreno draw context
+ * @cmds: Pointer to the ringbuffer to insert opcodes
+ *
+ * Return: The number of dwords written to @cmds
+ */
+u32 adreno_prepare_preib_preempt_scratch(struct adreno_device *adreno_dev,
+		struct adreno_context *drawctxt, u32 *cmds);
+
+/**
+ * adreno_prepare_preib_postamble_scratch - Insert postamble packets before IB commands
+ * @adreno_dev: Pointer to the adreno device
+ * @cmds: Pointer to the ringbuffer to insert opcodes
+ *
+ * Return: The number of dwords written to @cmds
+ */
+u32 adreno_prepare_preib_postamble_scratch(struct adreno_device *adreno_dev, u32 *cmds);
+
+/**
  * adreno_track_context - Add a context to active list and keep track of active contexts
  * @adreno_dev: Pointer to adreno device
  * @drawqueue: Pointer to the dispatch queue to which context send commands
