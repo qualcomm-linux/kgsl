@@ -761,6 +761,12 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
 
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
 
