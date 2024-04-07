@@ -1209,6 +1209,14 @@ bool a619_holi_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+static bool a6xx_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, A6XX_GPU_GMU_CX_GMU_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 /*
  * a6xx_gmu_sptprac_is_on() - Check if SPTP is on using pwr status register
  * @adreno_dev - Pointer to adreno_device
@@ -1881,7 +1889,14 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_GBIF_HALT, 0x0);
 	}
 
-	if (a6xx_gmu_gx_is_on(adreno_dev))
+	/*
+	 * GX_CXO_CLK is needed to access RBBM_SW_RESET_CMD register. There are
+	 * scenarios where the IFPC exit sequence is still in progress, and the
+	 * above clock may not be enabled. This situation leads to unclocked
+	 * access. Thus, trigger RBBM_SW_RESET_CMD only when GPU is fully active
+	 * i.e., IFPC sequence is completed.
+	 */
+	if (a6xx_gmu_gx_is_on(adreno_dev) && a6xx_gmu_rpmh_pwr_state_is_active(device))
 		kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
 
 	/* Make sure above writes are posted before turning off power resources */
