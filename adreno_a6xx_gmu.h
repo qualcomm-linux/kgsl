@@ -101,6 +101,10 @@ struct a6xx_gmu_device {
 	struct notifier_block gdsc_nb;
 	/** @gdsc_gate: Completion to signal cx gdsc collapse status */
 	struct completion gdsc_gate;
+	/** @pdc_cfg_base: Base address of PDC cfg registers */
+	void __iomem *pdc_cfg_base;
+	/** @pdc_seq_base: Base address of PDC seq registers */
+	void __iomem *pdc_seq_base;
 };
 
 /* Helper function to get to a6xx gmu device from adreno device */

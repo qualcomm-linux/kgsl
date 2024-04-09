@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_H_
@@ -24,6 +24,7 @@ extern const struct adreno_power_ops gen7_gmu_power_ops;
 extern const struct adreno_power_ops gen7_hwsched_power_ops;
 extern const struct adreno_perfcounters adreno_gen7_perfcounters;
 extern const struct adreno_perfcounters adreno_gen7_hwsched_perfcounters;
+extern const struct adreno_perfcounters adreno_gen7_no_cb_perfcounters;
 
 struct gen7_gpudev {
 	struct adreno_gpudev base;
@@ -113,6 +114,8 @@ struct adreno_gen7_core {
 	u32 bcl_data;
 	/** @preempt_level: Preemption level valid ranges [0 to 2] */
 	u32 preempt_level;
+	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
+	bool fast_bus_hint;
 };
 
 /**

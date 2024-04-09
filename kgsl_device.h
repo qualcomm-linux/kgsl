@@ -280,7 +280,7 @@ struct kgsl_device {
 	struct kgsl_pwrscale pwrscale;
 
 	int reset_counter; /* Track how many GPU core resets have occurred */
-	struct workqueue_struct *events_wq;
+	struct kthread_worker *events_worker;
 
 	/* Number of active contexts seen globally for this device */
 	int active_context_count;
@@ -335,6 +335,8 @@ struct kgsl_device {
 	} gpu_period;
 	/** @idle_jiffies: Latest idle jiffies */
 	unsigned long idle_jiffies;
+	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
+	bool dump_all_ibs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -527,6 +529,10 @@ struct kgsl_process_private {
 	 * @private_mutex: Mutex lock to protect kgsl_process_private
 	 */
 	struct mutex private_mutex;
+	/**
+	 * @cmdline: Cmdline string of the process
+	 */
+	char *cmdline;
 };
 
 struct kgsl_device_private {

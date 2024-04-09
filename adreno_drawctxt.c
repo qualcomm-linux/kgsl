@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -168,11 +168,11 @@ int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 			_check_context_timestamp(device, context, timestamp),
 			msecs_to_jiffies(timeout));
 
-	if (ret_temp == 0) {
-		ret = -ETIMEDOUT;
-		goto done;
-	} else if (ret_temp < 0) {
-		ret = (int) ret_temp;
+	if (ret_temp <= 0) {
+		kgsl_cancel_event(device, &context->events, timestamp,
+			wait_callback, (void *)drawctxt);
+
+		ret = ret_temp ? (int)ret_temp : -ETIMEDOUT;
 		goto done;
 	}
 	ret = 0;

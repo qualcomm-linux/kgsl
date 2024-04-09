@@ -12,6 +12,7 @@ static struct kgsl_memdesc *gen7_capturescript;
 static struct kgsl_memdesc *gen7_crashdump_registers;
 static u32 *gen7_cd_reg_end;
 static const struct gen7_snapshot_block_list *gen7_snapshot_block_list;
+static bool gen7_crashdump_timedout;
 
 /* Starting kernel virtual address for QDSS TMC register block */
 static void __iomem *tmc_virt;
@@ -140,7 +141,8 @@ static bool CD_SCRIPT_CHECK(struct kgsl_device *device)
 {
 	return (gen7_is_smmu_stalled(device) || (!device->snapshot_crashdumper) ||
 		IS_ERR_OR_NULL(gen7_capturescript) ||
-		IS_ERR_OR_NULL(gen7_crashdump_registers));
+		IS_ERR_OR_NULL(gen7_crashdump_registers) ||
+		gen7_crashdump_timedout);
 }
 
 static bool _gen7_do_crashdump(struct kgsl_device *device)
@@ -181,8 +183,18 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 
 	kgsl_regwrite(device, GEN7_CP_CRASH_DUMP_CNTL, 0);
 
-	if (WARN(!(reg & 0x2), "Crashdumper timed out\n"))
+	if (WARN(!(reg & 0x2), "Crashdumper timed out\n")) {
+		/*
+		 * Gen7 crash dumper script is broken down into multiple chunks
+		 * and script will be invoked multiple times to capture snapshot
+		 * of different sections of GPU. If crashdumper fails once, it is
+		 * highly likely it will fail subsequently as well. Hence update
+		 * gen7_crashdump_timedout variable to avoid running crashdumper
+		 * after it fails once.
+		 */
+		gen7_crashdump_timedout = true;
 		return false;
+	}
 
 	return true;
 }
@@ -1494,6 +1506,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
 	int is_current_rt;
 
+	gen7_crashdump_timedout = false;
 	gen7_snapshot_block_list = gpucore->gen7_snapshot_block_list;
 
 	/* External registers are dumped in the beginning of gmu snapshot */

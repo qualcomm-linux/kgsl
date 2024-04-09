@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/file.h>
@@ -42,7 +43,17 @@ static struct kgsl_memdesc_bind_range *bind_range_create(u64 start, u64 last,
 		return ERR_PTR(-EINVAL);
 	}
 
+	atomic_inc(&entry->vbo_count);
 	return range;
+}
+
+static void bind_range_destroy(struct kgsl_memdesc_bind_range *range)
+{
+	struct kgsl_mem_entry *entry = range->entry;
+
+	atomic_dec(&entry->vbo_count);
+	kgsl_mem_entry_put(entry);
+	kfree(range);
 }
 
 static u64 bind_range_len(struct kgsl_memdesc_bind_range *range)
@@ -100,19 +111,19 @@ static void kgsl_memdesc_remove_range(struct kgsl_mem_entry *target,
 		 * the entire range between start and last in this case.
 		 */
 		if (!entry || range->entry->id == entry->id) {
+			if (kgsl_mmu_unmap_range(memdesc->pagetable,
+				memdesc, range->range.start, bind_range_len(range)))
+				continue;
+
 			interval_tree_remove(node, &memdesc->ranges);
 			trace_kgsl_mem_remove_bind_range(target,
 				range->range.start, range->entry,
 				bind_range_len(range));
 
-			kgsl_mmu_unmap_range(memdesc->pagetable,
-				memdesc, range->range.start, bind_range_len(range));
-
 			kgsl_mmu_map_zero_page_to_range(memdesc->pagetable,
 				memdesc, range->range.start, bind_range_len(range));
 
-			kgsl_mem_entry_put(range->entry);
-			kfree(range);
+			bind_range_destroy(range);
 		}
 	}
 
@@ -126,6 +137,7 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 	struct kgsl_memdesc *memdesc = &target->memdesc;
 	struct kgsl_memdesc_bind_range *range =
 		bind_range_create(start, last, entry);
+	int ret = 0;
 
 	if (IS_ERR(range))
 		return PTR_ERR(range);
@@ -137,8 +149,10 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 	 * but is safer in case something goes bad while updating the interval
 	 * tree
 	 */
-	kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
+	ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc, start,
 		last - start + 1);
+	if (ret)
+		goto error;
 
 	next = interval_tree_iter_first(&memdesc->ranges, start, last);
 
@@ -156,8 +170,7 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 
 		if (start <= cur->range.start) {
 			if (last >= cur->range.last) {
-				kgsl_mem_entry_put(cur->entry);
-				kfree(cur);
+				bind_range_destroy(cur);
 				continue;
 			}
 			/* Adjust the start of the mapping */
@@ -196,6 +209,11 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		}
 	}
 
+	ret = kgsl_mmu_map_child(memdesc->pagetable, memdesc, start,
+			&entry->memdesc, offset, last - start + 1);
+	if (ret)
+		goto error;
+
 	/* Add the new range */
 	interval_tree_insert(&range->range, &memdesc->ranges);
 
@@ -203,24 +221,23 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		range->entry, bind_range_len(range));
 	mutex_unlock(&memdesc->ranges_lock);
 
-	return kgsl_mmu_map_child(memdesc->pagetable, memdesc, start,
-			&entry->memdesc, offset, last - start + 1);
+	return ret;
+
+error:
+	bind_range_destroy(range);
+	mutex_unlock(&memdesc->ranges_lock);
+	return ret;
 }
 
 static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 {
 	struct interval_tree_node *node, *next;
 	struct kgsl_memdesc_bind_range *range;
+	int ret = 0;
 
 	/* Unmap the entire pagetable region */
-	kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+	ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 		0, memdesc->size);
-
-	/* Put back the GPU address */
-	kgsl_mmu_put_gpuaddr(memdesc->pagetable, memdesc);
-
-	memdesc->gpuaddr = 0;
-	memdesc->pagetable = NULL;
 
 	/*
 	 * FIXME: do we have a use after free potential here?  We might need to
@@ -236,9 +253,22 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 		next = interval_tree_iter_next(node, 0, ~0UL);
 
 		interval_tree_remove(node, &memdesc->ranges);
-		kgsl_mem_entry_put(range->entry);
-		kfree(range);
+
+		/* Put the child's refcount if unmap succeeds */
+		if (!ret)
+			bind_range_destroy(range);
+		else
+			kfree(range);
 	}
+
+	if (ret)
+		return;
+
+	/* Put back the GPU address */
+	kgsl_mmu_put_gpuaddr(memdesc->pagetable, memdesc);
+
+	memdesc->gpuaddr = 0;
+	memdesc->pagetable = NULL;
 }
 
 static struct kgsl_memdesc_ops kgsl_vbo_ops = {
@@ -283,8 +313,12 @@ static void kgsl_sharedmem_free_bind_op(struct kgsl_sharedmem_bind_op *op)
 	if (IS_ERR_OR_NULL(op))
 		return;
 
-	for (i = 0; i < op->nr_ops; i++)
+	for (i = 0; i < op->nr_ops; i++) {
+		/* Decrement the vbo_count we added when creating the bind_op */
+		if (op->ops[i].entry)
+			atomic_dec(&op->ops[i].entry->vbo_count);
 		kgsl_mem_entry_put(op->ops[i].entry);
+	}
 
 	kgsl_mem_entry_put(op->target);
 
@@ -390,6 +424,9 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 			goto err;
 		}
 
+		/* Keep the child pinned in memory */
+		atomic_inc(&entry->vbo_count);
+
 		/* Make sure the child is not a VBO */
 		if ((entry->memdesc.flags & KGSL_MEMFLAGS_VBO)) {
 			ret = -EINVAL;
@@ -434,6 +471,7 @@ kgsl_sharedmem_create_bind_op(struct kgsl_process_private *private,
 		ranges += ranges_size;
 	}
 
+	init_completion(&op->comp);
 	kref_init(&op->ref);
 
 	return op;
@@ -478,6 +516,9 @@ static void kgsl_sharedmem_bind_worker(struct work_struct *work)
 	/* Release the reference on the target entry */
 	kgsl_mem_entry_put(op->target);
 	op->target = NULL;
+
+	/* Wake up any threads waiting for the bind operation */
+	complete_all(&op->comp);
 
 	if (op->callback)
 		op->callback(op);
@@ -572,18 +613,9 @@ kgsl_sharedmem_bind_fence(struct kgsl_sharedmem_bind_op *op)
 	return fence;
 }
 
-static void
-kgsl_sharedmem_bind_async_callback(struct kgsl_sharedmem_bind_op *op)
-{
-	struct completion *comp = op->data;
-
-	complete(comp);
-}
-
 long kgsl_ioctl_gpumem_bind_ranges(struct kgsl_device_private *dev_priv,
 		unsigned int cmd, void *data)
 {
-	DECLARE_COMPLETION_ONSTACK(sync);
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_gpumem_bind_ranges *param = data;
 	struct kgsl_sharedmem_bind_op *op;
@@ -630,19 +662,13 @@ long kgsl_ioctl_gpumem_bind_ranges(struct kgsl_device_private *dev_priv,
 		return 0;
 	}
 
-	/* For synchronous operations add a completion to wait on */
-	op->callback = kgsl_sharedmem_bind_async_callback;
-	op->data = &sync;
-
-	init_completion(&sync);
-
 	/*
 	 * Schedule the work. All the resources will be released after
 	 * the bind operation is done
 	 */
 	kgsl_sharedmem_bind_ranges(op);
 
-	ret = wait_for_completion_interruptible(&sync);
+	ret = wait_for_completion_interruptible(&op->comp);
 	kgsl_sharedmem_put_bind_op(op);
 
 	return ret;

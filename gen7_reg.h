@@ -138,6 +138,7 @@
 /* LPAC registers */
 #define GEN7_CP_LPAC_RB_RPTR             0xb06
 #define GEN7_CP_LPAC_RB_WPTR             0xb07
+#define GEN7_CP_LPAC_PROTECT_CNTL        0xb09
 #define GEN7_CP_LPAC_DRAW_STATE_ADDR     0xb0a
 #define GEN7_CP_LPAC_DRAW_STATE_DATA     0xb0b
 #define GEN7_CP_LPAC_ROQ_DBG_ADDR        0xb0c
@@ -911,7 +912,12 @@
 #define GEN7_SP_PERFCTR_SP_SEL_35           0xaea3
 
 /* TP registers */
+#define GEN7_TPL1_DBG_ECO_CNTL1             0xb602
 #define GEN7_TPL1_NC_MODE_CNTL              0xb604
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_1   0xb609
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_2   0xb60a
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_3   0xb60b
+#define GEN7_TPL1_BICUBIC_WEIGHTS_TABLE_4   0xb60c
 #define GEN7_TPL1_PERFCTR_TP_SEL_0          0xb610
 #define GEN7_TPL1_PERFCTR_TP_SEL_1          0xb611
 #define GEN7_TPL1_PERFCTR_TP_SEL_2          0xb612
@@ -968,6 +974,7 @@
 #define GBIF_AXI1_WRITE_DATA_TOTAL_BEATS   47
 
 /* GBIF registers */
+#define GEN7_GBIF_CX_CONFIG               0x3c00
 #define GEN7_GBIF_SCACHE_CNTL0            0x3c01
 #define GEN7_GBIF_SCACHE_CNTL1            0x3c02
 #define GEN7_GBIF_QSB_SIDE0               0x3c03

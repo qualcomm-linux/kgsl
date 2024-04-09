@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_MMU_H
 #define __KGSL_MMU_H
@@ -90,6 +90,8 @@ struct kgsl_pagetable {
 	 * forced 32 bit allocations
 	 */
 	u64 compat_va_end;
+	/** @va_hint: Virtual address hint for 64-bit non-SVM allocations */
+	u64 va_hint;
 	u64 global_base;
 };
 
@@ -109,7 +111,7 @@ struct kgsl_mmu_ops {
 			unsigned long name);
 	void (*mmu_map_global)(struct kgsl_mmu *mmu,
 		struct kgsl_memdesc *memdesc, u32 padding);
-	void (*mmu_flush_tlb)(struct kgsl_mmu *mmu);
+	void (*mmu_send_tlb_hint)(struct kgsl_mmu *mmu, bool hint);
 };
 
 struct kgsl_mmu_pt_ops {
@@ -167,6 +169,8 @@ enum kgsl_mmu_feature {
 	KGSL_MMU_SUPPORT_VBO,
 	/** @KGSL_MMU_PAGEFAULT_TERMINATE: Set to make pagefaults fatal */
 	KGSL_MMU_PAGEFAULT_TERMINATE,
+	/** @KGSL_MMU_LLCC_NWA: Set to make no write allocate the default LLCC policy */
+	KGSL_MMU_FORCE_LLCC_NWA,
 };
 
 #include "kgsl_iommu.h"
@@ -361,13 +365,10 @@ kgsl_mmu_pagetable_get_ttbr0(struct kgsl_pagetable *pagetable)
 	return 0;
 }
 
-static inline void kgsl_mmu_flush_tlb(struct kgsl_mmu *mmu)
+static inline void kgsl_mmu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
 {
-	if (!test_bit(KGSL_MMU_IOPGTABLE, &mmu->features))
-		return;
-
-	if (MMU_OP_VALID(mmu, mmu_flush_tlb))
-		return mmu->mmu_ops->mmu_flush_tlb(mmu);
+	if (MMU_OP_VALID(mmu, mmu_send_tlb_hint))
+		return mmu->mmu_ops->mmu_send_tlb_hint(mmu, hint);
 }
 
 /**

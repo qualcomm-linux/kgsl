@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_SHAREDMEM_H
 #define __KGSL_SHAREDMEM_H
@@ -73,6 +74,12 @@ void kgsl_get_memory_usage(char *str, size_t len, uint64_t memflags);
 void kgsl_free_secure_page(struct page *page);
 
 struct page *kgsl_alloc_secure_page(void);
+
+#if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
+int kgsl_lock_sgt(struct sg_table *sgt, u64 size);
+
+int kgsl_unlock_sgt(struct sg_table *sgt);
+#endif
 
 /**
  * kgsl_zero_page() - zero out a page
@@ -401,6 +408,7 @@ struct kgsl_sharedmem_bind_op {
 	void (*callback)(struct kgsl_sharedmem_bind_op *op);
 	void *data;
 	struct work_struct work;
+	struct completion comp;
 	struct kref ref;
 };
 

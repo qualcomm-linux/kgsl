@@ -439,7 +439,8 @@ static const u32 gen7_0_0_post_crashdumper_registers[] = {
 static_assert(IS_ALIGNED(sizeof(gen7_0_0_post_crashdumper_registers), 8));
 
 static const u32 gen7_14_0_pre_crashdumper_registers[] = {
-	 0x00210, 0x00213, 0x00536, 0x00536,
+	 0x00210, 0x00213, 0x00536, 0x00536, 0x03c00, 0x03c0b, 0x03c40, 0x03c42,
+	 0x03c45, 0x03c47, 0x03c49, 0x03c4a, 0x03cc0, 0x03cd1,
 	 UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen7_14_0_pre_crashdumper_registers), 8));
@@ -1403,6 +1404,31 @@ static const u32 gen7_2_0_sp_cluster_sp_vs_pipe_bv_usptp_registers[] = {
 };
 static_assert(IS_ALIGNED(sizeof(gen7_2_0_sp_cluster_sp_vs_pipe_bv_usptp_registers), 8));
 
+static const u32 gen7_14_0_non_context_tpl1_pipe_none_usptp_registers[] = {
+	 0x0b602, 0x0b602, 0x0b604, 0x0b604, 0x0b608, 0x0b60c, 0x0b60f, 0x0b621,
+	 0x0b630, 0x0b633,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen7_14_0_non_context_tpl1_pipe_none_usptp_registers), 8));
+
+static const u32 gen7_14_0_non_context_tpl1_pipe_br_usptp_registers[] = {
+	 0x0b600, 0x0b600,
+	 UINT_MAX, UINT_MAX,
+};
+
+static const u32 gen7_14_0_tpl1_cluster_sp_vs_pipe_br_usptp_registers[] = {
+	 0x0b300, 0x0b307, 0x0b309, 0x0b309, 0x0b310, 0x0b310,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen7_14_0_tpl1_cluster_sp_vs_pipe_br_usptp_registers), 8));
+
+static const u32 gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers[] = {
+	 0x0b180, 0x0b183, 0x0b190, 0x0b195, 0x0b2c0, 0x0b2d5, 0x0b300, 0x0b307,
+	 0x0b309, 0x0b309, 0x0b310, 0x0b310,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers), 8));
+
 /* Block: TPL1 Cluster: CLUSTER_SP_PS Pipeline: PIPE_BR */
 static const u32 gen7_0_0_tpl1_cluster_sp_ps_pipe_br_registers[] = {
 	0x0b180, 0x0b183, 0x0b190, 0x0b195, 0x0b2c0, 0x0b2d5, 0x0b300, 0x0b307,
@@ -2025,6 +2051,22 @@ static struct gen7_sptp_cluster_registers gen7_14_0_sptp_clusters[] = {
 		gen7_0_0_sp_cluster_sp_ps_pipe_br_sp_top_registers, 0xa800},
 	{ CLUSTER_SP_PS, SP_CTX3_3D_CPS_REG, PIPE_BR, 3, USPTP,
 		gen7_0_0_sp_cluster_sp_ps_pipe_br_usptp_registers, 0xa800},
+	{ CLUSTER_NONE, TP0_NCTX_REG, PIPE_NONE, 0, USPTP,
+		gen7_14_0_non_context_tpl1_pipe_none_usptp_registers, 0xb600},
+	{ CLUSTER_NONE, TP0_NCTX_REG, PIPE_BR, 0, USPTP,
+		gen7_14_0_non_context_tpl1_pipe_br_usptp_registers, 0xb600},
+	{ CLUSTER_SP_VS, TP0_CTX0_3D_CVS_REG, PIPE_BR, 0, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
+	{ CLUSTER_SP_VS, TP0_CTX1_3D_CVS_REG, PIPE_BR, 1, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
+	{ CLUSTER_SP_PS, TP0_CTX0_3D_CPS_REG, PIPE_BR, 0, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
+	{ CLUSTER_SP_PS, TP0_CTX1_3D_CPS_REG, PIPE_BR, 1, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
+	{ CLUSTER_SP_PS, TP0_CTX2_3D_CPS_REG, PIPE_BR, 2, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
+	{ CLUSTER_SP_PS, TP0_CTX3_3D_CPS_REG, PIPE_BR, 3, USPTP,
+		gen7_14_0_tpl1_cluster_sp_ps_pipe_br_usptp_registers, 0xb000},
 };
 
 struct gen7_shader_block {

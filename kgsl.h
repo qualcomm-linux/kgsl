@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_H
 #define __KGSL_H
@@ -239,6 +239,8 @@ struct kgsl_memdesc_ops {
 #define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
 /* The memdesc is mapped as iomem */
 #define KGSL_MEMDESC_IOMEM BIT(13)
+/* The memdesc is hypassigned to HLOS*/
+#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(14)
 
 /**
  * struct kgsl_memdesc - GPU memory object descriptor
@@ -329,7 +331,7 @@ struct kgsl_global_memdesc {
  *  are still references to it.
  * @dev_priv: back pointer to the device file that created this entry.
  * @metadata: String containing user specified metadata for the entry
- * @work: Work struct used to schedule a kgsl_mem_entry_put in atomic contexts
+ * @work: Work struct used to schedule kgsl_mem_entry_destroy()
  */
 struct kgsl_mem_entry {
 	struct kref refcount;
@@ -346,6 +348,8 @@ struct kgsl_mem_entry {
 	 * debugfs accounting
 	 */
 	atomic_t map_count;
+	/** @vbo_count: Count how many VBO ranges this entry is mapped in */
+	atomic_t vbo_count;
 };
 
 struct kgsl_device_private;
@@ -363,7 +367,7 @@ typedef void (*kgsl_event_func)(struct kgsl_device *, struct kgsl_event_group *,
  * @priv: Private data passed to the callback function
  * @node: List node for the kgsl_event_group list
  * @created: Jiffies when the event was created
- * @work: Work struct for dispatching the callback
+ * @work: kthread_work struct for dispatching the callback
  * @result: KGSL event result type to pass to the callback
  * group: The event group this event belongs to
  */
@@ -375,7 +379,7 @@ struct kgsl_event {
 	void *priv;
 	struct list_head node;
 	unsigned int created;
-	struct work_struct work;
+	struct kthread_work work;
 	int result;
 	struct kgsl_event_group *group;
 };
@@ -526,6 +530,7 @@ long kgsl_ioctl_recurring_command(struct kgsl_device_private *dev_priv,
 				unsigned int cmd, void *data);
 
 void kgsl_mem_entry_destroy(struct kref *kref);
+void kgsl_mem_entry_destroy_deferred(struct kref *kref);
 
 void kgsl_get_egl_counts(struct kgsl_mem_entry *entry,
 			int *egl_surface_count, int *egl_image_count);
@@ -642,6 +647,20 @@ kgsl_mem_entry_put(struct kgsl_mem_entry *entry)
 {
 	if (!IS_ERR_OR_NULL(entry))
 		kref_put(&entry->refcount, kgsl_mem_entry_destroy);
+}
+
+/*
+ * kgsl_mem_entry_put_deferred() - Puts refcount and triggers deferred
+ * mem_entry destroy when refcount is the last refcount.
+ * @entry: memory entry to be put.
+ *
+ * Use this to put a memory entry when we don't want to block
+ * the caller while destroying memory entry.
+ */
+static inline void kgsl_mem_entry_put_deferred(struct kgsl_mem_entry *entry)
+{
+	if (entry)
+		kref_put(&entry->refcount, kgsl_mem_entry_destroy_deferred);
 }
 
 /*
