@@ -300,4 +300,6 @@ size_t adreno_hwsched_snapshot_rb(struct kgsl_device *device, u8 *buf,
 	size_t remain, void *priv);
 size_t adreno_hwsched_snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
 	size_t remain, void *priv);
+void adreno_hwsched_snapshot_context_queue(struct adreno_device *adreno_dev,
+	struct kgsl_snapshot *snapshot);
 #endif

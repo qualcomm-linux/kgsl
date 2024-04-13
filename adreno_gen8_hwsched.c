@@ -113,25 +113,6 @@ static void snapshot_preemption_records(struct kgsl_device *device,
 			offset);
 }
 
-static int snapshot_context_queue(int id, void *ptr, void *data)
-{
-	struct kgsl_snapshot *snapshot = data;
-	struct kgsl_context *context = ptr;
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
-	struct gmu_mem_type_desc desc;
-
-	if (!context->gmu_registered)
-		return 0;
-
-	desc.memdesc = &drawctxt->gmu_context_queue;
-	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
-	kgsl_snapshot_add_section(context->device,
-		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, adreno_snapshot_gmu_mem, &desc);
-
-	return 0;
-}
-
 void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -211,9 +192,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 
 	}
 
-	read_lock(&device->context_lock);
-	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
-	read_unlock(&device->context_lock);
+	adreno_hwsched_snapshot_context_queue(adreno_dev, snapshot);
 }
 
 static void _get_hw_fence_entries(struct adreno_device *adreno_dev)

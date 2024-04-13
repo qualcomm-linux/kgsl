@@ -2754,3 +2754,32 @@ size_t adreno_hwsched_snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
 
 	return memdesc->size + sizeof(*header);
 }
+
+static int snapshot_context_queue(int id, void *ptr, void *data)
+{
+	struct kgsl_snapshot *snapshot = data;
+	struct kgsl_context *context = ptr;
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	struct gmu_mem_type_desc desc;
+
+	if (!context->gmu_registered)
+		return 0;
+
+	desc.memdesc = &drawctxt->gmu_context_queue;
+	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
+	kgsl_snapshot_add_section(context->device,
+		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
+		snapshot, adreno_snapshot_gmu_mem, &desc);
+
+	return 0;
+}
+
+void adreno_hwsched_snapshot_context_queue(struct adreno_device *adreno_dev,
+	struct kgsl_snapshot *snapshot)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	read_lock(&device->context_lock);
+	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
+	read_unlock(&device->context_lock);
+}
