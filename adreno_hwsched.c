@@ -2726,3 +2726,31 @@ bool adreno_hwsched_parse_payload_rb(struct adreno_device *adreno_dev,
 
 	return ret;
 }
+
+size_t adreno_hwsched_snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
+	size_t remain, void *priv)
+{
+	struct kgsl_memdesc *memdesc = priv;
+
+	struct kgsl_snapshot_gpu_object_v2 *header =
+		(struct kgsl_snapshot_gpu_object_v2 *)buf;
+
+	u8 *ptr = buf + sizeof(*header);
+
+	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
+		return 0;
+
+	if (remain < (memdesc->size + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE BUFFER");
+		return 0;
+	}
+
+	header->size = memdesc->size >> 2;
+	header->gpuaddr = memdesc->gpuaddr;
+	header->ptbase = MMU_DEFAULT_TTBR0(device);
+	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
+
+	memcpy(ptr, memdesc->hostptr, memdesc->size);
+
+	return memdesc->size + sizeof(*header);
+}

@@ -140,35 +140,6 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	return 0;
 }
 
-/* Snapshot AQE buffer */
-static size_t snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-
-	u8 *ptr = buf + sizeof(*header);
-
-	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
-		return 0;
-
-	if (remain < (memdesc->size + sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "AQE BUFFER");
-		return 0;
-	}
-
-	header->size = memdesc->size >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase = MMU_DEFAULT_TTBR0(device);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, memdesc->size);
-
-	return memdesc->size + sizeof(*header);
-}
-
 void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -237,7 +208,7 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 		if (entry->desc.mem_kind == HFI_MEMKIND_AQE_BUFFER)
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
-				snapshot, snapshot_aqe_buffer,
+				snapshot, adreno_hwsched_snapshot_aqe_buffer,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_HW_FENCE) {
