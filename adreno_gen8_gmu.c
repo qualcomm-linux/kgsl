@@ -384,9 +384,6 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN8_GMUAO_RSCC_CONTROL_REQ, 0);
 
-	if (adreno_dev->lm_enabled)
-		gmu_core_regwrite(device, GEN8_GMUAO_AO_SPARE_CNTL, 0);
-
 	set_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags);
 
 	return 0;
@@ -702,7 +699,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-	u32 reg, reg1, reg2, reg3, reg4, reg5;
+	u32 reg, reg1, reg2, reg3, reg4;
 	unsigned long t;
 	u64 ts1, ts2;
 
@@ -744,23 +741,16 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	gmu_core_regread(device, GEN8_GMUAO_GPU_CX_BUSY_STATUS, &reg2);
 	gmu_core_regread(device, GEN8_GMUAO_RBBM_INT_UNMASKED_STATUS_SHADOW, &reg3);
 	gmu_core_regread(device, GEN8_GMUCX_PWR_COL_KEEPALIVE, &reg4);
-	gmu_core_regread(device, GEN8_GMUAO_AO_SPARE_CNTL, &reg5);
 
 	dev_err(&gmu->pdev->dev,
 		"----------------------[ GMU error ]----------------------\n");
-	dev_err(&gmu->pdev->dev,
-		"Timeout waiting for lowest idle level %s\n",
+	dev_err(&gmu->pdev->dev, "Timeout waiting for lowest idle level %s\n",
 		idle_level_name(gmu->idle_level));
 	dev_err(&gmu->pdev->dev, "Start: %llx (absolute ticks)\n", ts1);
-	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n",
-		ts2-ts1);
-	dev_err(&gmu->pdev->dev,
-		"RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
+	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n", ts2-ts1);
+	dev_err(&gmu->pdev->dev, "RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
 	dev_err(&gmu->pdev->dev, "CX_BUSY_STATUS=%x\n", reg2);
-	dev_err(&gmu->pdev->dev,
-		"RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n",
-		reg3, reg4);
-	dev_err(&gmu->pdev->dev, "GMUAO_AO_SPARE_CNTL=%x\n", reg5);
+	dev_err(&gmu->pdev->dev, "RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n", reg3, reg4);
 
 	/* Access GX registers only when GX is ON */
 	if (is_on(reg1)) {
