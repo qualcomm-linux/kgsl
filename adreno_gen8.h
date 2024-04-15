@@ -608,4 +608,11 @@ void gen8_regread_aperture(struct kgsl_device *device,
  */
 void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id);
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_CORESIGHT)
+void gen8_coresight_init(struct adreno_device *device);
+#else
+static inline void gen8_coresight_init(struct adreno_device *device) { }
+#endif
+
 #endif

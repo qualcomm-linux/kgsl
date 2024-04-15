@@ -160,4 +160,5 @@ msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_a5xx_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_a6xx_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_gen7_coresight.o
+msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_gen8_coresight.o
 msm_kgsl-$(CONFIG_DEBUG_FS) += adreno_debugfs.o adreno_profile.o
