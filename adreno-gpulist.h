@@ -2818,7 +2818,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 		.compatible = "qcom,adreno-gpu-gen8-4-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE |
-			ADRENO_GMU_WARMBOOT,
+			ADRENO_GMU_WARMBOOT | ADRENO_L3_VOTE | ADRENO_IFPC,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
