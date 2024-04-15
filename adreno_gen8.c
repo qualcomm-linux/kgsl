@@ -1182,7 +1182,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL, BIT(30));
 
 	kgsl_regwrite(device, GEN8_UCHE_CLIENT_PF, BIT(7) |
-			FIELD_PREP(GENMASK(3, 0), adreno_dev->uche_client_pf));
+			FIELD_PREP(GENMASK(6, 0), adreno_dev->uche_client_pf));
 
 	/* Enable the GMEM save/restore feature for preemption */
 	if (adreno_is_preemption_enabled(adreno_dev)) {
