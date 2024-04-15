@@ -2058,6 +2058,10 @@ static const struct kgsl_regmap_list gen7_2_0_gbif_regs[] = {
 	{ GEN7_GMU_CX_MRC_GBIF_QOS_CTRL, 0x33 },
 };
 
+static const u32 gen7_6_0_gbif_client_qos_values[KGSL_PRIORITY_MAX_RB_LEVELS] = {
+	0x03230323,
+};
+
 static const struct kgsl_regmap_list gen7_2_0_hwcg_regs[] = {
 	{ GEN7_RBBM_CLOCK_CNTL_SP0, 0x02222222 },
 	{ GEN7_RBBM_CLOCK_CNTL2_SP0, 0x22022222 },
@@ -2229,6 +2233,43 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
 	.preempt_level = 1,
 	.ctxt_record_size = (2860 * SZ_1K),
 	.fast_bus_hint = true,
+};
+
+static const struct adreno_gen7_core adreno_gpu_core_gen7_6_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_6_0,
+				UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen7-6-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+				ADRENO_CONTENT_PROTECTION | ADRENO_L3_VOTE |
+				ADRENO_IFPC | ADRENO_PREEMPTION | ADRENO_BCL |
+				ADRENO_ACD | ADRENO_LPAC | ADRENO_DMS,
+		.gpudev = &adreno_gen7_hwsched_gpudev.base,
+		.perfcounters = &adreno_gen7_hwsched_perfcounters,
+		.uche_gmem_alignment = SZ_16M,
+		.gmem_size = 3 * SZ_1M,
+		.bus_width = 32,
+		.snapshot_size = SZ_4M,
+	},
+	.gmu_fw_version = GMU_VERSION(4, 1, 9),
+	.sqefw_name = "a740v3_sqe.fw",
+	.gmufw_name = "gmu_gen70200.bin",
+	.zap_name = "a740v3_zap",
+	.hwcg = gen7_2_0_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(gen7_2_0_hwcg_regs),
+	.ao_hwcg = gen7_2_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_2_0_ao_hwcg_regs),
+	.gbif = gen7_2_0_gbif_regs,
+	.gbif_count = ARRAY_SIZE(gen7_2_0_gbif_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen7_0_0_protected_regs,
+	.highest_bank_bit = 16,
+	.gmu_hub_clk_freq = 200000000,
+	.bcl_data = 1,
+	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
+	.qos_value = gen7_6_0_gbif_client_qos_values,
+	.preempt_level = 1,
+	.ctxt_record_size = (4192 * SZ_1K),
 };
 
 extern const struct gen7_snapshot_block_list gen7_9_0_snapshot_block_list;
@@ -2889,6 +2930,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen7_2_0.base,
 	&adreno_gpu_core_gen7_2_1.base,
 	&adreno_gpu_core_gen7_4_0.base,
+	&adreno_gpu_core_gen7_6_0.base,
 	&adreno_gpu_core_gen7_9_0.base,
 	&adreno_gpu_core_gen7_9_1.base,
 	&adreno_gpu_core_gen7_14_0.base,
