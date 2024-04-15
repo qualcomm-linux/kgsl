@@ -174,6 +174,14 @@ struct kgsl_pwrctrl {
 	u32 cur_ab;
 	/** @sysfs_thermal_req - PM QoS maximum frequency request from user (via sysfs) */
 	struct dev_pm_qos_request sysfs_thermal_req;
+	/* pmqos_max_pwrlevel: Max power level limit set from the PMQOS notifier */
+	u32 pmqos_max_pwrlevel;
+	/* cooling_dev: Handle to thermal cooling dev */
+	struct thermal_cooling_device *cooling_dev;
+	/* pmqos_max_freq: Handle to raise PMQOS MAX FREQUENCY request */
+	struct dev_pm_qos_request pmqos_max_freq;
+	/* cooling_ws: Work which updates PMQOS during thermal event */
+	struct work_struct cooling_ws;
 	/** @time_in_pwrlevel: Each pwrlevel active duration in usec */
 	u64 time_in_pwrlevel[KGSL_MAX_PWRLEVELS];
 	/** @last_stat_updated: The last time stats were updated */
