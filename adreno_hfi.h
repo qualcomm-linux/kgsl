@@ -1395,4 +1395,14 @@ static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
 
 	return 0;
 }
+
+/**
+ * hfi_feature_to_string - Convert an HFI feature value to its
+ * string representation
+ * @feature: HFI feature value to convert
+ *
+ * Return: Pointer to a string representing the given feature.
+ * If the feature is unknown, the function returns "unknown".
+ */
+const char *hfi_feature_to_string(u32 feature);
 #endif
