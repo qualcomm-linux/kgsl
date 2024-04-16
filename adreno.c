@@ -118,16 +118,18 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 }
 
 #if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
-static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
+static int adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret;
+	int ret = 0;
 
 	if (adreno_dev->zap_loaded) {
 		ret = kgsl_zap_shader_unload(&device->pdev->dev);
 		if (!ret)
 			adreno_dev->zap_loaded = false;
 	}
+
+	return ret;
 }
 #endif
 
@@ -1501,7 +1503,6 @@ static int adreno_pm_resume(struct device *dev)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
-	mutex_lock(&device->mutex);
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
 	if (pm_suspend_via_firmware()) {
 		struct kgsl_iommu *iommu = &device->mmu.iommu;
@@ -1514,6 +1515,7 @@ static int adreno_pm_resume(struct device *dev)
 	}
 #endif
 
+	mutex_lock(&device->mutex);
 	ops->pm_resume(adreno_dev);
 	mutex_unlock(&device->mutex);
 
@@ -1544,7 +1546,7 @@ static int adreno_pm_suspend(struct device *dev)
 
 #if IS_ENABLED(CONFIG_DEEPSLEEP)
 	if (!status && pm_suspend_via_firmware())
-		adreno_zap_shader_unload(adreno_dev);
+		status = adreno_zap_shader_unload(adreno_dev);
 #endif
 
 	mutex_unlock(&device->mutex);
