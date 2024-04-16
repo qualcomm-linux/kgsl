@@ -1895,7 +1895,7 @@ static bool gen8_hwsched_warmboot_possible(struct adreno_device *adreno_dev)
 static int gen8_hwsched_hfi_send_warmboot_cmd(struct adreno_device *adreno_dev,
 		struct kgsl_memdesc *desc, u32 flag, bool async, struct pending_cmd *ack)
 {
-	struct hfi_warmboot_scratch_cmd cmd;
+	struct hfi_warmboot_scratch_cmd cmd = {0};
 	int ret;
 
 	if (!adreno_dev->warmboot_enabled)
