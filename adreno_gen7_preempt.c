@@ -482,11 +482,9 @@ void gen7_preemption_prepare_postamble(struct adreno_device *adreno_dev)
 	 */
 	preempt->postamble_bootup_len = count;
 
-	/* Reserve 11 dwords in the device scratch buffer to clear perfcounters */
+	/* Insert PM4 packets in device scratch buffer to clear perfcounters */
 	if (!adreno_dev->perfcounter) {
-		postamble[count++] = cp_type7_packet(CP_REG_RMW, 3);
-		postamble[count++] = GEN7_RBBM_PERFCTR_SRAM_INIT_CMD;
-		postamble[count++] = 0x0;
+		postamble[count++] = cp_type4_packet(GEN7_RBBM_PERFCTR_SRAM_INIT_CMD, 1);
 		postamble[count++] = 0x1;
 
 		postamble[count++] = cp_type7_packet(CP_WAIT_REG_MEM, 6);
