@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -12,6 +12,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <soc/qcom/of_common.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -194,7 +195,7 @@ static int acd_calibrate_set(void *data, u64 val)
 	u32 debug_val = (u32) val;
 	int ret;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	ret = adreno_active_count_get(adreno_dev);
 	if (ret)
 		goto err;
@@ -205,7 +206,7 @@ static int acd_calibrate_set(void *data, u64 val)
 
 	adreno_active_count_put(adreno_dev);
 err:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return ret;
 }
 
@@ -1271,16 +1272,16 @@ static const char *gen7_fault_block_uche(struct kgsl_device *device,
 	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
 	 * here, try to lock device mutex and return if it fails.
 	 */
-	if (!mutex_trylock(&device->mutex))
+	if (!rt_mutex_trylock(&device->mutex))
 		goto regread_fail;
 
 	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		goto regread_fail;
 	}
 
 	kgsl_regread(device, GEN7_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
 	if (uche_client_id == SCOOBYDOO) {
@@ -1915,7 +1916,7 @@ static int gen7_setproperty(struct kgsl_device_private *dev_priv,
 	if (copy_from_user(&enable, value, sizeof(enable)))
 		return -EFAULT;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (enable) {
 		clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
@@ -1930,7 +1931,7 @@ static int gen7_setproperty(struct kgsl_device_private *dev_priv,
 		kgsl_pwrscale_disable(device, true);
 	}
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }

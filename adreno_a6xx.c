@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -13,6 +13,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <soc/qcom/of_common.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -1673,16 +1674,16 @@ static const char *a6xx_fault_block_uche(struct kgsl_device *device,
 	 * to turn off CX gdsc will fail during the reset. So to avoid blocking
 	 * here, try to lock device mutex and return if it fails.
 	 */
-	if (!mutex_trylock(&device->mutex))
+	if (!rt_mutex_trylock(&device->mutex))
 		return "UCHE: unknown";
 
 	if (!kgsl_state_is_awake(device)) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		return "UCHE: unknown";
 	}
 
 	kgsl_regread(device, A6XX_UCHE_CLIENT_PF, &uche_client_id);
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	/* Ignore the value if the gpu is in IFPC */
 	if (uche_client_id == SCOOBYDOO)
@@ -2193,7 +2194,7 @@ static int a6xx_setproperty(struct kgsl_device_private *dev_priv,
 	if (copy_from_user(&enable, value, sizeof(enable)))
 		return -EFAULT;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (enable) {
 		if (gmu_core_isenabled(device))
@@ -2215,7 +2216,7 @@ static int a6xx_setproperty(struct kgsl_device_private *dev_priv,
 		kgsl_pwrscale_disable(device, true);
 	}
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }

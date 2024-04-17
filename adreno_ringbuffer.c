@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/interconnect.h>
 #include <linux/sched/clock.h>
 #include <linux/slab.h>
 #include <soc/qcom/dcvs.h>
+#include <linux/rtmutex.h>
 
 #include "a3xx_reg.h"
 #include "a5xx_reg.h"
@@ -403,7 +405,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 	if (ret)
 		return ret;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	wait_time = msecs_to_jiffies(msecs);
 	if (wait_event_timeout(rb->ts_expire_waitq,
@@ -412,7 +414,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 		wait_time) == 0)
 		ret  = -ETIMEDOUT;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	/*
 	 * after wake up make sure that expected timestamp has retired
 	 * because the wakeup could have happened due to a cancel event

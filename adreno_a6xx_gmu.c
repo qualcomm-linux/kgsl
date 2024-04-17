@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
@@ -22,6 +22,7 @@
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -3069,7 +3070,7 @@ static void a6xx_gmu_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return;
 
 	if (WARN(atomic_read(&device->active_cnt) == 0,
@@ -3526,7 +3527,7 @@ static void gmu_idle_check(struct work_struct *work)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
@@ -3559,7 +3560,7 @@ static void gmu_idle_check(struct work_struct *work)
 	}
 
 done:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 static int a6xx_gmu_first_open(struct adreno_device *adreno_dev)
@@ -3602,7 +3603,7 @@ static int a6xx_gmu_active_count_get(struct adreno_device *adreno_dev)
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return -EINVAL;
 
 	if (test_bit(GMU_PRIV_PM_SUSPEND, &gmu->flags))

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitfield.h>
@@ -18,6 +18,7 @@
 #include <linux/random.h>
 #include <linux/regulator/consumer.h>
 #include <soc/qcom/secure_buffer.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "kgsl_device.h"
@@ -201,12 +202,12 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 	}
 
 	/* Skip TLB Operations if GPU is in slumber */
-	if (mutex_trylock(&device->mutex)) {
+	if (rt_mutex_trylock(&device->mutex)) {
 		if (device->state == KGSL_STATE_SLUMBER) {
-			mutex_unlock(&device->mutex);
+			rt_mutex_unlock(&device->mutex);
 			return 0;
 		}
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 	}
 
 	kgsl_iommu_flush_tlb(pt->base.mmu);
@@ -973,7 +974,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	if (ctx->stalled_on_fault)
 		return false;
 
-	if (!mutex_trylock(&device->mutex))
+	if (!rt_mutex_trylock(&device->mutex))
 		return true;
 
 	/*
@@ -985,7 +986,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	else
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return true;
 }
 

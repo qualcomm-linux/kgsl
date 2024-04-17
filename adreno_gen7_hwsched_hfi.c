@@ -10,6 +10,7 @@
 #include <linux/sched/clock.h>
 #include <linux/soc/qcom/msm_hw_fence.h>
 #include <soc/qcom/msm_performance.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -896,7 +897,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 	bool missing = true;
 
 	mutex_lock(&hwsched->mutex);
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	list_for_each_entry(obj, &hwsched->cmd_list, node) {
 		struct kgsl_drawobj *drawobj = obj->drawobj;
@@ -930,7 +931,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 		}
 	}
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	mutex_unlock(&hwsched->mutex);
 
 	kgsl_context_put(context);
@@ -1164,7 +1165,7 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 	 * recovery
 	 */
 	mutex_lock(&adreno_dev->hwsched.mutex);
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 	if (ret) {
@@ -1183,7 +1184,7 @@ static void gen7_defer_hw_fence_work(struct kthread_work *work)
 	_disable_hw_fence_throttle(adreno_dev, false);
 
 unlock:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	mutex_unlock(&adreno_dev->hwsched.mutex);
 }
 
@@ -3108,7 +3109,7 @@ int gen7_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
 	int ret = 0;
 
 	/* Device mutex is necessary to ensure only one hardware fence ack is being waited for */
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return -EINVAL;
 
 	spin_lock(&hfi->hw_fence.lock);
@@ -3778,7 +3779,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	if (rc)
 		goto done;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	rc = wait_for_completion_timeout(&pending_ack.complete,
 			msecs_to_jiffies(30 * 1000));
@@ -3789,7 +3790,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 			context->id, ts);
 		rc = -ETIMEDOUT;
 
-		mutex_lock(&device->mutex);
+		rt_mutex_lock(&device->mutex);
 
 		gmu_core_fault_snapshot(device);
 
@@ -3802,7 +3803,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	rc = check_detached_context_hardware_fences(adreno_dev, drawctxt);
 	if (rc)
@@ -3824,7 +3825,7 @@ void gen7_hwsched_context_detach(struct adreno_context *drawctxt)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret = 0;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	ret = send_context_unregister_hfi(adreno_dev, context,
 		drawctxt->internal_timestamp);
@@ -3843,7 +3844,7 @@ void gen7_hwsched_context_detach(struct adreno_context *drawctxt)
 
 	context->gmu_registered = false;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 u32 gen7_hwsched_preempt_count_get(struct adreno_device *adreno_dev)

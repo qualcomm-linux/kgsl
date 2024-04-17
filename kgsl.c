@@ -27,6 +27,7 @@
 #include <linux/string_helpers.h>
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
+#include <linux/rtmutex.h>
 
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
@@ -1336,7 +1337,7 @@ static int kgsl_close_device(struct kgsl_device *device)
 {
 	int result = 0;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	if (device->open_count == 1)
 		result = device->ftbl->last_close(device);
 
@@ -1351,7 +1352,7 @@ static int kgsl_close_device(struct kgsl_device *device)
 	 * last_close().
 	 */
 	device->open_count--;
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return result;
 
 }
@@ -1416,7 +1417,7 @@ static int kgsl_open_device(struct kgsl_device *device)
 {
 	int result = 0;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	if (device->open_count == 0) {
 		result = device->ftbl->first_open(device);
 		if (result)
@@ -1424,7 +1425,7 @@ static int kgsl_open_device(struct kgsl_device *device)
 	}
 	device->open_count++;
 out:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return result;
 }
 
@@ -2552,7 +2553,7 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	struct kgsl_context *context;
 	long result = -EINVAL;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	context = kgsl_context_get_owner(dev_priv, param->context_id);
 
 	if (context) {
@@ -2564,7 +2565,7 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	}
 
 	kgsl_context_put(context);
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return result;
 }
 

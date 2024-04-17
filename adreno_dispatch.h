@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef ____ADRENO_DISPATCHER_H
@@ -9,6 +10,7 @@
 #include <linux/kobject.h>
 #include <linux/kthread.h>
 #include <linux/llist.h>
+#include <linux/rtmutex.h>
 
 extern unsigned int adreno_drawobj_timeout;
 
@@ -68,7 +70,7 @@ struct adreno_dispatch_job {
  * @idle_gate: Gate to wait on for dispatcher to idle
  */
 struct adreno_dispatcher {
-	struct mutex mutex;
+	struct rt_mutex mutex;
 	unsigned long priv;
 	struct timer_list timer;
 	struct timer_list fault_timer;
