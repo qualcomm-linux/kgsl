@@ -13,12 +13,10 @@
 #include <linux/interconnect.h>
 #include <linux/io.h>
 #include <linux/kobject.h>
-#include <linux/mailbox/qmp.h>
 #include <linux/of_platform.h>
 #include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <soc/qcom/cmd-db.h>
 
@@ -292,7 +290,7 @@ int gen8_gmu_device_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN8_GMUCX_CM3_FW_INIT_RESULT,
 			BIT(8), 100, GENMASK(8, 0))) {
 		dev_err(&gmu->pdev->dev, "GMU failed to come out of reset\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_DEVICE_START);
 		return -ETIMEDOUT;
 	}
 
@@ -313,7 +311,7 @@ int gen8_gmu_hfi_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN8_GMUCX_HFI_CTRL_STATUS,
 			BIT(0), 100, BIT(0))) {
 		dev_err(&gmu->pdev->dev, "GMU HFI init failed\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_INIT);
 		return -ETIMEDOUT;
 	}
 
@@ -549,9 +547,9 @@ int gen8_gmu_oob_set(struct kgsl_device *device,
 				100, check)) {
 		if (req == oob_perfcntr)
 			gmu->num_oob_perfcntr--;
-		gmu_core_fault_snapshot(device);
-		ret = -ETIMEDOUT;
 		WARN(1, "OOB request %s timed out\n", oob_to_str(req));
+		ret = -ETIMEDOUT;
+		gmu_core_fault_snapshot(device, GMU_FAULT_OOB_SET);
 		trigger_reset_recovery(adreno_dev, req);
 	}
 
@@ -604,8 +602,8 @@ void gen8_gmu_irq_enable(struct adreno_device *adreno_dev)
 		return;
 
 	/* Clear pending IRQs, unmask needed interrupts and enable CX host IRQ */
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_0_MASK, GEN8_CX_MISC_INT_MASK);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_INT_0_MASK, GEN8_CX_MISC_INT_MASK);
 	enable_irq(device->cx_host_irq_num);
 }
 
@@ -631,8 +629,8 @@ void gen8_gmu_irq_disable(struct adreno_device *adreno_dev)
 
 	/* Disable CX host IRQ, mask all interrupts and clear pending IRQs */
 	disable_irq(device->cx_host_irq_num);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_0_MASK, UINT_MAX);
-	adreno_cx_misc_regwrite(adreno_dev, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_INT_0_MASK, UINT_MAX);
+	kgsl_regwrite(device, GEN8_GPU_CX_MISC_INT_CLEAR_CMD, UINT_MAX);
 }
 
 static int gen8_gmu_hfi_start_msg(struct adreno_device *adreno_dev)
@@ -778,7 +776,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	}
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_LOWEST_IDLE);
 	return -ETIMEDOUT;
 }
 
@@ -801,7 +799,7 @@ int gen8_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 				"GMU not idling: status2=0x%x %llx %llx\n",
 				status2, ts1,
 				gpudev->read_alwayson(adreno_dev));
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_IDLE);
 		return -ETIMEDOUT;
 	}
 
@@ -1582,9 +1580,12 @@ static u32 gen8_gmu_ifpc_isenabled(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void gen8_gmu_send_nmi(struct kgsl_device *device, bool force)
+void gen8_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	u32 result;
 
@@ -1595,7 +1596,7 @@ void gen8_gmu_send_nmi(struct kgsl_device *device, bool force)
 	if (gen8_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
-		return;
+		goto done;
 	}
 
 	if (force)
@@ -1635,6 +1636,9 @@ nmi:
 
 	/* Wait for the NMI to be handled */
 	udelay(200);
+
+done:
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, gmu->pdev, ticks, gf_policy);
 }
 
 static void gen8_gmu_cooperative_reset(struct kgsl_device *device)
@@ -1661,7 +1665,7 @@ static void gen8_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	gen8_gmu_send_nmi(device, true);
+	gen8_gmu_send_nmi(device, true, GMU_FAULT_PANIC_NONE);
 
 	gmu_core_regread(device, GEN8_GMUCX_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -1703,7 +1707,7 @@ void gen8_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN8_GMUAO_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen8_gmu_send_nmi(device, false);
+	gen8_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -1747,26 +1751,20 @@ static irqreturn_t gen8_gmu_irq_handler(int irq, void *data)
 
 void gen8_gmu_aop_send_acd_state(struct gen8_gmu_device *gmu, bool flag)
 {
-	struct qmp_pkt msg;
 	char msg_buf[36];
 	u32 size;
 	int ret;
 
-	if (IS_ERR_OR_NULL(gmu->mailbox.channel))
+	if (IS_ERR_OR_NULL(gmu->qmp))
 		return;
 
 	size = scnprintf(msg_buf, sizeof(msg_buf),
 			"{class: gpu, res: acd, val: %d}", flag);
 
-	/* mailbox controller expects 4-byte aligned buffer */
-	msg.size = ALIGN((size + 1), SZ_4);
-	msg.data = msg_buf;
-
-	ret = mbox_send_message(gmu->mailbox.channel, &msg);
-
+	ret = qmp_send(gmu->qmp, msg_buf, ALIGN((size + 1), SZ_4));
 	if (ret < 0)
 		dev_err(&gmu->pdev->dev,
-			"AOP mbox send message failed: %d\n", ret);
+			"AOP qmp send message failed: %d\n", ret);
 }
 
 int gen8_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level)
@@ -1993,7 +1991,7 @@ static int gen8_gmu_acd_set(struct kgsl_device *device, bool val)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (IS_ERR_OR_NULL(gmu->mailbox.channel))
+	if (IS_ERR_OR_NULL(gmu->qmp))
 		return -EINVAL;
 
 	/* Don't do any unneeded work if ACD is already in the correct state */
@@ -2182,19 +2180,12 @@ static void gen8_free_gmu_globals(struct gen8_gmu_device *gmu)
 	gmu->global_entries = 0;
 }
 
-static int gen8_gmu_aop_mailbox_init(struct adreno_device *adreno_dev,
+static int gen8_gmu_qmp_aoss_init(struct adreno_device *adreno_dev,
 		struct gen8_gmu_device *gmu)
 {
-	struct kgsl_mailbox *mailbox = &gmu->mailbox;
-
-	mailbox->client.dev = &gmu->pdev->dev;
-	mailbox->client.tx_block = true;
-	mailbox->client.tx_tout = 1000;
-	mailbox->client.knows_txdone = false;
-
-	mailbox->channel = mbox_request_channel(&mailbox->client, 0);
-	if (IS_ERR(mailbox->channel))
-		return PTR_ERR(mailbox->channel);
+	gmu->qmp = qmp_get(&gmu->pdev->dev);
+	if (IS_ERR(gmu->qmp))
+		return PTR_ERR(gmu->qmp);
 
 	adreno_dev->acd_enabled = true;
 	return 0;
@@ -2237,10 +2228,10 @@ static void gen8_gmu_acd_probe(struct kgsl_device *device,
 
 	cmd->num_levels = cmd_idx;
 
-	ret = gen8_gmu_aop_mailbox_init(adreno_dev, gmu);
+	ret = gen8_gmu_qmp_aoss_init(adreno_dev, gmu);
 	if (ret)
 		dev_err(&gmu->pdev->dev,
-			"AOP mailbox init failed: %d\n", ret);
+			"AOP qmp init failed: %d\n", ret);
 }
 
 static int gen8_gmu_reg_probe(struct adreno_device *adreno_dev)
@@ -2344,8 +2335,8 @@ void gen8_gmu_remove(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(gmu->mailbox.channel))
-		mbox_free_channel(gmu->mailbox.channel);
+	if (!IS_ERR_OR_NULL(gmu->qmp))
+		qmp_put(gmu->qmp);
 
 	adreno_dev->acd_enabled = false;
 
@@ -2494,6 +2485,7 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 
 	device->gmu_core.dev_ops = &gen8_gmudev;
+	device->gmu_core.gf_panic = GMU_FAULT_PANIC_NONE;
 
 	/* Set default GMU attributes */
 	gmu->log_stream_enable = false;
@@ -2903,11 +2895,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -3200,6 +3188,8 @@ int gen8_gmu_reset(struct adreno_device *adreno_dev)
 	gen8_gmu_suspend(adreno_dev);
 
 	gen8_reset_preempt_records(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

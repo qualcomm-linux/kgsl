@@ -7,7 +7,6 @@
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/interconnect.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_gen8.h"
@@ -1234,7 +1233,7 @@ static int check_inflight_hw_fences(struct adreno_device *adreno_dev)
 	read_unlock(&device->context_lock);
 
 	if (ret)
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 
 	return ret;
 }
@@ -1281,11 +1280,7 @@ no_gx_power:
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -1323,7 +1318,7 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 
 	dev_err(&gmu->pdev->dev, "hardware fence unack_count(%d) isn't zero before SLUMBER\n",
 		unack_count);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 }
 
 static void hwsched_idle_check(struct work_struct *work)
@@ -1356,7 +1351,7 @@ static void hwsched_idle_check(struct work_struct *work)
 
 	if (!gen8_hw_isidle(adreno_dev)) {
 		dev_err(device->dev, "GPU isn't idle before SLUMBER\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	}
 
 	check_hw_fence_unack_count(adreno_dev);
@@ -1625,7 +1620,7 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN8_GMUAO_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen8_gmu_send_nmi(device, false);
+	gen8_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -1831,6 +1826,8 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	gen8_gmu_suspend(adreno_dev);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

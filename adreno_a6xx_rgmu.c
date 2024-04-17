@@ -12,7 +12,6 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/regulator/consumer.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -169,7 +168,7 @@ static int a6xx_rgmu_oob_set(struct kgsl_device *device,
 		dev_err(&rgmu->pdev->dev,
 				"Timed out while setting OOB req:%s status:0x%x\n",
 				oob_to_str(req), status);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return ret;
 	}
 
@@ -371,7 +370,7 @@ static int a6xx_rgmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 			reg[7], reg[8], reg[9]);
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	return -ETIMEDOUT;
 }
 
@@ -459,7 +458,7 @@ static int a6xx_rgmu_fw_start(struct adreno_device *adreno_dev,
 		gmu_core_regread(device, A6XX_RGMU_CX_PCC_DEBUG, &status);
 		dev_err(&rgmu->pdev->dev,
 				"rgmu boot Failed. status:%08x\n", status);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return -ETIMEDOUT;
 	}
 
@@ -601,9 +600,13 @@ static int a6xx_rgmu_load_firmware(struct adreno_device *adreno_dev)
 }
 
 /* Halt RGMU execution */
-static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force)
+static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force,
+				     enum gmu_fault_panic_policy gf_policy)
 {
-	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(ADRENO_DEVICE(device));
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	unsigned int index, status, fence;
 
 	if (!device->gmu_fault)
@@ -635,6 +638,7 @@ static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force)
 	 */
 	gmu_core_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
 
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, rgmu->pdev, ticks, gf_policy);
 }
 
 static void halt_gbif_arb(struct adreno_device *adreno_dev)
@@ -1085,11 +1089,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags);
 
@@ -1112,6 +1112,8 @@ int a6xx_rgmu_reset(struct adreno_device *adreno_dev)
 	a6xx_rgmu_suspend(adreno_dev);
 
 	a6xx_reset_preempt_records(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags);
 

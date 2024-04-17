@@ -2614,6 +2614,8 @@ static const struct gen8_nonctxt_regs gen8_0_0_nonctxt_regs[] = {
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
 	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
 	{ GEN8_RBBM_SLICE_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
+	/* Enable contribution of all shader stages to SP perfcounters */
+	{ GEN8_SP_PERFCTR_SHADER_MASK, 0x0000003f, BIT(PIPE_NONE) },
 	/*
 	 * BIT(26): Limit the number of wave-slots for Eviction buffer to 1 per ALU GRP
 	 * BIT(30): Disable LPAC auto-promotion
@@ -2712,7 +2714,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE |
 			ADRENO_GMU_WARMBOOT | ADRENO_L3_VOTE | ADRENO_BCL |
-			ADRENO_IFPC | ADRENO_HW_FENCE,
+			ADRENO_IFPC | ADRENO_HW_FENCE | ADRENO_PREEMPTION |
+			ADRENO_ACD,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -2770,6 +2773,8 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
 	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
 	{ GEN8_RBBM_SLICE_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
+	/* Enable contribution of all shader stages to SP perfcounters */
+	{ GEN8_SP_PERFCTR_SHADER_MASK, 0x0000003f, BIT(PIPE_NONE) },
 	/*
 	 * BIT(26): Limit the number of wave-slots for Eviction buffer to 1 per ALU GRP
 	 * BIT(30): Disable LPAC auto-promotion
@@ -2812,7 +2817,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.compatible = "qcom,adreno-gpu-gen8-4-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
-			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE,
+			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE |
+			ADRENO_GMU_WARMBOOT,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,

@@ -17,7 +17,6 @@
 #include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
@@ -371,7 +370,7 @@ int gen7_gmu_device_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN7_GMU_CM3_FW_INIT_RESULT,
 			BIT(8), 100, GENMASK(8, 0))) {
 		dev_err(&gmu->pdev->dev, "GMU failed to come out of reset\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_DEVICE_START);
 		return -ETIMEDOUT;
 	}
 
@@ -392,7 +391,7 @@ int gen7_gmu_hfi_start(struct adreno_device *adreno_dev)
 	if (gmu_core_timed_poll_check(device, GEN7_GMU_HFI_CTRL_STATUS,
 			BIT(0), 100, BIT(0))) {
 		dev_err(&gmu->pdev->dev, "GMU HFI init failed\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_INIT);
 		return -ETIMEDOUT;
 	}
 
@@ -631,9 +630,9 @@ int gen7_gmu_oob_set(struct kgsl_device *device,
 				100, check)) {
 		if (req == oob_perfcntr)
 			gmu->num_oob_perfcntr--;
-		gmu_core_fault_snapshot(device);
 		ret = -ETIMEDOUT;
 		WARN(1, "OOB request %s timed out\n", oob_to_str(req));
+		gmu_core_fault_snapshot(device, GMU_FAULT_OOB_SET);
 		trigger_reset_recovery(adreno_dev, req);
 	}
 
@@ -864,7 +863,7 @@ int gen7_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	}
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_LOWEST_IDLE);
 	return -ETIMEDOUT;
 }
 
@@ -887,7 +886,7 @@ int gen7_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 				"GMU not idling: status2=0x%x %llx %llx\n",
 				status2, ts1,
 				gpudev->read_alwayson(adreno_dev));
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_IDLE);
 		return -ETIMEDOUT;
 	}
 
@@ -1294,7 +1293,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
 	 * iommu driver considers remapping an already mapped iova as fatal.
 	 */
-        if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
+	if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
 		goto free;
 
 	spin_lock(&vma->lock);
@@ -1672,9 +1671,12 @@ static unsigned int gen7_gmu_ifpc_isenabled(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void gen7_gmu_send_nmi(struct kgsl_device *device, bool force)
+void gen7_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	u32 result;
 
@@ -1685,7 +1687,7 @@ void gen7_gmu_send_nmi(struct kgsl_device *device, bool force)
 	if (gen7_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
-		return;
+		goto done;
 	}
 
 	if (force)
@@ -1725,6 +1727,8 @@ nmi:
 
 	/* Wait for the NMI to be handled */
 	udelay(200);
+done:
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, gmu->pdev, ticks, gf_policy);
 }
 
 static void gen7_gmu_cooperative_reset(struct kgsl_device *device)
@@ -1751,7 +1755,7 @@ static void gen7_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	gen7_gmu_send_nmi(device, true);
+	gen7_gmu_send_nmi(device, true, GMU_FAULT_PANIC_NONE);
 
 	gmu_core_regread(device, GEN7_GMU_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -1793,7 +1797,7 @@ void gen7_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN7_GMU_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen7_gmu_send_nmi(device, false);
+	gen7_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -2146,20 +2150,20 @@ static int gen7_bcl_sid_set(struct kgsl_device *device, u32 sid_id, u64 sid_val)
 		return -EINVAL;
 
 	switch (sid_id) {
-		case 0:
-			adreno_dev->bcl_data &= ~BCL_SID0_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID0_MASK, val);
-			break;
-		case 1:
-			adreno_dev->bcl_data &= ~BCL_SID1_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID1_MASK, val);
-			break;
-		case 2:
-			adreno_dev->bcl_data &= ~BCL_SID2_MASK;
-			bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID2_MASK, val);
-			break;
-		default:
-			return -EINVAL;
+	case 0:
+		adreno_dev->bcl_data &= ~BCL_SID0_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID0_MASK, val);
+		break;
+	case 1:
+		adreno_dev->bcl_data &= ~BCL_SID1_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID1_MASK, val);
+		break;
+	case 2:
+		adreno_dev->bcl_data &= ~BCL_SID2_MASK;
+		bcl_data = adreno_dev->bcl_data | FIELD_PREP(BCL_SID2_MASK, val);
+		break;
+	default:
+		return -EINVAL;
 	}
 
 	return adreno_power_cycle_u32(adreno_dev, &adreno_dev->bcl_data, bcl_data);
@@ -2174,14 +2178,14 @@ static u64 gen7_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 		return 0;
 
 	switch (sid_id) {
-		case 0:
-			return ((u64) FIELD_GET(BCL_SID0_MASK, adreno_dev->bcl_data));
-		case 1:
-			return ((u64) FIELD_GET(BCL_SID1_MASK, adreno_dev->bcl_data));
-		case 2:
-			return ((u64) FIELD_GET(BCL_SID2_MASK, adreno_dev->bcl_data));
-		default:
-			return 0;
+	case 0:
+		return ((u64) FIELD_GET(BCL_SID0_MASK, adreno_dev->bcl_data));
+	case 1:
+		return ((u64) FIELD_GET(BCL_SID1_MASK, adreno_dev->bcl_data));
+	case 2:
+		return ((u64) FIELD_GET(BCL_SID2_MASK, adreno_dev->bcl_data));
+	default:
+		return 0;
 	}
 }
 
@@ -3059,11 +3063,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -3358,6 +3358,8 @@ int gen7_gmu_reset(struct adreno_device *adreno_dev)
 	gen7_gmu_suspend(adreno_dev);
 
 	gen7_reset_preempt_records(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

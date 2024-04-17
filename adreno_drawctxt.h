@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
@@ -191,12 +191,33 @@ adreno_drawctxt_get_pagetable(struct adreno_context *drawctxt)
 /**
  * adreno_drawctxt_set_guilty - Mark a context as guilty and invalidate it
  * @device: Pointer to a GPU device handle
- * @context: Poniter to the context to invalidate
+ * @context: Pointer to the context to invalidate
  *
  * Mark the specified context as guilty and invalidate it
  */
 void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 		struct kgsl_context *context);
+
+/**
+ * adreno_prepare_preib_preempt_scratch - Update drawctxt pointer in preemption
+ * scratch buffer before IB commands
+ * @adreno_dev: Pointer to the adreno device
+ * @drawctxt: Pointer to the adreno draw context
+ * @cmds: Pointer to the ringbuffer to insert opcodes
+ *
+ * Return: The number of dwords written to @cmds
+ */
+u32 adreno_prepare_preib_preempt_scratch(struct adreno_device *adreno_dev,
+		struct adreno_context *drawctxt, u32 *cmds);
+
+/**
+ * adreno_prepare_preib_postamble_scratch - Insert postamble packets before IB commands
+ * @adreno_dev: Pointer to the adreno device
+ * @cmds: Pointer to the ringbuffer to insert opcodes
+ *
+ * Return: The number of dwords written to @cmds
+ */
+u32 adreno_prepare_preib_postamble_scratch(struct adreno_device *adreno_dev, u32 *cmds);
 
 /**
  * adreno_track_context - Add a context to active list and keep track of active contexts

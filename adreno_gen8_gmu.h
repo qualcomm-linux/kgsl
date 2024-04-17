@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_GMU_H
 #define __ADRENO_GEN8_GMU_H
 
-#include <linux/mailbox_client.h>
+#include <linux/soc/qcom/qcom_aoss.h>
 
 #include "adreno_gen8_hfi.h"
 #include "kgsl_gmu_core.h"
@@ -37,7 +37,6 @@ struct gen8_dcvs_table {
  *  than default power level
  * @idle_level: Minimal GPU idle power level
  * @fault_count: GMU fault count
- * @mailbox: Messages to AOP for ACD enable/disable go through this
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct gen8_gmu_device {
@@ -71,7 +70,8 @@ struct gen8_gmu_device {
 	u32 freqs[GMU_MAX_PWRLEVELS];
 	/** @vlvls: Array of GMU voltage levels */
 	u32 vlvls[GMU_MAX_PWRLEVELS];
-	struct kgsl_mailbox mailbox;
+	/** @qmp: aoss_qmp handle */
+	struct qmp *qmp;
 	/** @gmu_globals: Array to store gmu global buffers */
 	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
 	/** @global_entries: To keep track of number of gmu buffers */
@@ -299,7 +299,7 @@ int gen8_gmu_memory_init(struct adreno_device *adreno_dev);
  * @gmu: Pointer to the gen8 gmu device
  * @flag: Boolean to enable or disable acd in aop
  *
- * This function enables or disables gpu acd feature using mailbox
+ * This function enables or disables gpu acd feature using qmp
  */
 void gen8_gmu_aop_send_acd_state(struct gen8_gmu_device *gmu, bool flag);
 
@@ -464,9 +464,11 @@ void gen8_gmu_handle_watchdog(struct adreno_device *adreno_dev);
 /**
  * gen8_gmu_send_nmi - Send NMI to GMU
  * @device: Pointer to the kgsl device
+ * @gf_policy: GMU fault panic setting policy
  * @force: Boolean to forcefully send NMI irrespective of GMU state
  */
-void gen8_gmu_send_nmi(struct kgsl_device *device, bool force);
+void gen8_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy);
 
 /**
  * gen8_gmu_add_to_minidump - Register gen8_device with va minidump

@@ -348,6 +348,7 @@ int gen7_init(struct adreno_device *adreno_dev)
 #define CX_TIMER_INIT_SAMPLES 16
 void gen7_cx_timer_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u64 seed_val, tmr, skew = 0;
 	int i;
 	unsigned long flags;
@@ -369,12 +370,8 @@ void gen7_cx_timer_init(struct adreno_device *adreno_dev)
 		tmr2 = arch_timer_read_counter();
 
 		/* Write to the register and time it */
-		adreno_cx_misc_regwrite(adreno_dev,
-					GEN7_GPU_CX_MISC_AO_COUNTER_LO,
-					lower_32_bits(tmr2));
-		adreno_cx_misc_regwrite(adreno_dev,
-					GEN7_GPU_CX_MISC_AO_COUNTER_HI,
-					upper_32_bits(tmr2));
+		kgsl_regwrite(device, GEN7_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(tmr2));
+		kgsl_regwrite(device, GEN7_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(tmr2));
 
 		/* Barrier to make sure the write completes before timing it */
 		mb();
@@ -395,10 +392,8 @@ void gen7_cx_timer_init(struct adreno_device *adreno_dev)
 	seed_val = tmr + skew;
 
 	/* Seed the GPU CX counter with the adjusted timer */
-	adreno_cx_misc_regwrite(adreno_dev,
-			GEN7_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(seed_val));
-	adreno_cx_misc_regwrite(adreno_dev,
-			GEN7_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(seed_val));
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_AO_COUNTER_LO, lower_32_bits(seed_val));
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_AO_COUNTER_HI, upper_32_bits(seed_val));
 
 	local_irq_restore(flags);
 
@@ -407,6 +402,7 @@ void gen7_cx_timer_init(struct adreno_device *adreno_dev)
 
 void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 feature_fuse = 0;
 
 	/* Only Gen7_9_x has the HW feature information */
@@ -414,8 +410,7 @@ void gen7_get_gpu_feature_info(struct adreno_device *adreno_dev)
 		return;
 
 	/* Get HW feature soft fuse value */
-	adreno_cx_misc_regread(adreno_dev, GEN7_GPU_CX_MISC_SW_FUSE_VALUE,
-			       &feature_fuse);
+	kgsl_regread(device, GEN7_GPU_CX_MISC_SW_FUSE_VALUE, &feature_fuse);
 
 	adreno_dev->fastblend_enabled = feature_fuse & BIT(GEN7_FASTBLEND_SW_FUSE);
 	adreno_dev->raytracing_enabled = feature_fuse & BIT(GEN7_RAYTRACING_SW_FUSE);
@@ -664,6 +659,7 @@ static u64 gen7_get_uche_trap_base(void)
 
 void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 val;
 
 	if (!adreno_dev->ahb_timeout_val)
@@ -671,11 +667,11 @@ void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 
 	val = (ADRENO_AHB_CNTL_DEFAULT | FIELD_PREP(GENMASK(4, 0),
 			adreno_dev->ahb_timeout_val));
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
-	adreno_cx_misc_regwrite(adreno_dev, GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL, val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL, val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL, val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, val);
+	kgsl_regwrite(device, GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
 }
 
 int gen7_start(struct adreno_device *adreno_dev)
@@ -1590,28 +1586,6 @@ static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	irqreturn_t ret = IRQ_NONE;
-	u32 status;
-
-	if (gen7_irq_poll_fence(adreno_dev)) {
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-		return ret;
-	}
-
-	kgsl_regread(device, GEN7_RBBM_INT_0_STATUS, &status);
-
-	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
-
-	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
-
-	trace_kgsl_gen7_irq_status(adreno_dev, status);
-
-	return ret;
-}
-
 static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1658,7 +1632,6 @@ int gen7_probe_common(struct platform_device *pdev,
 
 	adreno_dev->gpucore = gpucore;
 	adreno_dev->chipid = chipid;
-	adreno_dev->cx_misc_base = GEN7_CX_MISC_BASE;
 
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
@@ -1786,7 +1759,7 @@ int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 
 	/* Look for the perfcounter to remove in the list */
 	for (i = 0; i < lock->dynamic_list_len - 1; i++) {
-		if ((data[offset + 1] == reg->select) && (data[offset] == pipe) ) {
+		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 			remove_counter = true;
 			break;
 		}
@@ -2214,7 +2187,7 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_hwsched_irq_handler,
+		.irq_handler = gen7_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_9_0_read_alwayson,
@@ -2243,7 +2216,7 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_hwsched_irq_handler,
+		.irq_handler = gen7_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_read_alwayson,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -337,7 +337,7 @@ static struct kgsl_drawobj *_process_drawqueue_get_next_drawobj(
  * @cmdobj: Pointer to the KGSL command object to requeue
  *
  * Failure to submit a command to the ringbuffer isn't the fault of the command
- * being submitted so if a failure happens, push it back on the head of the the
+ * being submitted so if a failure happens, push it back on the head of the
  * context queue to be reconsidered again unless the context got detached.
  */
 static inline int adreno_dispatcher_requeue_cmdobj(
@@ -1855,7 +1855,7 @@ static void do_header_and_snapshot(struct kgsl_device *device, int fault,
 
 		/* GMU snapshot will also pull a full device snapshot */
 		if (fault & ADRENO_GMU_FAULT)
-			gmu_core_fault_snapshot(device);
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		else
 			kgsl_device_snapshot(device, NULL, NULL, false);
 		return;
@@ -1990,6 +1990,8 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 
 	if (!(fault & ADRENO_GMU_FAULT_SKIP_SNAPSHOT))
 		do_header_and_snapshot(device, fault, hung_rb, cmdobj);
+
+	adreno_gpufault_stats(adreno_dev, cmdobj ? DRAWOBJ(cmdobj) : NULL, NULL, fault);
 
 	/* Turn off the KEEPALIVE vote from the ISR for hard fault */
 	if (gpudev->gpu_keepalive && fault & ADRENO_HARD_FAULT)

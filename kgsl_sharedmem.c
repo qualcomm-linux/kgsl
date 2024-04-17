@@ -259,8 +259,8 @@ imported_mem_show(struct kgsl_process_private *priv,
 			kgsl_get_egl_counts(entry, &egl_surface_count,
 					&egl_image_count);
 
-			if (kgsl_memdesc_get_memtype(m) ==
-						KGSL_MEMTYPE_EGL_SURFACE)
+			if ((kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_EGL_SURFACE) ||
+				(kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_SURFACE))
 				imported_mem += m->size;
 			else if (egl_surface_count == 0) {
 				uint64_t size = m->size;

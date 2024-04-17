@@ -17,7 +17,6 @@
 #include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
 #include <soc/qcom/cmd-db.h>
@@ -637,7 +636,7 @@ int a6xx_gmu_device_start(struct adreno_device *adreno_dev)
 			val, GMU_START_TIMEOUT, mask)) {
 
 		dev_err(&gmu->pdev->dev, "GMU doesn't boot\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_DEVICE_START);
 		return -ETIMEDOUT;
 	}
 
@@ -661,7 +660,7 @@ int a6xx_gmu_hfi_start(struct adreno_device *adreno_dev)
 			GMU_START_TIMEOUT,
 			BIT(0))) {
 		dev_err(&gmu->pdev->dev, "GMU HFI init failed\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_INIT);
 		return -ETIMEDOUT;
 	}
 
@@ -950,9 +949,9 @@ int a6xx_gmu_oob_set(struct kgsl_device *device,
 				check, GPU_START_TIMEOUT, check)) {
 		if (req == oob_perfcntr)
 			gmu->num_oob_perfcntr--;
-		gmu_core_fault_snapshot(device);
 		ret = -ETIMEDOUT;
 		WARN(1, "OOB request %s timed out\n", oob_to_str(req));
+		gmu_core_fault_snapshot(device, GMU_FAULT_OOB_SET);
 		trigger_reset_recovery(adreno_dev, req);
 	}
 
@@ -1144,7 +1143,7 @@ int a6xx_gmu_sptprac_enable(struct adreno_device *adreno_dev)
 			SPTPRAC_CTRL_TIMEOUT,
 			SPTPRAC_POWERON_STATUS_MASK)) {
 		dev_err(&gmu->pdev->dev, "power on SPTPRAC fail\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return -ETIMEDOUT;
 	}
 
@@ -1362,7 +1361,7 @@ int a6xx_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	}
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_LOWEST_IDLE);
 	return -ETIMEDOUT;
 }
 
@@ -1384,7 +1383,7 @@ int a6xx_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 				"GMU not idling: status2=0x%x %llx %llx\n",
 				status2, ts1,
 				a6xx_read_alwayson(ADRENO_DEVICE(device)));
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_WAIT_FOR_IDLE);
 		return -ETIMEDOUT;
 	}
 
@@ -2093,9 +2092,12 @@ static unsigned int a6xx_gmu_ifpc_isenabled(struct kgsl_device *device)
 }
 
 /* Send an NMI to the GMU */
-void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force)
+void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	u32 val;
 
@@ -2106,7 +2108,7 @@ void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force)
 	if (a6xx_gmu_gx_is_on(adreno_dev) && adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Skipping NMI because SMMU is stalled\n");
-		return;
+		goto done;
 	}
 
 	if (force)
@@ -2151,6 +2153,9 @@ nmi:
 
 	/* Wait for the NMI to be handled */
 	udelay(200);
+
+done:
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, gmu->pdev, ticks, gf_policy);
 }
 
 static void a6xx_gmu_cooperative_reset(struct kgsl_device *device)
@@ -2177,7 +2182,7 @@ static void a6xx_gmu_cooperative_reset(struct kgsl_device *device)
 	 * If we dont get a snapshot ready from GMU, trigger NMI
 	 * and if we still timeout then we just continue with reset.
 	 */
-	a6xx_gmu_send_nmi(device, true);
+	a6xx_gmu_send_nmi(device, true, GMU_FAULT_PANIC_NONE);
 
 	gmu_core_regread(device, A6XX_GMU_CM3_FW_INIT_RESULT, &result);
 	if ((result & 0x800) != 0x800)
@@ -2226,7 +2231,7 @@ void a6xx_gmu_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, A6XX_GMU_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	a6xx_gmu_send_nmi(device, false);
+	a6xx_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -2411,6 +2416,21 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	/*
+	 * Load PDC and RSC ucode before turning on
+	 * GFX rail. This avoids oob set timeout
+	 * for oob_boot_slumber request during
+	 * GMU first boot
+	 */
+	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
+		ret = a6xx_load_pdc_ucode(adreno_dev);
+		if (ret)
+			goto err;
+
+		a6xx_load_rsc_ucode(adreno_dev);
+		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
+	}
+
 	if (ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_HFI_USE_REG)) {
 		ret = a6xx_gmu_gfx_rail_on(adreno_dev);
 		if (ret) {
@@ -2423,15 +2443,6 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 		ret = a6xx_gmu_sptprac_enable(adreno_dev);
 		if (ret)
 			goto err;
-	}
-
-	if (!test_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags)) {
-		ret = a6xx_load_pdc_ucode(adreno_dev);
-		if (ret)
-			goto err;
-
-		a6xx_load_rsc_ucode(adreno_dev);
-		set_bit(GMU_PRIV_PDC_RSC_LOADED, &gmu->flags);
 	}
 
 	ret = a6xx_gmu_hfi_start(adreno_dev);
@@ -3410,11 +3421,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -3707,6 +3714,8 @@ int a6xx_gmu_reset(struct adreno_device *adreno_dev)
 	a6xx_gmu_suspend(adreno_dev);
 
 	a6xx_reset_preempt_records(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

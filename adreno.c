@@ -8,7 +8,6 @@
 #include <linux/firmware.h>
 #include <linux/input.h>
 #include <linux/interconnect.h>
-#include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_fdt.h>
@@ -17,7 +16,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/reset.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/trace.h>
 #include <linux/units.h>
 #include <linux/version.h>
@@ -53,7 +51,7 @@ static bool adreno_preemption_enable;
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
 
-/* Number of milliseconds to stay active active after a wake on touch */
+/* Number of milliseconds to stay active after a wake on touch */
 unsigned int adreno_wake_timeout = 100;
 
 static u32 get_ucode_version(const u32 *data)
@@ -136,7 +134,7 @@ static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 /**
  * adreno_readreg64() - Read a 64bit register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
+ * @adreno_dev: Pointer to the adreno device
  * @lo:	lower 32bit register enum that is to be read
  * @hi:	higher 32bit register enum that is to be read
  * @val: 64 bit Register value read is placed here
@@ -719,6 +717,7 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	if (level < 0 || level >= pwr->num_pwrlevels || level < pwr->default_pwrlevel)
 		level = pwr->num_pwrlevels - 1;
 
+	pwr->min_render_pwrlevel = level;
 	pwr->min_pwrlevel = level;
 }
 
@@ -905,40 +904,6 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	device->pwrctrl.bus_control = true;
 
 	return 0;
-}
-
-static void adreno_cx_misc_probe(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct resource *res;
-
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-					   "cx_misc");
-
-	if (res == NULL)
-		return;
-
-	adreno_dev->cx_misc_len = resource_size(res);
-	adreno_dev->cx_misc_virt = devm_ioremap(&device->pdev->dev,
-					res->start, adreno_dev->cx_misc_len);
-}
-
-static void adreno_isense_probe(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct resource *res;
-
-	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
-			"isense_cntl");
-	if (res == NULL)
-		return;
-
-	adreno_dev->isense_base = res->start - device->regmap.base->start;
-	adreno_dev->isense_len = resource_size(res);
-	adreno_dev->isense_virt = devm_ioremap(&device->pdev->dev, res->start,
-					adreno_dev->isense_len);
-	if (adreno_dev->isense_virt == NULL)
-		dev_warn(device->dev, "isense ioremap failed\n");
 }
 
 /* Read the fuse through the new and fancy nvmem method */
@@ -1174,6 +1139,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 
 	INIT_LIST_HEAD(&adreno_dev->active_list);
 	spin_lock_init(&adreno_dev->active_list_lock);
+	rwlock_init(&adreno_dev->fault_stats_lock);
 
 	for (i = 0; i < ARRAY_SIZE(adreno_dev->ringbuffers); i++) {
 		struct adreno_ringbuffer *rb = &adreno_dev->ringbuffers[i];
@@ -1324,9 +1290,9 @@ int adreno_device_probe(struct platform_device *pdev,
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
-	adreno_cx_misc_probe(device);
+	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
 
-	adreno_isense_probe(device);
+	kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL);
 
 	/* Allocate the memstore for storing timestamps and other useful info */
 
@@ -2056,11 +2022,7 @@ static int adreno_stop(struct kgsl_device *device)
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	adreno_set_active_ctxs_null(adreno_dev);
 
@@ -2708,84 +2670,11 @@ int adreno_suspend_context(struct kgsl_device *device)
 	return adreno_idle(device);
 }
 
-void adreno_cx_misc_regread(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int *value)
-{
-	unsigned int cx_misc_offset;
-
-	WARN_ONCE(!adreno_dev->cx_misc_virt,
-		  "cx_misc region is not defined in device tree");
-
-	cx_misc_offset = (offsetwords << 2);
-	if (!adreno_dev->cx_misc_virt ||
-		(cx_misc_offset >= adreno_dev->cx_misc_len))
-		return;
-
-	*value = __raw_readl(adreno_dev->cx_misc_virt + cx_misc_offset);
-
-	/*
-	 * ensure this read finishes before the next one.
-	 * i.e. act like normal readl()
-	 */
-	rmb();
-}
-
-void adreno_isense_regread(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int *value)
-{
-	unsigned int isense_offset;
-
-	isense_offset = (offsetwords << 2);
-	if (!adreno_dev->isense_virt ||
-		(isense_offset >= adreno_dev->isense_len))
-		return;
-
-	*value =  __raw_readl(adreno_dev->isense_virt + isense_offset);
-
-	/*
-	 * ensure this read finishes before the next one.
-	 * i.e. act like normal readl()
-	 */
-	rmb();
-}
-
 bool adreno_gx_is_on(struct adreno_device *adreno_dev)
 {
 	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
 
 	return gpudev->gx_is_on(adreno_dev);
-}
-
-void adreno_cx_misc_regwrite(struct adreno_device *adreno_dev,
-	unsigned int offsetwords, unsigned int value)
-{
-	unsigned int cx_misc_offset;
-
-	WARN_ONCE(!adreno_dev->cx_misc_virt,
-		  "cx_misc region is not defined in device tree");
-
-	cx_misc_offset = (offsetwords << 2);
-	if (!adreno_dev->cx_misc_virt ||
-		(cx_misc_offset >= adreno_dev->cx_misc_len))
-		return;
-
-	/*
-	 * ensure previous writes post before this one,
-	 * i.e. act like normal writel()
-	 */
-	wmb();
-	__raw_writel(value, adreno_dev->cx_misc_virt + cx_misc_offset);
-}
-
-void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
-		unsigned int offsetwords,
-		unsigned int mask, unsigned int bits)
-{
-	unsigned int val = 0;
-
-	adreno_cx_misc_regread(adreno_dev, offsetwords, &val);
-	val &= ~mask;
-	adreno_cx_misc_regwrite(adreno_dev, offsetwords, val | bits);
 }
 
 void adreno_profile_submit_time(struct adreno_submit_time *time)
@@ -3249,8 +3138,6 @@ static void adreno_set_isdb_breakpoint_registers(struct kgsl_device *device)
 
 	if (gpudev->set_isdb_breakpoint_registers)
 		gpudev->set_isdb_breakpoint_registers(adreno_dev);
-
-	return;
 }
 
 static void adreno_drawctxt_sched(struct kgsl_device *device,
@@ -3433,6 +3320,94 @@ u64 adreno_read_cx_timer(struct adreno_device *adreno_dev)
 
 	/* Since the GPU CX and CPU timers are synchronized return the CPU timer */
 	return arch_timer_read_counter();
+}
+
+static void add_proc_fault_list(struct adreno_device *adreno_dev,
+			struct kgsl_process_private *proc_priv)
+{
+	int cur_idx = -1;
+	int new_idx = -1;
+	int i;
+
+	/*
+	 * Add the process to array of faulting processes. This array is sorted (processes with
+	 * more faults are higher ranked).
+	 */
+	write_lock(&adreno_dev->fault_stats_lock);
+	proc_priv->fault_count++;
+
+	for (i = ARRAY_SIZE(adreno_dev->fault_procs) - 1; i >= 0; i--) {
+		struct adreno_fault_proc *proc = &adreno_dev->fault_procs[i];
+
+		/* Check whether this process is already tracked in the array */
+		if (!strcmp(proc->comm, proc_priv->comm)) {
+			proc_priv->fault_count = ++proc->fault_count;
+			cur_idx = i;
+			break;
+		}
+
+		/* Find left most entry with lower fault count than current process */
+		if (proc->fault_count < proc_priv->fault_count)
+			new_idx = i;
+	}
+
+	/*
+	 * If the process is not currently tracked, we can place it at the left most index that has
+	 * a fault count less than its fault count. If such an index does not exist, the array is
+	 * already full.
+	 */
+	if (cur_idx < 0) {
+		if (new_idx >= 0)
+			goto write_new_idx;
+		goto unlock;
+	}
+
+	/* Find the left most entry (if any) with a lower fault_count */
+	for (new_idx = 0; new_idx < cur_idx; new_idx++) {
+		if (adreno_dev->fault_procs[new_idx].fault_count < proc_priv->fault_count)
+			break;
+	}
+
+	/* Check if the current process is already at its correct position */
+	if (new_idx == cur_idx)
+		goto unlock;
+
+	/* Swap the two entries */
+	adreno_dev->fault_procs[cur_idx].fault_count =
+			adreno_dev->fault_procs[new_idx].fault_count;
+	strscpy(adreno_dev->fault_procs[cur_idx].comm, adreno_dev->fault_procs[new_idx].comm,
+			sizeof(adreno_dev->fault_procs[cur_idx].comm));
+
+write_new_idx:
+	adreno_dev->fault_procs[new_idx].fault_count = proc_priv->fault_count;
+	strscpy(adreno_dev->fault_procs[new_idx].comm, proc_priv->comm,
+		sizeof(adreno_dev->fault_procs[new_idx].comm));
+
+unlock:
+	write_unlock(&adreno_dev->fault_stats_lock);
+}
+
+void adreno_gpufault_stats(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault)
+{
+	int i;
+	struct kgsl_process_private *proc_priv = NULL, *proc_priv_lpac;
+
+	write_lock(&adreno_dev->fault_stats_lock);
+	for (i = 0; i < ARRAY_SIZE(adreno_dev->fault_counts); i++)
+		if (fault & BIT(i))
+			adreno_dev->fault_counts[i]++;
+	write_unlock(&adreno_dev->fault_stats_lock);
+
+	if (drawobj) {
+		proc_priv = drawobj->context->proc_priv;
+		add_proc_fault_list(adreno_dev, proc_priv);
+	}
+	if (drawobj_lpac) {
+		proc_priv_lpac = drawobj_lpac->context->proc_priv;
+		if (proc_priv_lpac != proc_priv)
+			add_proc_fault_list(adreno_dev, proc_priv_lpac);
+	}
 }
 
 static const struct kgsl_functable adreno_functable = {
@@ -3800,6 +3775,6 @@ module_exit(kgsl_3d_exit);
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
 MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo governor_msm_adreno_tz governor_gpubw_mon");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

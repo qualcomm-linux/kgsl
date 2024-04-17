@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -138,7 +138,7 @@ static int gen7_rb_context_switch(struct adreno_device *adreno_dev,
 	cmds[count++] = cp_type7_packet(CP_EVENT_WRITE, 1);
 	cmds[count++] = 0x31;
 
-	if (adreno_is_preemption_enabled(adreno_dev)) {
+	if (adreno_is_preemption_enabled(adreno_dev) && drawctxt->base.user_ctxt_record) {
 		u64 gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
 
 		cmds[count++] = cp_type7_packet(CP_SET_PSEUDO_REGISTER, 3);
@@ -194,7 +194,7 @@ int gen7_ringbuffer_submit(struct adreno_ringbuffer *rb,
 		 * If WPTR update fails, take inline snapshot and trigger
 		 * recovery.
 		 */
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		adreno_dispatcher_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	}

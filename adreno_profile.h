@@ -1,14 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2014,2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_PROFILE_H
 #define __ADRENO_PROFILE_H
 
 /**
  * struct adreno_profile_assigns_list: linked list for assigned perf counters
- * @list: linkage  for nodes in list
- * @name: group name  or GPU name name
+ * @list: linkage for nodes in list
+ * @name: group name or GPU name
  * @groupid: group id
  * @countable: countable assigned to perfcounter
  * @offset: perfcounter register address offset

@@ -8,6 +8,7 @@
 
 #include <linux/adreno-smmu-priv.h>
 #include <linux/io-pgtable.h>
+#include <linux/qcom-iommu-util.h>
 /*
  * These defines control the address range for allocations that
  * are mapped into all pagetables.
@@ -114,6 +115,8 @@
 /* offset at which a nop command is placed in setstate */
 #define KGSL_IOMMU_SETSTATE_NOP_OFFSET	1024
 
+#define KGSL_IOMMU_PAGEFAULT_TYPES (ilog2(IOMMU_FAULT_TRANSACTION_STALLED) + 1)
+
 /*
  * struct kgsl_iommu_context - Structure holding data about an iommu context
  * bank
@@ -137,6 +140,20 @@ struct kgsl_iommu_context {
 	struct iommu_domain *domain;
 	struct adreno_smmu_priv adreno_smmu;
 };
+
+/*
+ * struct kgsl_iommu_pf_proc - Structure to hold data on pagefaulting processes
+ */
+struct kgsl_iommu_pf_proc {
+	/** @comm: Task name of the pagefaulting process */
+	char comm[TASK_COMM_LEN];
+	/** @pf_count: Total count of pagefaults from this process */
+	u32 pf_count;
+	/** @pf_type_counts: Count of pagefaults of each type from this process */
+	u32 pf_type_counts[KGSL_IOMMU_PAGEFAULT_TYPES];
+};
+
+#define KGSL_IOMMU_MAX_PF_PROCS 10
 
 /*
  * struct kgsl_iommu - Structure holding iommu data for kgsl driver
@@ -175,6 +192,15 @@ struct kgsl_iommu {
 	u32 pagesize;
 	/** @cx_regulator: CX regulator handle in case the IOMMU needs it */
 	struct regulator *cx_regulator;
+	/** @pf_type_counts: Keep track of pagefaults */
+	u32 pf_type_counts[KGSL_IOMMU_PAGEFAULT_TYPES];
+	/**
+	 * @pf_procs: Array to keep track of per process pagefault count sorted by the number
+	 * of pagefaults
+	 */
+	struct kgsl_iommu_pf_proc pf_procs[KGSL_IOMMU_MAX_PF_PROCS];
+	/** @pf_stats_lock: A R/W lock to protect pagefault statistics */
+	rwlock_t pf_stats_lock;
 };
 
 /*

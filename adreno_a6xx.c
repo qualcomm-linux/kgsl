@@ -415,7 +415,7 @@ struct a6xx_reglist_list {
 };
 
 #define REGLIST(_a) \
-	 (struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), }
+	 ((struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), })
 
 static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
@@ -1572,9 +1572,8 @@ static void a6xx_llc_configure_gpu_scid(struct adreno_device *adreno_dev)
 		kgsl_regrmw(device, A6XX_GBIF_SCACHE_CNTL1,
 			A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
 	else
-		adreno_cx_misc_regrmw(adreno_dev,
-				A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
-				A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
+		kgsl_regrmw(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
+			A6XX_GPU_LLC_SCID_MASK, gpu_cntl1_val);
 
 	/*
 	 * On A660, the SCID programming for UCHE traffic is done in
@@ -1614,10 +1613,8 @@ static void a6xx_llc_configure_gpuhtw_scid(struct adreno_device *adreno_dev)
 
 	gpuhtw_scid = llcc_get_slice_id(adreno_dev->gpuhtw_llc_slice);
 
-	adreno_cx_misc_regrmw(adreno_dev,
-			A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
-			A6XX_GPUHTW_LLC_SCID_MASK,
-			gpuhtw_scid << A6XX_GPUHTW_LLC_SCID_SHIFT);
+	kgsl_regrmw(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1,
+		A6XX_GPUHTW_LLC_SCID_MASK, gpuhtw_scid << A6XX_GPUHTW_LLC_SCID_SHIFT);
 }
 
 /*
@@ -1642,8 +1639,7 @@ static void a6xx_llc_enable_overrides(struct adreno_device *adreno_dev)
 	 *      writenoallocoverrideen=1
 	 *      write-no-alloc=1 - Do not allocates lines on write miss
 	 */
-	adreno_cx_misc_regwrite(adreno_dev,
-			A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0, 0x3);
+	kgsl_regwrite(device, A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0, 0x3);
 }
 
 static const char *uche_client[7][3] = {
@@ -1853,28 +1849,6 @@ static int a6xx_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static irqreturn_t a6xx_hwsched_irq_handler(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	irqreturn_t ret = IRQ_NONE;
-	u32 status;
-
-	if (a6xx_irq_poll_fence(adreno_dev)) {
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-		return ret;
-	}
-
-	kgsl_regread(device, A6XX_RBBM_INT_0_STATUS, &status);
-
-	kgsl_regwrite(device, A6XX_RBBM_INT_CLEAR_CMD, status);
-
-	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs, status);
-
-	trace_kgsl_a5xx_irq_status(adreno_dev, status);
-
-	return ret;
-}
-
 static irqreturn_t a6xx_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2072,7 +2046,7 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	 */
 	data[offset] = reg->select;
 	data[offset + 1] = reg->countable;
-	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL,
+	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL;
 	data[offset + 3] = 1;
 
 	lock->list_length += 2;
@@ -2361,7 +2335,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.reg_offsets = a6xx_register_offsets,
 		.probe = a6xx_hwsched_probe,
 		.snapshot = a6xx_hwsched_snapshot,
-		.irq_handler = a6xx_hwsched_irq_handler,
+		.irq_handler = a6xx_irq_handler,
 		.iommu_fault_block = a6xx_iommu_fault_block,
 		.context_detach = a6xx_hwsched_context_detach,
 		.read_alwayson = a6xx_read_alwayson,

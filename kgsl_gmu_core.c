@@ -165,13 +165,14 @@ int gmu_core_dev_wait_for_active_transition(struct kgsl_device *device)
 	return 0;
 }
 
-void gmu_core_fault_snapshot(struct kgsl_device *device)
+void gmu_core_fault_snapshot(struct kgsl_device *device,
+			enum gmu_fault_panic_policy gf_policy)
 {
 	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
 
 	/* Send NMI first to halt GMU and capture the state close to the point of failure */
 	if (ops && ops->send_nmi)
-		ops->send_nmi(device, false);
+		ops->send_nmi(device, false, gf_policy);
 
 	kgsl_device_snapshot(device, NULL, NULL, true);
 }

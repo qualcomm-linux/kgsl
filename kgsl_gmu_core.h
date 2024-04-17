@@ -390,6 +390,32 @@ struct device_node;
 struct kgsl_device;
 struct kgsl_snapshot;
 
+#define GMU_FAULT_PANIC_NONE 0
+enum gmu_fault_panic_policy {
+	GMU_FAULT_DEVICE_START = 1,
+	GMU_FAULT_HFI_INIT,
+	GMU_FAULT_OOB_SET,
+	GMU_FAULT_HFI_RECIVE_ACK,
+	GMU_FAULT_SEND_CMD_WAIT_INLINE,
+	GMU_FAULT_HFI_SEND_GENERIC_REQ,
+	GMU_FAULT_F2H_MSG_ERR,
+	GMU_FAULT_H2F_MSG_START,
+	GMU_FAULT_WAIT_ACK_COMPLETION,
+	GMU_FAULT_HFI_ACK,
+	GMU_FAULT_CTX_UNREGISTER,
+	GMU_FAULT_WAIT_FOR_LOWEST_IDLE,
+	GMU_FAULT_WAIT_FOR_IDLE,
+	GMU_FAULT_HW_FENCE,
+	GMU_FAULT_MAX,
+};
+
+#define KGSL_GMU_CORE_FORCE_PANIC(gf_panic, pdev, ticks, policy) do { \
+		if (gf_panic & BIT(policy)) { \
+			dev_err(&pdev->dev, "GMU always on ticks: %llx\n", ticks);\
+			BUG();\
+		} \
+	} while (0)
+
 struct gmu_dev_ops {
 	int (*oob_set)(struct kgsl_device *device, enum oob_request req);
 	void (*oob_clear)(struct kgsl_device *device, enum oob_request req);
@@ -402,7 +428,8 @@ struct gmu_dev_ops {
 	int (*bcl_sid_set)(struct kgsl_device *device, u32 sid_id, u64 sid_val);
 	u64 (*bcl_sid_get)(struct kgsl_device *device, u32 sid_id);
 	void (*force_first_boot)(struct kgsl_device *device);
-	void (*send_nmi)(struct kgsl_device *device, bool force);
+	void (*send_nmi)(struct kgsl_device *device, bool force,
+		enum gmu_fault_panic_policy gf_policy);
 };
 
 /**
@@ -415,6 +442,8 @@ struct gmu_core_device {
 	void *ptr;
 	const struct gmu_dev_ops *dev_ops;
 	unsigned long flags;
+	/** @gf_panic: GMU fault panic policy */
+	enum gmu_fault_panic_policy gf_panic;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -462,10 +491,12 @@ void gmu_core_dev_cooperative_reset(struct kgsl_device *device);
 /**
  * gmu_core_fault_snapshot - Set gmu fault and trigger snapshot
  * @device: Pointer to the kgsl device
+ * @gf_policy: GMU fault panic setting policy
  *
  * Set the gmu fault and take snapshot when we hit a gmu fault
  */
-void gmu_core_fault_snapshot(struct kgsl_device *device);
+void gmu_core_fault_snapshot(struct kgsl_device *device,
+			enum gmu_fault_panic_policy gf_policy);
 
 /**
  * gmu_core_timed_poll_check() - polling *gmu* register at given offset until

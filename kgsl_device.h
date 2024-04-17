@@ -545,6 +545,12 @@ struct kgsl_process_private {
 	 * @cmdline: Cmdline string of the process
 	 */
 	char *cmdline;
+	/** @fault_count: Count of GPU faults from this process */
+	u32 fault_count;
+	/** @pf_count: Total count of pagefaults from this process */
+	u32 pf_count;
+	/** @pf_type_counts: Count of pagefaults of each type from this process */
+	u32 pf_type_counts[KGSL_IOMMU_PAGEFAULT_TYPES];
 };
 
 struct kgsl_device_private {

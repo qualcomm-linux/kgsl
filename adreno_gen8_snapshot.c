@@ -28,8 +28,9 @@ const struct gen8_snapshot_block_list gen8_0_0_snapshot_block_list = {
 	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
 	.external_core_regs = gen8_0_0_external_core_regs,
 	.num_external_core_regs = ARRAY_SIZE(gen8_0_0_external_core_regs),
-	.gmu_regs = gen8_gmu_registers,
-	.num_gmu_regs = ARRAY_SIZE(gen8_gmu_registers),
+	.gmu_cx_unsliced_regs = gen8_0_0_gmu_registers,
+	.gmu_gx_regs = gen8_gmu_gx_registers,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_gmu_gx_registers),
 	.rscc_regs = gen8_0_0_rscc_rsc_registers,
 	.reg_list = gen8_0_0_reg_list,
 	.cx_misc_regs = gen8_0_0_cx_misc_registers,
@@ -188,6 +189,9 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
 			(info->slice_id, 0, 0, 0));
+
+	/* Make sure the previous writes are posted before reading */
+	mb();
 
 	for (ptr = info->regs->regs; ptr[0] != UINT_MAX; ptr += 2) {
 		count = REG_COUNT(ptr);
@@ -675,6 +679,14 @@ done:
 	kgsl_regrmw(device, GEN8_SP_DBG_CNTL, GENMASK(1, 0), 0x0);
 }
 
+static void gen8_rmw_aperture(struct kgsl_device *device,
+	u32 offsetwords, u32 mask, u32 val, u32 pipe, u32 slice_id, u32 use_slice_id)
+{
+	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, slice_id, use_slice_id);
+
+	kgsl_regmap_rmw(&device->regmap, offsetwords, mask, val);
+}
+
 static void gen8_snapshot_mempool(struct kgsl_device *device,
 				struct kgsl_snapshot *snapshot)
 {
@@ -688,21 +700,24 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 		for (j = 0; j < slice; j++) {
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
-
 			/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4);
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, 0, 0);
+
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, j, 1);
 
 			kgsl_snapshot_indexed_registers_v2(device, snapshot,
 				cp_indexed_reg->addr, cp_indexed_reg->data,
 				0, cp_indexed_reg->size, cp_indexed_reg->pipe_id,
-				((slice > 1) ? j : UINT_MAX));
+				((cp_indexed_reg->slice_region == SLICE) ? j : UINT_MAX));
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
+			/* Reset CP_CHICKEN_DBG[StabilizeMVC] once we are done */
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, 0, 0);
 
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0);
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, j, 1);
 		}
 	}
 }
@@ -745,6 +760,12 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 			info->pipe_id, info->statetype_id, info->sp_id, info->usptp_id);
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
+
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
 
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
@@ -933,6 +954,9 @@ static size_t gen8_legacy_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 
 	if (info->cluster->sel)
 		kgsl_regwrite(device, info->cluster->sel->host_reg, info->cluster->sel->val);
+
+	/* Make sure the previous writes are posted before reading */
+	mb();
 
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
@@ -1587,9 +1611,15 @@ static void gen8_cx_misc_regs_snapshot(struct kgsl_device *device,
 	}
 
 legacy_snapshot:
+	regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
+
+	if (!kgsl_regmap_valid_offset(&device->regmap, regs_ptr[0])) {
+		WARN_ONCE(1, "cx_misc registers are not defined in device tree");
+		return;
+	}
+
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
-		snapshot, adreno_snapshot_cx_misc_registers,
-		(void *)gen8_snapshot_block_list->cx_misc_regs);
+		snapshot, adreno_snapshot_registers_v2, (void *)regs_ptr);
 }
 
 void gen8_snapshot_external_core_regs(struct kgsl_device *device,

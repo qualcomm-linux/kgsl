@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -290,7 +290,7 @@ static void drawobj_print(struct seq_file *s,
 		cmdobj_print(s, CMDOBJ(drawobj));
 
 	seq_puts(s, " flags: ");
-	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS),
+	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS);
 	kgsl_drawobj_put(drawobj);
 	seq_puts(s, "\n");
 }
@@ -615,6 +615,34 @@ static int _ifpc_hyst_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(ifpc_hyst_fops, _ifpc_hyst_show, _ifpc_hyst_store, "%llu\n");
 
+static int _gmu_fp_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	/* Max allowed GMU fault settings are 9 bits */
+	val = FIELD_GET(GENMASK(GMU_FAULT_MAX, 0), val);
+
+	if (val == device->gmu_core.gf_panic)
+		return 0;
+
+	mutex_lock(&device->mutex);
+	device->gmu_core.gf_panic = val;
+	mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
+static int _gmu_fp_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) KGSL_DEVICE(adreno_dev)->gmu_core.gf_panic;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(gmu_fp_fops, _gmu_fp_show, _gmu_fp_store, "%llu\n");
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -644,9 +672,13 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("isdb", 0644, device->d_debugfs,
 			device, &_isdb_fops);
 
-	if (gmu_core_isenabled(device))
+	if (gmu_core_isenabled(device)) {
 		debugfs_create_file("ifpc_hyst", 0644, device->d_debugfs,
 			device, &ifpc_hyst_fops);
+
+		debugfs_create_file("gmu_fault_policy", 0644, device->d_debugfs,
+			device, &gmu_fp_fops);
+	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT))
 		debugfs_create_file("warmboot", 0644, device->d_debugfs,

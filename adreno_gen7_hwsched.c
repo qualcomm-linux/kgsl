@@ -7,7 +7,6 @@
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/interconnect.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -246,7 +245,6 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 err:
 	snprintf(str, sizeof(str), "RB addr:0x%llx", gpuaddr);
 	SNAPSHOT_ERR_NOMEM(device, str);
-	return;
 }
 
 static bool parse_payload_rb_legacy(struct adreno_device *adreno_dev,
@@ -1191,7 +1189,7 @@ static int check_inflight_hw_fences(struct adreno_device *adreno_dev)
 	read_unlock(&device->context_lock);
 
 	if (ret)
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 
 	return ret;
 }
@@ -1238,11 +1236,7 @@ no_gx_power:
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -1278,7 +1272,7 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 
 	dev_err(&gmu->pdev->dev, "hardware fence unack_count(%d) isn't zero before SLUMBER\n",
 		unack_count);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 }
 
 static void hwsched_idle_check(struct work_struct *work)
@@ -1311,7 +1305,7 @@ static void hwsched_idle_check(struct work_struct *work)
 
 	if (!gen7_hw_isidle(adreno_dev)) {
 		dev_err(device->dev, "GPU isn't idle before SLUMBER\n");
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	}
 
 	check_hw_fence_unack_count(adreno_dev);
@@ -1527,7 +1521,7 @@ static int gen7_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
 
-	/**
+	/*
 	 * Wait for the dispatcher to retire everything by waiting
 	 * for the active count to go to zero.
 	 */
@@ -1584,7 +1578,7 @@ void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	gmu_core_regwrite(device, GEN7_GMU_AO_HOST_INTERRUPT_MASK,
 			(mask | GMU_INT_WDOG_BITE));
 
-	gen7_gmu_send_nmi(device, false);
+	gen7_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
@@ -1655,7 +1649,7 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct list_head hw_fence_list;
 	struct adreno_hw_fence_entry *entry, *tmp;
 
-	/**
+	/*
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
 	 * cannot send them from within atomic context. Hence, walk list of such hardware fences
 	 * for each context and add it to this local list and then walk this list to send all these
@@ -1790,6 +1784,8 @@ int gen7_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	gen7_gmu_suspend(adreno_dev);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

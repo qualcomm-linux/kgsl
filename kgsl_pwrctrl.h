@@ -56,7 +56,7 @@ struct kgsl_pwr_constraint {
 };
 
 /**
- * struct kgsl_pwrlevel - Struct holding different pwrlevel info obtained from
+ * struct kgsl_pwrlevel - Struct holding different pwrlevel info obtained
  * from dtsi file
  * @gpu_freq:          GPU frequency vote in Hz
  * @bus_freq:          Bus bandwidth vote index
@@ -88,6 +88,7 @@ struct kgsl_pwrlevel {
  * @default_pwrlevel - device wake up power level
  * @max_pwrlevel - maximum allowable powerlevel per the user
  * @min_pwrlevel - minimum allowable powerlevel per the user
+ * @min_render_pwrlevel - minimum allowable powerlevel for rendering
  * @num_pwrlevels - number of available power levels
  * @throttle_mask - LM throttle mask
  * @interval_timeout - timeout to be idle before a power event
@@ -142,10 +143,13 @@ struct kgsl_pwrctrl {
 	unsigned int default_pwrlevel;
 	unsigned int max_pwrlevel;
 	unsigned int min_pwrlevel;
+	unsigned int min_render_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int throttle_mask;
 	u32 interval_timeout;
 	u64 clock_times[KGSL_MAX_PWRLEVELS];
+	/** @thermal_time: Time in usecs the GPU is limited by thermal constraints */
+	u64 thermal_time;
 	struct kgsl_clk_stats clk_stats;
 	bool bus_control;
 	int bus_mod;

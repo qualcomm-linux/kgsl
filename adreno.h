@@ -8,6 +8,7 @@
 
 #include <linux/iopoll.h>
 #include <linux/of.h>
+#include <linux/soc/qcom/llcc-qcom.h>
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
@@ -256,6 +257,7 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
+#define ADRENO_FAULT_TYPES 8
 
 /**
  * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
@@ -514,24 +516,23 @@ struct adreno_dispatch_ops {
 };
 
 /**
+ * struct adreno_fault_proc - Structure to hold data on faulting processes
+ */
+struct adreno_fault_proc {
+	/** @comm: Task name of the faulting process */
+	char comm[TASK_COMM_LEN];
+	/** @fault_count: Count of the GPU faults from this process */
+	u32 fault_count;
+};
+
+#define ADRENO_MAX_FAULTING_PROCS 10
+
+/**
  * struct adreno_device - The mothership structure for all adreno related info
  * @dev: Reference to struct kgsl_device
  * @priv: Holds the private flags specific to the adreno_device
  * @chipid: Chip ID specific to the GPU
- * @cx_misc_len: Length of the CX MISC register block
- * @cx_misc_virt: Pointer where the CX MISC block is mapped
- * @isense_base: Base physical address of isense block
- * @isense_len: Length of the isense register block
- * @isense_virt: Pointer where isense block is mapped
  * @gpucore: Pointer to the adreno_gpu_core structure
- * @pfp_fw: Buffer which holds the pfp ucode
- * @pfp_fw_size: Size of pfp ucode buffer
- * @pfp_fw_version: Version of pfp ucode
- * @pfp: Memory descriptor which holds pfp ucode buffer info
- * @pm4_fw: Buffer which holds the pm4 ucode
- * @pm4_fw_size: Size of pm4 ucode buffer
- * @pm4_fw_version: Version of pm4 ucode
- * @pm4: Memory descriptor which holds pm4 ucode buffer info
  * @gpmu_cmds_size: Length of gpmu cmd stream
  * @gpmu_cmds: gpmu cmd stream
  * @ringbuffers: Array of pointers to adreno_ringbuffers
@@ -575,8 +576,7 @@ struct adreno_dispatch_ops {
  * @lm_threshold_cross: number of current peaks exceeding threshold
  * @ifpc_count: Number of times the GPU went into IFPC
  * @highest_bank_bit: Value of the highest bank bit
- * @csdev: Pointer to a coresight device (if applicable)
- * @gpmu_throttle_counters - counteers for number of throttled clocks
+ * @gpmu_throttle_counters - counters for number of throttled clocks
  * @irq_storm_work: Worker to handle possible interrupt storms
  * @active_list: List to track active contexts
  * @active_list_lock: Lock to protect active_list
@@ -592,11 +592,6 @@ struct adreno_device {
 	unsigned int chipid;
 	/** @uche_gmem_base: Base address of GMEM for UCHE access */
 	u64 uche_gmem_base;
-	unsigned int cx_misc_len;
-	void __iomem *cx_misc_virt;
-	unsigned long isense_base;
-	unsigned int isense_len;
-	void __iomem *isense_virt;
 	const struct adreno_gpu_core *gpucore;
 	struct adreno_firmware fw[2];
 	size_t gpmu_cmds_size;
@@ -737,8 +732,6 @@ struct adreno_device {
 	u32 ifpc_hyst;
 	/** @ifpc_hyst_floor: IFPC long hysteresis floor value */
 	u32 ifpc_hyst_floor;
-	/** @cx_misc_base: CX MISC register block base offset */
-	u32 cx_misc_base;
 	/*
 	 * @no_restore_count: Keep track of perfcounter requests that don't have
 	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
@@ -749,6 +742,15 @@ struct adreno_device {
 	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
 	 */
 	u32 ahb_timeout_val;
+	/** @fault_counts: Keep track of GPU faults */
+	u32 fault_counts[ADRENO_FAULT_TYPES];
+	/**
+	 * @fault_procs: Array to keep track of per process GPU fault count sorted by the number
+	 * of GPU faults
+	 */
+	struct adreno_fault_proc fault_procs[ADRENO_MAX_FAULTING_PROCS];
+	/** @fault_stats_lock: A R/W lock to protect GPU fault statistics */
+	rwlock_t fault_stats_lock;
 };
 
 /**
@@ -1086,15 +1088,6 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 long adreno_ioctl_perfcounter_put(struct kgsl_device_private *dev_priv,
 	unsigned int cmd, void *data);
 
-void adreno_cx_misc_regread(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int *value);
-void adreno_cx_misc_regwrite(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int value);
-void adreno_cx_misc_regrmw(struct adreno_device *adreno_dev,
-		unsigned int offsetwords,
-		unsigned int mask, unsigned int bits);
-void adreno_isense_regread(struct adreno_device *adreno_dev,
-		unsigned int offsetwords, unsigned int *value);
 bool adreno_gx_is_on(struct adreno_device *adreno_dev);
 
 u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
@@ -1299,8 +1292,8 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 
 /*
  * adreno_checkreg_off() - Checks the validity of a register enum
- * @adreno_dev:		Pointer to adreno device
- * @offset_name:	The register enum that is checked
+ * @adreno_dev: Pointer to adreno device
+ * @offset_name: The register enum that is checked
  */
 static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 					enum adreno_regs offset_name)
@@ -1328,9 +1321,9 @@ static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 /*
  * adreno_readreg() - Read a register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be read
- * @val:		Register value read is placed here
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be read
+ * @val: Register value read is placed here
  */
 static inline void adreno_readreg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int *val)
@@ -1347,9 +1340,9 @@ static inline void adreno_readreg(struct adreno_device *adreno_dev,
 /*
  * adreno_writereg() - Write a register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be written
- * @val:		Value to write
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be written
+ * @val: Value to write
  */
 static inline void adreno_writereg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int val)
@@ -1364,8 +1357,8 @@ static inline void adreno_writereg(struct adreno_device *adreno_dev,
 /*
  * adreno_getreg() - Returns the offset value of a register from the
  * register offset array in the gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum whore offset is returned
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum whore offset is returned
  */
 static inline unsigned int adreno_getreg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name)
@@ -1380,9 +1373,9 @@ static inline unsigned int adreno_getreg(struct adreno_device *adreno_dev,
 /*
  * adreno_write_gmureg() - Write a GMU register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be written
- * @val:		Value to write
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be written
+ * @val: Value to write
  */
 static inline void adreno_write_gmureg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int val)
@@ -2004,4 +1997,29 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
  * Return - AHB timeout value to be programmed in AHB CNTL registers
  */
 u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us);
+
+/**
+ * adreno_llcc_slice_deactivate - Deactivate GPU and GPUHTW llcc slices
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev)
+{
+	if (adreno_dev->gpu_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
+
+	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+}
+
+/**
+ * adreno_gpufault_stats - Update GPU fault statistics
+ * @adreno_dev: Adreno device handle
+ * @drawobj: GC drawobj that caused the fault
+ * @drawobj_lpac: LPAC drawobj that caused the fault
+ * @fault: Fault type
+ *
+ * Update statistics about GPU faults
+ */
+void adreno_gpufault_stats(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
 #endif /*__ADRENO_H */

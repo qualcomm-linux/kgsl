@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -252,59 +252,9 @@ int a6xx_receive_ack_cmd(struct a6xx_gmu_device *gmu, void *rcvd,
 		"HFI ACK: Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
 		req_hdr, ret_cmd->sent_hdr);
 
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_HFI_RECIVE_ACK);
 
 	return -ENODEV;
-}
-
-static int poll_gmu_reg(struct adreno_device *adreno_dev,
-	u32 offsetdwords, unsigned int expected_val,
-	unsigned int mask, unsigned int timeout_ms)
-{
-	unsigned int val;
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	unsigned long timeout = jiffies + msecs_to_jiffies(timeout_ms);
-	u64 ao_pre_poll, ao_post_poll;
-	bool nmi = false;
-
-	ao_pre_poll = a6xx_read_alwayson(adreno_dev);
-
-	/* FIXME: readl_poll_timeout? */
-	while (time_is_after_jiffies(timeout)) {
-		gmu_core_regread(device, offsetdwords, &val);
-		if ((val & mask) == expected_val)
-			return 0;
-
-		/*
-		 * If GMU firmware fails any assertion, error message is sent
-		 * to KMD and NMI is triggered. So check if GMU is in NMI and
-		 * timeout early. Bits [11:9] of A6XX_GMU_CM3_FW_INIT_RESULT
-		 * contain GMU reset status. Non zero value here indicates that
-		 * GMU reset is active, NMI handler would eventually complete
-		 * and GMU would wait for recovery.
-		 */
-		gmu_core_regread(device, A6XX_GMU_CM3_FW_INIT_RESULT, &val);
-		if (val & 0xE00) {
-			nmi = true;
-			break;
-		}
-
-		usleep_range(10, 100);
-	}
-
-	ao_post_poll = a6xx_read_alwayson(adreno_dev);
-
-	/* Check one last time */
-	gmu_core_regread(device, offsetdwords, &val);
-	if ((val & mask) == expected_val)
-		return 0;
-
-	dev_err(&gmu->pdev->dev, "kgsl hfi poll %s: always on: %lld ms\n",
-		nmi ? "abort" : "timeout",
-		div_u64((ao_post_poll - ao_pre_poll) * 52, USEC_PER_SEC));
-
-	return -ETIMEDOUT;
 }
 
 static int a6xx_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
@@ -327,14 +277,14 @@ static int a6xx_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
 	if (rc)
 		return rc;
 
-	rc = poll_gmu_reg(adreno_dev, A6XX_GMU_GMU2HOST_INTR_INFO,
-		HFI_IRQ_MSGQ_MASK, HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT);
+	rc = gmu_core_timed_poll_check(device, A6XX_GMU_GMU2HOST_INTR_INFO,
+			HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
 
 	if (rc) {
-		gmu_core_fault_snapshot(device);
 		dev_err(&gmu->pdev->dev,
 		"Timed out waiting on ack for 0x%8.8x (id %d, sequence %d)\n",
 		cmd[0], MSG_HDR_GET_ID(*cmd), MSG_HDR_GET_SEQNUM(*cmd));
+		gmu_core_fault_snapshot(device, GMU_FAULT_SEND_CMD_WAIT_INLINE);
 		return rc;
 	}
 
@@ -362,11 +312,11 @@ int a6xx_hfi_send_generic_req(struct adreno_device *adreno_dev, void *cmd, u32 s
 		struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-		gmu_core_fault_snapshot(device);
 		dev_err(&gmu->pdev->dev,
 				"HFI ACK failure: Req=0x%8.8X, Result=0x%8.8X\n",
 				ret_cmd.results[1],
 				ret_cmd.results[2]);
+		gmu_core_fault_snapshot(device, GMU_FAULT_HFI_SEND_GENERIC_REQ);
 		return -EINVAL;
 	}
 
@@ -536,12 +486,18 @@ static int a6xx_hfi_send_test(struct adreno_device *adreno_dev)
 
 void adreno_a6xx_receive_err_req(struct a6xx_gmu_device *gmu, void *rcvd)
 {
+	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(ADRENO_DEVICE(device));
+	u64 ticks = gpudev->read_alwayson(ADRENO_DEVICE(device));
 	struct hfi_err_cmd *cmd = rcvd;
 
 	dev_err(&gmu->pdev->dev, "HFI Error Received: %d %d %.16s\n",
 			((cmd->error_code >> 16) & 0xFFFF),
 			(cmd->error_code & 0xFFFF),
 			(char *) cmd->data);
+
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic,
+				  gmu->pdev, ticks, GMU_FAULT_F2H_MSG_ERR);
 }
 
 void adreno_a6xx_receive_debug_req(struct a6xx_gmu_device *gmu, void *rcvd)
