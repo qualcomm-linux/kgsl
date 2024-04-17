@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/sysfs.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_sysfs.h"
@@ -58,7 +59,7 @@ static int _ft_pagefault_policy_store(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret = 0;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	val &= KGSL_FT_PAGEFAULT_MASK;
 
 	if (device->state == KGSL_STATE_ACTIVE)
@@ -68,7 +69,7 @@ static int _ft_pagefault_policy_store(struct adreno_device *adreno_dev,
 	if (ret == 0)
 		device->mmu.pfpolicy = val;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }

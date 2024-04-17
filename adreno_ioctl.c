@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a5xx.h"
@@ -60,7 +62,7 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 	struct kgsl_perfcounter_get *get = data;
 	int result;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	/*
 	 * adreno_perfcounter_get() is called by kernel clients
@@ -70,7 +72,7 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 
 	result = adreno_perfcntr_active_oob_get(adreno_dev);
 	if (result) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		return (long)result;
 	}
 
@@ -89,7 +91,7 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 
 	adreno_perfcntr_active_oob_put(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return (long) result;
 }
@@ -102,7 +104,7 @@ long adreno_ioctl_perfcounter_put(struct kgsl_device_private *dev_priv,
 	struct kgsl_perfcounter_put *put = data;
 	int result;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	/* Delete the perfcounter from the process list */
 	result = adreno_process_perfcounter_del(dev_priv, put->groupid,
@@ -112,7 +114,7 @@ long adreno_ioctl_perfcounter_put(struct kgsl_device_private *dev_priv,
 	if (!result)
 		adreno_perfcounter_put(adreno_dev, put->groupid,
 			put->countable, PERFCOUNTER_FLAG_NONE);
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return (long) result;
 }

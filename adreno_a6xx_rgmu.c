@@ -13,6 +13,7 @@
 #include <linux/of_platform.h>
 #include <linux/regulator/consumer.h>
 #include <linux/soc/qcom/llcc-qcom.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -55,7 +56,7 @@ static void a6xx_rgmu_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return;
 
 	if (WARN(atomic_read(&device->active_cnt) == 0,
@@ -859,7 +860,7 @@ static void rgmu_idle_check(struct work_struct *work)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
@@ -889,7 +890,7 @@ static void rgmu_idle_check(struct work_struct *work)
 	}
 
 done:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 static void rgmu_idle_timer(struct timer_list *t)
@@ -1162,7 +1163,7 @@ static int a6xx_rgmu_active_count_get(struct adreno_device *adreno_dev)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return -EINVAL;
 
 	if (test_bit(RGMU_PRIV_PM_SUSPEND, &rgmu->flags))

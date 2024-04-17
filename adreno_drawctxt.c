@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_trace.h"
@@ -457,7 +458,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 	 * internal_timestamp is set in adreno_ringbuffer_addcmds,
 	 * which holds the device mutex.
 	 */
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	/*
 	 * Wait for the last global timestamp to pass before continuing.
@@ -486,7 +487,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 		adreno_set_gpu_fault(adreno_dev,
 				ADRENO_CTX_DETATCH_TIMEOUT_FAULT);
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 
 		/* Schedule dispatcher to kick in recovery */
 		adreno_dispatcher_schedule(device);
@@ -508,7 +509,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 	adreno_profile_process_results(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 void adreno_drawctxt_detach(struct kgsl_context *context)

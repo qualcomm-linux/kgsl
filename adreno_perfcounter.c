@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_perfcounter.h"
@@ -174,11 +175,11 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	ret = adreno_perfcntr_active_oob_get(adreno_dev);
 	if (ret) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		goto done;
 	}
 
@@ -207,7 +208,7 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 
 	adreno_perfcntr_active_oob_put(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	/* write the data */
 	if (ret == 0)
@@ -303,7 +304,7 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	if (counters == NULL || groupid >= counters->group_count)
 		return -EINVAL;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	group = &(counters->groups[groupid]);
 	*max_counters = group->reg_count;
@@ -313,7 +314,7 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	 * *max_counters and return success
 	 */
 	if (countables == NULL || count == 0) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		return 0;
 	}
 
@@ -321,14 +322,14 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 
 	buf = kmalloc_array(t, sizeof(unsigned int), GFP_KERNEL);
 	if (buf == NULL) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < t; i++)
 		buf[i] = group->regs[i].countable;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	if (copy_to_user(countables, buf, sizeof(unsigned int) * t))
 		ret = -EFAULT;

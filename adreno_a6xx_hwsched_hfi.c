@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iommu.h>
 #include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -1971,7 +1972,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	if (rc)
 		goto done;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	rc = wait_for_completion_timeout(&pending_ack.complete,
 			msecs_to_jiffies(30 * 1000));
@@ -1982,7 +1983,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 			context->id, ts);
 		rc = -ETIMEDOUT;
 
-		mutex_lock(&device->mutex);
+		rt_mutex_lock(&device->mutex);
 
 		gmu_core_fault_snapshot(device);
 
@@ -1998,7 +1999,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	rc = check_ack_failure(adreno_dev, &pending_ack);
 done:
@@ -2016,7 +2017,7 @@ void a6xx_hwsched_context_detach(struct adreno_context *drawctxt)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret = 0;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	ret = send_context_unregister_hfi(adreno_dev, context,
 		drawctxt->internal_timestamp);
@@ -2035,7 +2036,7 @@ void a6xx_hwsched_context_detach(struct adreno_context *drawctxt)
 
 	context->gmu_registered = false;
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 u32 a6xx_hwsched_preempt_count_get(struct adreno_device *adreno_dev)

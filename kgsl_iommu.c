@@ -19,6 +19,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/version.h>
 #include <soc/qcom/secure_buffer.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "kgsl_device.h"
@@ -305,12 +306,12 @@ flush:
 		struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
 
 		/* Skip TLB Operations if GPU is in slumber */
-		if (mutex_trylock(&device->mutex)) {
+		if (rt_mutex_trylock(&device->mutex)) {
 			if (device->state == KGSL_STATE_SLUMBER) {
-				mutex_unlock(&device->mutex);
+				rt_mutex_unlock(&device->mutex);
 				return 0;
 			}
-			mutex_unlock(&device->mutex);
+			rt_mutex_unlock(&device->mutex);
 		}
 	}
 
@@ -1102,7 +1103,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	if (ctx->stalled_on_fault)
 		return false;
 
-	if (!mutex_trylock(&device->mutex))
+	if (!rt_mutex_trylock(&device->mutex))
 		return true;
 
 	/*
@@ -1114,7 +1115,7 @@ static bool kgsl_iommu_check_stall_on_fault(struct kgsl_iommu_context *ctx,
 	else
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 	return true;
 }
 
