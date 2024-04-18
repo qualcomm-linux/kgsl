@@ -2335,6 +2335,49 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	return -ETIMEDOUT;
 }
 
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	int ret;
+	u64 start, end;
+
+	start = gpudev->read_alwayson(adreno_dev);
+	mutex_unlock(&device->mutex);
+
+	ret = wait_for_completion_timeout(&ack->complete,
+		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+
+	mutex_lock(&device->mutex);
+	if (ret)
+		return 0;
+
+	/*
+	 * It is possible the ack came, but due to HLOS latencies in processing hfi interrupt
+	 * and/or the f2h daemon, the ack isn't processed yet. Hence, process the msgq one last
+	 * time.
+	 */
+	process_msgq(adreno_dev);
+	end = gpudev->read_alwayson(adreno_dev);
+
+	if (completion_done(&ack->complete)) {
+		dev_err_ratelimited(dev,
+			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
+			cmd->ts, start, end);
+		return 0;
+	}
+
+	dev_err_ratelimited(dev,
+		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
+	return -ETIMEDOUT;
+}
+
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 {
 	u32 i;
