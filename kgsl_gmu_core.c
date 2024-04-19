@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -260,12 +260,20 @@ static void stream_trace_data(struct gmu_trace_packet *pkt)
 void gmu_core_process_trace_data(struct kgsl_device *device,
 	struct device *dev, struct kgsl_gmu_trace *trace)
 {
-	struct gmu_trace_header *trace_hdr = trace->md->hostptr;
-	u32 size, *buffer = trace->md->hostptr;
+	struct gmu_trace_header *trace_hdr;
+	u32 size, *buffer;
 	struct gmu_trace_packet *pkt;
 	u16 seq_num, num_pkts = 0;
-	u32 ridx = readl(&trace_hdr->read_index);
-	u32 widx = readl(&trace_hdr->write_index);
+	u32 ridx, widx;
+
+	if (IS_ERR_OR_NULL(trace->md))
+		return;
+
+	trace_hdr = trace->md->hostptr;
+	buffer = trace->md->hostptr;
+
+	ridx = readl(&trace_hdr->read_index);
+	widx = readl(&trace_hdr->write_index);
 
 	if (ridx == widx)
 		return;
@@ -349,12 +357,10 @@ void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace)
 
 void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 {
-	struct gmu_trace_header *hdr = trace->md->hostptr;
-
-	if (!trace->reset_hdr)
+	if (!trace->reset_hdr || IS_ERR_OR_NULL(trace->md))
 		return;
 
-	memset(hdr, 0, sizeof(struct gmu_trace_header));
+	memset(trace->md->hostptr, 0, sizeof(struct gmu_trace_header));
 	/* Reset sequence number to detect trace packet loss */
 	trace->seq_num = 0;
 	gmu_core_trace_header_init(trace);
