@@ -1381,6 +1381,12 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
+
 	/* Check no outstanding RPMh voting */
 	gen8_complete_rpmh_votes(gmu, 1);
 
@@ -1463,6 +1469,13 @@ static int gen8_gmu_notify_slumber(struct adreno_device *adreno_dev)
 
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, GEN8_GMUAO_AHB_FENCE_CTRL, 0);
+
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
+
 	return ret;
 }
 
