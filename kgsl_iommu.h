@@ -227,4 +227,14 @@ struct kgsl_iommu_pt {
 int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context);
 
+/**
+ * kgsl_set_smmu_lpac_aperture - set SMMU Aperture for LPAC context
+ * @device: Pointer to the KGSL device
+ * @context: Pointer to the LPAC iommu context
+ *
+ * Return: 0 on success or negative on failure.
+ */
+int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
+		struct kgsl_iommu_context *context);
+
 #endif

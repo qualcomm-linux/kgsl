@@ -1520,6 +1520,10 @@ static int adreno_pm_resume(struct device *dev)
 
 		if (status)
 			return status;
+
+		status = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (status < 0)
+			return status;
 	}
 #endif
 
@@ -3708,6 +3712,10 @@ static int adreno_hibernation_resume(struct device *dev)
 
 	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
 	if (ret)
+		goto err;
+
+	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+	if (ret < 0)
 		goto err;
 
 	gmu_core_dev_force_first_boot(device);
