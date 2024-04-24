@@ -910,7 +910,7 @@ static void gen7_process_syncobj_query_work(struct kthread_work *work)
 			dev_err(&gmu->pdev->dev, "Missing sync object ctx:%d ts:%d retired:%d\n",
 				context->id, cmd->sync_obj_ts, hdr->sync_obj_ts);
 			gmu_core_fault_snapshot(device);
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 		}
 	}
 
@@ -1366,7 +1366,7 @@ static irqreturn_t gen7_hwsched_hfi_handler(int irq, void *data)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"GMU CM3 fault interrupt received\n");
 
-		gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+		gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	/* Ignore OOB bits */
@@ -2947,7 +2947,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -2959,7 +2959,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -4053,7 +4053,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		 * Make sure we send all fences from this context to the TxQueue after recovery
 		 */
 		move_detached_context_hardware_fences(adreno_dev, drawctxt);
-		gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+		gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		goto done;
 	}

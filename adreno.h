@@ -8,6 +8,7 @@
 
 #include <linux/iopoll.h>
 #include <linux/of.h>
+#include <linux/soc/qcom/llcc-qcom.h>
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
@@ -1455,11 +1456,6 @@ static inline void adreno_set_gpu_fault(struct adreno_device *adreno_dev,
 	smp_wmb();
 }
 
-static inline bool adreno_gmu_gpu_fault(struct adreno_device *adreno_dev)
-{
-	return adreno_gpu_fault(adreno_dev) & ADRENO_GMU_FAULT;
-}
-
 /**
  * adreno_clear_gpu_fault() - Clear the GPU fault register
  * @adreno_dev: A pointer to an adreno_device structure
@@ -2046,4 +2042,17 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
  * Return - AHB timeout value to be programmed in AHB CNTL registers
  */
 u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us);
+
+/**
+ * adreno_llcc_slice_deactivate - Deactivate GPU and GPUHTW llcc slices
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev)
+{
+	if (adreno_dev->gpu_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
+
+	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+}
 #endif /*__ADRENO_H */

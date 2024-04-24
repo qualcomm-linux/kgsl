@@ -114,15 +114,12 @@ static struct gen8_shader_block gen8_3_0_shader_blocks[] = {
 	{ HLSQ_CHUNK_CVS_RAM, 0x01C0, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
 	{ HLSQ_CHUNK_CVS_RAM, 0x01C0, 1, 1, PIPE_BV, HLSQ_STATE, 1, 1},
 	{ HLSQ_CHUNK_CPS_RAM, 0x0300, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
-	{ HLSQ_CHUNK_CPS_RAM, 0x0180, 1, 1, PIPE_LPAC, HLSQ_STATE, 1, 1},
 	{ HLSQ_CHUNK_CVS_RAM_TAG, 0x0040, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
 	{ HLSQ_CHUNK_CVS_RAM_TAG, 0x0040, 1, 1, PIPE_BV, HLSQ_STATE, 1, 1},
 	{ HLSQ_CHUNK_CPS_RAM_TAG, 0x0040, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
-	{ HLSQ_CHUNK_CPS_RAM_TAG, 0x0040, 1, 1, PIPE_LPAC, HLSQ_STATE, 1, 1},
 	{ HLSQ_ICB_CVS_CB_BASE_TAG, 0x0010, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
 	{ HLSQ_ICB_CVS_CB_BASE_TAG, 0x0010, 1, 1, PIPE_BV, HLSQ_STATE, 1, 1},
 	{ HLSQ_ICB_CPS_CB_BASE_TAG, 0x0010, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
-	{ HLSQ_ICB_CPS_CB_BASE_TAG, 0x0010, 1, 1, PIPE_LPAC, HLSQ_STATE, 1, 1},
 	{ HLSQ_CVS_MISC_RAM, 0x0540, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
 	{ HLSQ_CVS_MISC_RAM, 0x0540, 1, 1, PIPE_BV, HLSQ_STATE, 1, 1},
 	{ HLSQ_CPS_MISC_RAM, 0x0640, 1, 1, PIPE_BR, HLSQ_STATE, 1, 1},
@@ -1925,8 +1922,7 @@ static struct gen8_reg_list gen8_3_0_ahb_registers[] = {
 	{ UNSLICE, gen8_3_0_ahb_secure_gpu_registers },
 };
 
-static struct gen8_reg_list gen8_3_0_gmu_regs[] = {
-	{ UNSLICE, gen8_3_0_gmu_registers },
+static struct gen8_reg_list gen8_3_0_gmu_gx_regs[] = {
 	{ UNSLICE, gen8_3_0_gmugx_registers },
 	{ SLICE, gen8_3_0_gmugx_slice_registers },
 };

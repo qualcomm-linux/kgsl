@@ -2848,27 +2848,72 @@ long kgsl_ioctl_cmdstream_freememontimestamp_ctxtid(
 	return ret;
 }
 
-static int check_vma(unsigned long hostptr, u64 size)
+static bool _vma_is_cached(struct vm_area_struct *vma)
+{
+	pteval_t pgprot_val = pgprot_val(vma->vm_page_prot);
+
+	/*
+	 * An uncached cpu mapping can either be marked as writecombine or noncached. If it isn't
+	 * either, then it means it is cached.
+	 */
+	if ((pgprot_val != pgprot_val(pgprot_writecombine((vma->vm_page_prot)))) &&
+		(pgprot_val != pgprot_val(pgprot_noncached(vma->vm_page_prot))))
+		return true;
+
+	return false;
+}
+
+static bool check_vma(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
+		unsigned long hostptr)
 {
 	struct vm_area_struct *vma;
 	unsigned long cur = hostptr;
+	bool cached;
 
-	while (cur < (hostptr + size)) {
+	vma = find_vma(current->mm, hostptr);
+	if (!vma)
+		return false;
+
+	/* Don't remap memory that we already own */
+	if (vma->vm_file && (vma->vm_ops == &kgsl_gpumem_vm_ops))
+		return false;
+
+	cached = _vma_is_cached(vma);
+
+	cur = vma->vm_end;
+
+	while (cur < (hostptr + memdesc->size)) {
 		vma = find_vma(current->mm, cur);
 		if (!vma)
 			return false;
 
 		/* Don't remap memory that we already own */
-		if (vma->vm_file && vma->vm_ops == &kgsl_gpumem_vm_ops)
+		if (vma->vm_file && (vma->vm_ops == &kgsl_gpumem_vm_ops))
+			return false;
+
+		/*
+		 * Make sure the entire memdesc is either cached or noncached. Bail out if there is
+		 * a mismatch as it can lead to coherency issues.
+		 */
+		if (cached != _vma_is_cached(vma))
 			return false;
 
 		cur = vma->vm_end;
 	}
 
+	/*
+	 * If cpu side mapping is cached (and io-coherency is enabled), the gpu mapping should be
+	 * marked io-coherent to avoid coherency issues.
+	 */
+	if (cached && kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT) &&
+		IS_ENABLED(CONFIG_QCOM_KGSL_IOCOHERENCY_DEFAULT))
+		memdesc->flags |= KGSL_MEMFLAGS_IOCOHERENT;
+
 	return true;
 }
 
-static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, unsigned long useraddr)
+static int memdesc_sg_virt(struct kgsl_device *device, struct kgsl_memdesc *memdesc,
+	unsigned long useraddr)
 {
 	int ret = 0;
 	long npages = 0, i;
@@ -2891,7 +2936,7 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, unsigned long useraddr)
 	}
 
 	mmap_read_lock(current->mm);
-	if (!check_vma(useraddr, memdesc->size)) {
+	if (!check_vma(device, memdesc, useraddr)) {
 		mmap_read_unlock(current->mm);
 		ret = -EFAULT;
 		goto out;
@@ -2937,9 +2982,8 @@ static const struct kgsl_memdesc_ops kgsl_usermem_ops = {
 	.put_gpuaddr = kgsl_unmap_and_put_gpuaddr,
 };
 
-static int kgsl_setup_anon_useraddr(struct kgsl_pagetable *pagetable,
-	struct kgsl_mem_entry *entry, unsigned long hostptr,
-	size_t offset, size_t size)
+static int kgsl_setup_anon_useraddr(struct kgsl_device *device, struct kgsl_pagetable *pagetable,
+	struct kgsl_mem_entry *entry, unsigned long hostptr, size_t offset, size_t size)
 {
 	/* Map an anonymous memory chunk */
 
@@ -2973,7 +3017,7 @@ static int kgsl_setup_anon_useraddr(struct kgsl_pagetable *pagetable,
 		entry->memdesc.gpuaddr = (uint64_t) hostptr;
 	}
 
-	ret =  memdesc_sg_virt(&entry->memdesc, hostptr);
+	ret =  memdesc_sg_virt(device, &entry->memdesc, hostptr);
 
 	if (ret && kgsl_memdesc_use_cpu_map(&entry->memdesc))
 		kgsl_mmu_put_gpuaddr(pagetable, &entry->memdesc);
@@ -2989,7 +3033,7 @@ static int kgsl_setup_useraddr(struct kgsl_device *device,
 	if (hostptr == 0 || !IS_ALIGNED(hostptr, PAGE_SIZE))
 		return -EINVAL;
 
-	return kgsl_setup_anon_useraddr(pagetable, entry,
+	return kgsl_setup_anon_useraddr(device, pagetable, entry,
 		hostptr, offset, size);
 }
 

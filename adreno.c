@@ -17,7 +17,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/reset.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/trace.h>
 #include <linux/units.h>
 #include <linux/version.h>
@@ -2047,11 +2046,7 @@ static int adreno_stop(struct kgsl_device *device)
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	adreno_set_active_ctxs_null(adreno_dev);
 

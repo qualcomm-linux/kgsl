@@ -1429,45 +1429,60 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 }
 
 static void do_fault_header(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj *drawobj)
+	struct kgsl_drawobj *drawobj, int fault)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_context *drawctxt;
-	u32 status, rptr, wptr, ib1sz, ib2sz;
-	u64 ib1base, ib2base;
+	u32 status = 0, rptr = 0, wptr = 0, ib1sz = 0, ib2sz = 0;
+	u64 ib1base = 0, ib2base = 0;
+	bool gx_on = adreno_gx_is_on(adreno_dev);
+	u32 ctxt_id = 0, ts = 0;
+	int rb_id = -1;
+
+	dev_err(device->dev, "Fault id:%d and GX is %s\n", fault, gx_on ? "ON" : "OFF");
+
+	if (!gx_on && !drawobj)
+		return;
 
 	if (gpudev->fault_header)
 		return gpudev->fault_header(adreno_dev, drawobj);
 
-	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS, &status);
-	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR, &rptr);
-	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_WPTR, &wptr);
-	adreno_readreg64(adreno_dev, ADRENO_REG_CP_IB1_BASE,
-			ADRENO_REG_CP_IB1_BASE_HI, &ib1base);
-	adreno_readreg(adreno_dev, ADRENO_REG_CP_IB1_BUFSZ, &ib1sz);
-	adreno_readreg64(adreno_dev, ADRENO_REG_CP_IB2_BASE,
-			ADRENO_REG_CP_IB2_BASE_HI, &ib2base);
-	adreno_readreg(adreno_dev, ADRENO_REG_CP_IB2_BUFSZ, &ib2sz);
+	if (gx_on) {
+		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS, &status);
+		adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR, &rptr);
+		adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_WPTR, &wptr);
+		adreno_readreg64(adreno_dev, ADRENO_REG_CP_IB1_BASE,
+				ADRENO_REG_CP_IB1_BASE_HI, &ib1base);
+		adreno_readreg(adreno_dev, ADRENO_REG_CP_IB1_BUFSZ, &ib1sz);
+		adreno_readreg64(adreno_dev, ADRENO_REG_CP_IB2_BASE,
+				ADRENO_REG_CP_IB2_BASE_HI, &ib2base);
+		adreno_readreg(adreno_dev, ADRENO_REG_CP_IB2_BUFSZ, &ib2sz);
 
-	drawctxt = ADRENO_CONTEXT(drawobj->context);
-	drawobj->context->last_faulted_cmd_ts = drawobj->timestamp;
-	drawobj->context->total_fault_count++;
+		dev_err(device->dev,
+			"status %8.8X rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
+			status, rptr, wptr, ib1base, ib1sz, ib2base, ib2sz);
+	}
 
-	pr_context(device, drawobj->context,
-		"ctx %u ctx_type %s ts %u status %8.8X dispatch_queue=%d rb %4.4x/%4.4x ib1 %16.16llX/%4.4x ib2 %16.16llX/%4.4x\n",
-		drawobj->context->id, kgsl_context_type(drawctxt->type),
-		drawobj->timestamp, status,
-		drawobj->context->gmu_dispatch_queue, rptr, wptr,
-		ib1base, ib1sz, ib2base, ib2sz);
+	if (drawobj) {
+		drawctxt = ADRENO_CONTEXT(drawobj->context);
+		drawobj->context->last_faulted_cmd_ts = drawobj->timestamp;
+		drawobj->context->total_fault_count++;
+		ctxt_id = drawobj->context->id;
+		ts = drawobj->timestamp;
+		rb_id = adreno_get_level(drawobj->context);
 
-	pr_context(device, drawobj->context, "cmdline: %s\n",
-			drawctxt->base.proc_priv->cmdline);
+		pr_context(device, drawobj->context,
+			"ctx %u ctx_type %s ts %u dispatch_queue=%d\n",
+			drawobj->context->id, kgsl_context_type(drawctxt->type),
+			drawobj->timestamp, drawobj->context->gmu_dispatch_queue);
 
-	trace_adreno_gpu_fault(drawobj->context->id, drawobj->timestamp, status,
-		rptr, wptr, ib1base, ib1sz, ib2base, ib2sz,
-		adreno_get_level(drawobj->context));
+		pr_context(device, drawobj->context,
+			   "cmdline: %s\n", drawctxt->base.proc_priv->cmdline);
+	}
 
+	trace_adreno_gpu_fault(ctxt_id, ts, status, rptr, wptr, ib1base, ib1sz,
+			       ib2base, ib2sz, rb_id);
 }
 
 static struct cmd_list_obj *get_active_cmdobj_lpac(
@@ -1733,7 +1748,7 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 
 	context = drawobj->context;
 
-	do_fault_header(adreno_dev, drawobj);
+	do_fault_header(adreno_dev, drawobj, fault);
 
 	kgsl_device_snapshot(device, context, NULL, false);
 
@@ -1804,6 +1819,8 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 			drawobj = NULL;
 	}
 
+	do_fault_header(adreno_dev, drawobj, fault);
+
 	if (!obj_lpac && (fault & ADRENO_IOMMU_PAGE_FAULT))
 		obj_lpac = get_active_cmdobj_lpac(adreno_dev);
 
@@ -1815,10 +1832,8 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		goto done;
 	}
 
-	if (obj) {
+	if (obj)
 		context = drawobj->context;
-		do_fault_header(adreno_dev, drawobj);
-	}
 
 	if (obj_lpac) {
 		drawobj_lpac = obj_lpac->drawobj;

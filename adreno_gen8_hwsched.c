@@ -513,6 +513,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
+
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -589,6 +592,9 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen8_gmu_register_config(adreno_dev);
 
 	gen8_gmu_irq_enable(adreno_dev);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen8_gmu_device_start(adreno_dev);
 	if (ret)
@@ -759,9 +765,6 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
 	if (ret)
@@ -1367,7 +1370,7 @@ static int gen8_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	if (req.freq != INVALID_DCVS_IDX)
@@ -1529,7 +1532,7 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
 
-	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static void gen8_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
