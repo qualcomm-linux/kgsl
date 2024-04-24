@@ -28,8 +28,9 @@ const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
 	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
 	.external_core_regs = gen8_3_0_external_core_regs,
 	.num_external_core_regs = ARRAY_SIZE(gen8_3_0_external_core_regs),
-	.gmu_regs = gen8_3_0_gmu_regs,
-	.num_gmu_regs = ARRAY_SIZE(gen8_3_0_gmu_regs),
+	.gmu_cx_unsliced_regs = gen8_3_0_gmu_registers,
+	.gmu_gx_regs = gen8_3_0_gmu_gx_regs,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_3_0_gmu_gx_regs),
 	.rscc_regs = gen8_3_0_rscc_rsc_registers,
 	.reg_list = gen8_3_0_reg_list,
 	.cx_misc_regs = gen8_3_0_cx_misc_registers,
@@ -66,9 +67,6 @@ const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
 			+ (GEN8_DEBUGBUS_BLOCK_SIZE << 3))
 
 #define CD_REG_END 0xaaaaaaaa
-
-#define NUMBER_OF_SLICES(is_sliced) (is_sliced ? MAX_PHYSICAL_SLICES : 1)
-#define SLICE_ID(slices, j) ((slices > 1) ? j : UINT_MAX)
 
 static u32 CD_WRITE(u64 *ptr, u32 offset, u64 val)
 {
@@ -188,6 +186,9 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
 			(info->slice_id, 0, 0, 0));
+
+	/* Make sure the previous writes are posted before reading */
+	mb();
 
 	for (ptr = info->regs->regs; ptr[0] != UINT_MAX; ptr += 2) {
 		count = REG_COUNT(ptr);
@@ -675,6 +676,14 @@ done:
 	kgsl_regrmw(device, GEN8_SP_DBG_CNTL, GENMASK(1, 0), 0x0);
 }
 
+static void gen8_rmw_aperture(struct kgsl_device *device,
+	u32 offsetwords, u32 mask, u32 val, u32 pipe, u32 slice_id, u32 use_slice_id)
+{
+	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, slice_id, use_slice_id);
+
+	kgsl_regmap_rmw(&device->regmap, offsetwords, mask, val);
+}
+
 static void gen8_snapshot_mempool(struct kgsl_device *device,
 				struct kgsl_snapshot *snapshot)
 {
@@ -688,21 +697,24 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 		for (j = 0; j < slice; j++) {
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
-
 			/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4);
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, 0, 0);
+
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x4,
+				cp_indexed_reg->pipe_id, j, 1);
 
 			kgsl_snapshot_indexed_registers_v2(device, snapshot,
 				cp_indexed_reg->addr, cp_indexed_reg->data,
 				0, cp_indexed_reg->size, cp_indexed_reg->pipe_id,
-				((slice > 1) ? j : UINT_MAX));
+				SLICE_ID(cp_indexed_reg->slice_region, j));
 
-			kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, GEN8_CP_APERTURE_REG_VAL
-				(j, cp_indexed_reg->pipe_id, 0, 0));
+			/* Reset CP_CHICKEN_DBG[StabilizeMVC] once we are done */
+			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, 0, 0);
 
-			kgsl_regrmw(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0);
+			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x0,
+				cp_indexed_reg->pipe_id, j, 1);
 		}
 	}
 }
@@ -830,7 +842,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 						info.pipe_id = cluster->pipe_id;
 						info.usptp_id = usptp;
 						info.sp_id = sp;
-						info.slice_id = SLICE_ID(slice, j);
+						info.slice_id = SLICE_ID(cluster->slice_region, j);
 						info.cluster_id = cluster->cluster_id;
 						info.context_id = cluster->context_id;
 						kgsl_snapshot_add_section(device,
@@ -863,7 +875,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 					info.pipe_id = cluster->pipe_id;
 					info.usptp_id = usptp;
 					info.sp_id = sp;
-					info.slice_id = SLICE_ID(slice, j);
+					info.slice_id = SLICE_ID(cluster->slice_region, j);
 					info.statetype_id = cluster->statetype;
 					info.cluster_id = cluster->cluster_id;
 					info.context_id = cluster->context_id;
@@ -933,6 +945,9 @@ static size_t gen8_legacy_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 
 	if (info->cluster->sel)
 		kgsl_regwrite(device, info->cluster->sel->host_reg, info->cluster->sel->val);
+
+	/* Make sure the previous writes are posted before reading */
+	mb();
 
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
@@ -1017,7 +1032,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 				info.pipe_id = cluster->pipe_id;
 				info.cluster_id = cluster->cluster_id;
 				info.context_id = cluster->context_id;
-				info.slice_id = SLICE_ID(slice, j);
+				info.slice_id = SLICE_ID(cluster->slice_region, j);
 				kgsl_snapshot_add_section(device,
 					KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot, func, &info);
 			}
@@ -1041,7 +1056,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 			info.pipe_id = cluster->pipe_id;
 			info.cluster_id = cluster->cluster_id;
 			info.context_id = cluster->context_id;
-			info.slice_id = SLICE_ID(slice, j);
+			info.slice_id = SLICE_ID(cluster->slice_region, j);
 			info.offset = offset;
 
 			ptr += CD_WRITE(ptr, GEN8_CP_APERTURE_CNTL_CD, GEN8_CP_APERTURE_REG_VAL
@@ -1474,7 +1489,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 			slices = NUMBER_OF_SLICES(regs->slice_region);
 			for (j = 0; j < slices; j++) {
 				info.regs = regs;
-				info.slice_id = SLICE_ID(slices, j);
+				info.slice_id = SLICE_ID(regs->slice_region, j);
 				kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3,
 					snapshot, func, &info);
 			}
@@ -1500,7 +1515,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 			if (regs->sel)
 				ptr += CD_WRITE(ptr, regs->sel->cd_reg, regs->sel->val);
 			info.regs = regs;
-			info.slice_id = SLICE_ID(slices, j);
+			info.slice_id = SLICE_ID(regs->slice_region, j);
 			info.offset = offset;
 
 			for (; regs_ptr[0] != UINT_MAX; regs_ptr += 2) {
@@ -1611,7 +1626,7 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 		for (j = 0; j < slices; j++) {
 			info.regs = regs;
-			info.slice_id = SLICE_ID(slices, j);
+			info.slice_id = SLICE_ID(regs->slice_region, j);
 			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3,
 				snapshot, gen8_legacy_snapshot_registers, &info);
 		}

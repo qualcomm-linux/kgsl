@@ -9,7 +9,6 @@
 #include <linux/cpufreq.h>
 #include <linux/interconnect.h>
 #include <linux/pm_qos.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -1220,11 +1219,7 @@ no_gx_power:
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -1491,7 +1486,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	if (!ret && req.freq != INVALID_DCVS_IDX) {
@@ -1660,7 +1655,7 @@ void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
 
-	gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static void gen7_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
@@ -1861,6 +1856,8 @@ int gen7_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	gen7_gmu_suspend(adreno_dev);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
+
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 

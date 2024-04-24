@@ -180,7 +180,7 @@ void kgsl_regmap_multi_write(struct kgsl_regmap *regmap,
 		prev = region;
 
 		writel_relaxed(list[i].val, region_addr(region, list[i].offset));
-		trace_kgsl_regwrite(list[i].val, list[i].offset);
+		trace_kgsl_regwrite(list[i].offset, list[i].val);
 	}
 }
 
