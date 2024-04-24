@@ -277,7 +277,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 		slice = regs->slice_region ? MAX_PHYSICAL_SLICES : 1;
 		for (j = 0 ; j < slice; j++) {
 			info.regs = regs;
-			info.slice_id = j;
+			info.slice_id = SLICE_ID(regs->slice_region, j);
 			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,
 				gen8_legacy_snapshot_registers, &info);
 		}
