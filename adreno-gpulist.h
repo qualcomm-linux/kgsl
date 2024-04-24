@@ -2656,7 +2656,11 @@ static const struct gen8_nonctxt_regs gen8_0_0_nonctxt_regs[] = {
 	 * BIT(30): Disable LPAC auto-promotion
 	 */
 	{ GEN8_SP_CHICKEN_BITS_1, BIT(26) | BIT(30), BIT(PIPE_NONE) },
-	{ GEN8_SP_CHICKEN_BITS_2, 0x00800000, BIT(PIPE_NONE) },
+	/*
+	 * BIT(22): Disable PS out of order retire
+	 * BIT(23): Enable half wave mode and MM instruction src&dst is half precision
+	 */
+	{ GEN8_SP_CHICKEN_BITS_2, BIT(22) | BIT(23), BIT(PIPE_NONE) },
 	{ GEN8_SP_CHICKEN_BITS_3, 0x00300000, BIT(PIPE_NONE) },
 	{ GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP, 0x00000080,  BIT(PIPE_NONE) },
 	{ GEN8_SP_READ_SEL, 0x0001ff00,  BIT(PIPE_NONE) },
@@ -2846,7 +2850,11 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	 * BIT(30): Disable LPAC auto-promotion
 	 */
 	{ GEN8_SP_CHICKEN_BITS_1, BIT(26) | BIT(30), BIT(PIPE_NONE) },
-	{ GEN8_SP_CHICKEN_BITS_2, 0x00800000, BIT(PIPE_NONE) },
+	/*
+	 * BIT(22): Disable PS out of order retire
+	 * BIT(23): Enable half wave mode and MM instruction src&dst is half precision
+	 */
+	{ GEN8_SP_CHICKEN_BITS_2, BIT(22) | BIT(23), BIT(PIPE_NONE) },
 	{ GEN8_SP_CHICKEN_BITS_3, 0x00300000, BIT(PIPE_NONE) },
 	{ GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP, 0x00000080,  BIT(PIPE_NONE) },
 	{ GEN8_SP_READ_SEL, 0x0001ff00,  BIT(PIPE_NONE) },
