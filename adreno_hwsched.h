@@ -270,4 +270,13 @@ void adreno_hwsched_syncobj_kfence_put(struct kgsl_drawobj_sync *syncobj);
  */
 bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
 		struct device *dev, u32 error);
+
+/**
+ * adreno_hwsched_poll_msg_queue_write_index - Poll on write index of HFI message queue
+ * @hfi_mem: Memory descriptor for HFI queue table
+ *
+ * Returns zero if write index advances or ETIMEDOUT if timed out polling
+ */
+int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem);
+
 #endif
