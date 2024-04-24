@@ -1693,16 +1693,18 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size, PIPE_BR, 0, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-		GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
+		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
+			GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
+		gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
+			GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
 
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
+		gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
 			&snapshot->ib1size_lpac, PIPE_LPAC, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
+		gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
+	}
 
 	/* Assert the isStatic bit before triggering snapshot */
 	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x1);
