@@ -165,7 +165,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 	struct kgsl_snapshot_mvc_regs_v3 *header =
 			(struct kgsl_snapshot_mvc_regs_v3 *)buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	u32 size = adreno_snapshot_regs_count(ptr) * sizeof(*data);
+	u32 size = (adreno_snapshot_regs_count(ptr) * sizeof(*data)) + sizeof(*header);
 	u32 count, k;
 
 	if (remain < size) {
@@ -203,7 +203,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 			kgsl_regread(device, k, data++);
 	}
 
-	return (size + sizeof(*header));
+	return size;
 }
 
 static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
@@ -216,7 +216,7 @@ static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
 	u32 *data = (u32 *)(buf + sizeof(*header));
 	u32 *src;
 	u32 cnt;
-	u32 size = adreno_snapshot_regs_count(ptr) * sizeof(*data);
+	u32 size = (adreno_snapshot_regs_count(ptr) * sizeof(*data)) + sizeof(*header);
 
 	if (remain < size) {
 		SNAPSHOT_ERR_NOMEM(device, "REGISTERS");
