@@ -624,14 +624,6 @@ kgsl_pool_shrink_count_objects(struct shrinker *shrinker,
 	return kgsl_pool_size_nonreserved();
 }
 
-/* Shrinker callback data*/
-static struct shrinker kgsl_pool_shrinker = {
-	.count_objects = kgsl_pool_shrink_count_objects,
-	.scan_objects = kgsl_pool_shrink_scan_objects,
-	.seeks = DEFAULT_SEEKS,
-	.batch = 0,
-};
-
 int kgsl_pool_reserved_get(void *data, u64 *val)
 {
 	struct kgsl_page_pool *pool = data;
@@ -713,6 +705,54 @@ static int kgsl_of_parse_mempool(struct kgsl_page_pool *pool,
 	return 0;
 }
 
+#if (KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE)
+static void kgsl_pool_shrinker_init(void)
+{
+	kgsl_driver.pool_shrinker = shrinker_alloc(0, "kgsl_pool_shrinker");
+
+	if (!kgsl_driver.pool_shrinker)
+		return;
+
+	kgsl_driver.pool_shrinker->count_objects = kgsl_pool_shrink_count_objects;
+	kgsl_driver.pool_shrinker->scan_objects = kgsl_pool_shrink_scan_objects;
+	kgsl_driver.pool_shrinker->seeks = DEFAULT_SEEKS;
+	kgsl_driver.pool_shrinker->batch = 0;
+
+	shrinker_register(kgsl_driver.pool_shrinker);
+}
+
+static void kgsl_pool_shrinker_close(void)
+{
+	if (kgsl_driver.pool_shrinker)
+		shrinker_free(kgsl_driver.pool_shrinker);
+
+	kgsl_driver.pool_shrinker = NULL;
+}
+#else
+/* Shrinker callback data*/
+static struct shrinker kgsl_pool_shrinker = {
+	.count_objects = kgsl_pool_shrink_count_objects,
+	.scan_objects = kgsl_pool_shrink_scan_objects,
+	.seeks = DEFAULT_SEEKS,
+	.batch = 0,
+};
+
+static void kgsl_pool_shrinker_init(void)
+{
+	kgsl_driver.pool_shrinker = &kgsl_pool_shrinker;
+#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
+	register_shrinker(kgsl_driver.pool_shrinker, "kgsl_pool_shrinker");
+#else
+	register_shrinker(kgsl_driver.pool_shrinker);
+#endif
+}
+
+static void kgsl_pool_shrinker_close(void)
+{
+	unregister_shrinker(kgsl_driver.pool_shrinker);
+}
+#endif
+
 void kgsl_probe_page_pools(void)
 {
 	struct device_node *node, *child;
@@ -743,11 +783,7 @@ void kgsl_probe_page_pools(void)
 	of_node_put(node);
 
 	/* Initialize shrinker */
-#if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
-	register_shrinker(&kgsl_pool_shrinker, "kgsl_pool_shrinker");
-#else
-	register_shrinker(&kgsl_pool_shrinker);
-#endif
+	kgsl_pool_shrinker_init();
 }
 
 void kgsl_exit_page_pools(void)
@@ -758,7 +794,7 @@ void kgsl_exit_page_pools(void)
 	kgsl_pool_reduce(INT_MAX, true);
 
 	/* Unregister shrinker */
-	unregister_shrinker(&kgsl_pool_shrinker);
+	kgsl_pool_shrinker_close();
 
 	/* Destroy helper structures */
 	for (i = 0; i < kgsl_num_pools; i++)
