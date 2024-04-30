@@ -2266,9 +2266,6 @@ static int gen7_hwsched_coldboot_gpu(struct adreno_device *adreno_dev)
 	struct pending_cmd ack = {0};
 	int ret = 0;
 
-	/* Clear the bit so we can set it when GPU bootup message recording is successful */
-	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
-
 	ret = gen7_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gpu_boot_scratch,
 		 HFI_WARMBOOT_SET_SCRATCH, true, &ack);
 	if (ret)
@@ -2344,6 +2341,7 @@ err:
 	if (ret) {
 		/* Clear the bit in case of an error so next boot will be coldboot */
 		clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+		clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 		gen7_hwsched_hfi_stop(adreno_dev);
 	}
 
@@ -2392,6 +2390,7 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	/* Reset the variable here and set it when we successfully record the scratch */
 	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 
 	ret = gen7_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
 		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
