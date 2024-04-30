@@ -2360,7 +2360,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
-	.ctxt_record_size = (3572 * SZ_1K),
+	.ctxt_record_size = (4208 * SZ_1K),
 	.preempt_level = 1,
 	.fast_bus_hint = true,
 };
@@ -2398,7 +2398,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_vote = BIT(2),
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
-	.ctxt_record_size = (3572 * SZ_1K),
+	.ctxt_record_size = (4208 * SZ_1K),
 	.preempt_level = 1,
 	.fast_bus_hint = true,
 };
