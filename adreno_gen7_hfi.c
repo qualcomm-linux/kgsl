@@ -390,8 +390,6 @@ static const char *feature_to_string(u32 feature)
 {
 	if (feature == HFI_FEATURE_ACD)
 		return "ACD";
-	else if (feature == HFI_FEATURE_LM)
-		return "LM";
 
 	return "unknown";
 }
