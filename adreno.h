@@ -1308,6 +1308,12 @@ static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 		adreno_is_gen8_4_0(adreno_dev);
 }
 
+/* Gen7 target which does not support concurrent binning */
+static inline int adreno_is_gen7_no_cb_family(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen7_14_0(adreno_dev);
+}
+
 /*
  * adreno_checkreg_off() - Checks the validity of a register enum
  * @adreno_dev: Pointer to adreno device

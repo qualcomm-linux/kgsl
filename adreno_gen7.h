@@ -41,6 +41,20 @@ struct gen7_device {
 	struct gen7_gmu_device gmu;
 	/** @adreno_dev: Container for the generic adreno device */
 	struct adreno_device adreno_dev;
+	/** @aperture: The last value that the host aperture register was programmed to */
+	u32 aperture;
+	/** @ext_pwrup_list_len: External pwrup reglist length */
+	u16 ext_pwrup_list_len;
+};
+
+/**
+ * struct gen7_pwrup_extlist - container for powerup external reglist
+ */
+struct gen7_pwrup_extlist {
+	/** offset: Dword offset of the register to write */
+	u32 offset;
+	/** pipelines: pipelines to write */
+	u32 pipelines;
 };
 
 /**
