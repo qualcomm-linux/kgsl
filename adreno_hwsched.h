@@ -52,7 +52,10 @@ struct adreno_hwsched_ops {
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
 		struct kgsl_sync_fence *kfence);
-
+	/**
+	 * @get_rb_hostptr - Target specific function to get ringbuffer host pointer
+	 */
+	void *(*get_rb_hostptr)(struct adreno_device *adreno_dev, u64 gpuaddr, u32 size);
 };
 
 /**
@@ -289,4 +292,10 @@ int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem);
 void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *entry);
 
+bool adreno_hwsched_parse_payload_rb_legacy(struct adreno_device *adreno_dev,
+	struct kgsl_snapshot *snapshot);
+bool adreno_hwsched_parse_payload_rb(struct adreno_device *adreno_dev,
+	struct kgsl_snapshot *snapshot);
+size_t adreno_hwsched_snapshot_rb(struct kgsl_device *device, u8 *buf,
+	size_t remain, void *priv);
 #endif

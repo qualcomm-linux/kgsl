@@ -210,18 +210,6 @@ struct gen8_hwsched_hfi *to_gen8_hwsched_hfi(struct adreno_device *adreno_dev);
 u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev);
 
 /**
- * gen8_hwsched_parse_payload - Parse payload to look up a key
- * @payload: Pointer to a payload section
- * @key: The key who's value is to be looked up
- *
- * This function parses the payload data which is a sequence
- * of key-value pairs.
- *
- * Return: The value of the key or 0 if key is not found
- */
-u32 gen8_hwsched_parse_payload(struct payload_section *payload, u32 key);
-
-/**
  * gen8_hwsched_lpac_cp_init - Send CP_INIT to LPAC via HFI
  * @adreno_dev: Pointer to adreno device structure
  *
@@ -328,4 +316,14 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev);
  */
 int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev);
 
+/**
+ * gen8_hwsched_get_rb_hostptr - Get rinbuffer host pointer
+ * @adreno_dev: pointer to the adreno device
+ * @gpuaddr: ringbuffer gpu address
+ * @size: size of the ringbuffer
+ *
+ * Return: Host pointer of the gpu ringbuffer
+ */
+void *gen8_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size);
 #endif

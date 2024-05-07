@@ -329,4 +329,14 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev);
  */
 int gen7_hwsched_boot_gpu(struct adreno_device *adreno_dev);
 
+/**
+ * gen7_hwsched_get_rb_hostptr - Get rinbuffer host pointer
+ * @adreno_dev: pointer to the adreno device
+ * @gpuaddr: ringbuffer gpu address
+ * @size: size of the ringbuffer
+ *
+ * Return: Host pointer of the gpu ringbuffer
+ */
+void *gen7_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size);
 #endif

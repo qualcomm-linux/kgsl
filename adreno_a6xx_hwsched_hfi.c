@@ -2159,3 +2159,21 @@ done:
 
 	return rc ? 0 : pending_ack.results[2];
 }
+
+void *a6xx_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size)
+{
+	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
+	u64 offset;
+	u32 i;
+
+	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
+		struct kgsl_memdesc *md = hw_hfi->mem_alloc_table[i].md;
+
+		if (kgsl_gpuaddr_in_memdesc(md, gpuaddr, size)) {
+			offset = gpuaddr - md->gpuaddr;
+			return md->hostptr + offset;
+		}
+	}
+	return NULL;
+}

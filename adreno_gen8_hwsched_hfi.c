@@ -191,19 +191,6 @@ static void log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
 	kgsl_context_put(context);
 }
 
-u32 gen8_hwsched_parse_payload(struct payload_section *payload, u32 key)
-{
-	u32 i;
-
-	/* Each key-value pair is 2 dwords */
-	for (i = 0; i < payload->dwords; i += 2) {
-		if (payload->data[i] == key)
-			return payload->data[i + 1];
-	}
-
-	return 0;
-}
-
 struct syncobj_flags {
 	unsigned long mask;
 	const char *name;
@@ -311,7 +298,7 @@ static u32 gen8_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 		struct payload_section *payload = start + i;
 
 		if (payload->type == type)
-			return gen8_hwsched_parse_payload(payload, key);
+			return adreno_hwsched_parse_payload(payload, key);
 
 		i += struct_size(payload, data, payload->dwords);
 	}
@@ -338,10 +325,10 @@ static u32 get_payload_rb_key(struct adreno_device *adreno_dev,
 		struct payload_section *payload = start + i;
 
 		if (payload->type == PAYLOAD_RB) {
-			u32 id = gen8_hwsched_parse_payload(payload, KEY_RB_ID);
+			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
 
 			if (id == rb_id)
-				return gen8_hwsched_parse_payload(payload, key);
+				return adreno_hwsched_parse_payload(payload, key);
 		}
 
 		i += struct_size(payload, data, payload->dwords);
@@ -3803,4 +3790,23 @@ done:
 	_disable_hw_fence_throttle(adreno_dev, true);
 
 	return ret;
+}
+
+void *gen8_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size)
+{
+	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+	u64 offset;
+	u32 i;
+
+	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
+		struct kgsl_memdesc *md = hw_hfi->mem_alloc_table[i].md;
+
+		if (kgsl_gpuaddr_in_memdesc(md, gpuaddr, size)) {
+			offset = gpuaddr - md->gpuaddr;
+			return md->hostptr + offset;
+		}
+	}
+
+	return NULL;
 }
