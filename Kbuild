@@ -146,6 +146,7 @@ msm_kgsl-y += \
 	adreno_gen8_rpmh.o \
 	adreno_gen8_snapshot.o \
 	adreno_hwsched.o \
+	adreno_hwsched_snapshot.o \
 	adreno_ioctl.o \
 	adreno_perfcounter.o \
 	adreno_ringbuffer.o \

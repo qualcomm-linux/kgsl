@@ -53,6 +53,7 @@ def kgsl_get_srcs():
         "adreno_gen8_rpmh.c",
         "adreno_gen8_snapshot.c",
         "adreno_hwsched.c",
+        "adreno_hwsched_snapshot.c",
         "adreno_ioctl.c",
         "adreno_perfcounter.c",
         "adreno_ringbuffer.c",

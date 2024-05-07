@@ -291,17 +291,4 @@ int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem);
  */
 void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *entry);
-
-bool adreno_hwsched_parse_payload_rb_legacy(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot);
-bool adreno_hwsched_parse_payload_rb(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot);
-size_t adreno_hwsched_snapshot_rb(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv);
-size_t adreno_hwsched_snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv);
-void adreno_hwsched_snapshot_context_queue(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot);
-void adreno_hwsched_snapshot_preemption_records(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md);
 #endif

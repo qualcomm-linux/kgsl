@@ -6,6 +6,7 @@
 #ifndef __ADRENO_SNAPSHOT_H
 #define __ADRENO_SNAPSHOT_H
 
+#include "adreno_hwsched_snapshot.h"
 #include "kgsl_snapshot.h"
 
 /* Number of dwords to dump in snapshot for CP SQE */

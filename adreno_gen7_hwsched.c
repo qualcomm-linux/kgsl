@@ -146,7 +146,7 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	}
 
 	if (adreno_hwsched_context_queue_enabled(adreno_dev))
-		adreno_hwsched_snapshot_context_queue(adreno_dev, snapshot);
+		adreno_hwsched_snapshot_context_queue(device, snapshot);
 }
 
 static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)

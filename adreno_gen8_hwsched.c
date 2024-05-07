@@ -141,7 +141,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 
 	}
 
-	adreno_hwsched_snapshot_context_queue(adreno_dev, snapshot);
+	adreno_hwsched_snapshot_context_queue(device, snapshot);
 }
 
 static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
