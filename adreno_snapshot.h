@@ -8,6 +8,9 @@
 
 #include "kgsl_snapshot.h"
 
+/* Number of dwords to dump in snapshot for CP SQE */
+#define SQE_FW_SNAPSHOT_DWORDS 5
+
 #define CP_CRASH_DUMPER_TIMEOUT 500
 
 #define SHADER_SECTION_SZ(_dwords) (((_dwords) * sizeof(unsigned int)) \

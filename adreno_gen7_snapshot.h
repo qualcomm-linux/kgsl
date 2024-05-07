@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_SNAPSHOT_H
 #define __ADRENO_GEN7_SNAPSHOT_H
@@ -31,9 +31,6 @@
 #define STATE_FORCE_CTXT_1 3
 
 #define GEN7_DEBUGBUS_BLOCK_SIZE 0x100
-
-/* Number of dword to dump in snapshot for CP SQE */
-#define GEN7_SQE_FW_SNAPSHOT_DWORDS 5
 
 struct gen7_sel_reg {
 	unsigned int host_reg;

@@ -1103,6 +1103,36 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 
 }
 
+/**
+ * adreno_snapshot_sqe -  Dump the SQE firmware version and few dwords
+ * @device: Pointer to the kgsl device
+ * @buf: Pointer to the snapshot buffer
+ * @remain: Remaining size in snapshot buffer
+ * @priv: Private pointer to pass to the function
+ *
+ * Return: Number of bytes written to the snapshot buffer
+ */
+static size_t adreno_snapshot_sqe(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	void *data = buf + sizeof(*header);
+	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
+
+	if (remain < DEBUG_SECTION_SZ(SQE_FW_SNAPSHOT_DWORDS)) {
+		SNAPSHOT_ERR_NOMEM(device, "SQE VERSION DEBUG");
+		return 0;
+	}
+
+	/* Dump the SQE firmware version and few dwords */
+	header->type = SNAPSHOT_DEBUG_SQE_VERSION;
+	header->size = SQE_FW_SNAPSHOT_DWORDS;
+	memcpy(data, fw->memdesc->hostptr, (SQE_FW_SNAPSHOT_DWORDS * sizeof(u32)));
+
+	return DEBUG_SECTION_SZ(SQE_FW_SNAPSHOT_DWORDS);
+}
+
 /* adreno_snapshot - Snapshot the Adreno GPU state
  * @device - KGSL device to snapshot
  * @snapshot - Pointer to the snapshot instance
@@ -1141,6 +1171,10 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 
 	snapshot->process = setup_fault_process(device, snapshot, context);
 	snapshot->process_lpac = setup_fault_process(device, snapshot, context_lpac);
+
+	/* Dump SQE Firmware version and few dwords */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, adreno_snapshot_sqe, NULL);
 
 	/* Add GPU specific sections - registers mainly, but other stuff too */
 	if (gpudev->snapshot)

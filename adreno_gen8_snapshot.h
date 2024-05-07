@@ -46,9 +46,6 @@ enum location_id {
 
 #define GEN8_DEBUGBUS_BLOCK_SIZE 0x100
 
-/* Number of dword to dump in snapshot for CP SQE */
-#define GEN8_SQE_FW_SNAPSHOT_DWORDS 5
-
 struct sel_reg {
 	u32 host_reg;
 	u32 cd_reg;
