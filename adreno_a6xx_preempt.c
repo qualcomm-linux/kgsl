@@ -724,17 +724,14 @@ int a6xx_preemption_init(struct adreno_device *adreno_dev)
 
 	/*
 	 * First 28 dwords of the device scratch buffer are used to store shadow rb data.
-	 * Reserve 11 dwords in the device scratch buffer from SCRATCH_POSTAMBLE_OFFSET for
-	 * KMD postamble pm4 packets. This should be in *device->scratch* so that userspace
-	 * cannot access it.
+	 * Insert PM4 packets in device scratch buffer to clear perfcounters. This should
+	 * be in *device->scratch* so that userspace cannot access it.
 	 */
 	if (!adreno_dev->perfcounter) {
 		u32 *postamble = device->scratch->hostptr + SCRATCH_POSTAMBLE_OFFSET;
 		u32 count = 0;
 
-		postamble[count++] = cp_type7_packet(CP_REG_RMW, 3);
-		postamble[count++] = A6XX_RBBM_PERFCTR_SRAM_INIT_CMD;
-		postamble[count++] = 0x0;
+		postamble[count++] = cp_type4_packet(A6XX_RBBM_PERFCTR_SRAM_INIT_CMD, 1);
 		postamble[count++] = 0x1;
 
 		postamble[count++] = cp_type7_packet(CP_WAIT_REG_MEM, 6);
