@@ -1029,6 +1029,9 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
 	u32 rcvd[MAX_RCVD_SIZE], next_hdr, type;
 
+	if (!(hw_hfi->irq_mask & HFI_IRQ_MSGQ_MASK))
+		return;
+
 	mutex_lock(&hw_hfi->msgq_mutex);
 
 	for (;;) {
