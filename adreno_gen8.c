@@ -2034,6 +2034,34 @@ static int gen8_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t gen8_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	/*
+	 * GPU can power down once the INT_0_STATUS is read below.
+	 * But there still might be some register reads required so
+	 * force the GMU/GPU into KEEPALIVE mode until done with the ISR.
+	 */
+	gen8_gpu_keepalive(adreno_dev, true);
+
+	kgsl_regread(device, GEN8_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, GEN8_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, gen8_irq_funcs, status);
+
+	trace_kgsl_gen8_irq_status(adreno_dev, status);
+
+	/* If hard fault, then let snapshot turn off the keepalive */
+	if (!(adreno_gpu_fault(adreno_dev) & ADRENO_HARD_FAULT))
+		gen8_gpu_keepalive(adreno_dev, false);
+
+	return ret;
+}
+
 static irqreturn_t gen8_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2715,7 +2743,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.reg_offsets = gen8_register_offsets,
 		.probe = gen8_hwsched_probe,
 		.snapshot = gen8_hwsched_snapshot,
-		.irq_handler = gen8_irq_handler,
+		.irq_handler = gen8_hwsched_irq_handler,
 		.iommu_fault_block = gen8_iommu_fault_block,
 		.context_detach = gen8_hwsched_context_detach,
 		.read_alwayson = gen8_read_alwayson,
