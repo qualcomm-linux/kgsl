@@ -52,6 +52,8 @@ struct kgsl_regmap {
 	struct kgsl_regmap_region region[5];
 	/** @count: Number of active regions in @region */
 	int count;
+	/** @use_relaxed: To use relaxed variant of IO access API */
+	bool use_relaxed;
 };
 
 /**

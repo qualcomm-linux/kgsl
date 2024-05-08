@@ -1044,9 +1044,19 @@ int gen8_start(struct adreno_device *adreno_dev)
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 	u64 uche_trap_base = gen8_get_uche_trap_base();
 	u32 rgba8888_lossless = 0;
+	int is_current_rt = rt_task(current);
 
 	/* Reset aperture fields to go through first aperture write check */
 	gen8_dev->aperture = UINT_MAX;
+
+	/*
+	 * Elevating the thread’s priority to FIFO to ensure sequential register access
+	 * on the same CPU, avoiding context switches to a different CPU or thread.
+	 */
+	if (!is_current_rt)
+		sched_set_fifo(current);
+
+	device->regmap.use_relaxed = false;
 
 	/* Make all blocks contribute to the GPU BUSY perf counter */
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_GPU_BUSY_MASKED, 0xffffffff);
@@ -1239,6 +1249,13 @@ int gen8_start(struct adreno_device *adreno_dev)
 		gen8_patch_pwrup_reglist(adreno_dev);
 		adreno_dev->patch_reglist = true;
 	}
+
+	/* Ensure very last register write is finished before we return from this function */
+	mb();
+	device->regmap.use_relaxed = true;
+
+	if (!is_current_rt)
+		sched_set_normal(current, 0);
 
 	return 0;
 }
