@@ -753,7 +753,6 @@ static void _a5xx_do_crashdump(struct kgsl_device *device)
 {
 	unsigned long wait_time;
 	unsigned int reg = 0;
-	unsigned int val;
 
 	crash_dump_valid = false;
 
@@ -764,8 +763,7 @@ static void _a5xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	kgsl_regread(device, A5XX_RBBM_STATUS3, &val);
-	if (val & BIT(24))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV so we can access the buffers */

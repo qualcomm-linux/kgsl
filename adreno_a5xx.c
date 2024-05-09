@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -97,6 +97,8 @@ static int a5xx_probe(struct platform_device *pdev,
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
+
+	adreno_dev->irq_mask = A5XX_INT_MASK;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
@@ -1272,8 +1274,6 @@ static int a5xx_start(struct adreno_device *adreno_dev)
 
 	adreno_get_bus_counters(adreno_dev);
 	adreno_perfcounter_restore(adreno_dev);
-
-	adreno_dev->irq_mask = A5XX_INT_MASK;
 
 	if (adreno_is_a530(adreno_dev) &&
 			ADRENO_FEATURE(adreno_dev, ADRENO_LM))

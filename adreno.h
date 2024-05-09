@@ -1,13 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
 
 #include <linux/iopoll.h>
 #include <linux/of.h>
+#include <linux/soc/qcom/llcc-qcom.h>
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
@@ -184,6 +185,9 @@
 #define ADRENO_FW_PM4 1
 #define ADRENO_FW_AQE 1
 
+#define ADRENO_GPUREV_VALUE(_major, _minor, _patchid) (((_major & 0xFF) << 16) | \
+						       ((_minor & 0xFF) << 8) | \
+						       (_patchid & 0xFF))
 enum adreno_gpurev {
 	ADRENO_REV_UNKNOWN = 0,
 	ADRENO_REV_A304 = 304,
@@ -207,6 +211,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A530 = 530,
 	ADRENO_REV_A540 = 540,
 	ADRENO_REV_A610 = 610,
+	ADRENO_REV_A611 = 611,
 	ADRENO_REV_A612 = 612,
 	ADRENO_REV_A615 = 615,
 	ADRENO_REV_A616 = 616,
@@ -229,14 +234,15 @@ enum adreno_gpurev {
 	 * Bits 8-15: Minor
 	 * Bits 0-7: Patch id
 	 */
-	ADRENO_REV_GEN7_0_0 = 0x070000,
-	ADRENO_REV_GEN7_0_1 = 0x070001,
-	ADRENO_REV_GEN7_2_0 = 0x070200,
-	ADRENO_REV_GEN7_2_1 = 0x070201,
-	ADRENO_REV_GEN7_4_0 = 0x070400,
-	ADRENO_REV_GEN7_9_0 = 0x070900,
-	ADRENO_REV_GEN7_9_1 = 0x070901,
-	ADRENO_REV_GEN7_11_0 = 0x070b00,
+	ADRENO_REV_GEN7_0_0 = ADRENO_GPUREV_VALUE(7, 0, 0),
+	ADRENO_REV_GEN7_0_1 = ADRENO_GPUREV_VALUE(7, 0, 1),
+	ADRENO_REV_GEN7_2_0 = ADRENO_GPUREV_VALUE(7, 2, 0),
+	ADRENO_REV_GEN7_2_1 = ADRENO_GPUREV_VALUE(7, 2, 1),
+	ADRENO_REV_GEN7_4_0 = ADRENO_GPUREV_VALUE(7, 4, 0),
+	ADRENO_REV_GEN7_9_0 = ADRENO_GPUREV_VALUE(7, 9, 0),
+	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
+	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
+	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -247,6 +253,25 @@ enum adreno_gpurev {
 #define ADRENO_GMU_FAULT BIT(5)
 #define ADRENO_CTX_DETATCH_TIMEOUT_FAULT BIT(6)
 #define ADRENO_GMU_FAULT_SKIP_SNAPSHOT BIT(7)
+
+enum adreno_pipe_type {
+	PIPE_NONE = 0,
+	PIPE_BR = 1,
+	PIPE_BV = 2,
+	PIPE_LPAC = 3,
+	PIPE_AQE0 = 4,
+	PIPE_AQE1 = 5,
+	PIPE_DDE_BR = 6,
+	PIPE_DDE_BV = 7,
+};
+/**
+ * Bit fields for GPU_CX_MISC_CX_AHB_*_CNTL registers
+ * AHB_TXFRTIMEOUTRELEASE	[8:8]
+ * AHB_TXFRTIMEOUTENABLE	[9:9]
+ * AHB_RESPONDERROR		[11:11]
+ * AHB_ERRORSTATUSENABLE	[12:12]
+ */
+#define ADRENO_AHB_CNTL_DEFAULT (BIT(12) | BIT(11) | BIT(9) | BIT(8))
 
 /* number of throttle counters for DCVS adjustment */
 #define ADRENO_GPMU_THROTTLE_COUNTERS 4
@@ -480,6 +505,8 @@ struct adreno_dispatch_ops {
 	void (*fault)(struct adreno_device *adreno_dev, u32 fault);
 	/* @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev, struct kgsl_sync_fence *kfence);
+	/* @get_fault: Get the GPU fault status */
+	u32 (*get_fault)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -493,14 +520,6 @@ struct adreno_dispatch_ops {
  * @isense_len: Length of the isense register block
  * @isense_virt: Pointer where isense block is mapped
  * @gpucore: Pointer to the adreno_gpu_core structure
- * @pfp_fw: Buffer which holds the pfp ucode
- * @pfp_fw_size: Size of pfp ucode buffer
- * @pfp_fw_version: Version of pfp ucode
- * @pfp: Memory descriptor which holds pfp ucode buffer info
- * @pm4_fw: Buffer which holds the pm4 ucode
- * @pm4_fw_size: Size of pm4 ucode buffer
- * @pm4_fw_version: Version of pm4 ucode
- * @pm4: Memory descriptor which holds pm4 ucode buffer info
  * @gpmu_cmds_size: Length of gpmu cmd stream
  * @gpmu_cmds: gpmu cmd stream
  * @ringbuffers: Array of pointers to adreno_ringbuffers
@@ -545,8 +564,7 @@ struct adreno_dispatch_ops {
  * @lm_threshold_cross: number of current peaks exceeding threshold
  * @ifpc_count: Number of times the GPU went into IFPC
  * @highest_bank_bit: Value of the highest bank bit
- * @csdev: Pointer to a coresight device (if applicable)
- * @gpmu_throttle_counters - counteers for number of throttled clocks
+ * @gpmu_throttle_counters - counters for number of throttled clocks
  * @irq_storm_work: Worker to handle possible interrupt storms
  * @active_list: List to track active contexts
  * @active_list_lock: Lock to protect active_list
@@ -677,8 +695,6 @@ struct adreno_device {
 	 * @soft_ft_vals: number of elements in @soft_ft_regs and @soft_ft_vals
 	 */
 	int soft_ft_count;
-	/** @wake_on_touch: If true our last wakeup was due to a touch event */
-	bool wake_on_touch;
 	/* @dispatch_ops: A pointer to a set of adreno dispatch ops */
 	const struct adreno_dispatch_ops *dispatch_ops;
 	/** @hwsched: Container for the hardware dispatcher */
@@ -726,6 +742,16 @@ struct adreno_device {
 	u32 ifpc_hyst_floor;
 	/** @cx_misc_base: CX MISC register block base offset */
 	u32 cx_misc_base;
+	/*
+	 * @no_restore_count: Keep track of perfcounter requests that don't have
+	 * ADRENO_PERFCOUNTER_GROUP_RESTORE flag set
+	 */
+	u32 no_restore_count;
+	/*
+	 * @ahb_timeout_val: AHB transaction timeout value.
+	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
+	 */
+	u32 ahb_timeout_val;
 };
 
 /**
@@ -972,6 +998,14 @@ struct adreno_gpudev {
 	 * @get_uche_trap_base: Return the UCHE_TRAP_BASE value
 	 */
 	u64 (*get_uche_trap_base)(void);
+	/**
+	 * @fault_header: Print fault header
+	 */
+	void (*fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @lpac_fault_header: Print LPAC fault header
+	 */
+	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
 };
 
 /**
@@ -1015,6 +1049,7 @@ extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
 extern const struct adreno_gpudev adreno_a619_holi_gpudev;
+extern const struct adreno_gpudev adreno_a611_gpudev;
 
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
@@ -1157,6 +1192,7 @@ static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 }
 
 ADRENO_TARGET(a610, ADRENO_REV_A610)
+ADRENO_TARGET(a611, ADRENO_REV_A611)
 ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
@@ -1232,6 +1268,13 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
 }
 
+static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
+{
+	unsigned int rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A610 || rev == ADRENO_REV_A611);
+}
+
 static inline int adreno_is_a640v2(struct adreno_device *adreno_dev)
 {
 	return (ADRENO_GPUREV(adreno_dev) == ADRENO_REV_A640) &&
@@ -1244,6 +1287,12 @@ static inline int adreno_is_gen7(struct adreno_device *adreno_dev)
 			ADRENO_GPUREV(adreno_dev) < 0x080000;
 }
 
+static inline int adreno_is_gen8(struct adreno_device *adreno_dev)
+{
+	return ADRENO_GPUREV(adreno_dev) >= 0x080000 &&
+			ADRENO_GPUREV(adreno_dev) < 0x090000;
+}
+
 ADRENO_TARGET(gen7_0_0, ADRENO_REV_GEN7_0_0)
 ADRENO_TARGET(gen7_0_1, ADRENO_REV_GEN7_0_1)
 ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
@@ -1252,6 +1301,7 @@ ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
+ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1272,8 +1322,8 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 
 /*
  * adreno_checkreg_off() - Checks the validity of a register enum
- * @adreno_dev:		Pointer to adreno device
- * @offset_name:	The register enum that is checked
+ * @adreno_dev: Pointer to adreno device
+ * @offset_name: The register enum that is checked
  */
 static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 					enum adreno_regs offset_name)
@@ -1301,9 +1351,9 @@ static inline bool adreno_checkreg_off(struct adreno_device *adreno_dev,
 /*
  * adreno_readreg() - Read a register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be read
- * @val:		Register value read is placed here
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be read
+ * @val: Register value read is placed here
  */
 static inline void adreno_readreg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int *val)
@@ -1320,9 +1370,9 @@ static inline void adreno_readreg(struct adreno_device *adreno_dev,
 /*
  * adreno_writereg() - Write a register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be written
- * @val:		Value to write
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be written
+ * @val: Value to write
  */
 static inline void adreno_writereg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int val)
@@ -1337,8 +1387,8 @@ static inline void adreno_writereg(struct adreno_device *adreno_dev,
 /*
  * adreno_getreg() - Returns the offset value of a register from the
  * register offset array in the gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum whore offset is returned
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum whore offset is returned
  */
 static inline unsigned int adreno_getreg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name)
@@ -1353,9 +1403,9 @@ static inline unsigned int adreno_getreg(struct adreno_device *adreno_dev,
 /*
  * adreno_write_gmureg() - Write a GMU register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
- * @offset_name:	The register enum that is to be written
- * @val:		Value to write
+ * @adreno_dev: Pointer to the adreno device
+ * @offset_name: The register enum that is to be written
+ * @val: Value to write
  */
 static inline void adreno_write_gmureg(struct adreno_device *adreno_dev,
 				enum adreno_regs offset_name, unsigned int val)
@@ -1395,11 +1445,6 @@ static inline void adreno_set_gpu_fault(struct adreno_device *adreno_dev,
 
 	/* make sure other CPUs see the update */
 	smp_wmb();
-}
-
-static inline bool adreno_gmu_gpu_fault(struct adreno_device *adreno_dev)
-{
-	return adreno_gpu_fault(adreno_dev) & ADRENO_GMU_FAULT;
 }
 
 /**
@@ -1971,4 +2016,50 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
  *
  */
 void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_smmu_is_stalled() - Check whether smmu is stalled or not
+ * @device: Pointer to adreno device
+ *
+ * Return - True if smmu is stalled or false otherwise
+ */
+bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_get_ahb_timeout_val() - Get the ahb_timeout value
+ * @adreno_dev: Adreno device handle
+ * @noc_timeout_us: GPU config NOC timeout value in usec
+ *
+ * Return - AHB timeout value to be programmed in AHB CNTL registers
+ */
+u32 adreno_get_ahb_timeout_val(struct adreno_device *adreno_dev, u32 noc_timeout_us);
+
+/**
+ * adreno_llcc_slice_deactivate - Deactivate GPU and GPUHTW llcc slices
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev)
+{
+	if (adreno_dev->gpu_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
+
+	if (adreno_dev->gpuhtw_llc_slice_enable && !IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
+		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+}
+
+/**
+ * adreno_irq_free - Free an interrupt allocated for GPU
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_irq_free(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!(adreno_dev->irq_mask || device->pwrctrl.interrupt_num))
+		return;
+
+	devm_free_irq(&device->pdev->dev, device->pwrctrl.interrupt_num, device);
+	adreno_dev->irq_mask = 0;
+	device->pwrctrl.interrupt_num = 0;
+}
 #endif /*__ADRENO_H */

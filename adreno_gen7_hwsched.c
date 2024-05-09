@@ -9,7 +9,6 @@
 #include <linux/cpufreq.h>
 #include <linux/interconnect.h>
 #include <linux/pm_qos.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -248,7 +247,6 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 err:
 	snprintf(str, sizeof(str), "RB addr:0x%llx", gpuaddr);
 	SNAPSHOT_ERR_NOMEM(device, str);
-	return;
 }
 
 static bool parse_payload_rb_legacy(struct adreno_device *adreno_dev,
@@ -494,6 +492,13 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen7_enable_ahb_timeout_detection(adreno_dev);
+
 	/* Initialize the CX timer */
 	gen7_cx_timer_init(adreno_dev);
 
@@ -532,7 +537,14 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	/* Vote for minimal DDR BW for GMU to init */
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 
+	/* From this GMU FW all RBBM interrupts are handled at GMU */
+	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
+		adreno_irq_free(adreno_dev);
+
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)
@@ -599,6 +611,13 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen7_enable_ahb_timeout_detection(adreno_dev);
+
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -610,6 +629,9 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen7_gmu_register_config(adreno_dev);
 
 	gen7_gmu_irq_enable(adreno_dev);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)
@@ -780,9 +802,6 @@ static int gen7_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
 	if (ret)
@@ -1203,11 +1222,7 @@ no_gx_power:
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
@@ -1474,7 +1489,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+			gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	if (!ret && req.freq != INVALID_DCVS_IDX) {
@@ -1563,7 +1578,7 @@ static int gen7_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel, ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
 	return ret;
 }
 
@@ -1581,7 +1596,7 @@ static int gen7_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
 
-	/**
+	/*
 	 * Wait for the dispatcher to retire everything by waiting
 	 * for the active count to go to zero.
 	 */
@@ -1643,7 +1658,7 @@ void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 	dev_err_ratelimited(&gmu->pdev->dev,
 			"GMU watchdog expired interrupt received\n");
 
-	gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static void gen7_hwsched_drain_ctxt_unregister(struct adreno_device *adreno_dev)
@@ -1709,7 +1724,7 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	struct list_head hw_fence_list;
 	struct adreno_hw_fence_entry *entry, *tmp;
 
-	/**
+	/*
 	 * Since we need to wait for ack from GMU when sending each inflight fence back to GMU, we
 	 * cannot send them from within atomic context. Hence, walk list of such hardware fences
 	 * for each context and add it to this local list and then walk this list to send all these
@@ -1845,6 +1860,8 @@ int gen7_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 
+	adreno_llcc_slice_deactivate(adreno_dev);
+
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
 	spin_lock(&hfi->hw_fence.lock);
@@ -1908,6 +1925,8 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 
 	adreno_dev->hwsched_enabled = true;
 
+	adreno_dev->irq_mask = GEN7_HWSCHED_INT_MASK;
+
 	ret = gen7_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1917,8 +1936,6 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, hwsched_idle_check);
 
 	timer_setup(&device->idle_timer, hwsched_idle_timer, 0);
-
-	adreno_dev->irq_mask = GEN7_HWSCHED_INT_MASK;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		adreno_dev->lpac_enabled = true;

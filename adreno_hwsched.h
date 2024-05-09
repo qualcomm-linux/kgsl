@@ -151,11 +151,11 @@ void adreno_hwsched_trigger(struct adreno_device *adreno_dev);
  */
 void adreno_hwsched_start(struct adreno_device *adreno_dev);
 /**
- * adreno_hwsched_dispatcher_init() - Initialize the hwsched dispatcher
+ * adreno_hwsched_init() - Initialize the hwsched
  * @adreno_dev: pointer to the adreno device
  * @hwsched_ops: Pointer to target specific hwsched ops
  *
- * Set up the dispatcher resources.
+ * Set up the hwsched resources.
  * Return: 0 on success or negative on failure.
  */
 int adreno_hwsched_init(struct adreno_device *adreno_dev,
@@ -167,6 +167,14 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
  * @fault: The type of fault
  */
 void adreno_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
+
+/**
+ * adreno_hwsched_clear_fault() - Clear the hwsched fault
+ * @adreno_dev: A pointer to an adreno_device structure
+ *
+ * Clear the hwsched fault status for adreno device
+ */
+void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
 
 /**
  * adreno_hwsched_parse_fault_ib - Parse the faulty submission
@@ -197,13 +205,6 @@ void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev);
  * Return: 0 on success or negative error on failure
  */
 int adreno_hwsched_idle(struct adreno_device *adreno_dev);
-
-static inline bool hwsched_in_fault(struct adreno_hwsched *hwsched)
-{
-	/* make sure we're reading the latest value */
-	smp_rmb();
-	return atomic_read(&hwsched->fault) != 0;
-}
 
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj);
@@ -248,4 +249,25 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev);
  * Return: The value of the key or 0 if key is not found
  */
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
+
+/**
+ * adreno_hwsched_gpu_fault - Gets hwsched gpu fault info
+ * @adreno_dev: pointer to the adreno device
+ *
+ * Returns zero for hwsched fault else non zero value
+ */
+u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_hwsched_log_nonfatal_gpu_fault - Logs non fatal GPU error from context bad hfi packet
+ * @adreno_dev: pointer to the adreno device
+ * @dev: Pointer to the struct device for the GMU platform device
+ * @error: Types of error that triggered from context bad HFI
+ *
+ * This function parses context bad hfi packet and logs error information.
+ *
+ * Return: True for non fatal error code else false.
+ */
+bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
+		struct device *dev, u32 error);
 #endif

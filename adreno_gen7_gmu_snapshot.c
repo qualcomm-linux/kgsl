@@ -285,7 +285,7 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 	 * A stalled SMMU can lead to NoC timeouts when host accesses DTCM.
 	 * DTCM can be read through side-band DBGC interface on gen7_2_x family.
 	 */
-	if (gen7_is_smmu_stalled(device) && !adreno_is_gen7_2_x_family(adreno_dev)) {
+	if (adreno_smmu_is_stalled(adreno_dev) && !adreno_is_gen7_2_x_family(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;
