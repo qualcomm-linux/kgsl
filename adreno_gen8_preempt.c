@@ -684,6 +684,13 @@ static int gen8_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	if (gen8_core->ctxt_record_size)
 		ctxt_record_size = gen8_core->ctxt_record_size;
 
+	/*
+	 * Since RB0 always runs to completion, there is no need to
+	 * save/restore GMEM data for RB0.
+	 */
+	if (rb->id == 0)
+		ctxt_record_size -= adreno_dev->gpucore->gmem_size;
+
 	ret = adreno_allocate_global(device, &rb->preemption_desc,
 		ctxt_record_size, SZ_16K, 0,
 		KGSL_MEMDESC_PRIVILEGED, "preemption_desc");
