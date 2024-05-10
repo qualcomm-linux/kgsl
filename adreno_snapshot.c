@@ -1299,3 +1299,54 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 	return (count * 4);
 }
 
+size_t adreno_snapshot_gmu_version(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *) (buf + sizeof(*header));
+	struct kgsl_snapshot_gmu_version *ver = priv;
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "GMU Version");
+		return 0;
+	}
+
+	header->type = ver->type;
+	header->size = 1;
+
+	*data = ver->value;
+
+	return DEBUG_SECTION_SZ(1);
+}
+
+size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_snapshot_gmu_mem *mem_hdr =
+		(struct kgsl_snapshot_gmu_mem *)buf;
+	void *data = buf + sizeof(*mem_hdr);
+	struct gmu_mem_type_desc *desc = priv;
+
+	if (priv == NULL || desc->memdesc->hostptr == NULL)
+		return 0;
+
+	if (remain < desc->memdesc->size + sizeof(*mem_hdr)) {
+		dev_err(device->dev,
+			"snapshot: Not enough memory for the gmu section %d\n",
+			desc->type);
+		return 0;
+	}
+
+	mem_hdr->type = desc->type;
+	mem_hdr->hostaddr = (u64)(uintptr_t)desc->memdesc->hostptr;
+	mem_hdr->gmuaddr = desc->memdesc->gmuaddr;
+	mem_hdr->gpuaddr = 0;
+
+	/* The hw fence queues are mapped as iomem in the kernel */
+	if (desc->type == SNAPSHOT_GMU_MEM_HW_FENCE)
+		memcpy_fromio(data, desc->memdesc->hostptr, desc->memdesc->size);
+	else
+		memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
+
+	return desc->memdesc->size + sizeof(*mem_hdr);
+}
