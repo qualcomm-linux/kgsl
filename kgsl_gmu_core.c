@@ -378,7 +378,7 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 	trace->reset_hdr = false;
 }
 
-#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
 struct rproc *gmu_core_soccp_vote_init(struct device *dev)
 {
 	u32 soccp_handle;

@@ -8,7 +8,7 @@
 
 #include <linux/mailbox_client.h>
 #include <linux/rbtree.h>
-#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
 #include <linux/remoteproc/qcom_rproc.h>
 #endif
 
