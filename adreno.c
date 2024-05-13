@@ -3180,8 +3180,8 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	/*
 	 * RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24) to tells if GPU
-	 * encoutnered a pagefault. Gen8 page fault status checked from
-	 * the software condition as RBBM_STATS3 is not available.
+	 * encountered a pagefault. Gen8 page fault status checked from
+	 * the software condition as RBBM_STATUS3 is not available.
 	 */
 	if (ADRENO_GPUREV(adreno_dev) < ADRENO_REV_GEN8_0_0) {
 		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
