@@ -1233,6 +1233,25 @@ static void a6xx_sptprac_disable(struct adreno_device *adreno_dev)
 }
 
 /*
+ * a6xx_prepare_for_regulator_disable() - Prepare for regulator disable
+ * @adreno_dev: Pointer to Adreno device
+ */
+static void a6xx_prepare_for_regulator_disable(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	/* This sequence is only required for A611 */
+	if (!adreno_is_a611(adreno_dev))
+		return;
+
+	kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
+	/* Make sure above writes are posted before turning off power resource.*/
+	wmb();
+	/*wait for 100usecs, to allow the software reset to complete*/
+	udelay(100);
+}
+
+/*
  * a6xx_gpu_keepalive() - GMU reg write to request GPU stays on
  * @adreno_dev: Pointer to the adreno device that has the GMU
  * @state: State to set: true is ON, false is OFF
@@ -2336,8 +2355,7 @@ const struct adreno_gpudev adreno_a6xx_gpudev = {
 	.init = a6xx_nogmu_init,
 	.irq_handler = a6xx_irq_handler,
 	.rb_start = a6xx_rb_start,
-	.regulator_enable = a6xx_sptprac_enable,
-	.regulator_disable = a6xx_sptprac_disable,
+	.regulator_disable = a6xx_prepare_for_regulator_disable,
 	.gpu_keepalive = a6xx_gpu_keepalive,
 	.hw_isidle = a6xx_hw_isidle,
 	.iommu_fault_block = a6xx_iommu_fault_block,
