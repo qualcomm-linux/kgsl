@@ -22,6 +22,106 @@
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
+/* CP Interrupt bits */
+#define GEN8_CP_GLOBAL_INT_HWFAULTBR 0
+#define GEN8_CP_GLOBAL_INT_HWFAULTBV 1
+#define GEN8_CP_GLOBAL_INT_HWFAULTLPAC 2
+#define GEN8_CP_GLOBAL_INT_HWFAULTAQE0 3
+#define GEN8_CP_GLOBAL_INT_HWFAULTAQE1 4
+#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBR 5
+#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBV 6
+#define GEN8_CP_GLOBAL_INT_SWFAULTBR 16
+#define GEN8_CP_GLOBAL_INT_SWFAULTBV 17
+#define GEN8_CP_GLOBAL_INT_SWFAULTLPAC 18
+#define GEN8_CP_GLOBAL_INT_SWFAULTAQE0 19
+#define GEN8_CP_GLOBAL_INT_SWFAULTAQE1 20
+#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBR 21
+#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBV 22
+
+#define CP_INTERRUPT_STATUS_MASK_GLOBAL		\
+	(BIT(GEN8_CP_GLOBAL_INT_HWFAULTBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTLPAC) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTAQE0) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTAQE1) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTDDEBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTDDEBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTLPAC) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTAQE0) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTAQE1) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTDDEBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTDDEBV))
+
+/* CP HW Fault status bits */
+#define CP_HW_RBFAULT 0
+#define CP_HW_IB1FAULT 1
+#define CP_HW_IB2FAULT 2
+#define CP_HW_IB3FAULT 3
+#define CP_HW_SDSFAULT 4
+#define CP_HW_MRBFAULT 5
+#define CP_HW_VSDFAULT 6
+#define CP_HW_SQEREADBRUSTOVF 8
+#define CP_HW_EVENTENGINEOVF 9
+#define CP_HW_UCODEERROR 10
+
+#define CP_HW_FAULT_STATUS_MASK_PIPE	\
+	(BIT(CP_HW_RBFAULT) |		\
+	 BIT(CP_HW_IB1FAULT) |		\
+	 BIT(CP_HW_IB2FAULT) |		\
+	 BIT(CP_HW_IB3FAULT) |		\
+	 BIT(CP_HW_SDSFAULT) |		\
+	 BIT(CP_HW_MRBFAULT) |		\
+	 BIT(CP_HW_VSDFAULT) |		\
+	 BIT(CP_HW_SQEREADBRUSTOVF) |	\
+	 BIT(CP_HW_EVENTENGINEOVF) |	\
+	 BIT(CP_HW_UCODEERROR))
+
+/* CP SW Fault status bits */
+#define CP_SW_CSFRBWRAP 0
+#define CP_SW_CSFIB1WRAP 1
+#define CP_SW_CSFIB2WRAP 2
+#define CP_SW_CSFIB3WRAP 3
+#define CP_SW_SDSWRAP 4
+#define CP_SW_MRBWRAP 5
+#define CP_SW_VSDWRAP 6
+#define CP_SW_OPCODEERROR 8
+#define CP_SW_VSDPARITYERROR 9
+#define CP_SW_REGISTERPROTECTIONERROR 10
+#define CP_SW_ILLEGALINSTRUCTION 11
+#define CP_SW_SMMUFAULT 12
+#define CP_SW_VBIFRESPCLIENT 13
+#define CP_SW_VBIFRESPTYPE 19
+#define CP_SW_VBIFRESPREAD 21
+#define CP_SW_VBIFRESP 22
+#define CP_SW_RTWROVF 23
+#define CP_SW_LRZRTWROVF 24
+#define CP_SW_LRZRTREFCNTOVF 25
+#define CP_SW_LRZRTCLRRESMISS 26
+
+#define CP_SW_FAULT_STATUS_MASK_PIPE		\
+	(BIT(CP_SW_CSFRBWRAP) |			\
+	 BIT(CP_SW_CSFIB1WRAP) |		\
+	 BIT(CP_SW_CSFIB2WRAP) |		\
+	 BIT(CP_SW_CSFIB3WRAP) |		\
+	 BIT(CP_SW_SDSWRAP) |			\
+	 BIT(CP_SW_MRBWRAP) |			\
+	 BIT(CP_SW_VSDWRAP) |			\
+	 BIT(CP_SW_OPCODEERROR) |		\
+	 BIT(CP_SW_VSDPARITYERROR) |		\
+	 BIT(CP_SW_REGISTERPROTECTIONERROR) |	\
+	 BIT(CP_SW_ILLEGALINSTRUCTION) |	\
+	 BIT(CP_SW_SMMUFAULT) |			\
+	 BIT(CP_SW_VBIFRESPCLIENT) |		\
+	 BIT(CP_SW_VBIFRESPTYPE) |		\
+	 BIT(CP_SW_VBIFRESPREAD) |		\
+	 BIT(CP_SW_VBIFRESP) |			\
+	 BIT(CP_SW_RTWROVF) |			\
+	 BIT(CP_SW_LRZRTWROVF) |		\
+	 BIT(CP_SW_LRZRTREFCNTOVF) |		\
+	 BIT(CP_SW_LRZRTCLRRESMISS))
+
 /* IFPC & Preemption static powerup restore list */
 static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_MODE_CNTL,
@@ -129,9 +229,14 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_CP_PROTECT_REG_GLOBAL + 44,
 	GEN8_CP_PROTECT_REG_GLOBAL + 45,
 	GEN8_CP_PROTECT_REG_GLOBAL + 63,
+	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
 };
 
 static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
+	{ GEN8_CP_HW_FAULT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
+	{ GEN8_CP_INTERRUPT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
 	{ GEN8_CP_PROTECT_CNTL_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)},
 	{ GEN8_CP_PROTECT_REG_PIPE + 15, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)},
 	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
@@ -871,11 +976,16 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	 * Write external pipe specific regs (<aperture> <address> <value> - triplets)
 	 * offset and the current value into GPU buffer
 	 */
-	for (pipe_id = PIPE_BR; pipe_id <= PIPE_LPAC; pipe_id++) {
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
 		for (i = 0; i < ARRAY_SIZE(gen8_0_0_pwrup_extlist); i++) {
 			unsigned long pipe = (unsigned long)gen8_0_0_pwrup_extlist[i].pipelines;
 
 			if (!test_bit(pipe_id, &pipe))
+				continue;
+			if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+				continue;
+			if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+				!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
 				continue;
 
 			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
@@ -1031,7 +1141,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	u32 mal, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0;
+	u32 mal, pipe_id, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0;
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
 	/*
@@ -1212,24 +1322,28 @@ int gen8_start(struct adreno_device *adreno_dev)
 	_llc_configure_gpu_scid(adreno_dev);
 	_llc_gpuhtw_slice_activate(adreno_dev);
 
-	gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-				GEN8_BR_APRIV_DEFAULT, PIPE_BR, 0, 0);
-	gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-				GEN8_APRIV_DEFAULT, PIPE_BV, 0, 0);
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
+		if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+			continue;
+		if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+			!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+			continue;
 
-	if (adreno_dev->lpac_enabled)
 		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_LPAC, 0, 0);
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE)) {
-		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_AQE0, 0, 0);
-		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_AQE1, 0, 0);
+			(pipe_id == PIPE_BR ? GEN8_BR_APRIV_DEFAULT : GEN8_APRIV_DEFAULT),
+			pipe_id, 0, 0);
+		gen8_regwrite_aperture(device, GEN8_CP_INTERRUPT_STATUS_MASK_PIPE,
+			CP_SW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
+		gen8_regwrite_aperture(device, GEN8_CP_HW_FAULT_STATUS_MASK_PIPE,
+			CP_HW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
 	}
 
 	/* Clear aperture register  */
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+
+	/* Program CP interrupt status mask to enable HW and SW error interrupts */
+	kgsl_regwrite(device, GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
+			CP_INTERRUPT_STATUS_MASK_GLOBAL);
 
 	_set_secvid(device);
 
@@ -1555,56 +1669,6 @@ int gen8_microcode_read(struct adreno_device *adreno_dev)
 
 	return adreno_get_firmware(adreno_dev, gen8_core->sqefw_name, sqe_fw);
 }
-
-/* CP Interrupt bits */
-#define GEN8_CP_GLOBAL_INT_HWFAULTBR 0
-#define GEN8_CP_GLOBAL_INT_HWFAULTBV 1
-#define GEN8_CP_GLOBAL_INT_HWFAULTLPAC 2
-#define GEN8_CP_GLOBAL_INT_HWFAULTAQE0 3
-#define GEN8_CP_GLOBAL_INT_HWFAULTAQE1 4
-#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBR 5
-#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBV 6
-#define GEN8_CP_GLOBAL_INT_SWFAULTBR 16
-#define GEN8_CP_GLOBAL_INT_SWFAULTBV 17
-#define GEN8_CP_GLOBAL_INT_SWFAULTLPAC 18
-#define GEN8_CP_GLOBAL_INT_SWFAULTAQE0 19
-#define GEN8_CP_GLOBAL_INT_SWFAULTAQE1 20
-#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBR 21
-#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBV 22
-
-/* CP HW Fault status bits */
-#define CP_HW_RBFAULT 0
-#define CP_HW_IB1FAULT 1
-#define CP_HW_IB2FAULT 2
-#define CP_HW_IB3FAULT 3
-#define CP_HW_SDSFAULT 4
-#define CP_HW_MRBFAULT 5
-#define CP_HW_VSDFAULT 6
-#define CP_HW_SQEREADBRUSTOVF 8
-#define CP_HW_EVENTENGINEOVF 9
-#define CP_HW_UCODEERROR 10
-
-/* CP SW Fault status bits */
-#define CP_SW_CSFRBWRAP 0
-#define CP_SW_CSFIB1WRAP 1
-#define CP_SW_CSFIB2WRAP 2
-#define CP_SW_CSFIB3WRAP 3
-#define CP_SW_SDSWRAP 4
-#define CP_SW_MRBWRAP 5
-#define CP_SW_VSDWRAP 6
-#define CP_SW_OPCODEERROR 8
-#define CP_SW_VSDPARITYERROR 9
-#define CP_SW_REGISTERPROTECTIONERROR 10
-#define CP_SW_ILLEGALINSTRUCTION 11
-#define CP_SW_SMMUFAULT 12
-#define CP_SW_VBIFRESPCLIENT 13
-#define CP_SW_VBIFRESPTYPE 19
-#define CP_SW_VBIFRESPREAD 21
-#define CP_SW_VBIFRESP 22
-#define CP_SW_RTWROVF 23
-#define CP_SW_LRZRTWROVF 24
-#define CP_SW_LRZRTREFCNTOVF 25
-#define CP_SW_LRZRTCLRRESMISS 26
 
 static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 status)
 {
