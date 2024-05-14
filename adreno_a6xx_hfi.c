@@ -385,16 +385,6 @@ int a6xx_hfi_send_core_fw_start(struct adreno_device *adreno_dev)
 	return a6xx_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
 
-static const char *feature_to_string(uint32_t feature)
-{
-	if (feature == HFI_FEATURE_ACD)
-		return "ACD";
-	else if (feature == HFI_FEATURE_LM)
-		return "LM";
-
-	return "unknown";
-}
-
 int a6xx_hfi_send_feature_ctrl(struct adreno_device *adreno_dev,
 	uint32_t feature, uint32_t enable, uint32_t data)
 {
@@ -412,11 +402,8 @@ int a6xx_hfi_send_feature_ctrl(struct adreno_device *adreno_dev,
 
 	ret = a6xx_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 	if (ret)
-		dev_err(&gmu->pdev->dev,
-				"Unable to %s feature %s (%d)\n",
-				enable ? "enable" : "disable",
-				feature_to_string(feature),
-				feature);
+		dev_err(&gmu->pdev->dev, "Unable to %s feature %s (%d)\n",
+			enable ? "enable" : "disable", hfi_feature_to_string(feature), feature);
 	return ret;
 }
 

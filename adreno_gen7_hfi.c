@@ -386,14 +386,6 @@ int gen7_hfi_send_core_fw_start(struct adreno_device *adreno_dev)
 	return gen7_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
 
-static const char *feature_to_string(u32 feature)
-{
-	if (feature == HFI_FEATURE_ACD)
-		return "ACD";
-
-	return "unknown";
-}
-
 /* For sending hfi message inline to handle GMU return type error */
 int gen7_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 		struct pending_cmd *ret_cmd, u32 size_bytes)
@@ -449,11 +441,8 @@ int gen7_hfi_send_feature_ctrl(struct adreno_device *adreno_dev,
 
 	ret = gen7_hfi_send_generic_req_v5(adreno_dev, &cmd, &ret_cmd, sizeof(cmd));
 	if (ret < 0)
-		dev_err(&gmu->pdev->dev,
-				"Unable to %s feature %s (%d)\n",
-				enable ? "enable" : "disable",
-				feature_to_string(feature),
-				feature);
+		dev_err(&gmu->pdev->dev, "Unable to %s feature %s (%d)\n",
+			enable ? "enable" : "disable", hfi_feature_to_string(feature), feature);
 	return ret;
 }
 

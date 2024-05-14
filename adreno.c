@@ -1097,6 +1097,45 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 }
 #endif
 
+const char *hfi_feature_to_string(u32 feature)
+{
+	switch (feature) {
+	case HFI_FEATURE_HWSCHED:
+		return "HWSCHED";
+	case HFI_FEATURE_PREEMPTION:
+		return "PREEMPTION";
+	case HFI_FEATURE_LM:
+		return "LM";
+	case HFI_FEATURE_IFPC:
+		return "IFPC";
+	case HFI_FEATURE_BCL:
+		return "BCL";
+	case HFI_FEATURE_ACD:
+		return "ACD";
+	case HFI_FEATURE_KPROF:
+		return "KPROF";
+	case HFI_FEATURE_BAIL_OUT_TIMER:
+		return "BAIL_OUT_TIMER";
+	case HFI_FEATURE_GMU_STATS:
+		return "GMU_STATS";
+	case HFI_FEATURE_CLX:
+		return "CLX";
+	case HFI_FEATURE_LSR:
+		return "LSR";
+	case HFI_FEATURE_LPAC:
+		return "LPAC";
+	case HFI_FEATURE_HW_FENCE:
+		return "HW_FENCE";
+	case HFI_FEATURE_PERF_NORETAIN:
+		return "PERF_NORETAIN";
+	case HFI_FEATURE_DMS:
+		return "DMS";
+	case HFI_FEATURE_AQE:
+		return "AQE";
+	}
+	return "unknown";
+}
+
 static void adreno_regmap_op_preaccess(struct kgsl_regmap_region *region)
 {
 	struct kgsl_device *device = region->priv;
