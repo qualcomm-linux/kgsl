@@ -384,6 +384,9 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
+
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -454,6 +457,9 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen7_gmu_register_config(adreno_dev);
 
 	gen7_gmu_irq_enable(adreno_dev);
+
+	/* Clear any hwsched faults that might have been left over */
+	adreno_hwsched_clear_fault(adreno_dev);
 
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)
@@ -588,9 +594,6 @@ static int gen7_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
 	if (ret)
