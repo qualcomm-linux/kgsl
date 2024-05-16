@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_H_
@@ -11,11 +11,6 @@
 
 #include "gen7_reg.h"
 #include "adreno_gen7_gmu.h"
-
-#define PIPE_NONE 0
-#define PIPE_BR 1
-#define PIPE_BV 2
-#define PIPE_LPAC 3
 
 /* Forward struct declaration */
 struct gen7_snapshot_block_list;
@@ -119,10 +114,19 @@ struct adreno_gen7_core {
 	u32 preempt_level;
 	/** @qos_value: GPU qos value to set for each RB. */
 	const u32 *qos_value;
+	/**
+	 * @acv_perfmode_ddr_freq: Vote perfmode when DDR frequency >= acv_perfmode_ddr_freq.
+	 * If not specified, vote perfmode for highest DDR level only.
+	 */
+	u32 acv_perfmode_ddr_freq;
 	/** @acv_perfmode_vote: ACV vote for GPU perfmode */
 	u32 acv_perfmode_vote;
 	/** @rt_bus_hint: IB level hint for real time clients i.e. RB-0 */
 	const u32 rt_bus_hint;
+	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
+	bool fast_bus_hint;
+	/** @noc_timeout_us: GPU config NOC port timeout in usec */
+	u32 noc_timeout_us;
 };
 
 /**
@@ -232,21 +236,6 @@ to_gen7_core(struct adreno_device *adreno_dev)
 	const struct adreno_gpu_core *core = adreno_dev->gpucore;
 
 	return container_of(core, struct adreno_gen7_core, base);
-}
-
-/**
- * gen7_is_smmu_stalled() - Check whether smmu is stalled or not
- * @device: Pointer to KGSL device
- *
- * Return - True if smmu is stalled or false otherwise
- */
-static inline bool gen7_is_smmu_stalled(struct kgsl_device *device)
-{
-	u32 val;
-
-	kgsl_regread(device, GEN7_RBBM_STATUS3, &val);
-
-	return val & BIT(24);
 }
 
 /* Preemption functions */
@@ -385,11 +374,13 @@ void gen7_spin_idle_debug(struct adreno_device *adreno_dev,
  * @reg: Perfcounter reg struct to add/remove to the list
  * @update_reg: true if the perfcounter needs to be programmed by the CPU
  * @pipe: pipe id for CP aperture control
+ * @flags: Flags set for requested perfcounter group
  *
  * Return: 0 on success or -EBUSY if the lock couldn't be taken
  */
 int gen7_perfcounter_update(struct adreno_device *adreno_dev,
-	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe);
+	struct adreno_perfcount_register *reg, bool update_reg, u32 pipe,
+	unsigned long flags);
 
 /*
  * gen7_ringbuffer_init - Initialize the ringbuffers
@@ -481,6 +472,14 @@ to_gen7_gpudev(const struct adreno_gpudev *gpudev)
  * Reset the preemption records at the time of hard reset
  */
 void gen7_reset_preempt_records(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_enable_ahb_timeout_detection - Program AHB control registers
+ * @adreno_dev: An Adreno GPU handle
+ *
+ * Program AHB control registers to enable AHB timeout detection.
+ */
+void gen7_enable_ahb_timeout_detection(struct adreno_device *adreno_dev);
 
 /**
  * gen7_rdpm_mx_freq_update - Update the mx frequency

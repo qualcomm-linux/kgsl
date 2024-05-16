@@ -1533,6 +1533,7 @@ static void adreno_fault_header(struct kgsl_device *device,
 	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
 	struct adreno_context *drawctxt =
 			drawobj ? ADRENO_CONTEXT(drawobj->context) : NULL;
+	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
 	unsigned int status, rptr, wptr, ib1sz, ib2sz;
 	uint64_t ib1base, ib2base;
 	bool gx_on = adreno_gx_is_on(adreno_dev);
@@ -1554,6 +1555,9 @@ static void adreno_fault_header(struct kgsl_device *device,
 
 		return;
 	}
+
+	if (gpudev->fault_header)
+		return gpudev->fault_header(adreno_dev, drawobj);
 
 	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS, &status);
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_RB_RPTR, &rptr);
@@ -1976,17 +1980,14 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	gx_on = adreno_gx_is_on(adreno_dev);
 
 	/*
-	 * On non-A3xx, read RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24)
-	 * to tell if this function was entered after a pagefault. If so, only
+	 * On non-A3xx, Check if this function was entered after a pagefault. If so, only
 	 * proceed if the fault handler has already run in the IRQ thread,
 	 * else return early to give the fault handler a chance to run.
 	 */
 	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) &&
 		!adreno_is_a3xx(adreno_dev) && gx_on) {
-		unsigned int val;
 
-		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
-		if (val & BIT(24)) {
+		if (adreno_smmu_is_stalled(adreno_dev)) {
 			mutex_unlock(&device->mutex);
 			dev_err(device->dev,
 				"SMMU is stalled without a pagefault\n");
@@ -2768,6 +2769,7 @@ static const struct adreno_dispatch_ops swsched_ops = {
 	.setup_context = adreno_dispatcher_setup_context,
 	.queue_context = adreno_dispatcher_queue_context,
 	.fault = adreno_dispatcher_fault,
+	.get_fault = adreno_gpu_fault,
 };
 
 /**

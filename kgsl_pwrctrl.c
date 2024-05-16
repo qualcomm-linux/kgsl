@@ -1493,11 +1493,15 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
+	if (!(device->freq_limiter_intr_num || pwr->interrupt_num))
+		return;
+
 	if (state) {
 		if (!test_and_set_bit(KGSL_PWRFLAGS_IRQ_ON,
 			&pwr->power_flags)) {
 			trace_kgsl_irq(device, state);
-			enable_irq(pwr->interrupt_num);
+			if (pwr->interrupt_num > 0)
+				enable_irq(pwr->interrupt_num);
 			if (device->freq_limiter_intr_num > 0)
 				enable_irq(device->freq_limiter_intr_num);
 		}
@@ -1507,9 +1511,9 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 			trace_kgsl_irq(device, state);
 			if (device->freq_limiter_intr_num > 0)
 				disable_irq(device->freq_limiter_intr_num);
-			if (in_interrupt())
+			if (in_interrupt() && (pwr->interrupt_num > 0))
 				disable_irq_nosync(pwr->interrupt_num);
-			else
+			else if (pwr->interrupt_num > 0)
 				disable_irq(pwr->interrupt_num);
 		}
 	}
@@ -2133,6 +2137,9 @@ void kgsl_pwrctrl_set_state(struct kgsl_device *device,
 	device->state = state;
 	device->requested_state = KGSL_STATE_NONE;
 
+	if (state == KGSL_STATE_SLUMBER)
+		device->pwrctrl.wake_on_touch = false;
+
 	spin_lock(&device->submit_lock);
 	if (state == KGSL_STATE_ACTIVE)
 		device->skip_inline_submit = false;
@@ -2222,6 +2229,23 @@ int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 
 	/* Request adjusted DCVS level */
 	return device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
+}
+
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int i;
+
+	if (!ddr_freq)
+		return (pwr->ddr_table_count - 1);
+
+	for (i = 0; i < pwr->ddr_table_count; i++) {
+		if (pwr->ddr_table[i] >= ddr_freq)
+			return i;
+	}
+
+	/* If DDR frequency is not found, vote perfmode for highest DDR level */
+	return (pwr->ddr_table_count - 1);
 }
 
 int kgsl_gpu_num_freqs(void)

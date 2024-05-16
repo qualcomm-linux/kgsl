@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN7_REG_H
@@ -1160,8 +1160,6 @@
 #define GEN7_GMU_CX_GMU_POWER_COUNTER_SELECT_3	0x1f87f
 #define GEN7_GMU_CX_AO_COUNTER_LO		0x1f880
 #define GEN7_GMU_CX_AO_COUNTER_HI		0x1f881
-#define GEN7_GMU_CX_GMU_ALWAYS_ON_COUNTER_L	0x1f888
-#define GEN7_GMU_CX_GMU_ALWAYS_ON_COUNTER_H	0x1f889
 #define GEN7_GMU_PWR_COL_INTER_FRAME_CTRL	0x1f8c0
 #define GEN7_GMU_PWR_COL_INTER_FRAME_HYST	0x1f8c1
 #define GEN7_GMU_GFX_PWR_CLK_STATUS		0x1f8d0
@@ -1304,6 +1302,11 @@
 
 /* GPU CX_MISC registers */
 #define GEN7_CX_MISC_BASE			0x27800
+#define GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL	0x10
+#define GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL	0x11
+#define GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL		0x12
+#define GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL	0x13
+#define GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL	0x14
 #define GEN7_GPU_CX_MISC_TCM_RET_CNTL		0x39
 #define GEN7_GPU_CX_MISC_AO_COUNTER_LO		0x80
 #define GEN7_GPU_CX_MISC_AO_COUNTER_HI		0x81
