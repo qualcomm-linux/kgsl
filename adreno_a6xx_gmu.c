@@ -2327,6 +2327,9 @@ static int a6xx_gmu_first_boot(struct adreno_device *adreno_dev)
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
+
 	ret = a6xx_gmu_device_start(adreno_dev);
 	if (ret)
 		goto err;
@@ -2422,6 +2425,9 @@ static int a6xx_gmu_boot(struct adreno_device *adreno_dev)
 	a6xx_gmu_register_config(adreno_dev);
 
 	a6xx_gmu_irq_enable(adreno_dev);
+
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = a6xx_gmu_device_start(adreno_dev);
 	if (ret)
@@ -3072,9 +3078,6 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
-
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
 
 	adreno_set_active_ctxs_null(adreno_dev);
 
