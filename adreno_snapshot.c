@@ -1421,3 +1421,46 @@ size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,
 
 	return desc->memdesc->size + sizeof(*mem_hdr);
 }
+
+/* Snapshot the preemption related buffers */
+static size_t snapshot_preemption_record(struct kgsl_device *device,
+	u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_memdesc *memdesc = priv;
+	struct kgsl_snapshot_gpu_object_v2 *header =
+		(struct kgsl_snapshot_gpu_object_v2 *)buf;
+	u8 *ptr = buf + sizeof(*header);
+	u64 ctxt_record_size = min_t(u64, device->snapshot_ctxt_record_size, memdesc->size);
+
+	if (remain < (ctxt_record_size + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
+		return 0;
+	}
+
+	header->size = ctxt_record_size >> 2;
+	header->gpuaddr = memdesc->gpuaddr;
+	header->ptbase =
+		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
+	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
+
+	memcpy(ptr, memdesc->hostptr, ctxt_record_size);
+
+	return ctxt_record_size + sizeof(*header);
+}
+
+void adreno_snapshot_preemption_record(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_ringbuffer *rb;
+	u32 i;
+
+	if (adreno_is_preemption_enabled(adreno_dev)) {
+		FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
+			kgsl_snapshot_add_section(device,
+				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
+				snapshot, snapshot_preemption_record,
+				rb->preemption_desc);
+		}
+	}
+}

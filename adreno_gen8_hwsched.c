@@ -62,57 +62,6 @@ void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
 	adreno_hwsched_fault(adreno_dev, fault);
 }
 
-static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md, u64 offset)
-{
-	struct kgsl_snapshot_section_header *section_header =
-		(struct kgsl_snapshot_section_header *)snapshot->ptr;
-	u8 *dest = snapshot->ptr + sizeof(*section_header);
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)dest;
-	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
-				device->snapshot_ctxt_record_size);
-	size_t section_size;
-
-	section_size = sizeof(*section_header) + sizeof(*header) + ctxt_record_size;
-	if (snapshot->remain < section_size) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return;
-	}
-
-	section_header->magic = SNAPSHOT_SECTION_MAGIC;
-	section_header->id = KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2;
-	section_header->size = section_size;
-
-	header->size = ctxt_record_size >> 2;
-	header->gpuaddr = md->gpuaddr + offset;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	dest += sizeof(*header);
-
-	memcpy(dest, md->hostptr + offset, ctxt_record_size);
-
-	snapshot->ptr += section_header->size;
-	snapshot->remain -= section_header->size;
-	snapshot->size += section_header->size;
-}
-
-static void snapshot_preemption_records(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
-{
-	u64 ctxt_record_size = md->size;
-	u64 offset;
-
-	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
-
-	/* All preemption records exist as a single mem alloc entry */
-	for (offset = 0; offset < md->size; offset += ctxt_record_size)
-		gen8_hwsched_snapshot_preemption_record(device, snapshot, md,
-			offset);
-}
-
 void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -165,7 +114,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_NON_SECURE)
-			snapshot_preemption_records(device, snapshot,
+			adreno_hwsched_snapshot_preemption_records(device, snapshot,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_PREEMPT_SCRATCH)
