@@ -357,6 +357,9 @@ void adreno_irqctrl(struct adreno_device *adreno_dev, int state)
 {
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
+	if (!adreno_dev->irq_mask)
+		return;
+
 	adreno_writereg(adreno_dev, ADRENO_REG_RBBM_INT_0_MASK,
 		state ? adreno_dev->irq_mask : 0);
 
@@ -1094,6 +1097,45 @@ static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 }
 #endif
 
+const char *hfi_feature_to_string(u32 feature)
+{
+	switch (feature) {
+	case HFI_FEATURE_HWSCHED:
+		return "HWSCHED";
+	case HFI_FEATURE_PREEMPTION:
+		return "PREEMPTION";
+	case HFI_FEATURE_LM:
+		return "LM";
+	case HFI_FEATURE_IFPC:
+		return "IFPC";
+	case HFI_FEATURE_BCL:
+		return "BCL";
+	case HFI_FEATURE_ACD:
+		return "ACD";
+	case HFI_FEATURE_KPROF:
+		return "KPROF";
+	case HFI_FEATURE_BAIL_OUT_TIMER:
+		return "BAIL_OUT_TIMER";
+	case HFI_FEATURE_GMU_STATS:
+		return "GMU_STATS";
+	case HFI_FEATURE_CLX:
+		return "CLX";
+	case HFI_FEATURE_LSR:
+		return "LSR";
+	case HFI_FEATURE_LPAC:
+		return "LPAC";
+	case HFI_FEATURE_HW_FENCE:
+		return "HW_FENCE";
+	case HFI_FEATURE_PERF_NORETAIN:
+		return "PERF_NORETAIN";
+	case HFI_FEATURE_DMS:
+		return "DMS";
+	case HFI_FEATURE_AQE:
+		return "AQE";
+	}
+	return "unknown";
+}
+
 static void adreno_regmap_op_preaccess(struct kgsl_regmap_region *region)
 {
 	struct kgsl_device *device = region->priv;
@@ -1168,6 +1210,15 @@ static const struct of_device_id adreno_component_match[] = {
 	{ .compatible = "qcom,smmu-kgsl-cb" },
 	{},
 };
+
+static int adreno_irq_setup(struct platform_device *pdev,
+		struct adreno_device *adreno_dev)
+{
+	if (!adreno_dev->irq_mask)
+		return 0;
+
+	return kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, KGSL_DEVICE(adreno_dev));
+}
 
 int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
@@ -1268,7 +1319,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	if (status)
 		goto err_remove_llcc;
 
-	status = kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, device);
+	status = adreno_irq_setup(pdev, adreno_dev);
 	if (status < 0)
 		goto err_unbind;
 

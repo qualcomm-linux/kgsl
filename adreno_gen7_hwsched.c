@@ -535,6 +535,10 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	/* Vote for minimal DDR BW for GMU to init */
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 
+	/* From this GMU FW all RBBM interrupts are handled at GMU */
+	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
+		adreno_irq_free(adreno_dev);
+
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
 	/* Clear any hwsched faults that might have been left over */
@@ -708,8 +712,15 @@ static int gen7_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
-	return gen7_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
+	ret = gen7_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
+	return ret;
 }
 static int gen7_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 {
@@ -1850,6 +1861,8 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 
 	adreno_dev->hwsched_enabled = true;
 
+	adreno_dev->irq_mask = GEN7_HWSCHED_INT_MASK;
+
 	ret = gen7_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1859,8 +1872,6 @@ int gen7_hwsched_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, hwsched_idle_check);
 
 	timer_setup(&device->idle_timer, hwsched_idle_timer, 0);
-
-	adreno_dev->irq_mask = GEN7_HWSCHED_INT_MASK;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		adreno_dev->lpac_enabled = true;

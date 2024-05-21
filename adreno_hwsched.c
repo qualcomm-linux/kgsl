@@ -13,6 +13,8 @@
 #include <linux/msm_kgsl.h>
 #include <soc/qcom/msm_performance.h>
 
+#define POLL_SLEEP_US 100
+
 /*
  * Number of commands that can be queued in a context before it sleeps
  *
@@ -2335,6 +2337,49 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	return -ETIMEDOUT;
 }
 
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	int ret;
+	u64 start, end;
+
+	start = gpudev->read_alwayson(adreno_dev);
+	mutex_unlock(&device->mutex);
+
+	ret = wait_for_completion_timeout(&ack->complete,
+		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+
+	mutex_lock(&device->mutex);
+	if (ret)
+		return 0;
+
+	/*
+	 * It is possible the ack came, but due to HLOS latencies in processing hfi interrupt
+	 * and/or the f2h daemon, the ack isn't processed yet. Hence, process the msgq one last
+	 * time.
+	 */
+	process_msgq(adreno_dev);
+	end = gpudev->read_alwayson(adreno_dev);
+
+	if (completion_done(&ack->complete)) {
+		dev_err_ratelimited(dev,
+			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
+			cmd->ts, start, end);
+		return 0;
+	}
+
+	dev_err_ratelimited(dev,
+		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
+	return -ETIMEDOUT;
+}
+
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 {
 	u32 i;
@@ -2382,4 +2427,112 @@ void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, stru
 	for (i = 0; (i < count) && (i < ARRAY_SIZE(entries)); i++)
 		dev_err(dev, "%d: ctx=%llu seqno=%llu\n", i, entries[i].cmd.ctxt_id,
 			entries[i].cmd.ts);
+}
+
+static void adreno_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
+		u32 type, u32 key, u32 *ptr, u32 num_values)
+{
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		/* key-value pair is 'num_values + 1' dwords */
+		if ((payload->type == type) && (payload->data[i] == key)) {
+			u32 j = 1;
+
+			do {
+				ptr[j - 1] = payload->data[i + j];
+				j++;
+			} while (num_values--);
+			break;
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+}
+
+bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
+		struct device *dev, u32 error)
+{
+	bool non_fatal = true;
+
+	switch (error) {
+	case GMU_CP_AHB_ERROR: {
+		u32 err_details[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_CP_AHB_ERROR, err_details, 2);
+		dev_crit_ratelimited(dev,
+			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
+			err_details[0], err_details[1]);
+		break;
+	}
+	case GMU_ATB_ASYNC_FIFO_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
+		break;
+	case GMU_RBBM_ATB_BUF_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB bus overflow\n");
+		break;
+	case GMU_UCHE_OOB_ACCESS:
+		dev_crit_ratelimited(dev, "UCHE: Out of bounds access\n");
+		break;
+	case GMU_UCHE_TRAP_INTR:
+		dev_crit_ratelimited(dev, "UCHE: Trap interrupt\n");
+		break;
+	case GMU_TSB_WRITE_ERROR: {
+		u32 addr[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_TSB_WRITE_ERROR, addr, 2);
+		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%lx MID: %lu\n",
+			FIELD_GET(GENMASK(16, 0), addr[1]) << 32 | addr[0],
+			FIELD_GET(GENMASK(31, 23), addr[1]));
+		break;
+	}
+	default:
+		non_fatal = false;
+		break;
+	}
+
+	return non_fatal;
+}
+
+int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem)
+{
+	struct hfi_queue_table *tbl = hfi_mem->hostptr;
+	struct hfi_queue_header *hdr = &tbl->qhdr[HFI_MSG_ID];
+	unsigned long timeout = jiffies + msecs_to_jiffies(HFI_RSP_TIMEOUT);
+
+	while (time_before(jiffies, timeout)) {
+		if (hdr->write_index != hdr->read_index)
+			goto done;
+
+		/* Wait for upto 100 us before trying again */
+		usleep_range((POLL_SLEEP_US >> 2) + 1, POLL_SLEEP_US);
+		cpu_relax();
+	}
+
+	/* Check if the write index has advanced */
+	if (hdr->write_index == hdr->read_index)
+		return -ETIMEDOUT;
+
+done:
+	/*
+	 * This is to ensure that the queue is not read speculatively before the
+	 * polling condition is evaluated.
+	 */
+	rmb();
+
+	return 0;
 }

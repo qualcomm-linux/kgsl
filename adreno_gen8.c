@@ -22,6 +22,106 @@
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
+/* CP Interrupt bits */
+#define GEN8_CP_GLOBAL_INT_HWFAULTBR 0
+#define GEN8_CP_GLOBAL_INT_HWFAULTBV 1
+#define GEN8_CP_GLOBAL_INT_HWFAULTLPAC 2
+#define GEN8_CP_GLOBAL_INT_HWFAULTAQE0 3
+#define GEN8_CP_GLOBAL_INT_HWFAULTAQE1 4
+#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBR 5
+#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBV 6
+#define GEN8_CP_GLOBAL_INT_SWFAULTBR 16
+#define GEN8_CP_GLOBAL_INT_SWFAULTBV 17
+#define GEN8_CP_GLOBAL_INT_SWFAULTLPAC 18
+#define GEN8_CP_GLOBAL_INT_SWFAULTAQE0 19
+#define GEN8_CP_GLOBAL_INT_SWFAULTAQE1 20
+#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBR 21
+#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBV 22
+
+#define CP_INTERRUPT_STATUS_MASK_GLOBAL		\
+	(BIT(GEN8_CP_GLOBAL_INT_HWFAULTBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTLPAC) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTAQE0) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTAQE1) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTDDEBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_HWFAULTDDEBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTBV) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTLPAC) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTAQE0) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTAQE1) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTDDEBR) |	\
+	 BIT(GEN8_CP_GLOBAL_INT_SWFAULTDDEBV))
+
+/* CP HW Fault status bits */
+#define CP_HW_RBFAULT 0
+#define CP_HW_IB1FAULT 1
+#define CP_HW_IB2FAULT 2
+#define CP_HW_IB3FAULT 3
+#define CP_HW_SDSFAULT 4
+#define CP_HW_MRBFAULT 5
+#define CP_HW_VSDFAULT 6
+#define CP_HW_SQEREADBRUSTOVF 8
+#define CP_HW_EVENTENGINEOVF 9
+#define CP_HW_UCODEERROR 10
+
+#define CP_HW_FAULT_STATUS_MASK_PIPE	\
+	(BIT(CP_HW_RBFAULT) |		\
+	 BIT(CP_HW_IB1FAULT) |		\
+	 BIT(CP_HW_IB2FAULT) |		\
+	 BIT(CP_HW_IB3FAULT) |		\
+	 BIT(CP_HW_SDSFAULT) |		\
+	 BIT(CP_HW_MRBFAULT) |		\
+	 BIT(CP_HW_VSDFAULT) |		\
+	 BIT(CP_HW_SQEREADBRUSTOVF) |	\
+	 BIT(CP_HW_EVENTENGINEOVF) |	\
+	 BIT(CP_HW_UCODEERROR))
+
+/* CP SW Fault status bits */
+#define CP_SW_CSFRBWRAP 0
+#define CP_SW_CSFIB1WRAP 1
+#define CP_SW_CSFIB2WRAP 2
+#define CP_SW_CSFIB3WRAP 3
+#define CP_SW_SDSWRAP 4
+#define CP_SW_MRBWRAP 5
+#define CP_SW_VSDWRAP 6
+#define CP_SW_OPCODEERROR 8
+#define CP_SW_VSDPARITYERROR 9
+#define CP_SW_REGISTERPROTECTIONERROR 10
+#define CP_SW_ILLEGALINSTRUCTION 11
+#define CP_SW_SMMUFAULT 12
+#define CP_SW_VBIFRESPCLIENT 13
+#define CP_SW_VBIFRESPTYPE 19
+#define CP_SW_VBIFRESPREAD 21
+#define CP_SW_VBIFRESP 22
+#define CP_SW_RTWROVF 23
+#define CP_SW_LRZRTWROVF 24
+#define CP_SW_LRZRTREFCNTOVF 25
+#define CP_SW_LRZRTCLRRESMISS 26
+
+#define CP_SW_FAULT_STATUS_MASK_PIPE		\
+	(BIT(CP_SW_CSFRBWRAP) |			\
+	 BIT(CP_SW_CSFIB1WRAP) |		\
+	 BIT(CP_SW_CSFIB2WRAP) |		\
+	 BIT(CP_SW_CSFIB3WRAP) |		\
+	 BIT(CP_SW_SDSWRAP) |			\
+	 BIT(CP_SW_MRBWRAP) |			\
+	 BIT(CP_SW_VSDWRAP) |			\
+	 BIT(CP_SW_OPCODEERROR) |		\
+	 BIT(CP_SW_VSDPARITYERROR) |		\
+	 BIT(CP_SW_REGISTERPROTECTIONERROR) |	\
+	 BIT(CP_SW_ILLEGALINSTRUCTION) |	\
+	 BIT(CP_SW_SMMUFAULT) |			\
+	 BIT(CP_SW_VBIFRESPCLIENT) |		\
+	 BIT(CP_SW_VBIFRESPTYPE) |		\
+	 BIT(CP_SW_VBIFRESPREAD) |		\
+	 BIT(CP_SW_VBIFRESP) |			\
+	 BIT(CP_SW_RTWROVF) |			\
+	 BIT(CP_SW_LRZRTWROVF) |		\
+	 BIT(CP_SW_LRZRTREFCNTOVF) |		\
+	 BIT(CP_SW_LRZRTCLRRESMISS))
+
 /* IFPC & Preemption static powerup restore list */
 static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_MODE_CNTL,
@@ -81,7 +181,7 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_16,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_17,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_18,
-	GEN8_CP_PROTECT_CNTL_PIPE,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_19,
 	GEN8_CP_PROTECT_REG_GLOBAL,
 	GEN8_CP_PROTECT_REG_GLOBAL + 1,
 	GEN8_CP_PROTECT_REG_GLOBAL + 2,
@@ -129,10 +229,16 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_CP_PROTECT_REG_GLOBAL + 44,
 	GEN8_CP_PROTECT_REG_GLOBAL + 45,
 	GEN8_CP_PROTECT_REG_GLOBAL + 63,
-	GEN8_CP_PROTECT_REG_PIPE + 15,
+	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
 };
 
 static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
+	{ GEN8_CP_HW_FAULT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
+	{ GEN8_CP_INTERRUPT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
+	{ GEN8_CP_PROTECT_CNTL_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)},
+	{ GEN8_CP_PROTECT_REG_PIPE + 15, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)},
 	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
@@ -387,10 +493,6 @@ void gen8_cp_init_cmds(struct adreno_device *adreno_dev, u32 *cmds)
 
 	/* Enable the register init list with the spinlock */
 	mask |= BIT(8);
-
-	/* By default DMS is enabled from CP side, disable it if not supported */
-	if (!adreno_dev->dms_enabled)
-		mask |= BIT(11);
 
 	cmds[i++] = cp_type7_packet(CP_ME_INIT, 7);
 
@@ -874,11 +976,16 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	 * Write external pipe specific regs (<aperture> <address> <value> - triplets)
 	 * offset and the current value into GPU buffer
 	 */
-	for (pipe_id = PIPE_BR; pipe_id <= PIPE_BV; pipe_id++) {
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
 		for (i = 0; i < ARRAY_SIZE(gen8_0_0_pwrup_extlist); i++) {
 			unsigned long pipe = (unsigned long)gen8_0_0_pwrup_extlist[i].pipelines;
 
 			if (!test_bit(pipe_id, &pipe))
+				continue;
+			if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+				continue;
+			if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+				!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
 				continue;
 
 			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
@@ -1034,7 +1141,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	u32 mal, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0;
+	u32 mal, pipe_id, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0;
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
 	/*
@@ -1047,9 +1154,19 @@ int gen8_start(struct adreno_device *adreno_dev)
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 	u64 uche_trap_base = gen8_get_uche_trap_base();
 	u32 rgba8888_lossless = 0;
+	int is_current_rt = rt_task(current);
 
 	/* Reset aperture fields to go through first aperture write check */
 	gen8_dev->aperture = UINT_MAX;
+
+	/*
+	 * Elevating the thread’s priority to FIFO to ensure sequential register access
+	 * on the same CPU, avoiding context switches to a different CPU or thread.
+	 */
+	if (!is_current_rt)
+		sched_set_fifo(current);
+
+	device->regmap.use_relaxed = false;
 
 	/* Make all blocks contribute to the GPU BUSY perf counter */
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_GPU_BUSY_MASKED, 0xffffffff);
@@ -1161,6 +1278,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN8_SP_NC_MODE_CNTL,
 		      FIELD_PREP(GENMASK(11, 10), hbb_hi) |
+		      FIELD_PREP(GENMASK(5, 4), 2) |
 		      FIELD_PREP(GENMASK(3, 3), mal) |
 		      FIELD_PREP(GENMASK(2, 1), hbb_lo));
 
@@ -1182,7 +1300,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL, BIT(30));
 
 	kgsl_regwrite(device, GEN8_UCHE_CLIENT_PF, BIT(7) |
-			FIELD_PREP(GENMASK(3, 0), adreno_dev->uche_client_pf));
+			FIELD_PREP(GENMASK(6, 0), adreno_dev->uche_client_pf));
 
 	/* Enable the GMEM save/restore feature for preemption */
 	if (adreno_is_preemption_enabled(adreno_dev)) {
@@ -1204,24 +1322,28 @@ int gen8_start(struct adreno_device *adreno_dev)
 	_llc_configure_gpu_scid(adreno_dev);
 	_llc_gpuhtw_slice_activate(adreno_dev);
 
-	gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-				GEN8_BR_APRIV_DEFAULT, PIPE_BR, 0, 0);
-	gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-				GEN8_APRIV_DEFAULT, PIPE_BV, 0, 0);
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
+		if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
+			continue;
+		if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
+			!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
+			continue;
 
-	if (adreno_dev->lpac_enabled)
 		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_LPAC, 0, 0);
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE)) {
-		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_AQE0, 0, 0);
-		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
-					GEN8_APRIV_DEFAULT, PIPE_AQE1, 0, 0);
+			(pipe_id == PIPE_BR ? GEN8_BR_APRIV_DEFAULT : GEN8_APRIV_DEFAULT),
+			pipe_id, 0, 0);
+		gen8_regwrite_aperture(device, GEN8_CP_INTERRUPT_STATUS_MASK_PIPE,
+			CP_SW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
+		gen8_regwrite_aperture(device, GEN8_CP_HW_FAULT_STATUS_MASK_PIPE,
+			CP_HW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
 	}
 
 	/* Clear aperture register  */
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+
+	/* Program CP interrupt status mask to enable HW and SW error interrupts */
+	kgsl_regwrite(device, GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
+			CP_INTERRUPT_STATUS_MASK_GLOBAL);
 
 	_set_secvid(device);
 
@@ -1241,6 +1363,13 @@ int gen8_start(struct adreno_device *adreno_dev)
 		gen8_patch_pwrup_reglist(adreno_dev);
 		adreno_dev->patch_reglist = true;
 	}
+
+	/* Ensure very last register write is finished before we return from this function */
+	mb();
+	device->regmap.use_relaxed = true;
+
+	if (!is_current_rt)
+		sched_set_normal(current, 0);
 
 	return 0;
 }
@@ -1540,56 +1669,6 @@ int gen8_microcode_read(struct adreno_device *adreno_dev)
 
 	return adreno_get_firmware(adreno_dev, gen8_core->sqefw_name, sqe_fw);
 }
-
-/* CP Interrupt bits */
-#define GEN8_CP_GLOBAL_INT_HWFAULTBR 0
-#define GEN8_CP_GLOBAL_INT_HWFAULTBV 1
-#define GEN8_CP_GLOBAL_INT_HWFAULTLPAC 2
-#define GEN8_CP_GLOBAL_INT_HWFAULTAQE0 3
-#define GEN8_CP_GLOBAL_INT_HWFAULTAQE1 4
-#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBR 5
-#define GEN8_CP_GLOBAL_INT_HWFAULTDDEBV 6
-#define GEN8_CP_GLOBAL_INT_SWFAULTBR 16
-#define GEN8_CP_GLOBAL_INT_SWFAULTBV 17
-#define GEN8_CP_GLOBAL_INT_SWFAULTLPAC 18
-#define GEN8_CP_GLOBAL_INT_SWFAULTAQE0 19
-#define GEN8_CP_GLOBAL_INT_SWFAULTAQE1 20
-#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBR 21
-#define GEN8_CP_GLOBAL_INT_SWFAULTDDEBV 22
-
-/* CP HW Fault status bits */
-#define CP_HW_RBFAULT 0
-#define CP_HW_IB1FAULT 1
-#define CP_HW_IB2FAULT 2
-#define CP_HW_IB3FAULT 3
-#define CP_HW_SDSFAULT 4
-#define CP_HW_MRBFAULT 5
-#define CP_HW_VSDFAULT 6
-#define CP_HW_SQEREADBRUSTOVF 8
-#define CP_HW_EVENTENGINEOVF 9
-#define CP_HW_UCODEERROR 10
-
-/* CP SW Fault status bits */
-#define CP_SW_CSFRBWRAP 0
-#define CP_SW_CSFIB1WRAP 1
-#define CP_SW_CSFIB2WRAP 2
-#define CP_SW_CSFIB3WRAP 3
-#define CP_SW_SDSWRAP 4
-#define CP_SW_MRBWRAP 5
-#define CP_SW_VSDWRAP 6
-#define CP_SW_OPCODEERROR 8
-#define CP_SW_VSDPARITYERROR 9
-#define CP_SW_REGISTERPROTECTIONERROR 10
-#define CP_SW_ILLEGALINSTRUCTION 11
-#define CP_SW_SMMUFAULT 12
-#define CP_SW_VBIFRESPCLIENT 13
-#define CP_SW_VBIFRESPTYPE 19
-#define CP_SW_VBIFRESPREAD 21
-#define CP_SW_VBIFRESP 22
-#define CP_SW_RTWROVF 23
-#define CP_SW_LRZRTWROVF 24
-#define CP_SW_LRZRTREFCNTOVF 25
-#define CP_SW_LRZRTCLRRESMISS 26
 
 static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 status)
 {
@@ -2036,6 +2115,34 @@ static int gen8_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t gen8_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	/*
+	 * GPU can power down once the INT_0_STATUS is read below.
+	 * But there still might be some register reads required so
+	 * force the GMU/GPU into KEEPALIVE mode until done with the ISR.
+	 */
+	gen8_gpu_keepalive(adreno_dev, true);
+
+	kgsl_regread(device, GEN8_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, GEN8_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, gen8_irq_funcs, status);
+
+	trace_kgsl_gen8_irq_status(adreno_dev, status);
+
+	/* If hard fault, then let snapshot turn off the keepalive */
+	if (!(adreno_gpu_fault(adreno_dev) & ADRENO_HARD_FAULT))
+		gen8_gpu_keepalive(adreno_dev, false);
+
+	return ret;
+}
+
 static irqreturn_t gen8_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2127,6 +2234,8 @@ int gen8_probe_common(struct platform_device *pdev,
 
 	/* debugfs node for ACD calibration */
 	debugfs_create_file("acd_calibrate", 0644, device->d_debugfs, device, &acd_cal_fops);
+
+	gen8_coresight_init(adreno_dev);
 
 	/* Dump additional AQE 16KB data on top of default 128KB(64(BR)+64(BV)) */
 	device->snapshot_ctxt_record_size = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ?
@@ -2715,7 +2824,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.reg_offsets = gen8_register_offsets,
 		.probe = gen8_hwsched_probe,
 		.snapshot = gen8_hwsched_snapshot,
-		.irq_handler = gen8_irq_handler,
+		.irq_handler = gen8_hwsched_irq_handler,
 		.iommu_fault_block = gen8_iommu_fault_block,
 		.context_detach = gen8_hwsched_context_detach,
 		.read_alwayson = gen8_read_alwayson,

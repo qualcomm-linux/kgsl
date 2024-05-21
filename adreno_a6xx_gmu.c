@@ -1846,6 +1846,14 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a635(adreno_dev)))
+		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	/* Check no outstanding RPMh voting */
 	a6xx_complete_rpmh_votes(adreno_dev, GPU_RESET_TIMEOUT);
 
@@ -1971,6 +1979,15 @@ static int a6xx_gmu_notify_slumber(struct adreno_device *adreno_dev)
 out:
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
+
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a635(adreno_dev)))
+		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	return ret;
 }
 
@@ -3681,6 +3698,8 @@ int a6xx_gmu_device_probe(struct platform_device *pdev,
 
 	adreno_dev = &a6xx_dev->adreno_dev;
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -3694,8 +3713,6 @@ int a6xx_gmu_device_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, gmu_idle_check);
 
 	timer_setup(&device->idle_timer, gmu_idle_timer, 0);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }

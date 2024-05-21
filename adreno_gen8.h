@@ -12,6 +12,8 @@
 #include "adreno_gen8_gmu.h"
 #include "gen8_reg.h"
 
+#define GEN8_0_0_NUM_PHYSICAL_SLICES	3
+
 /* Forward struct declaration */
 struct gen8_snapshot_block_list;
 
@@ -608,4 +610,21 @@ void gen8_regread_aperture(struct kgsl_device *device,
  */
 void gen8_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id,
 		u32 slice_id, u32 use_slice_id);
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_CORESIGHT)
+void gen8_coresight_init(struct adreno_device *device);
+#else
+static inline void gen8_coresight_init(struct adreno_device *device) { }
+#endif
+
+/**
+ * gen8_get_num_slices - Get the number of physical slices for Gen8 GPUs
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Return: Number of physical slices available on Gen8 GPUs
+ */
+static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
+{
+	return GEN8_0_0_NUM_PHYSICAL_SLICES;
+}
 #endif

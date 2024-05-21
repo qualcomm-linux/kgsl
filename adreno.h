@@ -241,11 +241,13 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_2_0 = ADRENO_GPUREV_VALUE(7, 2, 0),
 	ADRENO_REV_GEN7_2_1 = ADRENO_GPUREV_VALUE(7, 2, 1),
 	ADRENO_REV_GEN7_4_0 = ADRENO_GPUREV_VALUE(7, 4, 0),
+	ADRENO_REV_GEN7_6_0 = ADRENO_GPUREV_VALUE(7, 6, 0),
 	ADRENO_REV_GEN7_9_0 = ADRENO_GPUREV_VALUE(7, 9, 0),
 	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
 	ADRENO_REV_GEN7_14_0 = ADRENO_GPUREV_VALUE(7, 14, 0),
 	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
 	ADRENO_REV_GEN8_0_0 = ADRENO_GPUREV_VALUE(8, 0, 0),
+	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
 };
 
@@ -1267,6 +1269,7 @@ ADRENO_TARGET(gen7_0_1, ADRENO_REV_GEN7_0_1)
 ADRENO_TARGET(gen7_2_0, ADRENO_REV_GEN7_2_0)
 ADRENO_TARGET(gen7_2_1, ADRENO_REV_GEN7_2_1)
 ADRENO_TARGET(gen7_4_0, ADRENO_REV_GEN7_4_0)
+ADRENO_TARGET(gen7_6_0, ADRENO_REV_GEN7_6_0)
 ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_14_0, ADRENO_REV_GEN7_14_0)
@@ -1286,8 +1289,8 @@ static inline int adreno_is_gen7_0_x_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
-		adreno_is_gen7_9_x(adreno_dev) || adreno_is_gen7_14_0(adreno_dev) ||
-		adreno_is_gen7_11_0(adreno_dev);
+		adreno_is_gen7_6_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev) ||
+		adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
 }
 
 /*
@@ -2022,4 +2025,20 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
  */
 void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
+
+/**
+ * adreno_irq_free - Free an interrupt allocated for GPU
+ * @adreno_dev: Adreno device handle
+ */
+static inline void adreno_irq_free(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!(adreno_dev->irq_mask || device->pwrctrl.interrupt_num))
+		return;
+
+	devm_free_irq(&device->pdev->dev, device->pwrctrl.interrupt_num, device);
+	adreno_dev->irq_mask = 0;
+	device->pwrctrl.interrupt_num = 0;
+}
 #endif /*__ADRENO_H */

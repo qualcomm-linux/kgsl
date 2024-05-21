@@ -40,7 +40,9 @@ enum location_id {
 #define UNSLICE                 0
 #define SLICE                   1
 
-#define MAX_PHYSICAL_SLICES     3
+#define NUMBER_OF_SLICES(region, adreno_dev) \
+	((region == SLICE) ? gen8_get_num_slices(adreno_dev) : 1)
+#define SLICE_ID(region, j) ((region == SLICE) ? j : UINT_MAX)
 
 #define GEN8_DEBUGBUS_BLOCK_SIZE 0x100
 

@@ -922,9 +922,10 @@ static ssize_t force_panic_show(struct kgsl_device *device, char *buf)
 static ssize_t force_panic_store(struct kgsl_device *device, const char *buf,
 	size_t count)
 {
-	if (strtobool(buf, &device->force_panic))
-		return -EINVAL;
-	return count;
+	int ret;
+
+	ret = kstrtobool(buf, &device->force_panic);
+	return ret ? ret : count;
 }
 
 /* Show the break_ib request status */
@@ -955,10 +956,10 @@ static ssize_t prioritize_unrecoverable_show(
 static ssize_t prioritize_unrecoverable_store(
 		struct kgsl_device *device, const char *buf, size_t count)
 {
-	if (strtobool(buf, &device->prioritize_unrecoverable))
-		return -EINVAL;
+	int ret;
 
-	return count;
+	ret = kstrtobool(buf, &device->prioritize_unrecoverable);
+	return ret ? ret : count;
 }
 
 /* Show the snapshot_crashdumper request status */
@@ -972,9 +973,10 @@ static ssize_t snapshot_crashdumper_show(struct kgsl_device *device, char *buf)
 static ssize_t snapshot_crashdumper_store(struct kgsl_device *device,
 	const char *buf, size_t count)
 {
-	if (strtobool(buf, &device->snapshot_crashdumper))
-		return -EINVAL;
-	return count;
+	int ret;
+
+	ret = kstrtobool(buf, &device->snapshot_crashdumper);
+	return ret ? ret : count;
 }
 
 /* Show the timestamp of the last collected snapshot */
@@ -996,10 +998,10 @@ static ssize_t snapshot_legacy_show(struct kgsl_device *device, char *buf)
 static ssize_t snapshot_legacy_store(struct kgsl_device *device,
 	const char *buf, size_t count)
 {
-	if (strtobool(buf, &device->snapshot_legacy))
-		return -EINVAL;
+	int ret;
 
-	return count;
+	ret = kstrtobool(buf, &device->snapshot_legacy);
+	return ret ? ret : count;
 }
 
 static struct bin_attribute snapshot_attr = {

@@ -243,7 +243,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	const struct adreno_gen8_core *gpucore = to_gen8_core(ADRENO_DEVICE(device));
+	const struct adreno_gen8_core *gpucore = to_gen8_core(adreno_dev);
 	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
 						gpucore->gen8_snapshot_block_list;
 	u32 i, slice, j;
@@ -274,10 +274,10 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	for (i = 0 ; i < gen8_snapshot_block_list->num_gmu_gx_regs; i++) {
 		struct gen8_reg_list *regs = &gen8_snapshot_block_list->gmu_gx_regs[i];
 
-		slice = regs->slice_region ? MAX_PHYSICAL_SLICES : 1;
+		slice = NUMBER_OF_SLICES(regs->slice_region, adreno_dev);
 		for (j = 0 ; j < slice; j++) {
 			info.regs = regs;
-			info.slice_id = j;
+			info.slice_id = SLICE_ID(regs->slice_region, j);
 			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,
 				gen8_legacy_snapshot_registers, &info);
 		}

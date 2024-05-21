@@ -860,8 +860,9 @@ int gen7_start(struct adreno_device *adreno_dev)
 	 * the prefetch granularity size.
 	 */
 	if (adreno_is_gen7_0_0(adreno_dev) || adreno_is_gen7_0_1(adreno_dev) ||
-		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev)
-		|| adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_11_0(adreno_dev)) {
+		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_2_0(adreno_dev) ||
+		adreno_is_gen7_2_1(adreno_dev) || adreno_is_gen7_6_0(adreno_dev) ||
+		adreno_is_gen7_11_0(adreno_dev)) {
 		kgsl_regwrite(device, GEN7_CP_CHICKEN_DBG, 0x1);
 		kgsl_regwrite(device, GEN7_CP_BV_CHICKEN_DBG, 0x1);
 		/* Avoid configuring LPAC pipe on targets which do not have LPAC. */
@@ -1586,6 +1587,34 @@ static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	/*
+	 * GPU can power down once the INT_0_STATUS is read below.
+	 * But there still might be some register reads required so
+	 * force the GMU/GPU into KEEPALIVE mode until done with the ISR.
+	 */
+	gen7_gpu_keepalive(adreno_dev, true);
+
+	kgsl_regread(device, GEN7_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
+
+	trace_kgsl_gen7_irq_status(adreno_dev, status);
+
+	/* If hard fault, then let snapshot turn off the keepalive */
+	if (!(adreno_gpu_fault(adreno_dev) & ADRENO_HARD_FAULT))
+		gen7_gpu_keepalive(adreno_dev, false);
+
+	return ret;
+}
+
 static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2187,7 +2216,7 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_9_0_read_alwayson,
@@ -2216,7 +2245,7 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_irq_handler,
+		.irq_handler = gen7_hwsched_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.context_detach = gen7_hwsched_context_detach,
 		.read_alwayson = gen7_read_alwayson,

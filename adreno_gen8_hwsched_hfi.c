@@ -219,65 +219,6 @@ u32 gen8_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	return 0;
 }
 
-/* Look up a particular key's value for a given type of payload */
-static u32 gen8_hwsched_lookup_key_value_legacy(struct adreno_device *adreno_dev,
-	u32 type, u32 key)
-{
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-
-	if (!cmd->hdr)
-		return 0;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd_legacy, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == type)
-			return gen8_hwsched_parse_payload(payload, key);
-
-		i += struct_size(payload, data, payload->dwords);
-	}
-
-	return 0;
-}
-
-static u32 get_payload_rb_key_legacy(struct adreno_device *adreno_dev,
-	u32 rb_id, u32 key)
-{
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-
-	if (!cmd->hdr)
-		return 0;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd_legacy, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == PAYLOAD_RB) {
-			u32 id = gen8_hwsched_parse_payload(payload, KEY_RB_ID);
-
-			if (id == rb_id)
-				return gen8_hwsched_parse_payload(payload, key);
-		}
-
-		i += struct_size(payload, data, payload->dwords);
-	}
-
-	return 0;
-}
-
 struct syncobj_flags {
 	unsigned long mask;
 	const char *name;
@@ -365,148 +306,6 @@ static void find_timeout_syncobj(struct adreno_device *adreno_dev, u32 ctxt_id, 
 	kgsl_context_put(context);
 }
 
-static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct device *dev = &gmu->pdev->dev;
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-
-	switch (cmd->error) {
-	case GMU_GPU_HW_HANG:
-		dev_crit_ratelimited(dev, "MISC: GPU hang detected\n");
-		break;
-	case GMU_GPU_SW_HANG:
-		dev_crit_ratelimited(dev, "gpu timeout ctx %d ts %u\n",
-			cmd->ctxt_id, cmd->ts);
-		break;
-	case GMU_CP_OPCODE_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP opcode error interrupt | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-			KEY_CP_OPCODE_ERROR));
-		break;
-	case GMU_CP_PROTECTED_ERROR: {
-		u32 status = gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_PROTECTED_ERROR);
-
-		dev_crit_ratelimited(dev,
-			"CP | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
-			status & (1 << 20) ? "READ" : "WRITE",
-			status & 0x3FFFF, status);
-		}
-		break;
-	case GMU_CP_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "CP Illegal instruction error\n");
-		break;
-	case GMU_CP_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "CP ucode error interrupt\n");
-		break;
-	case GMU_CP_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP | Ringbuffer HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
-		break;
-	case GMU_GPU_PREEMPT_TIMEOUT: {
-		u32 cur, next, cur_rptr, cur_wptr, next_rptr, next_wptr;
-
-		cur = gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-			PAYLOAD_PREEMPT_TIMEOUT, KEY_PREEMPT_TIMEOUT_CUR_RB_ID);
-		next = gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-			PAYLOAD_PREEMPT_TIMEOUT,
-			KEY_PREEMPT_TIMEOUT_NEXT_RB_ID);
-		cur_rptr = get_payload_rb_key_legacy(adreno_dev, cur, KEY_RB_RPTR);
-		cur_wptr = get_payload_rb_key_legacy(adreno_dev, cur, KEY_RB_WPTR);
-		next_rptr = get_payload_rb_key_legacy(adreno_dev, next, KEY_RB_RPTR);
-		next_wptr = get_payload_rb_key_legacy(adreno_dev, next, KEY_RB_WPTR);
-
-		dev_crit_ratelimited(dev,
-			"Preemption Fault: cur=%d R/W=0x%x/0x%x, next=%d R/W=0x%x/0x%x\n",
-			cur, cur_rptr, cur_wptr, next, next_rptr, next_wptr);
-		}
-		break;
-	case GMU_CP_GPC_ERROR:
-		dev_crit_ratelimited(dev, "RBBM: GPC error\n");
-		break;
-	case GMU_CP_BV_OPCODE_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP BV opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-			KEY_CP_BV_OPCODE_ERROR));
-		break;
-	case GMU_CP_BV_PROTECTED_ERROR: {
-		u32 status = gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_BV_PROTECTED_ERROR);
-
-		dev_crit_ratelimited(dev,
-			"CP BV | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
-			status & (1 << 20) ? "READ" : "WRITE",
-			status & 0x3FFFF, status);
-		}
-		break;
-	case GMU_CP_BV_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev,
-			"CP BV | Ringbuffer HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
-		break;
-	case GMU_CP_BV_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "CP BV Illegal instruction error\n");
-		break;
-	case GMU_CP_BV_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "CP BV ucode error interrupt\n");
-		break;
-	case GMU_GPU_SW_FUSE_VIOLATION:
-		dev_crit_ratelimited(dev, "RBBM: SW Feature Fuse violation status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_SWFUSE_VIOLATION_FAULT));
-		break;
-	case GMU_GPU_AQE0_OPCODE_ERRROR:
-		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
-		break;
-	case GMU_GPU_AQE0_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 ucode error interrupt\n");
-		break;
-	case GMU_GPU_AQE0_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE0_HW_FAULT));
-		break;
-	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
-		break;
-	case GMU_GPU_AQE1_OPCODE_ERRROR:
-		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
-		break;
-	case GMU_GPU_AQE1_UCODE_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 ucode error interrupt\n");
-		break;
-	case GMU_GPU_AQE1_HW_FAULT_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 HW fault | status=0x%8.8x\n",
-			gen8_hwsched_lookup_key_value_legacy(adreno_dev,
-				PAYLOAD_FAULT_REGS, KEY_AQE1_HW_FAULT));
-		break;
-	case GMU_GPU_AQE1_ILLEGAL_INST_ERROR:
-		dev_crit_ratelimited(dev, "AQE1 Illegal instruction error\n");
-		break;
-	case GMU_SYNCOBJ_TIMEOUT_ERROR:
-		dev_crit_ratelimited(dev, "syncobj timeout ctx %d ts %u\n",
-			cmd->ctxt_id, cmd->ts);
-		find_timeout_syncobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-		break;
-	case GMU_CP_UNKNOWN_ERROR:
-		fallthrough;
-	default:
-		dev_crit_ratelimited(dev, "Unknown GPU fault: %u\n",
-			cmd->error);
-		break;
-	}
-}
-
 /* Look up a particular key's value for a given type of payload */
 static u32 gen8_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 	u32 type, u32 key)
@@ -566,11 +365,15 @@ static u32 get_payload_rb_key(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static void log_gpu_fault(struct adreno_device *adreno_dev)
+static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct device *dev = &gmu->pdev->dev;
 	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+
+	/* Return false for non fatal errors */
+	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, dev, cmd->error))
+		return false;
 
 	switch (cmd->error) {
 	case GMU_GPU_HW_HANG:
@@ -738,6 +541,9 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 			cmd->error);
 		break;
 	}
+
+	/* Return true for fatal errors to perform recovery sequence */
+	return true;
 }
 
 static bool is_queue_empty(struct adreno_device *adreno_dev, u32 queue_idx)
@@ -780,12 +586,11 @@ static u32 peek_next_header(struct adreno_device *adreno_dev, struct gen8_gmu_de
 
 static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
-		log_gpu_fault_legacy(adreno_dev);
-	else
-		log_gpu_fault(adreno_dev);
+	/* Non fatal RBBM error interrupts don't go through reset and recovery */
+	if (!log_gpu_fault(adreno_dev)) {
+		memset(adreno_dev->hwsched.ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
+		return;
+	}
 
 	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
@@ -1223,6 +1028,9 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
 	u32 rcvd[MAX_RCVD_SIZE], next_hdr, type;
+
+	if (!(hw_hfi->irq_mask & HFI_IRQ_MSGQ_MASK))
+		return;
 
 	mutex_lock(&hw_hfi->msgq_mutex);
 
@@ -1780,57 +1588,61 @@ static int send_start_msg(struct adreno_device *adreno_dev)
 		return rc;
 
 poll:
-	rc = gmu_core_timed_poll_check(device, GEN8_GMUCX_GMU2HOST_INTR_INFO,
-		HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
+	rc = adreno_hwsched_poll_msg_queue_write_index(gmu->hfi.hfi_mem);
 
 	if (rc) {
 		dev_err(&gmu->pdev->dev,
 			"Timed out processing MSG_START seqnum: %d\n",
 			seqnum);
+		gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
 		goto done;
 	}
 
-	/* Clear the interrupt */
-	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR,
-		HFI_IRQ_MSGQ_MASK);
-
-	if (gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) <= 0) {
-		dev_err(&gmu->pdev->dev, "MSG_START: no payload\n");
-		rc = -EINVAL;
+	rc = gen8_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
+	if (rc <= 0) {
+		dev_err(&gmu->pdev->dev,
+			"MSG_START: payload error: %d\n",
+			rc);
+		gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
 		goto done;
 	}
 
-	if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
-		rc = gen8_receive_ack_cmd(gmu, rcvd, &pending_ack);
-		if (rc)
-			return rc;
-
-		return check_ack_failure(adreno_dev, &pending_ack);
-	}
-
-	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_MEM_ALLOC) {
+	switch (MSG_HDR_GET_ID(rcvd[0])) {
+	case F2H_MSG_MEM_ALLOC:
 		rc = mem_alloc_reply(adreno_dev, rcvd);
-		if (rc)
-			return rc;
-
-		goto poll;
-	}
-
-	if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_REGISTER) {
+		break;
+	case F2H_MSG_GMU_CNTR_REGISTER:
 		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
-		if (rc)
-			return rc;
-		goto poll;
+		break;
+	default:
+		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
+			rc = gen8_receive_ack_cmd(gmu, rcvd, &pending_ack);
+			/* Check ack failure if we received an expected ack */
+			if (!rc)
+				rc = check_ack_failure(adreno_dev, &pending_ack);
+			goto done;
+		} else {
+			dev_err(&gmu->pdev->dev,
+				"MSG_START: unexpected response id:%d, type:%d\n",
+				MSG_HDR_GET_ID(rcvd[0]),
+				MSG_HDR_GET_TYPE(rcvd[0]));
+			gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
+			rc = -EINVAL;
+			goto done;
+		}
 	}
 
-	dev_err(&gmu->pdev->dev,
-		"MSG_START: unexpected response id:%d, type:%d\n",
-		MSG_HDR_GET_ID(rcvd[0]),
-		MSG_HDR_GET_TYPE(rcvd[0]));
+	if (!rc)
+		goto poll;
 
 done:
-	gmu_core_fault_snapshot(device, GMU_FAULT_H2F_MSG_START);
-
+	/* Clear the interrupt */
+	gmu_core_regwrite(device, GEN8_GMUCX_GMU2HOST_INTR_CLR, HFI_IRQ_MSGQ_MASK);
+	/*
+	 * Add a write barrier to post the interrupt clear so that we dont have a
+	 * pending interrupt.
+	 */
+	wmb();
 	return rc;
 }
 
@@ -2047,25 +1859,6 @@ static int gen8_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-static int gen8_hfi_send_dms_feature_ctrl(struct adreno_device *adreno_dev)
-{
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	int ret;
-
-	if (!test_bit(ADRENO_DEVICE_DMS, &adreno_dev->priv))
-		return 0;
-
-	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_DMS, 1, 0);
-	if (ret == -ENOENT) {
-		dev_err(&gmu->pdev->dev, "GMU doesn't support DMS feature\n");
-		clear_bit(ADRENO_DEVICE_DMS, &adreno_dev->priv);
-		adreno_dev->dms_enabled = false;
-		return 0;
-	}
-
-	return ret;
-}
-
 static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
 				const char *str)
 {
@@ -2203,9 +1996,6 @@ static int gen8_hwsched_coldboot_gpu(struct adreno_device *adreno_dev)
 	struct pending_cmd ack = {0};
 	int ret = 0;
 
-	/* Clear the bit so we can set it when GPU bootup message recording is successful */
-	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
-
 	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gpu_boot_scratch,
 		 HFI_WARMBOOT_SET_SCRATCH, true, &ack);
 	if (ret)
@@ -2281,6 +2071,7 @@ err:
 	if (ret) {
 		/* Clear the bit in case of an error so next boot will be coldboot */
 		clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+		clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 		gen8_hwsched_hfi_stop(adreno_dev);
 	}
 
@@ -2329,6 +2120,7 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	/* Reset the variable here and set it when we successfully record the scratch */
 	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 
 	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
 		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
@@ -2375,10 +2167,6 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	}
 
 	ret = gen8_hfi_send_perfcounter_feature_ctrl(adreno_dev);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_dms_feature_ctrl(adreno_dev);
 	if (ret)
 		goto err;
 
@@ -3775,17 +3563,26 @@ int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 	return ret;
 }
 
+static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
+{
+	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev), GMU_FAULT_CTX_UNREGISTER);
+
+	/* Make sure we send all fences from this context to the TxQueue after recovery */
+	move_detached_context_hardware_fences(adreno_dev, drawctxt);
+	gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+}
+
 static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	struct kgsl_context *context, u32 ts)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 	struct pending_cmd pending_ack;
 	struct hfi_unregister_ctxt_cmd cmd;
 	u32 seqnum;
-	int rc, ret;
+	int ret;
 
 	/* Only send HFI if device is not in SLUMBER */
 	if (!context->gmu_registered ||
@@ -3801,60 +3598,44 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	cmd.ctxt_id = context->id,
 	cmd.ts = ts,
 
-	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
-	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
-
-	add_waiter(hfi, cmd.hdr, &pending_ack);
-
 	/*
 	 * Although we know device is powered on, we can still enter SLUMBER
 	 * because the wait for ack below is done without holding the mutex. So
 	 * take an active count before releasing the mutex so as to avoid a
 	 * concurrent SLUMBER sequence while GMU is un-registering this context.
 	 */
-	gen8_hwsched_active_count_get(adreno_dev);
+	ret = gen8_hwsched_active_count_get(adreno_dev);
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
+		return ret;
+	}
 
-	rc = gen8_hfi_cmdq_write(adreno_dev, (u32 *)&cmd, sizeof(cmd));
-	if (rc)
-		goto done;
+	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
+	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
+	add_waiter(hfi, cmd.hdr, &pending_ack);
 
-	mutex_unlock(&device->mutex);
-
-	rc = wait_for_completion_timeout(&pending_ack.complete,
-			msecs_to_jiffies(30 * 1000));
-	if (!rc) {
-		dev_err(&gmu->pdev->dev,
-			"Ack timeout for context unregister seq: %d ctx: %u ts: %u\n",
-			MSG_HDR_GET_SEQNUM(pending_ack.sent_hdr),
-			context->id, ts);
-		rc = -ETIMEDOUT;
-
-		mutex_lock(&device->mutex);
-
-		gmu_core_fault_snapshot(device, GMU_FAULT_CTX_UNREGISTER);
-
-		/*
-		 * Make sure we send all fences from this context to the TxQueue after recovery
-		 */
-		move_detached_context_hardware_fences(adreno_dev, drawctxt);
-		gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-
+	ret = gen8_hfi_cmdq_write(adreno_dev, (u32 *)&cmd, sizeof(cmd));
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
-
-	rc = check_detached_context_hardware_fences(adreno_dev, drawctxt);
-	if (rc)
+	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
+		&gmu->pdev->dev, &pending_ack, gen8_hwsched_process_msgq, &cmd);
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		goto done;
+	}
 
-	rc = check_ack_failure(adreno_dev, &pending_ack);
+	ret = check_detached_context_hardware_fences(adreno_dev, drawctxt);
+	if (!ret)
+		ret = check_ack_failure(adreno_dev, &pending_ack);
+
 done:
 	gen8_hwsched_active_count_put(adreno_dev);
-
 	del_waiter(hfi, &pending_ack);
 
-	return rc;
+	return ret;
 }
 
 void gen8_hwsched_context_detach(struct adreno_context *drawctxt)

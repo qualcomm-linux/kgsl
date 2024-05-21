@@ -1849,6 +1849,34 @@ static int a6xx_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static irqreturn_t a6xx_hwsched_irq_handler(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	irqreturn_t ret = IRQ_NONE;
+	u32 status;
+
+	/*
+	 * On A6xx, the GPU can power down once the INT_0_STATUS is read
+	 * below. But there still might be some register reads required
+	 * so force the GMU/GPU into KEEPALIVE mode until done with the ISR.
+	 */
+	a6xx_gpu_keepalive(adreno_dev, true);
+
+	kgsl_regread(device, A6XX_RBBM_INT_0_STATUS, &status);
+
+	kgsl_regwrite(device, A6XX_RBBM_INT_CLEAR_CMD, status);
+
+	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs, status);
+
+	trace_kgsl_a5xx_irq_status(adreno_dev, status);
+
+	/* If hard fault, then let snapshot turn off the keepalive */
+	if (!(adreno_gpu_fault(adreno_dev) & ADRENO_HARD_FAULT))
+		a6xx_gpu_keepalive(adreno_dev, false);
+
+	return ret;
+}
+
 static irqreturn_t a6xx_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1929,6 +1957,8 @@ static int a6xx_probe(struct platform_device *pdev,
 
 	memset(adreno_dev, 0, sizeof(*adreno_dev));
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1942,8 +1972,6 @@ static int a6xx_probe(struct platform_device *pdev,
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }
@@ -2335,7 +2363,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.reg_offsets = a6xx_register_offsets,
 		.probe = a6xx_hwsched_probe,
 		.snapshot = a6xx_hwsched_snapshot,
-		.irq_handler = a6xx_irq_handler,
+		.irq_handler = a6xx_hwsched_irq_handler,
 		.iommu_fault_block = a6xx_iommu_fault_block,
 		.context_detach = a6xx_hwsched_context_detach,
 		.read_alwayson = a6xx_read_alwayson,

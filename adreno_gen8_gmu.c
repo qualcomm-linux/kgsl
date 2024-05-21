@@ -384,9 +384,6 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN8_GMUAO_RSCC_CONTROL_REQ, 0);
 
-	if (adreno_dev->lm_enabled)
-		gmu_core_regwrite(device, GEN8_GMUAO_AO_SPARE_CNTL, 0);
-
 	set_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags);
 
 	return 0;
@@ -702,7 +699,7 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-	u32 reg, reg1, reg2, reg3, reg4, reg5;
+	u32 reg, reg1, reg2, reg3, reg4;
 	unsigned long t;
 	u64 ts1, ts2;
 
@@ -744,23 +741,16 @@ int gen8_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	gmu_core_regread(device, GEN8_GMUAO_GPU_CX_BUSY_STATUS, &reg2);
 	gmu_core_regread(device, GEN8_GMUAO_RBBM_INT_UNMASKED_STATUS_SHADOW, &reg3);
 	gmu_core_regread(device, GEN8_GMUCX_PWR_COL_KEEPALIVE, &reg4);
-	gmu_core_regread(device, GEN8_GMUAO_AO_SPARE_CNTL, &reg5);
 
 	dev_err(&gmu->pdev->dev,
 		"----------------------[ GMU error ]----------------------\n");
-	dev_err(&gmu->pdev->dev,
-		"Timeout waiting for lowest idle level %s\n",
+	dev_err(&gmu->pdev->dev, "Timeout waiting for lowest idle level %s\n",
 		idle_level_name(gmu->idle_level));
 	dev_err(&gmu->pdev->dev, "Start: %llx (absolute ticks)\n", ts1);
-	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n",
-		ts2-ts1);
-	dev_err(&gmu->pdev->dev,
-		"RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
+	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n", ts2-ts1);
+	dev_err(&gmu->pdev->dev, "RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
 	dev_err(&gmu->pdev->dev, "CX_BUSY_STATUS=%x\n", reg2);
-	dev_err(&gmu->pdev->dev,
-		"RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n",
-		reg3, reg4);
-	dev_err(&gmu->pdev->dev, "GMUAO_AO_SPARE_CNTL=%x\n", reg5);
+	dev_err(&gmu->pdev->dev, "RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n", reg3, reg4);
 
 	/* Access GX registers only when GX is ON */
 	if (is_on(reg1)) {
@@ -1381,6 +1371,12 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
+
 	/* Check no outstanding RPMh voting */
 	gen8_complete_rpmh_votes(gmu, 1);
 
@@ -1391,42 +1387,24 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	/* Make sure above writes are committed before we proceed to recovery */
 	wmb();
 
-	gmu_core_regwrite(device, GEN8_GMUCX_CM3_SYSRESET, 1);
-
-	/* Halt GX traffic */
-	if (gen8_gmu_gx_is_on(adreno_dev))
-		_do_gbif_halt(device, GEN8_RBBM_GBIF_HALT,
-				GEN8_RBBM_GBIF_HALT_ACK,
-				GEN8_GBIF_GX_HALT_MASK,
-				"GX");
-
 	/* Halt CX traffic */
 	_do_gbif_halt(device, GEN8_GBIF_HALT, GEN8_GBIF_HALT_ACK,
 			GEN8_GBIF_ARB_HALT_MASK, "CX");
-
-	if (gen8_gmu_gx_is_on(adreno_dev))
-		kgsl_regwrite(device, GEN8_RBBM_SW_RESET_CMD, 0x1);
-
-	/* Make sure above writes are posted before turning off power resources */
-	wmb();
-
-	/* Allow the software reset to complete */
-	udelay(100);
-
-	/*
-	 * This is based on the assumption that GMU is the only one controlling
-	 * the GX HS. This code path is the only client voting for GX from linux
-	 * kernel.
-	 */
-	if (!gen8_gmu_gx_is_on(adreno_dev))
-		return;
 
 	/*
 	 * Switch gx gdsc control from GMU to CPU force non-zero reference
 	 * count in clk driver so next disable call will turn off the GDSC
 	 */
-	kgsl_pwrctrl_enable_gx_gdsc(device);
-	kgsl_pwrctrl_disable_gx_gdsc(device);
+	if (gen8_gmu_gx_is_on(adreno_dev)) {
+		kgsl_pwrctrl_enable_gx_gdsc(device);
+		kgsl_pwrctrl_disable_gx_gdsc(device);
+	}
+
+	/*
+	 * Trigger RSC slumber sequence to turn off GMU controlled domains
+	 * (GX, MXC) and remove GPU bus votes
+	 */
+	gen8_rscc_sleep_sequence(adreno_dev);
 
 	if (gen8_gmu_gx_is_on(adreno_dev))
 		dev_err(&gmu->pdev->dev, "gx is stuck on\n");
@@ -1463,6 +1441,13 @@ static int gen8_gmu_notify_slumber(struct adreno_device *adreno_dev)
 
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, GEN8_GMUAO_AHB_FENCE_CTRL, 0);
+
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
+
 	return ret;
 }
 
@@ -2100,7 +2085,7 @@ static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel, ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
 	return ret;
 }
 
@@ -3150,6 +3135,8 @@ int gen8_gmu_device_probe(struct platform_device *pdev,
 
 	adreno_dev = &gen8_dev->adreno_dev;
 
+	adreno_dev->irq_mask = GEN8_INT_MASK;
+
 	ret = gen8_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -3163,13 +3150,6 @@ int gen8_gmu_device_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, gmu_idle_check);
 
 	timer_setup(&device->idle_timer, gmu_idle_timer, 0);
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_DMS)) {
-		set_bit(ADRENO_DEVICE_DMS, &adreno_dev->priv);
-		adreno_dev->dms_enabled = true;
-	}
-
-	adreno_dev->irq_mask = GEN8_INT_MASK;
 
 	return 0;
 }
