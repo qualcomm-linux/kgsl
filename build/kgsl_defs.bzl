@@ -104,6 +104,11 @@ def external_deps(target, variant):
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
+    if target in [ "monaco" ]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
+            ]
+
     native.genrule(
        name = "{}_defconfig".format(tv),
        srcs = defconfigs + [ "config/{}_gpuconf".format(tv) ],
