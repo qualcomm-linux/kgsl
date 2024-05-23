@@ -36,7 +36,7 @@ ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
         KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 
-ifeq ($(TARGET_BOARD_PLATFORM), sun)
+ifneq ($(filter sun niobe, $(TARGET_BOARD_PLATFORM)),)
 	KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,synx-driver-symvers)/synx-driver-symvers
 endif
 
