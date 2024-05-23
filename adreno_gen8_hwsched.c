@@ -1704,16 +1704,36 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 	return ret;
 }
 
-static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
+static int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_hw_fence_entry *entry, *tmp;
+	int ret = 0;
+
+	/* We don't need the drawctxt lock here as this context has already been invalidated */
+	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
+
+		/* Any error here is fatal */
+		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
+			HW_FENCE_FLAG_SKIP_MEMSTORE);
+		if (ret)
+			break;
+
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+	}
+
+	return ret;
+}
+
+static struct adreno_context *_get_guilty_context(struct kgsl_device *device)
+{
 	struct kgsl_context *context = NULL;
 	struct adreno_context *guilty = NULL;
-	int id, ret = 0;
+	int id;
 
 	read_lock(&device->context_lock);
 	idr_for_each_entry(&device->context_idr, context, id) {
-		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv) &&
+		if (test_and_clear_bit(KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE, &context->priv) &&
 			_kgsl_context_get(context)) {
 			guilty = ADRENO_CONTEXT(context);
 			break;
@@ -1721,17 +1741,30 @@ static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
 	}
 	read_unlock(&device->context_lock);
 
-	if (!guilty)
-		return 0;
+	return guilty;
+}
+
+static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_context *guilty = _get_guilty_context(device);
+	int ret = 0;
 
 	/*
 	 * We don't need drawctxt spinlock to signal these fences since the only other place
 	 * which can retire these fences is the context detach path and device mutex
 	 * ensures mutual exclusion between recovery thread and detach thread.
 	 */
-	ret = gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+	while (guilty) {
+		ret = gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
 
-	kgsl_context_put(&guilty->base);
+		kgsl_context_put(&guilty->base);
+
+		if (ret)
+			break;
+
+		guilty = _get_guilty_context(device);
+	}
 
 	return ret;
 }

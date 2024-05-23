@@ -265,6 +265,9 @@ void adreno_drawctxt_invalidate(struct kgsl_device *device,
 	spin_lock(&drawctxt->lock);
 	set_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv);
 
+	if (!list_empty(&drawctxt->hw_fence_list))
+		set_bit(KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE, &context->priv);
+
 	/*
 	 * set the timestamp to the last value since the context is invalidated
 	 * and we want the pending events for this context to go away

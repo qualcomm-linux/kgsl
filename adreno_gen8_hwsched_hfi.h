@@ -285,18 +285,6 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence);
 
 /**
- * gen8_hwsched_drain_context_hw_fences - Drain context's hardware fences via GMU
- * @adreno_dev: Pointer to adreno device
- * @drawctxt: Pointer to the adreno context which is to be flushed
- *
- * Trigger hardware fences that were never dispatched to GMU
- *
- * Return: Zero on success or negative error on failure
- */
-int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt);
-
-/**
  * gen8_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
  * from a context have been sent to the TxQueue or not
  * @adreno_dev: Pointer to adreno device

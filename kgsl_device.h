@@ -364,6 +364,8 @@ struct kgsl_device {
  * @KGSL_CONTEXT_PRIV_PAGEFAULT - The context has caused a page fault.
  * @KGSL_CONTEXT_PRIV_DEVICE_SPECIFIC - this value and higher values are
  *	reserved for devices specific use.
+ * @KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE - this context got invalidated
+ * and needs its hardware fences drained after device reset
  */
 enum kgsl_context_priv {
 	KGSL_CONTEXT_PRIV_SUBMITTED = 0,
@@ -371,6 +373,7 @@ enum kgsl_context_priv {
 	KGSL_CONTEXT_PRIV_INVALID,
 	KGSL_CONTEXT_PRIV_PAGEFAULT,
 	KGSL_CONTEXT_PRIV_DEVICE_SPECIFIC = 16,
+	KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE,
 };
 
 struct kgsl_process_private;

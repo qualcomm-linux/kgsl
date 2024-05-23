@@ -3905,27 +3905,6 @@ static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 	}
 }
 
-int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
-	struct adreno_context *drawctxt)
-{
-	struct adreno_hw_fence_entry *entry, *tmp;
-	int ret = 0;
-
-	/* We don't need the drawctxt lock here as this context has already been invalidated */
-	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
-
-		/* Any error here is fatal */
-		ret = gen7_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
-			HW_FENCE_FLAG_SKIP_MEMSTORE);
-		if (ret)
-			break;
-
-		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
-	}
-
-	return ret;
-}
-
 static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
