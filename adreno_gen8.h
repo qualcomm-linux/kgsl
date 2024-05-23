@@ -13,6 +13,7 @@
 #include "gen8_reg.h"
 
 #define GEN8_0_0_NUM_PHYSICAL_SLICES	3
+#define GEN8_3_0_NUM_PHYSICAL_SLICES	1
 
 /* Forward struct declaration */
 struct gen8_snapshot_block_list;
@@ -625,6 +626,8 @@ static inline void gen8_coresight_init(struct adreno_device *device) { }
  */
 static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
 {
+	if (adreno_is_gen8_3_0(adreno_dev))
+		return GEN8_3_0_NUM_PHYSICAL_SLICES;
 	return GEN8_0_0_NUM_PHYSICAL_SLICES;
 }
 #endif

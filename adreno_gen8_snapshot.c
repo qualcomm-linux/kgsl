@@ -6,6 +6,7 @@
 
 #include "adreno.h"
 #include "adreno_gen8_0_0_snapshot.h"
+#include "adreno_gen8_3_0_snapshot.h"
 #include "adreno_snapshot.h"
 
 static struct kgsl_memdesc *gen8_capturescript;
@@ -44,6 +45,37 @@ const struct gen8_snapshot_block_list gen8_0_0_snapshot_block_list = {
 	.num_sptp_clusters = ARRAY_SIZE(gen8_0_0_sptp_clusters),
 	.index_registers = gen8_0_0_cp_indexed_reg_list,
 	.index_registers_len = ARRAY_SIZE(gen8_0_0_cp_indexed_reg_list),
+	.mempool_index_registers = gen8_0_0_cp_mempool_reg_list,
+	.mempool_index_registers_len = ARRAY_SIZE(gen8_0_0_cp_mempool_reg_list),
+};
+
+const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen8_0_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_0_0_ahb_registers),
+	.debugbus_blocks = gen8_3_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen8_3_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen8_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen8_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen8_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
+	.external_core_regs = gen8_3_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen8_3_0_external_core_regs),
+	.gmu_cx_unsliced_regs = gen8_3_0_gmu_registers,
+	.gmu_gx_regs = gen8_3_0_gmu_gx_regs,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_3_0_gmu_gx_regs),
+	.rscc_regs = gen8_3_0_rscc_rsc_registers,
+	.reg_list = gen8_0_0_reg_list,
+	.cx_misc_regs = gen8_0_0_cx_misc_registers,
+	.shader_blocks = gen8_3_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen8_3_0_shader_blocks),
+	.cp_clusters = gen8_3_0_cp_clusters,
+	.num_cp_clusters = ARRAY_SIZE(gen8_3_0_cp_clusters),
+	.clusters = gen8_3_0_mvc_clusters,
+	.num_clusters = ARRAY_SIZE(gen8_3_0_mvc_clusters),
+	.sptp_clusters = gen8_3_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen8_3_0_sptp_clusters),
+	.index_registers = gen8_3_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen8_3_0_cp_indexed_reg_list),
 	.mempool_index_registers = gen8_0_0_cp_mempool_reg_list,
 	.mempool_index_registers_len = ARRAY_SIZE(gen8_0_0_cp_mempool_reg_list),
 };
@@ -603,8 +635,9 @@ static void gen8_snapshot_shader(struct kgsl_device *device,
 	if (CD_SCRIPT_CHECK(device)) {
 		for (i = 0; i < num_shader_blocks; i++) {
 			struct gen8_shader_block *block = &shader_blocks[i];
+			u32 slices = NUMBER_OF_SLICES(block->slice_region, ADRENO_DEVICE(device));
 
-			for (slice = 0; slice < block->num_slices; slice++) {
+			for (slice = 0; slice < slices; slice++) {
 				for (sp = 0; sp < block->num_sps; sp++) {
 					for (usptp = 0; usptp < block->num_usptps; usptp++) {
 						info.block = block;
@@ -628,12 +661,13 @@ static void gen8_snapshot_shader(struct kgsl_device *device,
 
 	for (i = 0; i < num_shader_blocks; i++) {
 		struct gen8_shader_block *block = &shader_blocks[i];
+		u32 slices = NUMBER_OF_SLICES(block->slice_region, ADRENO_DEVICE(device));
 
 		/* Build the crash script */
 		ptr = gen8_capturescript->hostptr;
 		offset = 0;
 
-		for (slice = 0; slice < block->num_slices; slice++) {
+		for (slice = 0; slice < slices; slice++) {
 			for (sp = 0; sp < block->num_sps; sp++) {
 				for (usptp = 0; usptp < block->num_usptps; usptp++) {
 					/* Program the aperture */
@@ -657,7 +691,7 @@ static void gen8_snapshot_shader(struct kgsl_device *device,
 			func = gen8_snapshot_shader_memory;
 
 		offset = 0;
-		for (slice = 0; slice < block->num_slices; slice++) {
+		for (slice = 0; slice < slices; slice++) {
 			for (sp = 0; sp < block->num_sps; sp++) {
 				for (usptp = 0; usptp < block->num_usptps; usptp++) {
 					info.block = block;
