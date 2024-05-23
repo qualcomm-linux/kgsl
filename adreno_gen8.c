@@ -730,7 +730,7 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	const struct gen8_protected_regs *regs = gen8_core->protected_regs;
-	u32 count;
+	u32 count = 0;
 	int i;
 
 	/*
