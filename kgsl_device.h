@@ -454,6 +454,8 @@ struct kgsl_context {
 	struct list_head faults;
 	/** @fault_lock: Mutex to protect faults */
 	struct mutex fault_lock;
+	/** @deferred_destroy_ws: Work struct used to destroy context in a deferred manner */
+	struct work_struct deferred_destroy_ws;
 };
 
 #define _context_comm(_c) \
@@ -819,6 +821,19 @@ kgsl_context_put(struct kgsl_context *context)
 {
 	if (context)
 		kref_put(&context->refcount, kgsl_context_destroy);
+}
+
+/*
+ * kgsl_context_put_deferred() - Puts refcount and triggers deferred
+ * context destroy when refcount is the last refcount.
+ * @context: context to put
+ *
+ * Use this to put a context from within atomic context
+ */
+static inline void kgsl_context_put_deferred(struct kgsl_context *context)
+{
+	if (context)
+		kref_put(&context->refcount, kgsl_context_destroy_deferred);
 }
 
 /**

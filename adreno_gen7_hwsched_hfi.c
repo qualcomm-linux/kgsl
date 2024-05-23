@@ -3373,15 +3373,21 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 	if (!DRAWCTXT_SLOT_AVAILABLE(drawctxt->hw_fence_count))
 		return NULL;
 
-	entry = kmem_cache_zalloc(hwsched->hw_fence_cache, GFP_ATOMIC);
-	if (!entry)
+	if (_kgsl_context_get(&drawctxt->base))
 		return NULL;
+
+	entry = kmem_cache_zalloc(hwsched->hw_fence_cache, GFP_ATOMIC);
+	if (!entry) {
+		kgsl_context_put_deferred(&drawctxt->base);
+		return NULL;
+	}
 
 	entry->kfence = kfence;
 	entry->drawctxt = drawctxt;
 
 	if (setup_hw_fence_info_cmd(adreno_dev, entry)) {
 		kmem_cache_free(hwsched->hw_fence_cache, entry);
+		kgsl_context_put_deferred(&drawctxt->base);
 		return NULL;
 	}
 

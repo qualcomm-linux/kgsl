@@ -707,4 +707,10 @@ static inline bool kgsl_addr_range_overlap(uint64_t gpuaddr1,
  */
 void kgsl_work_period_update(struct kgsl_device *device,
 			struct gpu_work_period *period, u64 active);
+
+/**
+ * kgsl_context_destroy_deferred() - Destroy context in a deferred manner
+ * @kref: Pointer to context refcount
+ */
+void kgsl_context_destroy_deferred(struct kref *kref);
 #endif /* __KGSL_H */
