@@ -16,19 +16,11 @@
  * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
- * @hfi_mem: pointer to HFI shared memory
  * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
- * @num_gpupwrlevels: number GPU frequencies in GPU freq table
- * @num_bwlevel: number of GPU BW levels
- * @num_cnocbwlevel: number CNOC BW levels
- * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
  * @clks: GPU subsystem clocks required for GMU functionality
- * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
- *		than default power level
  * @idle_level: Minimal GPU idle power level
- * @fault_count: GMU fault count
  * @mailbox: Messages to AOP for ACD enable/disable go through this
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
