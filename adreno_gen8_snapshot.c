@@ -1467,6 +1467,8 @@ static size_t snapshot_preemption_record(struct kgsl_device *device,
 	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
 					device->snapshot_ctxt_record_size);
 
+	ctxt_record_size = min_t(u64, ctxt_record_size, memdesc->size);
+
 	if (remain < (ctxt_record_size + sizeof(*header))) {
 		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
 		return 0;
