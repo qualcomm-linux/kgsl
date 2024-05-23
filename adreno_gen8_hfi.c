@@ -604,7 +604,7 @@ int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 	cmd.domain[1].clxh = 0;
 	cmd.domain[1].urgmode = 1;
 	cmd.domain[1].lkgen = 0;
-	cmd.domain[1].currbudget = 100;
+	cmd.domain[1].currbudget = 50;
 
 	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
