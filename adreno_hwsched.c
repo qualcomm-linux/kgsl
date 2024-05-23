@@ -2393,7 +2393,8 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	return 0;
 }
 
-void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, struct device *dev)
+void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+	struct device *dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hw_fence_entry entries[5];
@@ -2412,6 +2413,7 @@ void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, stru
 			if (count < ARRAY_SIZE(entries))
 				memcpy(&entries[count], entry, sizeof(*entry));
 			count++;
+			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 		}
 
 		spin_unlock(&drawctxt->lock);
@@ -2535,4 +2537,19 @@ done:
 	rmb();
 
 	return 0;
+}
+
+/* This function can be called while holding the drawctxt spinlock */
+void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
+	struct adreno_hw_fence_entry *entry)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct adreno_context *drawctxt = entry->drawctxt;
+
+	atomic_dec(&hwsched->hw_fence_count);
+	drawctxt->hw_fence_count--;
+
+	dma_fence_put(&entry->kfence->fence);
+	list_del_init(&entry->node);
+	kmem_cache_free(hwsched->hw_fence_cache, entry);
 }

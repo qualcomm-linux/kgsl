@@ -146,21 +146,6 @@ static void gen7_receive_ack_async(struct adreno_device *adreno_dev, void *rcvd)
 			MSG_HDR_GET_SEQNUM(waiters[i]));
 }
 
-/* This function is called while holding the drawctxt spinlock */
-void gen7_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry)
-{
-	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
-	struct adreno_context *drawctxt = entry->drawctxt;
-
-	atomic_dec(&hwsched->hw_fence_count);
-	drawctxt->hw_fence_count--;
-
-	dma_fence_put(&entry->kfence->fence);
-	list_del_init(&entry->node);
-	kmem_cache_free(hwsched->hw_fence_cache, entry);
-}
-
 static void _retire_inflight_hw_fences(struct adreno_device *adreno_dev,
 	struct kgsl_context *context)
 {
@@ -182,7 +167,7 @@ static void _retire_inflight_hw_fences(struct adreno_device *adreno_dev,
 		if (timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)
 			break;
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);
 }
@@ -1087,7 +1072,7 @@ static int _send_deferred_hw_fence(struct adreno_device *adreno_dev,
 	if (!retired)
 		list_move_tail(&entry->node, &drawctxt->hw_fence_inflight_list);
 	else
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	spin_unlock(&drawctxt->lock);
 
 	return 0;
@@ -3217,7 +3202,7 @@ int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_d
 			break;
 		}
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);
 
@@ -3245,7 +3230,7 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 			continue;
 		}
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 
 	/* Also grab all the hardware fences which were never sent to GMU */
@@ -3281,7 +3266,7 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 			ret = -EINVAL;
 			goto fault;
 		}
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 
 	/* Send hardware fences (to TxQueue) that were not dispatched to GMU */
@@ -3292,7 +3277,7 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 		if (ret)
 			goto fault;
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 
 	return 0;
@@ -3557,7 +3542,7 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 		if (__ratelimit(&_rs))
 			dev_err(&gmu->pdev->dev, "hw fence for ctx:%d ts:%d ret:%d may not be destroyed\n",
 				kfence->context_id, kfence->timestamp, ret);
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 		kgsl_hw_fence_destroy(kfence);
 		goto done;
 	}
@@ -3628,8 +3613,7 @@ static void process_hw_fence_queue(struct adreno_device *adreno_dev,
 		 * A fence that is sent to GMU must be added to the drawctxt->hw_fence_inflight_list
 		 * so that we can keep track of when GMU sends it to the TxQueue
 		 */
-		list_del_init(&entry->node);
-		list_add_tail(&entry->node, &drawctxt->hw_fence_inflight_list);
+		list_move_tail(&entry->node, &drawctxt->hw_fence_inflight_list);
 	}
 }
 
@@ -3917,7 +3901,7 @@ static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 
 		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 }
 
@@ -3936,7 +3920,7 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 		if (ret)
 			break;
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 
 	return ret;

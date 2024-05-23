@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_HFI_H_
@@ -310,14 +310,6 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
  */
 int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt);
-
-/**
- * gen7_remove_hw_fence_entry - Remove hardware fence entry
- * @adreno_dev: pointer to the adreno device
- * @entry: Pointer to the hardware fence entry
- */
-void gen7_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
 
 /**
  * gen7_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset

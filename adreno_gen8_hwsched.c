@@ -465,14 +465,15 @@ static void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_o
 	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hw_hfi->hw_fence.flags);
 	spin_unlock(&hw_hfi->hw_fence.lock);
 
-	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
-
 	/*
 	 * It is possible that some hardware fences were created while we were in slumber. Since
 	 * soccp power vote failed, these hardware fences may never be signaled. Hence, log them
 	 * for debug purposes.
 	 */
-	adreno_hwsched_log_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+	adreno_hwsched_log_destroy_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+	adreno_mark_for_coldboot(adreno_dev);
+
+	adreno_hwsched_deregister_hw_fence(adreno_dev);
 }
 
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
@@ -1145,7 +1146,7 @@ static void drain_ctx_hw_fences_cpu(struct adreno_device *adreno_dev,
 	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
 		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
-		gen8_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);
 }
@@ -1610,7 +1611,7 @@ static void process_context_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		/* Delete the fences that GMU has sent to the TxQueue */
 		if (timestamp_cmp(hdr->out_fence_ts, (u32)entry->cmd.ts) >= 0) {
-			gen8_remove_hw_fence_entry(adreno_dev, entry);
+			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 			continue;
 		}
 
@@ -1695,7 +1696,7 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		context = &entry->drawctxt->base;
 
-		gen8_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 
 		kgsl_context_put(context);
 	}

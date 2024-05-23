@@ -1140,7 +1140,7 @@ static void drain_ctx_hw_fences_cpu(struct adreno_device *adreno_dev,
 	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
 		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);
 }
@@ -1607,7 +1607,7 @@ static void process_context_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		/* Delete the fences that GMU has sent to the TxQueue */
 		if (timestamp_cmp(hdr->out_fence_ts, (u32)entry->cmd.ts) >= 0) {
-			gen7_remove_hw_fence_entry(adreno_dev, entry);
+			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 			continue;
 		}
 
@@ -1692,7 +1692,7 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		context = &entry->drawctxt->base;
 
-		gen7_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 
 		kgsl_context_put(context);
 	}

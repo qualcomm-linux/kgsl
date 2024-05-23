@@ -35,6 +35,7 @@
 
 /*
  * This is used to avoid creating any more hardware fences until concurrent reset/recovery completes
+ * or when soccp vote fails
  */
 #define GEN8_HWSCHED_HW_FENCE_ABORT_BIT 0x2
 
@@ -308,14 +309,6 @@ int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
  */
 int gen8_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt);
-
-/**
- * gen8_remove_hw_fence_entry - Remove hardware fence entry
- * @adreno_dev: pointer to the adreno device
- * @entry: Pointer to the hardware fence entry
- */
-void gen8_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
 
 /**
  * gen8_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset
