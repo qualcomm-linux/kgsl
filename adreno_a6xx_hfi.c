@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -257,56 +257,6 @@ int a6xx_receive_ack_cmd(struct a6xx_gmu_device *gmu, void *rcvd,
 	return -ENODEV;
 }
 
-static int poll_gmu_reg(struct adreno_device *adreno_dev,
-	u32 offsetdwords, unsigned int expected_val,
-	unsigned int mask, unsigned int timeout_ms)
-{
-	unsigned int val;
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	unsigned long timeout = jiffies + msecs_to_jiffies(timeout_ms);
-	u64 ao_pre_poll, ao_post_poll;
-	bool nmi = false;
-
-	ao_pre_poll = a6xx_read_alwayson(adreno_dev);
-
-	/* FIXME: readl_poll_timeout? */
-	while (time_is_after_jiffies(timeout)) {
-		gmu_core_regread(device, offsetdwords, &val);
-		if ((val & mask) == expected_val)
-			return 0;
-
-		/*
-		 * If GMU firmware fails any assertion, error message is sent
-		 * to KMD and NMI is triggered. So check if GMU is in NMI and
-		 * timeout early. Bits [11:9] of A6XX_GMU_CM3_FW_INIT_RESULT
-		 * contain GMU reset status. Non zero value here indicates that
-		 * GMU reset is active, NMI handler would eventually complete
-		 * and GMU would wait for recovery.
-		 */
-		gmu_core_regread(device, A6XX_GMU_CM3_FW_INIT_RESULT, &val);
-		if (val & 0xE00) {
-			nmi = true;
-			break;
-		}
-
-		usleep_range(10, 100);
-	}
-
-	ao_post_poll = a6xx_read_alwayson(adreno_dev);
-
-	/* Check one last time */
-	gmu_core_regread(device, offsetdwords, &val);
-	if ((val & mask) == expected_val)
-		return 0;
-
-	dev_err(&gmu->pdev->dev, "kgsl hfi poll %s: always on: %lld ms\n",
-		nmi ? "abort" : "timeout",
-		div_u64((ao_post_poll - ao_pre_poll) * 52, USEC_PER_SEC));
-
-	return -ETIMEDOUT;
-}
-
 static int a6xx_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
 	void *data, struct pending_cmd *ret_cmd)
 {
@@ -327,8 +277,8 @@ static int a6xx_hfi_send_cmd_wait_inline(struct adreno_device *adreno_dev,
 	if (rc)
 		return rc;
 
-	rc = poll_gmu_reg(adreno_dev, A6XX_GMU_GMU2HOST_INTR_INFO,
-		HFI_IRQ_MSGQ_MASK, HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT);
+	rc = gmu_core_timed_poll_check(device, A6XX_GMU_GMU2HOST_INTR_INFO,
+			HFI_IRQ_MSGQ_MASK, HFI_RSP_TIMEOUT, HFI_IRQ_MSGQ_MASK);
 
 	if (rc) {
 		gmu_core_fault_snapshot(device);
