@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -679,10 +679,10 @@ int a6xx_rscc_wakeup_sequence(struct adreno_device *adreno_dev)
 	if (!test_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags))
 		return 0;
 	 /* A660 has a replacement register */
-	if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev))
-		gmu_core_regread(device, A662_GPU_CC_GX_DOMAIN_MISC3, &val);
-	else if (adreno_is_a660(ADRENO_DEVICE(device)) ||
+	if (adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
 			adreno_is_a663(adreno_dev))
+		gmu_core_regread(device, A662_GPU_CC_GX_DOMAIN_MISC3, &val);
+	else if (adreno_is_a660(ADRENO_DEVICE(device)))
 		gmu_core_regread(device, A6XX_GPU_CC_GX_DOMAIN_MISC3, &val);
 	else
 		gmu_core_regread(device, A6XX_GPU_CC_GX_DOMAIN_MISC, &val);
