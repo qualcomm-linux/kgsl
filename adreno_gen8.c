@@ -2870,7 +2870,7 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	pr_context(device, drawobj->context, "lpac cmdline: %s\n",
 		   drawctxt->base.proc_priv->cmdline);
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_LPAC_STATUS, &status);
@@ -2926,7 +2926,7 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 			   drawctxt->base.proc_priv->cmdline);
 	}
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_STATUS, &status);
