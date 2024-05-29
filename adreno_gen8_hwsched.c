@@ -513,6 +513,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
+	/* From this GMU FW all RBBM interrupts are handled at GMU */
+	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
+		adreno_irq_free(adreno_dev);
+
 	/* Clear any hwsched faults that might have been left over */
 	adreno_hwsched_clear_fault(adreno_dev);
 
@@ -1797,6 +1801,8 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 
 	adreno_dev->hwsched_enabled = true;
 
+	adreno_dev->irq_mask = GEN8_HWSCHED_INT_MASK;
+
 	ret = gen8_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1806,8 +1812,6 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, hwsched_idle_check);
 
 	timer_setup(&device->idle_timer, hwsched_idle_timer, 0);
-
-	adreno_dev->irq_mask = GEN8_HWSCHED_INT_MASK;
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		adreno_dev->lpac_enabled = true;

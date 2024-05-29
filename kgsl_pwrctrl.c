@@ -411,8 +411,9 @@ static void kgsl_pwrctrl_min_pwrlevel_set(struct kgsl_device *device,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	mutex_lock(&device->mutex);
-	if (level >= pwr->num_pwrlevels)
-		level = pwr->num_pwrlevels - 1;
+
+	if (level > pwr->min_render_pwrlevel)
+		level = pwr->min_render_pwrlevel;
 
 	/* You can't set a minimum power level lower than the maximum */
 	if (level < pwr->max_pwrlevel)
@@ -1493,11 +1494,15 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
+	if (!(device->freq_limiter_intr_num || pwr->interrupt_num))
+		return;
+
 	if (state) {
 		if (!test_and_set_bit(KGSL_PWRFLAGS_IRQ_ON,
 			&pwr->power_flags)) {
 			trace_kgsl_irq(device, state);
-			enable_irq(pwr->interrupt_num);
+			if (pwr->interrupt_num > 0)
+				enable_irq(pwr->interrupt_num);
 			if (device->freq_limiter_intr_num > 0)
 				enable_irq(device->freq_limiter_intr_num);
 		}
@@ -1507,9 +1512,9 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 			trace_kgsl_irq(device, state);
 			if (device->freq_limiter_intr_num > 0)
 				disable_irq(device->freq_limiter_intr_num);
-			if (in_interrupt())
+			if (in_interrupt() && (pwr->interrupt_num > 0))
 				disable_irq_nosync(pwr->interrupt_num);
-			else
+			else if (pwr->interrupt_num > 0)
 				disable_irq(pwr->interrupt_num);
 		}
 	}

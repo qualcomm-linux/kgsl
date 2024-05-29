@@ -1152,6 +1152,8 @@ struct payload_section {
 #define KEY_AQE0_HW_FAULT 12
 #define KEY_AQE1_OPCODE_ERROR 13
 #define KEY_AQE1_HW_FAULT 14
+#define KEY_CP_AHB_ERROR 30
+#define KEY_TSB_WRITE_ERROR 31
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -1224,6 +1226,14 @@ struct payload_section {
 #define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
 /* GMU encountered a sync object which is signaled via software but not via hardware */
 #define GMU_SYNCOBJ_TIMEOUT_ERROR 630
+/* Non fatal GPU error codes */
+#define GMU_CP_AHB_ERROR 650
+#define GMU_ATB_ASYNC_FIFO_OVERFLOW 651
+#define GMU_RBBM_ATB_BUF_OVERFLOW 652
+#define GMU_UCHE_OOB_ACCESS 653
+#define GMU_UCHE_TRAP_INTR  654
+#define GMU_TSB_WRITE_ERROR 655
+
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 

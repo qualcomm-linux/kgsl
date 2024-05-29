@@ -595,11 +595,15 @@ static u32 get_payload_rb_key(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static void log_gpu_fault(struct adreno_device *adreno_dev)
+static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct device *dev = &gmu->pdev->dev;
 	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+
+	/* Return false for non fatal errors */
+	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, dev, cmd->error))
+		return false;
 
 	switch (cmd->error) {
 	case GMU_GPU_HW_HANG:
@@ -767,6 +771,9 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 			cmd->error);
 		break;
 	}
+
+	/* Return true for fatal errors to perform recovery sequence */
+	return true;
 }
 
 static u32 peek_next_header(struct gen8_gmu_device *gmu, uint32_t queue_idx)
@@ -791,11 +798,18 @@ static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(gmu->ver.hfi) < 2) {
 		log_gpu_fault_legacy(adreno_dev);
-	else
-		log_gpu_fault(adreno_dev);
+		goto done;
+	}
 
+	/* Non fatal RBBM error interrupts don't go through reset and recovery */
+	if (!log_gpu_fault(adreno_dev)) {
+		memset(adreno_dev->hwsched.ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
+		return;
+	}
+
+done:
 	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 

@@ -1538,6 +1538,75 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 	}
 }
 
+static size_t gen8_snapshot_cx_misc_registers(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	const u32 *ptr = (u32 *)priv;
+	u32 *src, *data = (unsigned int *)buf;
+	size_t size = adreno_snapshot_regs_count(ptr) * sizeof(u32);
+
+	if (remain < size) {
+		SNAPSHOT_ERR_NOMEM(device, "CX_MISC REGISTERS");
+		return 0;
+	}
+
+	src = gen8_crashdump_registers->hostptr;
+
+	for (; ptr[0] != UINT_MAX; ptr += 2) {
+		u32 cnt = REG_COUNT(ptr);
+
+		if (cnt == 1)
+			*data++ = BIT(31) | ptr[0];
+		else {
+			*data++ = ptr[0];
+			*data++ = cnt;
+		}
+		memcpy(data, src, cnt << 2);
+		data += cnt;
+		src += cnt;
+	}
+
+	/* Return the size of the section */
+	return size;
+}
+
+static void gen8_cx_misc_regs_snapshot(struct kgsl_device *device,
+					struct kgsl_snapshot *snapshot)
+{
+	u64 *ptr, offset = 0;
+	const u32 *regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
+
+	if (CD_SCRIPT_CHECK(device) || !adreno_gx_is_on(ADRENO_DEVICE(device)))
+		goto legacy_snapshot;
+
+	/* Build the crash script */
+	ptr = (u64 *)gen8_capturescript->hostptr;
+
+	for (; regs_ptr[0] != UINT_MAX; regs_ptr += 2) {
+		u32 r = REG_COUNT(regs_ptr);
+
+		ptr += CD_READ(ptr, regs_ptr[0], r,
+			(gen8_crashdump_registers->gpuaddr + offset));
+		offset += r * sizeof(u32);
+	}
+
+	/* Marker for end of script */
+	CD_FINISH(ptr, offset);
+
+	/* Try to run the crash dumper */
+	if (_gen8_do_crashdump(device)) {
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
+			snapshot, gen8_snapshot_cx_misc_registers,
+			(void *)gen8_snapshot_block_list->cx_misc_regs);
+		return;
+	}
+
+legacy_snapshot:
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
+		snapshot, adreno_snapshot_cx_misc_registers,
+		(void *)gen8_snapshot_block_list->cx_misc_regs);
+}
+
 void gen8_snapshot_external_core_regs(struct kgsl_device *device,
 			struct kgsl_snapshot *snapshot)
 {
@@ -1582,6 +1651,16 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_snapshot_trace_buffer(device, snapshot);
 
 	gen8_snapshot_debugbus(adreno_dev, snapshot);
+
+	gen8_cx_misc_regs_snapshot(device, snapshot);
+
+	/* SQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_sqe, NULL);
+
+	/* AQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_aqe, NULL);
 
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
@@ -1644,14 +1723,6 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 			gen8_snapshot_block_list->index_registers[i].size,
 			gen8_snapshot_block_list->index_registers[i].pipe_id, UINT_MAX);
 	}
-
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen8_snapshot_sqe, NULL);
-
-	/* AQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen8_snapshot_aqe, NULL);
 
 	/* Mempool debug data */
 	gen8_snapshot_mempool(device, snapshot);

@@ -23,7 +23,7 @@
 #include "kgsl_util.h"
 
 /* IFPC & Preemption static powerup restore list */
-static const u32 gen8_pwrup_reglist[] = {
+static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_MODE_CNTL,
 	GEN8_UCHE_VARB_IDLE_TIMEOUT,
 	GEN8_UCHE_GBIF_GX_CONFIG,
@@ -32,15 +32,12 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_CACHE_WAYS,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
-	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
-	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
 	GEN8_VSC_BIN_SIZE,
-	GEN8_VSC_KMD_DBG_ECO_CNTL,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
 	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO,
@@ -49,16 +46,14 @@ static const u32 gen8_pwrup_reglist[] = {
 };
 
 /* IFPC only static powerup restore list */
-static const u32 gen8_ifpc_pwrup_reglist[] = {
+static const u32 gen8_3_0_ifpc_pwrup_reglist[] = {
 	GEN8_RBBM_NC_MODE_CNTL,
 	GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL,
 	GEN8_RBBM_SLICE_NC_MODE_CNTL,
 	GEN8_SP_NC_MODE_CNTL,
-	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_LO,
-	GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_HI,
-	GEN8_SP_CHICKEN_BITS_1,
 	GEN8_SP_CHICKEN_BITS_2,
 	GEN8_SP_CHICKEN_BITS_3,
+	GEN8_SP_PERFCTR_SHADER_MASK,
 	GEN8_TPL1_NC_MODE_CNTL,
 	GEN8_TPL1_DBG_ECO_CNTL,
 	GEN8_TPL1_DBG_ECO_CNTL1,
@@ -80,7 +75,7 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_16,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_17,
 	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_18,
-	GEN8_CP_PROTECT_CNTL_PIPE,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_19,
 	GEN8_CP_PROTECT_REG_GLOBAL,
 	GEN8_CP_PROTECT_REG_GLOBAL + 1,
 	GEN8_CP_PROTECT_REG_GLOBAL + 2,
@@ -124,14 +119,12 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_CP_PROTECT_REG_GLOBAL + 40,
 	GEN8_CP_PROTECT_REG_GLOBAL + 41,
 	GEN8_CP_PROTECT_REG_GLOBAL + 42,
-	GEN8_CP_PROTECT_REG_GLOBAL + 43,
-	GEN8_CP_PROTECT_REG_GLOBAL + 44,
-	GEN8_CP_PROTECT_REG_GLOBAL + 45,
 	GEN8_CP_PROTECT_REG_GLOBAL + 63,
-	GEN8_CP_PROTECT_REG_PIPE + 15,
 };
 
 static const struct gen8_pwrup_extlist gen8_3_0_pwrup_extlist[] = {
+	{ GEN8_CP_PROTECT_CNTL_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) },
+	{ GEN8_CP_PROTECT_REG_PIPE + 15, BIT(PIPE_BR) | BIT(PIPE_BV) },
 	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
@@ -141,7 +134,6 @@ static const struct gen8_pwrup_extlist gen8_3_0_pwrup_extlist[] = {
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR)},
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR)},
 	{ GEN8_RB_GC_GMEM_PROTECT, BIT(PIPE_BR)},
-	{ GEN8_RB_LPAC_GMEM_PROTECT, BIT(PIPE_BR)},
 	{ GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE, BIT(PIPE_BR)},
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR)},
@@ -790,14 +782,14 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
 
 	/* Static IFPC restore only registers */
-	reglist[items].regs = gen8_ifpc_pwrup_reglist;
-	reglist[items].count = ARRAY_SIZE(gen8_ifpc_pwrup_reglist);
+	reglist[items].regs = gen8_3_0_ifpc_pwrup_reglist;
+	reglist[items].count = ARRAY_SIZE(gen8_3_0_ifpc_pwrup_reglist);
 	lock->ifpc_list_len = reglist[items].count;
 	items++;
 
 	/* Static IFPC + preemption registers */
-	reglist[items].regs = gen8_pwrup_reglist;
-	reglist[items].count = ARRAY_SIZE(gen8_pwrup_reglist);
+	reglist[items].regs = gen8_3_0_pwrup_reglist;
+	reglist[items].count = ARRAY_SIZE(gen8_3_0_pwrup_reglist);
 	lock->preemption_list_len = reglist[items].count;
 	items++;
 
@@ -821,12 +813,12 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 				nc_overrides[j].list_type))
 				continue;
 
-			if ((reglist[i].regs == gen8_ifpc_pwrup_reglist) &&
+			if ((reglist[i].regs == gen8_3_0_ifpc_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 1)) {
 				*dest++ = nc_overrides[j].offset;
 				kgsl_regread(device, nc_overrides[j].offset, dest++);
 				lock->ifpc_list_len++;
-			} else if ((reglist[i].regs == gen8_pwrup_reglist) &&
+			} else if ((reglist[i].regs == gen8_3_0_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 2)) {
 				*dest++ = nc_overrides[j].offset;
 				kgsl_regread(device, nc_overrides[j].offset, dest++);
@@ -864,7 +856,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	 * Write external pipe specific regs (<aperture> <address> <value> - triplets)
 	 * offset and the current value into GPU buffer
 	 */
-	for (pipe_id = PIPE_BR; pipe_id <= PIPE_BV; pipe_id++) {
+	for (pipe_id = PIPE_BR; pipe_id <= PIPE_LPAC; pipe_id++) {
 		for (i = 0; i < ARRAY_SIZE(gen8_3_0_pwrup_extlist); i++) {
 			unsigned long pipe = (unsigned long)gen8_3_0_pwrup_extlist[i].pipelines;
 

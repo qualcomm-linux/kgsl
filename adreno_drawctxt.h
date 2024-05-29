@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
@@ -183,7 +183,7 @@ adreno_drawctxt_get_pagetable(struct adreno_context *drawctxt)
 /**
  * adreno_drawctxt_set_guilty - Mark a context as guilty and invalidate it
  * @device: Pointer to a GPU device handle
- * @context: Poniter to the context to invalidate
+ * @context: Pointer to the context to invalidate
  *
  * Mark the specified context as guilty and invalidate it
  */

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_SNAPSHOT_H_
@@ -197,14 +197,14 @@ struct kgsl_snapshot_mem_list_v2 {
 
 /* Indirect buffer sub-section header */
 struct kgsl_snapshot_ib {
-	__u32 gpuaddr; /* GPU address of the the IB */
+	__u32 gpuaddr; /* GPU address of the IB */
 	__u32 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	int size;    /* Size of the IB */
 } __packed;
 
 /* Indirect buffer sub-section header (v2) */
 struct kgsl_snapshot_ib_v2 {
-	__u64 gpuaddr; /* GPU address of the the IB */
+	__u64 gpuaddr; /* GPU address of the IB */
 	__u64 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	__u64 size;    /* Size of the IB */
 } __packed;
@@ -387,14 +387,14 @@ struct kgsl_snapshot_trace_buffer {
 
 struct kgsl_snapshot_gpu_object {
 	int type;      /* Type of GPU object */
-	__u32 gpuaddr; /* GPU address of the the object */
+	__u32 gpuaddr; /* GPU address of the object */
 	__u32 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	int size;    /* Size of the object (in dwords) */
 };
 
 struct kgsl_snapshot_gpu_object_v2 {
 	int type;      /* Type of GPU object */
-	__u64 gpuaddr; /* GPU address of the the object */
+	__u64 gpuaddr; /* GPU address of the object */
 	__u64 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	__u64 size;    /* Size of the object (in dwords) */
 } __packed;

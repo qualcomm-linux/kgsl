@@ -576,11 +576,15 @@ static u32 get_payload_rb_key(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static void log_gpu_fault(struct adreno_device *adreno_dev)
+static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct device *dev = &gmu->pdev->dev;
 	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+
+	/* Return false for non fatal errors */
+	if (adreno_hwsched_log_nonfatal_gpu_fault(adreno_dev, dev, cmd->error))
+		return false;
 
 	switch (cmd->error) {
 	case GMU_GPU_HW_HANG:
@@ -748,6 +752,9 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 			cmd->error);
 		break;
 	}
+
+	/* Return true for fatal errors to perform recovery sequence */
+	return true;
 }
 
 static u32 peek_next_header(struct gen7_gmu_device *gmu, uint32_t queue_idx)
@@ -772,11 +779,18 @@ static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(gmu->ver.hfi) < 2) {
 		log_gpu_fault_legacy(adreno_dev);
-	else
-		log_gpu_fault(adreno_dev);
+		goto done;
+	}
 
+	/* Non fatal RBBM error interrupts don't go through reset and recovery */
+	if (!log_gpu_fault(adreno_dev)) {
+		memset(adreno_dev->hwsched.ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
+		return;
+	}
+
+done:
 	gen7_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
@@ -1512,7 +1526,7 @@ int gen7_hwsched_hfi_init(struct adreno_device *adreno_dev)
 
 	if (IS_ERR_OR_NULL(hw_hfi->f2h_task)) {
 		hw_hfi->f2h_task = kthread_run(hfi_f2h_main, adreno_dev, "gmu_f2h");
-		if(!IS_ERR(hw_hfi->f2h_task))
+		if (!IS_ERR(hw_hfi->f2h_task))
 			sched_set_fifo(hw_hfi->f2h_task);
 	}
 
@@ -2050,9 +2064,8 @@ static void _context_queue_enable(struct adreno_device *adreno_dev)
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 
 	if (GMU_VER_MINOR(gmu->ver.hfi) >= 3) {
-		if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_CONTEXT_QUEUE, 0) == 1) {
+		if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_CONTEXT_QUEUE, 0) == 1)
 			set_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
-		}
 	}
 }
 

@@ -1758,7 +1758,7 @@ int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 
 	/* Look for the perfcounter to remove in the list */
 	for (i = 0; i < lock->dynamic_list_len - 1; i++) {
-		if ((data[offset + 1] == reg->select) && (data[offset] == pipe) ) {
+		if ((data[offset + 1] == reg->select) && (data[offset] == pipe)) {
 			remove_counter = true;
 			break;
 		}

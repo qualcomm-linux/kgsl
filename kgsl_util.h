@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_UTIL_H_
@@ -240,9 +240,9 @@ static inline void kgsl_remove_from_minidump(char *name, u64 virt_addr, u64 phy_
 }
 
 static inline int kgsl_add_va_to_minidump(struct device *dev, const char *name, void *ptr,
-               size_t size)
+		size_t size)
 {
-       return 0;
+	return 0;
 }
 
 static inline void kgsl_qcom_va_md_register(struct kgsl_device *device)

@@ -2382,3 +2382,82 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 
 	return 0;
 }
+
+static void adreno_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
+		u32 type, u32 key, u32 *ptr, u32 num_values)
+{
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		/* key-value pair is 'num_values + 1' dwords */
+		if ((payload->type == type) && (payload->data[i] == key)) {
+			u32 j = 1;
+
+			do {
+				ptr[j - 1] = payload->data[i + j];
+				j++;
+			} while (num_values--);
+			break;
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+}
+
+bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
+		struct device *dev, u32 error)
+{
+	bool non_fatal = true;
+
+	switch (error) {
+	case GMU_CP_AHB_ERROR: {
+		u32 err_details[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_CP_AHB_ERROR, err_details, 2);
+		dev_crit_ratelimited(dev,
+			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
+			err_details[0], err_details[1]);
+		break;
+	}
+	case GMU_ATB_ASYNC_FIFO_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
+		break;
+	case GMU_RBBM_ATB_BUF_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB bus overflow\n");
+		break;
+	case GMU_UCHE_OOB_ACCESS:
+		dev_crit_ratelimited(dev, "UCHE: Out of bounds access\n");
+		break;
+	case GMU_UCHE_TRAP_INTR:
+		dev_crit_ratelimited(dev, "UCHE: Trap interrupt\n");
+		break;
+	case GMU_TSB_WRITE_ERROR: {
+		u32 addr[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_TSB_WRITE_ERROR, addr, 2);
+		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%lx MID: %lu\n",
+			FIELD_GET(GENMASK(16, 0), addr[1]) << 32 | addr[0],
+			FIELD_GET(GENMASK(31, 23), addr[1]));
+		break;
+	}
+	default:
+		non_fatal = false;
+		break;
+	}
+
+	return non_fatal;
+}
