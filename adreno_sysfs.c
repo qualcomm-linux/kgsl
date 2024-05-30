@@ -140,6 +140,10 @@ static int _hwcg_store(struct adreno_device *adreno_dev, bool val)
 	if (adreno_dev->hwcg_enabled == val)
 		return 0;
 
+	/* UCHE_GBIF_GX_CONFIG register requires update of reglist */
+	if (!adreno_is_gen8(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev))
+		adreno_dev->patch_reglist = false;
+
 	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->hwcg_enabled,
 		val);
 }
