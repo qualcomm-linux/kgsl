@@ -510,7 +510,6 @@
 #define GEN8_RBBM_SLICE_PERFCTR_SRAM_INIT_CMD     0x5e8
 #define GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD    0x5eb
 #define GEN8_RBBM_SLICE_NC_MODE_CNTL              0x5ec
-#define GEN8_VSC_BIN_SIZE                         0xc02
 #define GEN8_VSC_KMD_DBG_ECO_CNTL                 0xdf0
 
 /* DBGC_CFG registers */
