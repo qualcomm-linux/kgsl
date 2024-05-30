@@ -2786,6 +2786,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
@@ -2824,6 +2825,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 /* GEN8_4_0 noncontext register list */
@@ -2927,6 +2929,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.qos_value = gen8_4_0_gbif_client_qos_values,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.bcl_data = 1,
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;

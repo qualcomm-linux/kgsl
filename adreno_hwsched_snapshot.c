@@ -237,16 +237,22 @@ void adreno_hwsched_snapshot_context_queue(struct kgsl_device *device,
 	read_unlock(&device->context_lock);
 }
 
-static void hwsched_snapshot_preemption_record(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md, u64 offset)
+void adreno_hwsched_snapshot_preemption_record(struct kgsl_device *device,
+	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md, u64 offset, u64 size)
 {
 	struct kgsl_snapshot_section_header *section_header =
 		(struct kgsl_snapshot_section_header *)snapshot->ptr;
 	u8 *dest = snapshot->ptr + sizeof(*section_header);
 	struct kgsl_snapshot_gpu_object_v2 *header =
 		(struct kgsl_snapshot_gpu_object_v2 *)dest;
-	u64 ctxt_record_size = min_t(u64, device->snapshot_ctxt_record_size, md->size);
+	u64 ctxt_record_size = min_t(u64, device->snapshot_ctxt_record_size, size);
 	size_t section_size;
+
+	if (WARN_RATELIMIT((ctxt_record_size > md->size) ||
+		(offset > (md->size - ctxt_record_size)),
+		"Invalid preemption context record size: md_size: 0x%llx, ctxt_record_size: 0x%llx\n",
+		md->size, ctxt_record_size))
+		return;
 
 	section_size = sizeof(*section_header) + sizeof(*header) + ctxt_record_size;
 	if (snapshot->remain < section_size) {
@@ -271,17 +277,4 @@ static void hwsched_snapshot_preemption_record(struct kgsl_device *device,
 	snapshot->ptr += section_header->size;
 	snapshot->remain -= section_header->size;
 	snapshot->size += section_header->size;
-}
-
-void adreno_hwsched_snapshot_preemption_records(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
-{
-	u64 ctxt_record_size = md->size;
-	u64 offset;
-
-	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
-
-	/* All preemption records exist as a single mem alloc entry */
-	for (offset = 0; offset < md->size; offset += ctxt_record_size)
-		hwsched_snapshot_preemption_record(device, snapshot, md, offset);
 }
