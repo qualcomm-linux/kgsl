@@ -67,6 +67,9 @@ endif
 ifeq ($(CONFIG_ARCH_BENGAL), y)
         include $(KGSL_PATH)/config/gki_bengal.conf
 endif
+ifeq ($(CONFIG_ARCH_PARROT), y)
+	include $(KGSL_PATH)/config/gki_parrot.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 
