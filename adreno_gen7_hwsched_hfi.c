@@ -454,7 +454,7 @@ static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
 			gen7_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
 				KEY_SWFUSE_VIOLATION_FAULT));
 		break;
-	case GMU_GPU_AQE0_OPCODE_ERRROR:
+	case GMU_GPU_AQE0_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
@@ -470,7 +470,7 @@ static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
 	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
 		break;
-	case GMU_GPU_AQE1_OPCODE_ERRROR:
+	case GMU_GPU_AQE1_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value_legacy(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
@@ -691,7 +691,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 			gen7_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
 				KEY_SWFUSE_VIOLATION_FAULT));
 		break;
-	case GMU_GPU_AQE0_OPCODE_ERRROR:
+	case GMU_GPU_AQE0_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
@@ -707,7 +707,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
 		break;
-	case GMU_GPU_AQE1_OPCODE_ERRROR:
+	case GMU_GPU_AQE1_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));

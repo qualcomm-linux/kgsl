@@ -482,7 +482,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
 				KEY_SWFUSE_VIOLATION_FAULT));
 		break;
-	case GMU_GPU_AQE0_OPCODE_ERRROR:
+	case GMU_GPU_AQE0_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 opcode error | opcode=0x%8.8x\n",
 			gen8_hwsched_lookup_key_value(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE0_OPCODE_ERROR));
@@ -498,7 +498,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 	case GMU_GPU_AQE0_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "AQE0 Illegal instruction error\n");
 		break;
-	case GMU_GPU_AQE1_OPCODE_ERRROR:
+	case GMU_GPU_AQE1_OPCODE_ERROR:
 		dev_crit_ratelimited(dev, "AQE1 opcode error | opcode=0x%8.8x\n",
 			gen8_hwsched_lookup_key_value(adreno_dev,
 				PAYLOAD_FAULT_REGS, KEY_AQE1_OPCODE_ERROR));
@@ -518,6 +518,124 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(dev, "syncobj timeout ctx %d ts %u\n",
 			cmd->gc.ctxt_id, cmd->gc.ts);
 		find_timeout_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
+		break;
+	case GMU_CP_DDEBR_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BR | Ringbuffer HW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBR_HW_FAULT));
+		break;
+	case GMU_CP_DDEBR_OPCODE_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BR opcode error | opcode=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+			KEY_CP_DDEBR_OPCODE_ERROR));
+		break;
+	case GMU_CP_DDEBR_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "CP DDE BR ucode error\n");
+		break;
+	case GMU_CP_DDEBR_PROTECTED_ERROR: {
+		u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBR_PROTECTED_ERROR);
+
+		dev_crit_ratelimited(dev,
+			"CP DDE BR | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
+			status & (1 << 20) ? "READ" : "WRITE",
+			status & 0x3FFFF, status);
+		}
+		break;
+	case GMU_CP_DDEBR_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "CP DDEBR Illegal instruction error\n");
+		break;
+	case GMU_CP_DDEBV_HW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BV | Ringbuffer HW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBV_HW_FAULT));
+		break;
+	case GMU_CP_DDEBV_OPCODE_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BV opcode error | opcode=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+			KEY_CP_DDEBV_OPCODE_ERROR));
+		break;
+	case GMU_CP_DDEBV_UCODE_ERROR:
+		dev_crit_ratelimited(dev, "CP DDE BV ucode error\n");
+		break;
+	case GMU_CP_DDEBV_PROTECTED_ERROR: {
+		u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBV_PROTECTED_ERROR);
+
+		dev_crit_ratelimited(dev,
+			"CP DDE BV | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
+			status & (1 << 20) ? "READ" : "WRITE",
+			status & 0x3FFFF, status);
+		}
+		break;
+	case GMU_CP_DDEBV_ILLEGAL_INST_ERROR:
+		dev_crit_ratelimited(dev, "CP DDE BV Illegal instruction error\n");
+		break;
+	case GMU_CP_BR_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP BR | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_BR_SW_FAULT));
+		break;
+	case GMU_CP_BV_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP BV | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_BV_SW_FAULT));
+		break;
+	case GMU_CP_LPAC_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP LPAC | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_LPAC_SW_FAULT));
+		break;
+	case GMU_CP_AQE0_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP AQE0 | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_AQE0_SW_FAULT));
+		break;
+	case GMU_CP_AQE1_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP AQE1 | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_AQE1_SW_FAULT));
+		break;
+	case GMU_CP_AQE0_PROTECTED_ERROR: {
+		u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_AQE0_PROTECTED_ERROR);
+
+		dev_crit_ratelimited(dev,
+			"CP AQE0 | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
+			status & (1 << 20) ? "READ" : "WRITE",
+			status & 0x3FFFF, status);
+		}
+		break;
+	case GMU_CP_AQE1_PROTECTED_ERROR: {
+		u32 status = gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_AQE1_PROTECTED_ERROR);
+
+		dev_crit_ratelimited(dev,
+			"CP AQE1 | Protected mode error | %s | addr=0x%5.5x | status=0x%8.8x\n",
+			status & (1 << 20) ? "READ" : "WRITE",
+			status & 0x3FFFF, status);
+		}
+		break;
+	case GMU_CP_DDEBR_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BR | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBR_SW_FAULT));
+		break;
+	case GMU_CP_DDEBV_SW_FAULT_ERROR:
+		dev_crit_ratelimited(dev,
+			"CP DDE BV | SW fault | status=0x%8.8x\n",
+			gen8_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+				KEY_CP_DDEBV_SW_FAULT));
 		break;
 	case GMU_CP_UNKNOWN_ERROR:
 		fallthrough;
