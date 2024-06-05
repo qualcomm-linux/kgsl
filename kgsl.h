@@ -346,6 +346,8 @@ struct kgsl_mem_entry {
 	 * debugfs accounting
 	 */
 	atomic_t map_count;
+	/** @vbo_count: Count how many VBO ranges this entry is mapped in */
+	atomic_t vbo_count;
 };
 
 struct kgsl_device_private;
