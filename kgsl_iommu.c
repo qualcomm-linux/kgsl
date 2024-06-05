@@ -130,7 +130,7 @@ static int get_sg_from_child(struct sg_table *sgt, struct kgsl_memdesc *child,
 	int pgoffset = (offset >> PAGE_SHIFT);
 	struct scatterlist *target_sg;
 	struct sg_page_iter iter;
-	int ret;
+	int i = 0, ret;
 
 	if (child->pages)
 		return sg_alloc_table_from_pages(sgt,
@@ -143,9 +143,12 @@ static int get_sg_from_child(struct sg_table *sgt, struct kgsl_memdesc *child,
 
 	target_sg = sgt->sgl;
 
-	for_each_sg_page(child->sgt->sgl, &iter, npages, pgoffset) {
+	for_each_sgtable_page(child->sgt, &iter, pgoffset) {
 		sg_set_page(target_sg, sg_page_iter_page(&iter), PAGE_SIZE, 0);
 		target_sg = sg_next(target_sg);
+
+		if (++i == npages)
+			break;
 	}
 
 	return 0;
@@ -1450,12 +1453,14 @@ int kgsl_set_smmu_aperture(struct kgsl_device *device,
 	return ret;
 }
 
-static int set_smmu_lpac_aperture(struct kgsl_device *device,
+int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
 	int ret;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	if (!test_bit(KGSL_MMU_SMMU_APERTURE, &device->mmu.features))
+	if (!test_bit(KGSL_MMU_SMMU_APERTURE, &device->mmu.features) ||
+			!ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		return 0;
 
 	ret = qcom_scm_kgsl_set_smmu_lpac_aperture(context->cb_num);
@@ -2544,16 +2549,16 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	/* Enable TTBR0 on the default and LPAC contexts */
 	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->info.cfg);
 
-	kgsl_set_smmu_aperture(device, &iommu->user_context);
+	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
+	if (ret)
+		goto err;
 
 	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->info.cfg);
 
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
-		ret = set_smmu_lpac_aperture(device, &iommu->lpac_context);
-		if (ret < 0) {
-			kgsl_iommu_detach_context(&iommu->lpac_context);
-			goto err;
-		}
+	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+	if (ret < 0) {
+		kgsl_iommu_detach_context(&iommu->lpac_context);
+		goto err;
 	}
 
 	return 0;
@@ -2760,10 +2765,8 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 
 	/* Probe the default pagetable */
 	ret = iommu_probe_user_context(device, node);
-	if (ret) {
-		of_platform_depopulate(&pdev->dev);
+	if (ret)
 		goto err;
-	}
 
 	/* Probe the secure pagetable (this is optional) */
 	iommu_probe_secure_context(device, node);

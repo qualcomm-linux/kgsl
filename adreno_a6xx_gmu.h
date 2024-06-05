@@ -16,19 +16,11 @@
  * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
- * @hfi_mem: pointer to HFI shared memory
  * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
- * @num_gpupwrlevels: number GPU frequencies in GPU freq table
- * @num_bwlevel: number of GPU BW levels
- * @num_cnocbwlevel: number CNOC BW levels
- * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
  * @clks: GPU subsystem clocks required for GMU functionality
- * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
- *		than default power level
  * @idle_level: Minimal GPU idle power level
- * @fault_count: GMU fault count
  * @mailbox: Messages to AOP for ACD enable/disable go through this
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
@@ -107,6 +99,8 @@ struct a6xx_gmu_device {
 	u32 stats_interval;
 	/** @stats_kobj: kernel object for GMU stats directory in sysfs */
 	struct kobject stats_kobj;
+	/** @cur_freq: Tracks current frequency for GMU */
+	u32 cur_freq;
 };
 
 /* Helper function to get to a6xx gmu device from adreno device */
@@ -449,5 +443,14 @@ void a6xx_gmu_send_nmi(struct kgsl_device *device, bool force,
  * @adreno_dev: Pointer to the adreno device
  */
 int a6xx_gmu_add_to_minidump(struct adreno_device *adreno_dev);
+
+/**
+ * a6xx_gmu_clock_set_rate - Set the gmu clock rate
+ * @adreno_dev: Handle to the adreno device
+ * @req_freq: Requested freq to set gmu to
+ *
+ * Returns 0 on success or error on clock set rate failure
+ */
+int a6xx_gmu_clock_set_rate(struct adreno_device *adreno_dev, u32 req_freq);
 
 #endif

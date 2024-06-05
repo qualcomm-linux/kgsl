@@ -1864,21 +1864,37 @@ void gen7_gmu_aop_send_acd_state(struct gen7_gmu_device *gmu, bool flag)
 			"AOP mbox send message failed: %d\n", ret);
 }
 
+int gen7_gmu_clock_set_rate(struct adreno_device *adreno_dev, u32 req_freq)
+{
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	int ret = 0;
+
+	gen7_rdpm_cx_freq_update(gmu, req_freq / 1000);
+
+	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk",
+			req_freq);
+	if (ret) {
+		dev_err(&gmu->pdev->dev, "GMU clock:%d set failed:%d\n",
+			req_freq, ret);
+		return ret;
+	}
+
+	trace_kgsl_gmu_pwrlevel(req_freq, gmu->cur_freq);
+
+	gmu->cur_freq = req_freq;
+
+	return ret;
+}
+
 int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	gen7_rdpm_cx_freq_update(gmu, gmu->freqs[level] / 1000);
-
-	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk",
-			gmu->freqs[level]);
-	if (ret) {
-		dev_err(&gmu->pdev->dev, "GMU clock:%d set failed:%d\n",
-			gmu->freqs[level], ret);
+	ret = gen7_gmu_clock_set_rate(adreno_dev, gmu->freqs[level]);
+	if (ret)
 		return ret;
-	}
 
 	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "hub_clk",
 			adreno_dev->gmu_hub_clk_freq);

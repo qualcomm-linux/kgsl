@@ -79,8 +79,8 @@ struct gen8_shader_block {
 	u32 pipeid;
 	/* location: Location identifier for the block data */
 	u32 location;
-	/* num_slices: the number of slices to dump */
-	u32 num_slices;
+	/* slice_region: slice region, if SLICE then loop over all slices */
+	u32 slice_region;
 	/* num_ctx: repeat id to loop */
 	u32 num_ctx;
 	/* offset: The offset in the snasphot dump */

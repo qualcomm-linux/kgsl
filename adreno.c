@@ -1559,6 +1559,10 @@ static int adreno_pm_resume(struct device *dev)
 
 		if (status)
 			return status;
+
+		status = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (status < 0)
+			return status;
 	}
 #endif
 
@@ -3219,8 +3223,8 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	/*
 	 * RBBM_STATUS3:SMMU_STALLED_ON_FAULT (BIT 24) to tells if GPU
-	 * encoutnered a pagefault. Gen8 page fault status checked from
-	 * the software condition as RBBM_STATS3 is not available.
+	 * encountered a pagefault. Gen8 page fault status checked from
+	 * the software condition as RBBM_STATUS3 is not available.
 	 */
 	if (ADRENO_GPUREV(adreno_dev) < ADRENO_REV_GEN8_0_0) {
 		adreno_readreg(adreno_dev, ADRENO_REG_RBBM_STATUS3, &val);
@@ -3747,6 +3751,10 @@ static int adreno_hibernation_resume(struct device *dev)
 
 	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
 	if (ret)
+		goto err;
+
+	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+	if (ret < 0)
 		goto err;
 
 	gmu_core_dev_force_first_boot(device);

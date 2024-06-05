@@ -1297,15 +1297,6 @@ int a6xx_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	/* Switch to min GMU clock */
-	a6xx_rdpm_cx_freq_update(gmu, gmu->freqs[0] / 1000);
-
-	ret = kgsl_clk_set_rate(gmu->clks, gmu->num_clks, "gmu_clk",
-			gmu->freqs[0]);
-	if (ret)
-		dev_err(&gmu->pdev->dev, "GMU clock:%d set failed:%d\n",
-			gmu->freqs[0], ret);
-
 err:
 	if (ret)
 		a6xx_hwsched_hfi_stop(adreno_dev);

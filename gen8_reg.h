@@ -39,6 +39,8 @@
 #define GEN8_RBBM_GBIF_CLIENT_QOS_CNTL           0x008
 #define GEN8_RBBM_GBIF_HALT                      0x00a
 #define GEN8_RBBM_GBIF_HALT_ACK                  0x00b
+#define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL          0x010
+#define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL2         0x011
 #define GEN8_RBBM_STATUS                         0x012
 #define GEN8_RBBM_STATUS1                        0x013
 #define GEN8_RBBM_GFX_STATUS                     0x015
@@ -59,6 +61,7 @@
 #define GEN8_RBBM_CLOCK_CNTL_GLOBAL              0x09a
 #define GEN8_RBBM_CGC_GLOBAL_LOAD_CMD            0x09b
 #define GEN8_RBBM_CGC_P2S_TRIG_CMD               0x09c
+#define GEN8_RBBM_CGC_P2S_CNTL                   0x09d
 #define GEN8_RBBM_CGC_P2S_STATUS                 0x09f
 
 #define GEN8_RBBM_CGC_0_PC                       0x10b
