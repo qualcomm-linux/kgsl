@@ -485,18 +485,6 @@ void gen7_gmu_send_nmi(struct kgsl_device *device, bool force,
 int gen7_gmu_add_to_minidump(struct adreno_device *adreno_dev);
 
 /**
- * gen7_snapshot_gmu_mem - Snapshot a GMU memory descriptor
- * @device: Pointer to the kgsl device
- * @buf: Destination snapshot buffer
- * @remain: Remaining size of the snapshot buffer
- * @priv: Opaque handle
- *
- * Return: Number of bytes written to snapshot buffer
- */
-size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
-	u8 *buf, size_t remain, void *priv);
-
-/**
  * gen7_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
  * @adreno_dev: Handle to the adreno device
  * @ab: ab request that needs to be scaled in MBps

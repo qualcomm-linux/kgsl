@@ -14,6 +14,9 @@
 /* High word is static, low word is snapshot version ID */
 #define SNAPSHOT_MAGIC 0x504D0002
 
+#define DEBUG_SECTION_SZ(_dwords) (((_dwords) * sizeof(unsigned int)) \
+				   + sizeof(struct kgsl_snapshot_debug))
+
 /* GPU ID scheme:
  * [16:31] - core identifer (0x0002 for 2D or 0x0003 for 3D)
  * [00:16] - GPU specific identifier
@@ -306,6 +309,13 @@ struct kgsl_snapshot_eventlog {
 	__u16 version;
 	/** @size: Size of the eventlog buffer in bytes */
 	u32 size;
+} __packed;
+
+struct kgsl_snapshot_gmu_version {
+	/** @type: Type of the GMU version buffer */
+	u32 type;
+	/** @value: GMU FW version value */
+	u32 value;
 } __packed;
 
 struct kgsl_device;

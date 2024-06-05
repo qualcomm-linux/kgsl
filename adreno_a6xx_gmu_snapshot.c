@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "a6xx_reg.h"
@@ -154,37 +154,6 @@ static const unsigned int a650_rscc_registers[] = {
 	0x3915B, 0x3915B,
 };
 
-static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_snapshot_gmu_mem *mem_hdr =
-		(struct kgsl_snapshot_gmu_mem *)buf;
-	unsigned int *data = (unsigned int *)
-		(buf + sizeof(*mem_hdr));
-	struct gmu_mem_type_desc *desc = priv;
-
-	if (priv == NULL || desc->memdesc->hostptr == NULL)
-		return 0;
-
-	if (remain < desc->memdesc->size + sizeof(*mem_hdr)) {
-		dev_err(device->dev,
-			"snapshot: Not enough memory for the gmu section %d\n",
-			desc->type);
-		return 0;
-	}
-
-	memset(mem_hdr, 0, sizeof(*mem_hdr));
-	mem_hdr->type = desc->type;
-	mem_hdr->hostaddr = (uintptr_t)desc->memdesc->hostptr;
-	mem_hdr->gmuaddr = desc->memdesc->gmuaddr;
-	mem_hdr->gpuaddr = 0;
-
-	/* Just copy the ringbuffer, there are no active IBs */
-	memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
-
-	return desc->memdesc->size + sizeof(*mem_hdr);
-}
-
 static size_t a6xx_gmu_snapshot_dtcm(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
@@ -268,33 +237,8 @@ static void a6xx_gmu_snapshot_memories(struct kgsl_device *device,
 
 		kgsl_snapshot_add_section(device,
 			KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-			snapshot, a6xx_snapshot_gmu_mem, &desc);
+			snapshot, adreno_snapshot_gmu_mem, &desc);
 	}
-}
-
-struct kgsl_snapshot_gmu_version {
-	uint32_t type;
-	uint32_t value;
-};
-
-static size_t a6xx_snapshot_gmu_version(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
-	uint32_t *data = (uint32_t *) (buf + sizeof(*header));
-	struct kgsl_snapshot_gmu_version *ver = priv;
-
-	if (remain < DEBUG_SECTION_SZ(1)) {
-		SNAPSHOT_ERR_NOMEM(device, "GMU Version");
-		return 0;
-	}
-
-	header->type = ver->type;
-	header->size = 1;
-
-	*data = ver->value;
-
-	return DEBUG_SECTION_SZ(1);
 }
 
 static void a6xx_gmu_snapshot_versions(struct kgsl_device *device,
@@ -318,7 +262,7 @@ static void a6xx_gmu_snapshot_versions(struct kgsl_device *device,
 
 	for (i = 0; i < ARRAY_SIZE(gmu_vers); i++)
 		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-				snapshot, a6xx_snapshot_gmu_version,
+				snapshot, adreno_snapshot_gmu_version,
 				&gmu_vers[i]);
 }
 

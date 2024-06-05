@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2015,2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_SNAPSHOT_H
 #define __ADRENO_SNAPSHOT_H
@@ -9,9 +9,6 @@
 #include "kgsl_snapshot.h"
 
 #define CP_CRASH_DUMPER_TIMEOUT 500
-
-#define DEBUG_SECTION_SZ(_dwords) (((_dwords) * sizeof(unsigned int)) \
-		+ sizeof(struct kgsl_snapshot_debug))
 
 #define SHADER_SECTION_SZ(_dwords) (((_dwords) * sizeof(unsigned int)) \
 		+ sizeof(struct kgsl_snapshot_shader))
@@ -131,4 +128,27 @@ void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
 			unsigned int *rbptr,
 			struct kgsl_snapshot *snapshot);
 
+/**
+ * adreno_snapshot_gmu_version - To dump gmu version info to snapshot buffer
+ * @device: Pointer to the kgsl device
+ * @buf: Destination snapshot buffer
+ * @remain: Remaining size of the snapshot buffer
+ * @priv: Opaque handle
+ *
+ * Return: Number of bytes written to snapshot buffer
+ */
+size_t adreno_snapshot_gmu_version(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv);
+
+/**
+ * kgsl_snapshot_gmu_mem - Snapshot a GMU memory descriptor
+ * @device: Pointer to the kgsl device
+ * @buf: Destination snapshot buffer
+ * @remain: Remaining size of the snapshot buffer
+ * @priv: Opaque handle
+ *
+ * Return: Number of bytes written to snapshot buffer
+ */
+size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,
+	u8 *buf, size_t remain, void *priv);
 #endif /*__ADRENO_SNAPSHOT_H */

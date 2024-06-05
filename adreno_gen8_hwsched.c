@@ -286,7 +286,7 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
 	kgsl_snapshot_add_section(context->device,
 		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen8_snapshot_gmu_mem, &desc);
+		snapshot, adreno_snapshot_gmu_mem, &desc);
 
 	return 0;
 }
@@ -394,7 +394,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 			desc.type = SNAPSHOT_GMU_MEM_HW_FENCE;
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-				snapshot, gen8_snapshot_gmu_mem, &desc);
+				snapshot, adreno_snapshot_gmu_mem, &desc);
 		}
 
 	}
