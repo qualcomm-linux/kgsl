@@ -2048,6 +2048,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_0_1 = {
 };
 
 extern const struct gen7_snapshot_block_list gen7_2_0_snapshot_block_list;
+extern const struct gen7_snapshot_block_list gen7_6_0_snapshot_block_list;
 
 static const struct kgsl_regmap_list gen7_2_0_gbif_regs[] = {
 	{ GEN7_GBIF_QSB_SIDE0, 0x00071620 },
@@ -2266,7 +2267,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_6_0 = {
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
 	.bcl_data = 1,
-	.gen7_snapshot_block_list = &gen7_2_0_snapshot_block_list,
+	.gen7_snapshot_block_list = &gen7_6_0_snapshot_block_list,
 	.qos_value = gen7_6_0_gbif_client_qos_values,
 	.preempt_level = 1,
 	.ctxt_record_size = (4192 * SZ_1K),

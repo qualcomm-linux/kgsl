@@ -11,6 +11,7 @@
 #include "adreno_snapshot.h"
 #include "adreno_gen7_0_0_snapshot.h"
 #include "adreno_gen7_2_0_snapshot.h"
+#include "adreno_gen7_6_0_snapshot.h"
 #include "kgsl_device.h"
 
 static size_t gen7_gmu_snapshot_dtcm(struct kgsl_device *device,
