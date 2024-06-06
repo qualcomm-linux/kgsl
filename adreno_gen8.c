@@ -918,6 +918,9 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       FIELD_PREP(GENMASK(30, 18), count) |
 				       FIELD_PREP(BIT(31), regs[i].noaccess),
 				       PIPE_LPAC, 0, 0);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 }
 
 static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
@@ -1163,6 +1166,9 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 	}
 	mutex_unlock(&gen8_dev->nc_mutex);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }

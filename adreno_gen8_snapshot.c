@@ -1743,6 +1743,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
 	}
 
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
+
 	/* Assert the isStatic bit before triggering snapshot */
 	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x1);
 
