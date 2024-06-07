@@ -2930,6 +2930,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.bcl_data = 1,
 	.ctxt_record_size = (13536 * SZ_1K),
+	.noc_timeout_us = 3410, /* 3.41 msec */
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;
