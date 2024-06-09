@@ -944,11 +944,12 @@ int gen7_start(struct adreno_device *adreno_dev)
 
 	kgsl_regwrite(device, GEN7_CP_APRIV_CNTL, GEN7_BR_APRIV_DEFAULT);
 
-	/* gen7_14_0 does not have BV and LPAC hence skip regwrite */
-	if (!adreno_is_gen7_14_0(adreno_dev)) {
+	/* Skip this regwrite for Gen7 targets that do not have BV and LPAC */
+	if (!adreno_is_gen7_no_cb_family(adreno_dev))
 		kgsl_regwrite(device, GEN7_CP_BV_APRIV_CNTL, GEN7_APRIV_DEFAULT);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		kgsl_regwrite(device, GEN7_CP_LPAC_APRIV_CNTL, GEN7_APRIV_DEFAULT);
-	}
 
 	/* Marking AQE Instruction cache fetches as privileged */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
@@ -1210,8 +1211,8 @@ int gen7_rb_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN7_CP_RB_RPTR_ADDR_LO, lower_32_bits(addr));
 	kgsl_regwrite(device, GEN7_CP_RB_RPTR_ADDR_HI, upper_32_bits(addr));
 
-	/* gen7_14_0 does not have BV hence skip regwrite */
-	if (!adreno_is_gen7_14_0(adreno_dev)) {
+	/* Skip this regwrite for Gen7 targets that do not have BV */
+	if (!adreno_is_gen7_no_cb_family(adreno_dev)) {
 		addr = SCRATCH_RB_GPU_ADDR(device, rb->id, bv_rptr);
 		kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_LO, lower_32_bits(addr));
 		kgsl_regwrite(device, GEN7_CP_BV_RB_RPTR_ADDR_HI, upper_32_bits(addr));
@@ -1357,46 +1358,50 @@ static void gen7_cp_hw_err_callback(struct adreno_device *adreno_dev, int bit)
 	if (status1 & BIT(CP_INT_ILLEGALINSTRUCTION))
 		dev_crit_ratelimited(dev, "CP Illegal instruction error\n");
 
-	if (status1 & BIT(CP_INT_OPCODEERRORLPAC))
-		dev_crit_ratelimited(dev, "CP Opcode error LPAC\n");
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
+		if (status1 & BIT(CP_INT_OPCODEERRORLPAC))
+			dev_crit_ratelimited(dev, "CP Opcode error LPAC\n");
 
-	if (status1 & BIT(CP_INT_UCODEERRORLPAC))
-		dev_crit_ratelimited(dev, "CP ucode error LPAC\n");
+		if (status1 & BIT(CP_INT_UCODEERRORLPAC))
+			dev_crit_ratelimited(dev, "CP ucode error LPAC\n");
 
-	if (status1 & BIT(CP_INT_CPHWFAULTLPAC))
-		dev_crit_ratelimited(dev, "CP hw fault LPAC\n");
+		if (status1 & BIT(CP_INT_CPHWFAULTLPAC))
+			dev_crit_ratelimited(dev, "CP hw fault LPAC\n");
 
-	if (status1 & BIT(CP_INT_REGISTERPROTECTIONLPAC))
-		dev_crit_ratelimited(dev, "CP register protection LPAC\n");
+		if (status1 & BIT(CP_INT_REGISTERPROTECTIONLPAC))
+			dev_crit_ratelimited(dev, "CP register protection LPAC\n");
 
-	if (status1 & BIT(CP_INT_ILLEGALINSTRUCTIONLPAC))
-		dev_crit_ratelimited(dev, "CP illegal instruction LPAC\n");
-
-	if (status1 & BIT(CP_INT_OPCODEERRORBV)) {
-		kgsl_regwrite(device, GEN7_CP_BV_SQE_STAT_ADDR, 1);
-		kgsl_regread(device, GEN7_CP_BV_SQE_STAT_DATA, &opcode);
-		dev_crit_ratelimited(dev, "CP opcode error BV | opcode=0x%8.8x\n", opcode);
+		if (status1 & BIT(CP_INT_ILLEGALINSTRUCTIONLPAC))
+			dev_crit_ratelimited(dev, "CP illegal instruction LPAC\n");
 	}
 
-	if (status1 & BIT(CP_INT_UCODEERRORBV))
-		dev_crit_ratelimited(dev, "CP ucode error BV\n");
+	if (!adreno_is_gen7_no_cb_family(adreno_dev)) {
+		if (status1 & BIT(CP_INT_OPCODEERRORBV)) {
+			kgsl_regwrite(device, GEN7_CP_BV_SQE_STAT_ADDR, 1);
+			kgsl_regread(device, GEN7_CP_BV_SQE_STAT_DATA, &opcode);
+			dev_crit_ratelimited(dev, "CP opcode error BV | opcode=0x%8.8x\n", opcode);
+		}
 
-	if (status1 & BIT(CP_INT_CPHWFAULTBV)) {
-		kgsl_regread(device, GEN7_CP_BV_HW_FAULT, &status2);
-		dev_crit_ratelimited(dev,
-			"CP BV | Ringbuffer HW fault | status=%x\n", status2);
+		if (status1 & BIT(CP_INT_UCODEERRORBV))
+			dev_crit_ratelimited(dev, "CP ucode error BV\n");
+
+		if (status1 & BIT(CP_INT_CPHWFAULTBV)) {
+			kgsl_regread(device, GEN7_CP_BV_HW_FAULT, &status2);
+			dev_crit_ratelimited(dev,
+				"CP BV | Ringbuffer HW fault | status=%x\n", status2);
+		}
+
+		if (status1 & BIT(CP_INT_REGISTERPROTECTIONBV)) {
+			kgsl_regread(device, GEN7_CP_BV_PROTECT_STATUS, &status2);
+			dev_crit_ratelimited(dev,
+				"CP BV | Protected mode error | %s | addr=%x | status=%x\n",
+				status2 & BIT(20) ? "READ" : "WRITE",
+				status2 & 0x3ffff, status2);
+		}
+
+		if (status1 & BIT(CP_INT_ILLEGALINSTRUCTIONBV))
+			dev_crit_ratelimited(dev, "CP illegal instruction BV\n");
 	}
-
-	if (status1 & BIT(CP_INT_REGISTERPROTECTIONBV)) {
-		kgsl_regread(device, GEN7_CP_BV_PROTECT_STATUS, &status2);
-		dev_crit_ratelimited(dev,
-			"CP BV | Protected mode error | %s | addr=%x | status=%x\n",
-			status2 & BIT(20) ? "READ" : "WRITE",
-			status2 & 0x3ffff, status2);
-	}
-
-	if (status1 & BIT(CP_INT_ILLEGALINSTRUCTIONBV))
-		dev_crit_ratelimited(dev, "CP illegal instruction BV\n");
 }
 
 static void gen7_err_callback(struct adreno_device *adreno_dev, int bit)
