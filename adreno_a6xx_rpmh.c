@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/types.h>
@@ -354,10 +354,10 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	memset(vlvl_tbl, 0, sizeof(vlvl_tbl));
 
 	table->gx_votes[0].freq = 0;
-	table->gx_votes[0].cx_vote = 0;
+	table->gx_votes[0].dep_vote = 0;
 	/* Disable cx vote in gmu dcvs table if it is not supported in DT */
 	if (pwr->pwrlevels[0].cx_level == 0xffffffff)
-		table->gx_votes[0].cx_vote = 0xffffffff;
+		table->gx_votes[0].dep_vote = 0xffffffff;
 
 	/* GMU power levels are in ascending order */
 	for (index = 1, i = pwr->num_pwrlevels - 1; i >= 0; i--, index++) {
@@ -367,7 +367,7 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 		table->gx_votes[index].freq = pwr->pwrlevels[i].gpu_freq / 1000;
 
 		ret = to_cx_hlvl(cx_rail, cx_vlvl,
-				&table->gx_votes[index].cx_vote);
+				&table->gx_votes[index].dep_vote);
 		if (ret) {
 			dev_err(&gmu->pdev->dev, "Unsupported cx corner: %u\n",
 					cx_vlvl);
