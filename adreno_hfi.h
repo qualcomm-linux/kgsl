@@ -92,9 +92,6 @@ enum hfi_table_type {
 	HFI_TABLE_MAX,
 };
 
-/* A6xx uses a different value for KPROF */
-#define HFI_FEATURE_A6XX_KPROF	14
-
 /* For Gen7 & Gen8 ACD */
 #define F_PWR_ACD_CALIBRATE	78
 
