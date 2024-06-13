@@ -3058,7 +3058,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_LPAC | ADRENO_AQE |
 			ADRENO_GMU_WARMBOOT | ADRENO_L3_VOTE | ADRENO_IFPC |
-			ADRENO_BCL | ADRENO_ACD | ADRENO_HW_FENCE,
+			ADRENO_BCL | ADRENO_ACD | ADRENO_HW_FENCE |
+			ADRENO_PREEMPTION,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3084,6 +3085,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.qos_value = gen8_4_0_gbif_client_qos_values,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.bcl_data = 1,
+	.preempt_level = 1,
 	.ctxt_record_size = (13536 * SZ_1K),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 };
