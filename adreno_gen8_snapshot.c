@@ -884,6 +884,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 						info.usptp_id = usptp;
 						info.sp_id = sp;
 						info.slice_id = SLICE_ID(cluster->slice_region, j);
+						info.statetype_id = cluster->statetype;
 						info.cluster_id = cluster->cluster_id;
 						info.context_id = cluster->context_id;
 						kgsl_snapshot_add_section(device,
