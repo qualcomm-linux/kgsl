@@ -174,20 +174,30 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 		if (start <= cur->range.start) {
 			if (last >= cur->range.last) {
 				/* Unmap the entire cur range */
-				if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-					kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+				if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+					ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 						cur->range.start,
 						cur->range.last - cur->range.start + 1);
+					if (ret) {
+						interval_tree_insert(node, &memdesc->ranges);
+						goto error;
+					}
+				}
 
 				bind_range_destroy(cur);
 				continue;
 			}
 
 			/* Unmap the range overlapping cur */
-			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-				kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 					cur->range.start,
 					last - cur->range.start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
+			}
 
 			/* Adjust the start of the mapping */
 			cur->range.start = last + 1;
@@ -218,10 +228,15 @@ static int kgsl_memdesc_add_range(struct kgsl_mem_entry *target,
 			}
 
 			/* Unmap the range overlapping cur */
-			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-				kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO) {
+				ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 					start,
 					min_t(u64, cur->range.last, last) - start + 1);
+				if (ret) {
+					interval_tree_insert(node, &memdesc->ranges);
+					goto error;
+				}
+			}
 
 			cur->range.last = start - 1;
 			interval_tree_insert(node, &memdesc->ranges);
@@ -252,6 +267,7 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 	struct interval_tree_node *node, *next;
 	struct kgsl_memdesc_bind_range *range;
 	int ret = 0;
+	bool unmap_fail;
 
 	/*
 	 * If the VBO maps the zero range then we can unmap the entire
@@ -260,6 +276,8 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 	if (!(memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO))
 		ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 			0, memdesc->size);
+
+	unmap_fail = ret;
 
 	/*
 	 * FIXME: do we have a use after free potential here?  We might need to
@@ -278,7 +296,7 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 
 		/* Unmap this range */
 		if (memdesc->flags & KGSL_MEMFLAGS_VBO_NO_MAP_ZERO)
-			kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
+			ret = kgsl_mmu_unmap_range(memdesc->pagetable, memdesc,
 				range->range.start,
 				range->range.last - range->range.start + 1);
 
@@ -288,9 +306,10 @@ static void kgsl_sharedmem_vbo_put_gpuaddr(struct kgsl_memdesc *memdesc)
 		else
 			kfree(range);
 
+		unmap_fail = unmap_fail || ret;
 	}
 
-	if (ret)
+	if (unmap_fail)
 		return;
 
 	/* Put back the GPU address */
