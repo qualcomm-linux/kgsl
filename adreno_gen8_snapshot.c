@@ -749,6 +749,9 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 				cp_indexed_reg->pipe_id, j, 1);
 		}
 	}
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(ADRENO_DEVICE(device), 0, 0, 0);
 }
 
 static u32 gen8_read_dbgahb(struct kgsl_device *device,
