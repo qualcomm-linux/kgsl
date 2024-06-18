@@ -1593,7 +1593,7 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	if (a6xx_is_smmu_stalled(device))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV for legacy targets so we can access the buffers */
@@ -1799,6 +1799,10 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 
 	sptprac_on = a6xx_gmu_sptprac_is_on(adreno_dev);
 
+	/* SQE Firmware */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, a6xx_snapshot_sqe, NULL);
+
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
 
@@ -1895,10 +1899,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a6xx_snapshot_cp_roq, NULL);
 
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, a6xx_snapshot_sqe, NULL);
-
 	/* Mempool debug data */
 	if (adreno_is_a650_family(adreno_dev))
 		a650_snapshot_mempool(device, snapshot);
@@ -1915,7 +1915,7 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		/* Shader memory */
 		a6xx_snapshot_shader(device, snapshot);
 
-		if (!a6xx_is_smmu_stalled(device))
+		if (!adreno_smmu_is_stalled(adreno_dev))
 			memset(a6xx_crashdump_registers->hostptr, 0xaa,
 					a6xx_crashdump_registers->size);
 	}

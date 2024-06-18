@@ -415,7 +415,7 @@ struct a6xx_reglist_list {
 };
 
 #define REGLIST(_a) \
-	 (struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), }
+	 ((struct a6xx_reglist_list) { .regs = _a, .count = ARRAY_SIZE(_a), })
 
 static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 {
@@ -1916,9 +1916,9 @@ int a6xx_probe_common(struct platform_device *pdev,
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
 	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
-		device->pwrctrl.cx_gdsc_offset = (adreno_is_a662(adreno_dev) ||
-			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_GDSCR :
-			A6XX_GPU_CC_CX_GDSCR;
+		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
+			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
+			A6XX_GPU_CC_CX_CFG_GDSCR;
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
@@ -1948,6 +1948,8 @@ static int a6xx_probe(struct platform_device *pdev,
 
 	memset(adreno_dev, 0, sizeof(*adreno_dev));
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1961,8 +1963,6 @@ static int a6xx_probe(struct platform_device *pdev,
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }
@@ -2065,7 +2065,7 @@ int a6xx_perfcounter_update(struct adreno_device *adreno_dev,
 	 */
 	data[offset] = reg->select;
 	data[offset + 1] = reg->countable;
-	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL,
+	data[offset + 2] = A6XX_RBBM_PERFCTR_CNTL;
 	data[offset + 3] = 1;
 
 	lock->list_length += 2;

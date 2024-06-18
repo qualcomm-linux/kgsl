@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015-2017,2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_A5XX_H_
@@ -265,20 +265,20 @@ extern const struct adreno_perfcounters adreno_a5xx_perfcounters;
 int a5xx_ringbuffer_init(struct adreno_device *adreno_dev);
 
 /**
-* a5xx_ringbuffer_addcmds - Submit a command to the ringbuffer
-* @adreno_dev: An Adreno GPU handle
-* @rb: Pointer to the ringbuffer to submit on
-* @drawctxt: Pointer to the draw context for the submission, or NULL for
-* internal submissions
-* @flags: Flags for the submission
-* @in: Commands to write to the ringbuffer
-* @dwords: Size of @in (in dwords)
-* @timestamp: Timestamp for the submission
-* @time: Optional pointer to a submit time structure
-*
-* Submit a command to the ringbuffer.
-* Return: 0 on success or negative on failure
-*/
+ * a5xx_ringbuffer_addcmds - Submit a command to the ringbuffer
+ * @adreno_dev: An Adreno GPU handle
+ * @rb: Pointer to the ringbuffer to submit on
+ * @drawctxt: Pointer to the draw context for the submission, or NULL for
+ * internal submissions
+ * @flags: Flags for the submission
+ * @in: Commands to write to the ringbuffer
+ * @dwords: Size of @in (in dwords)
+ * @timestamp: Timestamp for the submission
+ * @time: Optional pointer to a submit time structure
+ *
+ * Submit a command to the ringbuffer.
+ * Return: 0 on success or negative on failure
+ */
 int a5xx_ringbuffer_addcmds(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 flags, u32 *in, u32 dwords, u32 timestamp,

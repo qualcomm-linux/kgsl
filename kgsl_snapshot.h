@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_SNAPSHOT_H_
@@ -44,6 +44,7 @@ struct kgsl_snapshot_section_header {
 #define KGSL_SNAPSHOT_SECTION_IB           0x0401
 #define KGSL_SNAPSHOT_SECTION_IB_V2        0x0402
 #define KGSL_SNAPSHOT_SECTION_INDEXED_REGS 0x0501
+#define KGSL_SNAPSHOT_SECTION_INDEXED_REGS_V2 0x0502
 #define KGSL_SNAPSHOT_SECTION_ISTORE       0x0801
 #define KGSL_SNAPSHOT_SECTION_DEBUG        0x0901
 #define KGSL_SNAPSHOT_SECTION_DEBUGBUS     0x0A01
@@ -53,8 +54,10 @@ struct kgsl_snapshot_section_header {
 #define KGSL_SNAPSHOT_SECTION_MEMLIST_V2   0x0E02
 #define KGSL_SNAPSHOT_SECTION_SHADER       0x1201
 #define KGSL_SNAPSHOT_SECTION_SHADER_V2    0x1202
+#define KGSL_SNAPSHOT_SECTION_SHADER_V3    0x1203
 #define KGSL_SNAPSHOT_SECTION_MVC          0x1501
 #define KGSL_SNAPSHOT_SECTION_MVC_V2       0x1502
+#define KGSL_SNAPSHOT_SECTION_MVC_V3       0x1503
 #define KGSL_SNAPSHOT_SECTION_GMU          0x1601
 #define KGSL_SNAPSHOT_SECTION_GMU_MEMORY   0x1701
 #define KGSL_SNAPSHOT_SECTION_SIDE_DEBUGBUS 0x1801
@@ -194,14 +197,14 @@ struct kgsl_snapshot_mem_list_v2 {
 
 /* Indirect buffer sub-section header */
 struct kgsl_snapshot_ib {
-	__u32 gpuaddr; /* GPU address of the the IB */
+	__u32 gpuaddr; /* GPU address of the IB */
 	__u32 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	int size;    /* Size of the IB */
 } __packed;
 
 /* Indirect buffer sub-section header (v2) */
 struct kgsl_snapshot_ib_v2 {
-	__u64 gpuaddr; /* GPU address of the the IB */
+	__u64 gpuaddr; /* GPU address of the IB */
 	__u64 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	__u64 size;    /* Size of the IB */
 } __packed;
@@ -240,6 +243,15 @@ struct kgsl_snapshot_indexed_regs {
 	int count;     /* Number of dwords in the data */
 } __packed;
 
+struct kgsl_snapshot_indexed_regs_v2 {
+	u32 index_reg;	/* Offset of the index register for this section */
+	u32 data_reg;	/* Offset of the data register for this section */
+	u32 start;	/* Starting index */
+	u32 count;	/* Number of dwords in the data */
+	u32 pipe_id;	/* Id of pipe, BV, Br etc */
+	u32 slice_id;	/* Slice ID to be dumped */
+} __packed;
+
 /* MVC register sub-section header */
 struct kgsl_snapshot_mvc_regs {
 	int ctxt_id;
@@ -251,6 +263,16 @@ struct kgsl_snapshot_mvc_regs_v2 {
 	int cluster_id;
 	int pipe_id;
 	int location_id;
+} __packed;
+
+struct kgsl_snapshot_mvc_regs_v3 {
+	u32 ctxt_id;
+	u32 cluster_id;
+	u32 pipe_id;
+	u32 location_id;
+	u32 slice_id;
+	u32 sp_id;
+	u32 usptp_id;
 } __packed;
 
 /* Istore sub-section header */
@@ -316,6 +338,17 @@ struct kgsl_snapshot_shader_v2 {
 	u32 size;  /* Number of dwords in the dump */
 } __packed;
 
+struct kgsl_snapshot_shader_v3 {
+	u32 type;  /* SP/TP statetype */
+	u32 slice_id; /* Slice ID */
+	u32 sp_index; /* SP/TP index */
+	u32 usptp; /* USPTP index */
+	u32 pipe_id; /* Pipe id */
+	u32 location; /* Location value */
+	u32 ctxt_id; /* Context ID */
+	u32 size;  /* Number of dwords in the dump */
+} __packed;
+
 #define TRACE_BUF_NUM_SIG 4
 
 /**
@@ -354,14 +387,14 @@ struct kgsl_snapshot_trace_buffer {
 
 struct kgsl_snapshot_gpu_object {
 	int type;      /* Type of GPU object */
-	__u32 gpuaddr; /* GPU address of the the object */
+	__u32 gpuaddr; /* GPU address of the object */
 	__u32 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	int size;    /* Size of the object (in dwords) */
 };
 
 struct kgsl_snapshot_gpu_object_v2 {
 	int type;      /* Type of GPU object */
-	__u64 gpuaddr; /* GPU address of the the object */
+	__u64 gpuaddr; /* GPU address of the object */
 	__u64 ptbase;  /* Base for the pagetable the GPU address is valid in */
 	__u64 size;    /* Size of the object (in dwords) */
 } __packed;
