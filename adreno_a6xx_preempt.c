@@ -59,7 +59,7 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer,
 		/* If WPTR update fails, set the fault and trigger recovery */
 		if (ret) {
 			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-			adreno_dispatcher_fault(adreno_dev,
+			adreno_scheduler_fault(adreno_dev,
 				ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 		}
 	}
@@ -117,7 +117,7 @@ static void _a6xx_preemption_done(struct adreno_device *adreno_dev)
 			     adreno_dev->next_rb->wptr);
 
 		/* Set a fault and restart */
-		adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 
 		return;
 	}
@@ -174,7 +174,7 @@ static void _a6xx_preemption_fault(struct adreno_device *adreno_dev)
 			adreno_set_preempt_state(adreno_dev,
 				ADRENO_PREEMPT_COMPLETE);
 
-			adreno_dispatcher_schedule(device);
+			adreno_scheduler_queue(adreno_dev);
 			return;
 		}
 	}
@@ -188,7 +188,7 @@ static void _a6xx_preemption_fault(struct adreno_device *adreno_dev)
 		     adreno_get_rptr(adreno_dev->next_rb),
 		     adreno_dev->next_rb->wptr);
 
-	adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 }
 
 static void _a6xx_preemption_worker(struct work_struct *work)
@@ -403,10 +403,10 @@ err:
 	/* If fenced write fails, take inline snapshot and trigger recovery */
 	if (!atomic) {
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-		adreno_dispatcher_fault(adreno_dev,
+		adreno_scheduler_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	} else {
-		adreno_dispatcher_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 	adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE);
 	/* Clear the keep alive */
@@ -437,7 +437,7 @@ void a6xx_preemption_callback(struct adreno_device *adreno_dev, int bit)
 		 * there then we have to assume something bad happened
 		 */
 		adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE);
-		adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
+		adreno_scheduler_queue(adreno_dev);
 		return;
 	}
 

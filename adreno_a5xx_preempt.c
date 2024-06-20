@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2017,2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -68,7 +68,7 @@ static void _a5xx_preemption_done(struct adreno_device *adreno_dev)
 			     adreno_dev->next_rb->wptr);
 
 		/* Set a fault and restart */
-		adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 
 		return;
 	}
@@ -109,7 +109,7 @@ static void _a5xx_preemption_fault(struct adreno_device *adreno_dev)
 			adreno_set_preempt_state(adreno_dev,
 				ADRENO_PREEMPT_COMPLETE);
 
-			adreno_dispatcher_schedule(device);
+			adreno_scheduler_queue(adreno_dev);
 			return;
 		}
 	}
@@ -123,7 +123,7 @@ static void _a5xx_preemption_fault(struct adreno_device *adreno_dev)
 		     adreno_get_rptr(adreno_dev->next_rb),
 		     adreno_dev->next_rb->wptr);
 
-	adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 }
 
 static void _a5xx_preemption_worker(struct work_struct *work)
@@ -275,7 +275,7 @@ void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 		 * there then we have to assume something bad happened
 		 */
 		adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE);
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 		return;
 	}
 

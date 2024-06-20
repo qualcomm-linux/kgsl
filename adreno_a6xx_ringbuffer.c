@@ -168,7 +168,7 @@ int a6xx_ringbuffer_submit(struct adreno_ringbuffer *rb,
 		 * recovery.
 		 */
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-		adreno_dispatcher_fault(adreno_dev,
+		adreno_scheduler_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	}
 

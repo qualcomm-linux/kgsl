@@ -908,9 +908,7 @@ static void trigger_reset_recovery(struct adreno_device *adreno_dev,
 	if (req != oob_perfcntr)
 		return;
 
-	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->fault)
-		adreno_dev->dispatch_ops->fault(adreno_dev,
-			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 }
 
 int a6xx_gmu_oob_set(struct kgsl_device *device,
@@ -2077,7 +2075,7 @@ static int a6xx_gmu_dcvs_set(struct adreno_device *adreno_dev,
 		 * dispatcher based reset and recovery.
 		 */
 		if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-			adreno_dispatcher_fault(adreno_dev, ADRENO_GMU_FAULT |
+			adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT |
 				ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	}
 
