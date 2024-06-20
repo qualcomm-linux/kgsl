@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -602,7 +602,7 @@ static void gen7_snapshot_shader(struct kgsl_device *device,
 		void *priv) = gen7_legacy_snapshot_shader;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	if (adreno_is_gen7_0_x_family(adreno_dev))
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev))
 		kgsl_regrmw(device, GEN7_SP_DBG_CNTL, GENMASK(1, 0), 3);
 
 	if (CD_SCRIPT_CHECK(device)) {
@@ -672,7 +672,7 @@ static void gen7_snapshot_shader(struct kgsl_device *device,
 	}
 
 done:
-	if (adreno_is_gen7_0_x_family(adreno_dev))
+	if (adreno_is_gen7_0_x_family(adreno_dev) || adreno_is_gen7_14_0(adreno_dev))
 		kgsl_regrmw(device, GEN7_SP_DBG_CNTL, GENMASK(1, 0), 0x0);
 }
 
