@@ -286,7 +286,7 @@ static int snapshot_context_queue(int id, void *ptr, void *data)
 	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
 	kgsl_snapshot_add_section(context->device,
 		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen8_snapshot_gmu_mem, &desc);
+		snapshot, adreno_snapshot_gmu_mem, &desc);
 
 	return 0;
 }
@@ -394,7 +394,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 			desc.type = SNAPSHOT_GMU_MEM_HW_FENCE;
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-				snapshot, gen8_snapshot_gmu_mem, &desc);
+				snapshot, adreno_snapshot_gmu_mem, &desc);
 		}
 
 	}
@@ -562,7 +562,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1) {
+	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -618,6 +620,9 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	 * register access which happens to be just after enabling clocks.
 	 */
 	gen8_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
 
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)

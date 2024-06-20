@@ -134,6 +134,7 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_TRAP_BASE_LO,
@@ -158,6 +159,7 @@ static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_CACHE_WAYS,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_TRAP_BASE_LO,
@@ -740,7 +742,7 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	int i;
 	unsigned long flags;
 
-	/* Set up the CX timer just once */
+	/* Set it up during first boot or after suspend resume */
 	if (test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
 		return;
 
