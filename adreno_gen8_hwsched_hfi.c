@@ -1089,6 +1089,20 @@ static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 received_
 	_disable_hw_fence_throttle(adreno_dev, false);
 }
 
+static void gen8_process_f2h_platform_msg(struct adreno_device *adreno_dev, u32 *rcvd)
+{
+	struct hfi_msg_platform *msg = (struct hfi_msg_platform *)rcvd;
+
+	if (msg->sub_type == F2H_ST_MSG_SCALE_GMU) {
+		struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+		struct hfi_scale_gmu_cmd *cmd = (struct hfi_scale_gmu_cmd *)&(msg->cmd);
+		u32 index = cmd->gmu_pwrlevel;
+
+		if ((index > 0) && (index <= GMU_MAX_PWRLEVELS))
+			gen8_gmu_clock_set_rate(adreno_dev, gmu->freqs[index - 1]);
+	}
+}
+
 void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1147,6 +1161,9 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev)
 
 			adreno_mark_for_coldboot(adreno_dev);
 			}
+			break;
+		case F2H_MSG_PLATFORM:
+			gen8_process_f2h_platform_msg(adreno_dev, rcvd);
 			break;
 		}
 	}
@@ -2352,6 +2369,96 @@ static int gen8_hwsched_build_dcvs_table(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct hfi_table_cmd *cmd;
+	struct hfi_table_entry *entry;
+	u32 index;
+	u32 ddr_index;
+	u32 size_first_entry_dwords = (sizeof(*entry) >> 2) + (1 * 1);
+	u32 size_second_entry_dwords = (sizeof(*entry) >> 2) + (1 * 4);
+	u32 size_table_dwords = (sizeof(*cmd) >> 2) + size_first_entry_dwords +
+				size_second_entry_dwords;
+
+	/*
+	 * Return early if the scaling table is already generated or if the ddr threshold
+	 * to scale is not set for the target
+	 */
+	if (gmu->gmu_scaling_cmdbuf || !gmu->perf_ddr_bw)
+		return 0;
+
+	/*
+	 * Total size of struct elements and data, which is (count * stride) for each
+	 * entry. Make sure the size is equal to the total number of entries in the
+	 * buffer (index) to avoid overflow.
+	 */
+	gmu->gmu_scaling_cmdbuf = kcalloc(size_table_dwords,
+					sizeof(*(gmu->gmu_scaling_cmdbuf)), GFP_KERNEL);
+	if (!gmu->gmu_scaling_cmdbuf)
+		return -ENOMEM;
+
+	cmd = (struct hfi_table_cmd *)gmu->gmu_scaling_cmdbuf;
+	cmd->version = 0;
+	cmd->type = HFI_TABLE_GMU_SCALING_DATA;
+	index = sizeof(*cmd) >> 2;
+
+	if ((index + size_first_entry_dwords) > size_table_dwords) {
+		kfree(gmu->gmu_scaling_cmdbuf);
+		return -ENOMEM;
+	}
+
+	/*
+	 * Fill up first entry
+	 * First entry table contains the initial gmu power level
+	 */
+	entry = (struct hfi_table_entry *)&gmu->gmu_scaling_cmdbuf[index];
+	entry->count = 1;
+	entry->stride = 1;
+
+	/*
+	 * If the ddr threshold is defined for the target, set the initial gmu level as the lowest
+	 * gmu power level which is 1. If not, gmu scaling will be disabled.
+	 */
+	entry->data[0] = 1;
+	index += size_first_entry_dwords;
+
+	if ((index + size_second_entry_dwords) > size_table_dwords) {
+		kfree(gmu->gmu_scaling_cmdbuf);
+		return -ENOMEM;
+	}
+
+	/*
+	 * Fill up second entry
+	 * Second entry table contains the ddr threshold level for each gmu power level from
+	 * index 0 to MAX_CX_LEVEL. The entry represents the threshold the corresponding
+	 * gmu power level index needs to cross to be scaled to a higher level. 0 represents
+	 * no scaling up on that level. To scale down, the ddr should be below the threshold
+	 * at the previos gmu power level index.
+	 */
+	entry = (struct hfi_table_entry *)&gmu->gmu_scaling_cmdbuf[index];
+	entry->count = 1;
+	entry->stride = 4;
+
+	/* Find the ddr index for gmu level 1 */
+	for (ddr_index = 0; ddr_index < pwr->ddr_table_count; ddr_index++) {
+		if (pwr->ddr_table[ddr_index] >= gmu->perf_ddr_bw)
+			break;
+	}
+	entry->data[0] = 0;
+	entry->data[1] = ddr_index;
+	entry->data[2] = 0;
+	entry->data[3] = 0;
+	index += size_second_entry_dwords;
+
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
+	cmd->hdr = MSG_HDR_SET_SIZE(cmd->hdr, index);
+
+	return 0;
+}
+
 static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2373,6 +2480,15 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	ret = gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
+	if (ret)
+		return ret;
+
+	ret = gen8_hwsched_build_gmu_scaling_table(adreno_dev);
+	if (ret)
+		return ret;
+
+	cmd = (struct hfi_table_cmd *)gmu->gmu_scaling_cmdbuf;
 	return gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 }
 

@@ -90,6 +90,8 @@ enum hfi_table_type {
 	HFI_TABLE_CLX_V2	= 5,
 	HFI_TABLE_THERM		= 6,
 	HFI_TABLE_DCVS_DATA	= 7,
+	HFI_TABLE_SYS_TIME_DATA	= 8,
+	HFI_TABLE_GMU_SCALING_DATA	= 9,
 	HFI_TABLE_MAX,
 };
 
@@ -500,6 +502,7 @@ enum hfi_msg_type {
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
 	F2H_MSG_PROCESS_TRACE		= 155,
+	F2H_MSG_PLATFORM		= 200,
 	HFI_MAX_ID,
 };
 
@@ -513,6 +516,11 @@ enum gmu_ret_type {
 	GMU_ERROR_TIMEOUT,
 	GMU_ERROR_NOT_SUPPORTED,
 	GMU_ERROR_NO_ENTRY,
+};
+
+/* Platform specific F2H subtype message for GMU */
+enum gmu_f2h_msg_platform {
+	F2H_ST_MSG_SCALE_GMU,
 };
 
 /* H2F */
@@ -1098,6 +1106,20 @@ struct pending_cmd {
 	/** @node: to add it to the list of hfi packets waiting for ack */
 	struct list_head node;
 };
+
+struct hfi_msg_platform {
+	/** @header: Header for the platform specific msg */
+	u32 header;
+	/** @sub_type: Sub type for the platform msg */
+	u32 sub_type;
+	/** @cmd: Pointer to the HFI platform cmd */
+	u32 cmd[];
+} __packed;
+
+struct hfi_scale_gmu_cmd {
+	/** @gmu_pwrlevel: Gmu index of gmu power level to scale to */
+	u32 gmu_pwrlevel;
+} __packed;
 
 static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)
 {
