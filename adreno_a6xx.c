@@ -200,7 +200,8 @@ int a6xx_init(struct adreno_device *adreno_dev)
 	if (of_fdt_get_ddrtype() == 0x7) {
 		if (adreno_is_a660_shima(adreno_dev) ||
 			adreno_is_a635(adreno_dev) ||
-			adreno_is_a662(adreno_dev))
+			adreno_is_a662(adreno_dev) ||
+			adreno_is_gen6_3_26_0(adreno_dev))
 			adreno_dev->highest_bank_bit = 14;
 		else if ((adreno_is_a650(adreno_dev) ||
 				adreno_is_a660(adreno_dev)))
@@ -275,7 +276,7 @@ __get_rbbm_clock_cntl_on(struct adreno_device *adreno_dev)
 {
 	if (adreno_is_a630(adreno_dev))
 		return 0x8AA8AA02;
-	else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev))
+	else if (adreno_is_a612_family(adreno_dev) || adreno_is_a610_family(adreno_dev))
 		return 0xAAA8AA82;
 	else if (adreno_is_a702(adreno_dev))
 		return 0xAAAAAA82;
@@ -365,6 +366,22 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 
 	kgsl_regread(device, A6XX_RBBM_CLOCK_CNTL, &value);
 
+	/*
+	 * GBIF L2 CGC control is not part of the UCHE and is enabled by
+	 * default. Hence modify the register when CGC disabled is
+	 * requested.
+	 * Note: The below programming will need modification in case
+	 * of change in the register reset value in future.
+	 */
+	if (!on)
+		kgsl_regrmw(device, A6XX_UCHE_GBIF_GX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), 0));
+
+	/* Recommended to always disable GBIF_CX_CONFIG for gen6_3_26_0 */
+	if (adreno_is_gen6_3_26_0(adreno_dev))
+		kgsl_regrmw(device, A6XX_GBIF_CX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), 0));
+
 	if (value == __get_rbbm_clock_cntl_on(adreno_dev) && on)
 		return;
 
@@ -377,7 +394,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Hence skip GMU_GX registers for A12 and A610.
 	 */
 
-	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
+	if (gmu_core_isenabled(device) && !adreno_is_a612_family(adreno_dev) &&
 		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 1, 0);
@@ -388,16 +405,12 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 		kgsl_regwrite(device, a6xx_core->hwcg[i].offset,
 			on ? a6xx_core->hwcg[i].val : 0);
 
-	/* GBIF L2 CGC control is not part of the UCHE */
-	kgsl_regrmw(device, A6XX_UCHE_GBIF_GX_CONFIG, 0x70000,
-			FIELD_PREP(GENMASK(18, 16), on ? 2 : 0));
-
 	/*
 	 * Enable SP clock after programming HWCG registers.
 	 * A612 and A610 GPU is not having the GX power domain.
 	 * Hence skip GMU_GX registers for A612.
 	 */
-	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
+	if (gmu_core_isenabled(device) && !adreno_is_a612_family(adreno_dev) &&
 		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 0, 1);
@@ -620,14 +633,13 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, A6XX_UCHE_CACHE_WAYS, 0x4);
 
 	/* ROQ sizes are twice as big on a640/a680 than on a630 */
-	if ((ADRENO_GPUREV(adreno_dev) >= ADRENO_REV_A640) &&
-		       !adreno_is_a702(adreno_dev)) {
-		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
-		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
-	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev) ||
-		adreno_is_a702(adreno_dev)) {
+	if (adreno_is_a612_family(adreno_dev) || adreno_is_a610_family(adreno_dev) ||
+			adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x00800060);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x40201b16);
+	} else if (ADRENO_GPUREV(adreno_dev) >= ADRENO_REV_A640) {
+		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
+		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
 	} else {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x010000C0);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
@@ -642,8 +654,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 	}
 
-	if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev)) {
-		/* For A612 and A610 Mem pool size is reduced to 48 */
+	if (adreno_is_a612_family(adreno_dev) || adreno_is_a610_family(adreno_dev)) {
+		/* For A612, gen6_3_26_0 and A610 Mem pool size is reduced to 48 */
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 48);
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 47);
 	} else if (adreno_is_a702(adreno_dev)) {
