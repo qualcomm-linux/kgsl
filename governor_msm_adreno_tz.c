@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/errno.h>
 #include <linux/devfreq.h>
@@ -68,7 +68,7 @@ static unsigned long acc_total, acc_relative_busy;
 /*
  * Returns GPU suspend time in millisecond.
  */
-u64 suspend_time_ms(void)
+static u64 suspend_time_ms(void)
 {
 	u64 suspend_sampling_time;
 	u64 time_diff = 0;
@@ -168,7 +168,7 @@ static const struct device_attribute *adreno_tz_attr_list[] = {
 		NULL
 };
 
-void compute_work_load(struct devfreq_dev_status *stats,
+static void compute_work_load(struct devfreq_dev_status *stats,
 		struct devfreq_msm_adreno_tz_data *priv,
 		struct devfreq *devfreq)
 {

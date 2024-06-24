@@ -3125,7 +3125,7 @@ static void kgsl_process_add_stats(struct kgsl_process_private *priv,
 		priv->stats[type].max = ret;
 }
 
-u64 kgsl_get_stats(pid_t pid)
+static u64 kgsl_get_stats(pid_t pid)
 {
 	struct kgsl_process_private *process;
 	u64 ret;

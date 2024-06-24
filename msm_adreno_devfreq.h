@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef MSM_ADRENO_DEVFREQ_H
@@ -78,6 +78,16 @@ typedef void(*getbw_func)(unsigned long *, unsigned long *, void *);
 
 int devfreq_vbif_update_bw(void);
 void devfreq_vbif_register_callback(getbw_func func, void *data);
+
+int devfreq_gpubw_init(void);
+
+void devfreq_gpubw_exit(void);
+
+int msm_adreno_tz_init(void);
+
+void msm_adreno_tz_exit(void);
+
+int msm_adreno_tz_reinit(struct devfreq *devfreq);
 
 #if defined(CONFIG_QTEE_SHM_BRIDGE)
 #include <linux/qtee_shmbridge.h>

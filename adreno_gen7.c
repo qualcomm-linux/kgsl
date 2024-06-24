@@ -1691,7 +1691,7 @@ static u32 _get_pipeid(u32 groupid)
 		return PIPE_NONE;
 }
 
-int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
+static int gen7_perfcounter_remove(struct adreno_device *adreno_dev,
 	struct adreno_perfcount_register *reg, u32 groupid)
 {
 	void *ptr = adreno_dev->pwrup_reglist->hostptr;

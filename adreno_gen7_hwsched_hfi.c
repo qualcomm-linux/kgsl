@@ -2305,7 +2305,7 @@ static int gen7_hwsched_setup_default_votes(struct adreno_device *adreno_dev)
 	return kgsl_pwrctrl_axi(device, true);
 }
 
-int gen7_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
+static int gen7_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct pending_cmd ack = {0};
@@ -3023,7 +3023,7 @@ static void populate_ibs(struct adreno_device *adreno_dev,
 
 #define DISPQ_IRQ_BIT(_idx) BIT((_idx) + HFI_DSP_IRQ_BASE)
 
-int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
+static int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt, u32 *msg, u32 size_bytes,
 	struct kgsl_drawobj *drawobj, struct adreno_submit_time *time)
 {
