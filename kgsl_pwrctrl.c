@@ -1426,9 +1426,9 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 	if (!(event & REGULATOR_EVENT_DISABLE) || !pwr->cx_gdsc_wait)
 		return 0;
 
-	if (pwr->cx_gdsc_offset) {
-		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_gdsc_offset,
-			val, !(val & BIT(31)), 100, 100 * 1000))
+	if (pwr->cx_cfg_gdsc_offset) {
+		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_cfg_gdsc_offset,
+			val, (val & BIT(15)), 100, 100 * 1000))
 			dev_err(device->dev, "GPU CX wait timeout.\n");
 	}
 

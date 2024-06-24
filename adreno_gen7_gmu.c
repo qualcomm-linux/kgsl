@@ -455,9 +455,6 @@ int gen7_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN7_GMU_RSCC_CONTROL_REQ, 0);
 
-	if (adreno_dev->lm_enabled)
-		gmu_core_regwrite(device, GEN7_GMU_AO_SPARE_CNTL, 0);
-
 	set_bit(GMU_PRIV_RSCC_SLEEP_DONE, &gmu->flags);
 
 	return 0;
@@ -781,7 +778,7 @@ int gen7_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
-	unsigned int reg, reg1, reg2, reg3, reg4, reg5, reg6, reg7, reg8;
+	u32 reg, reg1, reg2, reg3, reg4;
 	unsigned long t;
 	u64 ts1, ts2;
 
@@ -823,34 +820,25 @@ int gen7_gmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 	gmu_core_regread(device, GEN7_GPU_GMU_AO_GPU_CX_BUSY_STATUS, &reg2);
 	gmu_core_regread(device, GEN7_GMU_RBBM_INT_UNMASKED_STATUS, &reg3);
 	gmu_core_regread(device, GEN7_GMU_GMU_PWR_COL_KEEPALIVE, &reg4);
-	gmu_core_regread(device, GEN7_GMU_AO_SPARE_CNTL, &reg5);
 
 	dev_err(&gmu->pdev->dev,
 		"----------------------[ GMU error ]----------------------\n");
-	dev_err(&gmu->pdev->dev,
-		"Timeout waiting for lowest idle level %s\n",
+	dev_err(&gmu->pdev->dev, "Timeout waiting for lowest idle level %s\n",
 		idle_level_name(gmu->idle_level));
 	dev_err(&gmu->pdev->dev, "Start: %llx (absolute ticks)\n", ts1);
-	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n",
-		ts2-ts1);
-	dev_err(&gmu->pdev->dev,
-		"RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
+	dev_err(&gmu->pdev->dev, "Poll: %llx (ticks relative to start)\n", ts2-ts1);
+	dev_err(&gmu->pdev->dev, "RPMH_POWER_STATE=%x GFX_PWR_CLK_STATUS=%x\n", reg, reg1);
 	dev_err(&gmu->pdev->dev, "CX_BUSY_STATUS=%x\n", reg2);
-	dev_err(&gmu->pdev->dev,
-		"RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n",
-		reg3, reg4);
-	dev_err(&gmu->pdev->dev, "GEN7_GMU_AO_SPARE_CNTL=%x\n", reg5);
+	dev_err(&gmu->pdev->dev, "RBBM_INT_UNMASKED_STATUS=%x PWR_COL_KEEPALIVE=%x\n", reg3, reg4);
 
 	/* Access GX registers only when GX is ON */
 	if (is_on(reg1)) {
-		kgsl_regread(device, GEN7_CP_STATUS_1, &reg6);
-		kgsl_regread(device, GEN7_CP_CP2GMU_STATUS, &reg7);
-		kgsl_regread(device, GEN7_CP_CONTEXT_SWITCH_CNTL, &reg8);
+		kgsl_regread(device, GEN7_CP_STATUS_1, &reg2);
+		kgsl_regread(device, GEN7_CP_CP2GMU_STATUS, &reg3);
+		kgsl_regread(device, GEN7_CP_CONTEXT_SWITCH_CNTL, &reg4);
 
-		dev_err(&gmu->pdev->dev, "GEN7_CP_STATUS_1=%x\n", reg6);
-		dev_err(&gmu->pdev->dev,
-			"CP2GMU_STATUS=%x CONTEXT_SWITCH_CNTL=%x\n",
-			reg7, reg8);
+		dev_err(&gmu->pdev->dev, "GEN7_CP_STATUS_1=%x\n", reg2);
+		dev_err(&gmu->pdev->dev, "CP2GMU_STATUS=%x CONTEXT_SWITCH_CNTL=%x\n", reg3, reg4);
 	}
 
 	WARN_ON(1);
@@ -1465,6 +1453,12 @@ static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	/* Check no outstanding RPMh voting */
 	gen7_complete_rpmh_votes(gmu, 1);
 
@@ -1557,6 +1551,13 @@ static int gen7_gmu_notify_slumber(struct adreno_device *adreno_dev)
 
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, GEN7_GMU_AO_AHB_FENCE_CTRL, 0);
+
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	return ret;
 }
 
@@ -1974,7 +1975,9 @@ static int gen7_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1) {
+	if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE, 0) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -2159,6 +2162,21 @@ static u64 gen7_bcl_sid_get(struct kgsl_device *device, u32 sid_id)
 	}
 }
 
+static void gen7_send_tlb_hint(struct kgsl_device *device, bool val)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+
+	if (!gmu->domain)
+		return;
+
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	qcom_skip_tlb_management(&gmu->pdev->dev, val);
+#endif
+	if (!val)
+		iommu_flush_iotlb_all(gmu->domain);
+}
+
 static const struct gmu_dev_ops gen7_gmudev = {
 	.oob_set = gen7_gmu_oob_set,
 	.oob_clear = gen7_gmu_oob_clear,
@@ -2171,6 +2189,7 @@ static const struct gmu_dev_ops gen7_gmudev = {
 	.bcl_sid_set = gen7_bcl_sid_set,
 	.bcl_sid_get = gen7_bcl_sid_get,
 	.send_nmi = gen7_gmu_send_nmi,
+	.send_tlb_hint = gen7_send_tlb_hint,
 };
 
 static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
@@ -2212,8 +2231,6 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	return ret;
 }
 
-#define NUM_CHANNELS 4
-
 u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 {
 	u16 vote = 0;
@@ -2228,7 +2245,7 @@ u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
 	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
 	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
 	 */
-	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * NUM_CHANNELS;
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * adreno_dev->gpucore->num_ddr_channels;
 	max_ab = max_bw / 1000;
 
 	/*

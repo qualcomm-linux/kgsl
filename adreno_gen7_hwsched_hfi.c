@@ -2248,9 +2248,6 @@ static int gen7_hwsched_coldboot_gpu(struct adreno_device *adreno_dev)
 	struct pending_cmd ack = {0};
 	int ret = 0;
 
-	/* Clear the bit so we can set it when GPU bootup message recording is successful */
-	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
-
 	ret = gen7_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gpu_boot_scratch,
 		 HFI_WARMBOOT_SET_SCRATCH, true, &ack);
 	if (ret)
@@ -2326,6 +2323,7 @@ err:
 	if (ret) {
 		/* Clear the bit in case of an error so next boot will be coldboot */
 		clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+		clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 		gen7_hwsched_hfi_stop(adreno_dev);
 	}
 
@@ -2374,6 +2372,7 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	/* Reset the variable here and set it when we successfully record the scratch */
 	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
 
 	ret = gen7_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
 		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
@@ -4004,17 +4003,26 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 	return ret;
 }
 
+static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
+{
+	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev));
+
+	/* Make sure we send all fences from this context to the TxQueue after recovery */
+	move_detached_context_hardware_fences(adreno_dev, drawctxt);
+	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+}
+
 static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	struct kgsl_context *context, u32 ts)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 	struct pending_cmd pending_ack;
 	struct hfi_unregister_ctxt_cmd cmd;
 	u32 seqnum;
-	int rc, ret;
+	int ret;
 
 	/* Only send HFI if device is not in SLUMBER */
 	if (!context->gmu_registered ||
@@ -4030,60 +4038,44 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	cmd.ctxt_id = context->id,
 	cmd.ts = ts,
 
-	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
-	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
-
-	add_waiter(hfi, cmd.hdr, &pending_ack);
-
 	/*
 	 * Although we know device is powered on, we can still enter SLUMBER
 	 * because the wait for ack below is done without holding the mutex. So
 	 * take an active count before releasing the mutex so as to avoid a
 	 * concurrent SLUMBER sequence while GMU is un-registering this context.
 	 */
-	gen7_hwsched_active_count_get(adreno_dev);
+	ret = gen7_hwsched_active_count_get(adreno_dev);
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
+		return ret;
+	}
 
-	rc = gen7_hfi_cmdq_write(adreno_dev, (u32 *)&cmd, sizeof(cmd));
-	if (rc)
-		goto done;
+	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
+	cmd.hdr = MSG_HDR_SET_SEQNUM_SIZE(cmd.hdr, seqnum, sizeof(cmd) >> 2);
+	add_waiter(hfi, cmd.hdr, &pending_ack);
 
-	mutex_unlock(&device->mutex);
-
-	rc = wait_for_completion_timeout(&pending_ack.complete,
-			msecs_to_jiffies(30 * 1000));
-	if (!rc) {
-		dev_err(&gmu->pdev->dev,
-			"Ack timeout for context unregister seq: %d ctx: %u ts: %u\n",
-			MSG_HDR_GET_SEQNUM(pending_ack.sent_hdr),
-			context->id, ts);
-		rc = -ETIMEDOUT;
-
-		mutex_lock(&device->mutex);
-
-		gmu_core_fault_snapshot(device);
-
-		/*
-		 * Make sure we send all fences from this context to the TxQueue after recovery
-		 */
-		move_detached_context_hardware_fences(adreno_dev, drawctxt);
-		gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-
+	ret = gen7_hfi_cmdq_write(adreno_dev, (u32 *)&cmd, sizeof(cmd));
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
-
-	rc = check_detached_context_hardware_fences(adreno_dev, drawctxt);
-	if (rc)
+	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
+		&gmu->pdev->dev, &pending_ack, gen7_hwsched_process_msgq, &cmd);
+	if (ret) {
+		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		goto done;
+	}
 
-	rc = check_ack_failure(adreno_dev, &pending_ack);
+	ret = check_detached_context_hardware_fences(adreno_dev, drawctxt);
+	if (!ret)
+		ret = check_ack_failure(adreno_dev, &pending_ack);
+
 done:
 	gen7_hwsched_active_count_put(adreno_dev);
-
 	del_waiter(hfi, &pending_ack);
 
-	return rc;
+	return ret;
 }
 
 void gen7_hwsched_context_detach(struct adreno_context *drawctxt)

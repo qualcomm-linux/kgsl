@@ -1868,28 +1868,6 @@ static int a6xx_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static irqreturn_t a6xx_hwsched_irq_handler(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	irqreturn_t ret = IRQ_NONE;
-	u32 status;
-
-	if (a6xx_irq_poll_fence(adreno_dev)) {
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-		return ret;
-	}
-
-	kgsl_regread(device, A6XX_RBBM_INT_0_STATUS, &status);
-
-	kgsl_regwrite(device, A6XX_RBBM_INT_CLEAR_CMD, status);
-
-	ret = adreno_irq_callbacks(adreno_dev, a6xx_irq_funcs, status);
-
-	trace_kgsl_a5xx_irq_status(adreno_dev, status);
-
-	return ret;
-}
-
 static irqreturn_t a6xx_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1938,9 +1916,9 @@ int a6xx_probe_common(struct platform_device *pdev,
 	adreno_reg_offset_init(gpudev->reg_offsets);
 
 	if (gmu_core_isenabled(device) && (gpudev != &adreno_a6xx_rgmu_gpudev))
-		device->pwrctrl.cx_gdsc_offset = (adreno_is_a662(adreno_dev) ||
-			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_GDSCR :
-			A6XX_GPU_CC_CX_GDSCR;
+		device->pwrctrl.cx_cfg_gdsc_offset = (adreno_is_a662(adreno_dev) ||
+			adreno_is_a621(adreno_dev)) ? A662_GPU_CC_CX_CFG_GDSCR :
+			A6XX_GPU_CC_CX_CFG_GDSCR;
 
 	adreno_dev->hwcg_enabled = true;
 	adreno_dev->uche_client_pf = 1;
@@ -2376,7 +2354,7 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.reg_offsets = a6xx_register_offsets,
 		.probe = a6xx_hwsched_probe,
 		.snapshot = a6xx_hwsched_snapshot,
-		.irq_handler = a6xx_hwsched_irq_handler,
+		.irq_handler = a6xx_irq_handler,
 		.iommu_fault_block = a6xx_iommu_fault_block,
 		.preemption_context_init = a6xx_preemption_context_init,
 		.context_detach = a6xx_hwsched_context_detach,

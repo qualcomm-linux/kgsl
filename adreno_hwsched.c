@@ -1473,9 +1473,10 @@ static void do_fault_header(struct adreno_device *adreno_dev,
 		rb_id = adreno_get_level(drawobj->context);
 
 		pr_context(device, drawobj->context,
-			"ctx %u ctx_type %s ts %u dispatch_queue=%d\n",
+			"ctx %u ctx_type %s ts %u policy %lX dispatch_queue=%d\n",
 			drawobj->context->id, kgsl_context_type(drawctxt->type),
-			drawobj->timestamp, drawobj->context->gmu_dispatch_queue);
+			drawobj->timestamp, CMDOBJ(drawobj)->fault_recovery,
+			drawobj->context->gmu_dispatch_queue);
 
 		pr_context(device, drawobj->context,
 			   "cmdline: %s\n", drawctxt->base.proc_priv->cmdline);
@@ -1810,11 +1811,13 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
-	if (obj)
+	if (obj) {
 		drawobj = obj->drawobj;
-	else if (hwsched->recurring_cmdobj &&
+		CMDOBJ(drawobj)->fault_recovery = cmd->gc.policy;
+	} else if (hwsched->recurring_cmdobj &&
 		hwsched->recurring_cmdobj->base.context->id == cmd->gc.ctxt_id) {
 		drawobj = DRAWOBJ(hwsched->recurring_cmdobj);
+		CMDOBJ(drawobj)->fault_recovery = cmd->gc.policy;
 		if (!kref_get_unless_zero(&drawobj->refcount))
 			drawobj = NULL;
 	}
@@ -1837,6 +1840,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (obj_lpac) {
 		drawobj_lpac = obj_lpac->drawobj;
+		CMDOBJ(drawobj_lpac)->fault_recovery = cmd->lpac.policy;
 		context_lpac  = drawobj_lpac->context;
 		if (gpudev->lpac_fault_header)
 			gpudev->lpac_fault_header(adreno_dev, drawobj_lpac);
@@ -2367,6 +2371,49 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	dev_err(dev, "Ack timeout for id:%d sequence=%d ticks=%llu/%llu\n",
 		MSG_HDR_GET_ID(ack->sent_hdr), MSG_HDR_GET_SEQNUM(ack->sent_hdr), start, end);
 	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev));
+	return -ETIMEDOUT;
+}
+
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	int ret;
+	u64 start, end;
+
+	start = gpudev->read_alwayson(adreno_dev);
+	mutex_unlock(&device->mutex);
+
+	ret = wait_for_completion_timeout(&ack->complete,
+		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+
+	mutex_lock(&device->mutex);
+	if (ret)
+		return 0;
+
+	/*
+	 * It is possible the ack came, but due to HLOS latencies in processing hfi interrupt
+	 * and/or the f2h daemon, the ack isn't processed yet. Hence, process the msgq one last
+	 * time.
+	 */
+	process_msgq(adreno_dev);
+	end = gpudev->read_alwayson(adreno_dev);
+
+	if (completion_done(&ack->complete)) {
+		dev_err_ratelimited(dev,
+			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
+			cmd->ts, start, end);
+		return 0;
+	}
+
+	dev_err_ratelimited(dev,
+		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }
 

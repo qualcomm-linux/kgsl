@@ -166,6 +166,8 @@ struct adreno_gen8_core {
 	const u32 rt_bus_hint;
 	/** @fast_bus_hint: Whether or not to increase IB vote on high ddr stall */
 	bool fast_bus_hint;
+	/** @noc_timeout_us: GPU config NOC port timeout in usec */
+	u32 noc_timeout_us;
 };
 
 /**
@@ -320,6 +322,15 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev);
  */
 void gen8_snapshot_external_core_regs(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot);
+
+/**
+ * gen8_enable_ahb_timeout_detection - Program AHB control registers
+ * @adreno_dev: An Adreno GPU handle
+ *
+ * Program AHB control registers to enable AHB timeout detection.
+ *
+ */
+void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev);
 
 /**
  * gen8_start - Program gen8 registers
