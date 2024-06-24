@@ -2272,7 +2272,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_3_0 = {
 				ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_ACD,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_no_cb_perfcounters,
-		.uche_gmem_alignment = 0,
+		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = SZ_512K,
 		.bus_width = 32,
 		.snapshot_size = SZ_2M,
