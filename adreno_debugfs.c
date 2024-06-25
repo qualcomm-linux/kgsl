@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -290,7 +290,7 @@ static void drawobj_print(struct seq_file *s,
 		cmdobj_print(s, CMDOBJ(drawobj));
 
 	seq_puts(s, " flags: ");
-	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS),
+	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS);
 	kgsl_drawobj_put(drawobj);
 	seq_puts(s, "\n");
 }

@@ -1473,9 +1473,10 @@ static void do_fault_header(struct adreno_device *adreno_dev,
 		rb_id = adreno_get_level(drawobj->context);
 
 		pr_context(device, drawobj->context,
-			"ctx %u ctx_type %s ts %u dispatch_queue=%d\n",
+			"ctx %u ctx_type %s ts %u policy %lX dispatch_queue=%d\n",
 			drawobj->context->id, kgsl_context_type(drawctxt->type),
-			drawobj->timestamp, drawobj->context->gmu_dispatch_queue);
+			drawobj->timestamp, CMDOBJ(drawobj)->fault_recovery,
+			drawobj->context->gmu_dispatch_queue);
 
 		pr_context(device, drawobj->context,
 			   "cmdline: %s\n", drawctxt->base.proc_priv->cmdline);
@@ -1810,11 +1811,13 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
-	if (obj)
+	if (obj) {
 		drawobj = obj->drawobj;
-	else if (hwsched->recurring_cmdobj &&
+		CMDOBJ(drawobj)->fault_recovery = cmd->gc.policy;
+	} else if (hwsched->recurring_cmdobj &&
 		hwsched->recurring_cmdobj->base.context->id == cmd->gc.ctxt_id) {
 		drawobj = DRAWOBJ(hwsched->recurring_cmdobj);
+		CMDOBJ(drawobj)->fault_recovery = cmd->gc.policy;
 		if (!kref_get_unless_zero(&drawobj->refcount))
 			drawobj = NULL;
 	}
@@ -1837,6 +1840,7 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 
 	if (obj_lpac) {
 		drawobj_lpac = obj_lpac->drawobj;
+		CMDOBJ(drawobj_lpac)->fault_recovery = cmd->lpac.policy;
 		context_lpac  = drawobj_lpac->context;
 		if (gpudev->lpac_fault_header)
 			gpudev->lpac_fault_header(adreno_dev, drawobj_lpac);
@@ -2370,6 +2374,49 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	return -ETIMEDOUT;
 }
 
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	int ret;
+	u64 start, end;
+
+	start = gpudev->read_alwayson(adreno_dev);
+	mutex_unlock(&device->mutex);
+
+	ret = wait_for_completion_timeout(&ack->complete,
+		msecs_to_jiffies(msecs_to_jiffies(30 * 1000)));
+
+	mutex_lock(&device->mutex);
+	if (ret)
+		return 0;
+
+	/*
+	 * It is possible the ack came, but due to HLOS latencies in processing hfi interrupt
+	 * and/or the f2h daemon, the ack isn't processed yet. Hence, process the msgq one last
+	 * time.
+	 */
+	process_msgq(adreno_dev);
+	end = gpudev->read_alwayson(adreno_dev);
+
+	if (completion_done(&ack->complete)) {
+		dev_err_ratelimited(dev,
+			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
+			cmd->ts, start, end);
+		return 0;
+	}
+
+	dev_err_ratelimited(dev,
+		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
+	return -ETIMEDOUT;
+}
+
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 {
 	u32 i;
@@ -2381,4 +2428,83 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	}
 
 	return 0;
+}
+
+static void adreno_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
+		u32 type, u32 key, u32 *ptr, u32 num_values)
+{
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		/* key-value pair is 'num_values + 1' dwords */
+		if ((payload->type == type) && (payload->data[i] == key)) {
+			u32 j = 1;
+
+			do {
+				ptr[j - 1] = payload->data[i + j];
+				j++;
+			} while (num_values--);
+			break;
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+}
+
+bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
+		struct device *dev, u32 error)
+{
+	bool non_fatal = true;
+
+	switch (error) {
+	case GMU_CP_AHB_ERROR: {
+		u32 err_details[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_CP_AHB_ERROR, err_details, 2);
+		dev_crit_ratelimited(dev,
+			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
+			err_details[0], err_details[1]);
+		break;
+	}
+	case GMU_ATB_ASYNC_FIFO_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
+		break;
+	case GMU_RBBM_ATB_BUF_OVERFLOW:
+		dev_crit_ratelimited(dev, "RBBM: ATB bus overflow\n");
+		break;
+	case GMU_UCHE_OOB_ACCESS:
+		dev_crit_ratelimited(dev, "UCHE: Out of bounds access\n");
+		break;
+	case GMU_UCHE_TRAP_INTR:
+		dev_crit_ratelimited(dev, "UCHE: Trap interrupt\n");
+		break;
+	case GMU_TSB_WRITE_ERROR: {
+		u32 addr[2];
+
+		adreno_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
+						KEY_TSB_WRITE_ERROR, addr, 2);
+		dev_crit_ratelimited(dev, "TSB: Write error interrupt: Address: 0x%lx MID: %lu\n",
+			FIELD_GET(GENMASK(16, 0), addr[1]) << 32 | addr[0],
+			FIELD_GET(GENMASK(31, 23), addr[1]));
+		break;
+	}
+	default:
+		non_fatal = false;
+		break;
+	}
+
+	return non_fatal;
 }

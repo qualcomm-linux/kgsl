@@ -1152,6 +1152,8 @@ struct payload_section {
 #define KEY_AQE0_HW_FAULT 12
 #define KEY_AQE1_OPCODE_ERROR 13
 #define KEY_AQE1_HW_FAULT 14
+#define KEY_CP_AHB_ERROR 30
+#define KEY_TSB_WRITE_ERROR 31
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -1224,6 +1226,14 @@ struct payload_section {
 #define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
 /* GMU encountered a sync object which is signaled via software but not via hardware */
 #define GMU_SYNCOBJ_TIMEOUT_ERROR 630
+/* Non fatal GPU error codes */
+#define GMU_CP_AHB_ERROR 650
+#define GMU_ATB_ASYNC_FIFO_OVERFLOW 651
+#define GMU_RBBM_ATB_BUF_OVERFLOW 652
+#define GMU_UCHE_OOB_ACCESS 653
+#define GMU_UCHE_TRAP_INTR  654
+#define GMU_TSB_WRITE_ERROR 655
+
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
 
@@ -1343,6 +1353,27 @@ static inline u32 hfi_get_gmu_sz_alignment(u32 align)
 int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	struct device *dev, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
+
+/**
+ * adreno_hwsched_ctxt_unregister_wait_completion - Wait for HFI ack for context unregister
+ * adreno_dev: Pointer to the adreno device
+ * dev: Pointer to the device structure
+ * ack: Pointer to the pending ack
+ * process_msgq: Function pointer to the msgq processing function
+ * cmd: Pointer to the hfi packet header and data
+ *
+ * This function waits for the completion structure for context unregister hfi ack,
+ * which gets signaled asynchronously. In case there is a timeout, process the msgq
+ * one last time. If the ack is present, log an error and move on. If the ack isn't
+ * present, log an error and return -ETIMEDOUT.
+ *
+ * Return: 0 on success and -ETIMEDOUT on failure
+ */
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd);
 
 /**
  * hfi_get_minidump_string - Get the va-minidump string from entry

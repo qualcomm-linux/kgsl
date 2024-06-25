@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -179,6 +179,9 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 {
 	unsigned int reg = 0;
 	ktime_t timeout;
+
+	if (CD_SCRIPT_CHECK(device))
+		return false;
 
 	kgsl_regwrite(device, GEN7_CP_CRASH_SCRIPT_BASE_LO,
 			lower_32_bits(gen7_capturescript->gpuaddr));
@@ -387,7 +390,7 @@ static size_t gen7_snapshot_trace_buffer_gfx_trace(struct kgsl_device *device,
 	struct kgsl_snapshot_trace_buffer *header =
 			(struct kgsl_snapshot_trace_buffer *) buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct gen7_trace_buffer_info* info =
+	struct gen7_trace_buffer_info *info =
 				(struct gen7_trace_buffer_info *) priv;
 
 	if (remain < SZ_2K + sizeof(*header)) {
@@ -419,8 +422,8 @@ static size_t gen7_snapshot_trace_buffer_gfx_trace(struct kgsl_device *device,
 	}
 
 	/* Number of times the circular buffer has wrapped around */
-	wrap_count = FIELD_GET(GENMASK(31,12), status);
-	write_ptr = FIELD_GET(GENMASK(8,0), status);
+	wrap_count = FIELD_GET(GENMASK(31, 12), status);
+	write_ptr = FIELD_GET(GENMASK(8, 0), status);
 
 	/* Read partial buffer starting from 0 */
 	if (!wrap_count) {
@@ -448,7 +451,7 @@ static size_t gen7_snapshot_trace_buffer_etb(struct kgsl_device *device,
 	u32 read_ptr, count, write_ptr, val, idx = 0;
 	struct kgsl_snapshot_trace_buffer *header = (struct kgsl_snapshot_trace_buffer *) buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct gen7_trace_buffer_info* info = (struct gen7_trace_buffer_info *) priv;
+	struct gen7_trace_buffer_info *info = (struct gen7_trace_buffer_info *) priv;
 
 	/* Unlock ETB buffer */
 	qdss_regwrite(tmc_virt, QDSS_AOSS_APB_TMC_LAR, 0xC5ACCE55);
@@ -581,8 +584,8 @@ static void gen7_snapshot_trace_buffer(struct kgsl_device *device,
 		kgsl_regread(device, GEN7_CX_DBGC_CFG_DBGBUS_CNTLT, &val);
 	}
 
-	info.granularity = FIELD_GET(GENMASK(14,12), val);
-	info.segment = FIELD_GET(GENMASK(31,28), val);
+	info.granularity = FIELD_GET(GENMASK(14, 12), val);
+	info.segment = FIELD_GET(GENMASK(31, 28), val);
 
 	val_tmc_ctrl = qdss_regread(tmc_virt, QDSS_AOSS_APB_TMC_CTRL);
 
@@ -1508,7 +1511,7 @@ static void gen7_cx_misc_regs_snapshot(struct kgsl_device *device,
 	u64 *ptr, offset = 0;
 	const u32 *regs_ptr = (const u32 *)gen7_snapshot_block_list->cx_misc_regs;
 
-	if (CD_SCRIPT_CHECK(device))
+	if (CD_SCRIPT_CHECK(device) || !adreno_gx_is_on(ADRENO_DEVICE(device)))
 		goto done;
 
 	/* Build the crash script */
@@ -1670,6 +1673,8 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL3_TP0, cgc2);
 	}
 
+	gen7_cx_misc_regs_snapshot(device, snapshot);
+
 	/* SQE Firmware */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen7_snapshot_sqe, NULL);
@@ -1721,8 +1726,6 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 		(void *) gen7_snapshot_block_list->pre_crashdumper_regs);
 
 	gen7_reglist_snapshot(device, snapshot);
-
-	gen7_cx_misc_regs_snapshot(device, snapshot);
 
 	/*
 	 * Need to program and save this register before capturing resource table
