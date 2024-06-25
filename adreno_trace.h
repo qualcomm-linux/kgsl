@@ -968,7 +968,7 @@ TRACE_EVENT(adreno_ext_hw_fence_signal,
 		__entry->flags = flags;
 		__entry->ticks = gmu_ticks;
 	),
-	TP_printk("ctx=%llu seqno=%llu flags=0x%x ticks=%llu",
+	TP_printk("id=%llu seqno=%llu flags=0x%x ticks=%llu",
 		__entry->context, __entry->seq_no, __entry->flags, __entry->ticks
 	)
 );
