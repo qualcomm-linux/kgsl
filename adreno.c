@@ -1937,6 +1937,10 @@ void adreno_active_count_put(struct adreno_device *adreno_dev)
 		return;
 
 	if (atomic_dec_and_test(&device->active_cnt)) {
+		const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
+
+		if (!device->host_based_dcvs)
+			gpudev->power_feature_stats(adreno_dev);
 		kgsl_pwrscale_update_stats(device);
 		kgsl_pwrscale_update(device);
 

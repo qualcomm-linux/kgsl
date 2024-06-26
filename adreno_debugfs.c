@@ -480,6 +480,10 @@ static int _bcl_throttle_time_us_get(void *data, u64 *val)
 {
 	struct kgsl_device *device = data;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (gpudev->power_feature_stats)
+		gpudev->power_feature_stats(adreno_dev);
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		*val = 0;

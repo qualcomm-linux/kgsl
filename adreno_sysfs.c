@@ -337,6 +337,11 @@ static bool _touch_wake_show(struct adreno_device *adreno_dev)
 
 static unsigned int _ifpc_count_show(struct adreno_device *adreno_dev)
 {
+	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (gpudev->power_feature_stats)
+		gpudev->power_feature_stats(adreno_dev);
+
 	return adreno_dev->ifpc_count;
 }
 

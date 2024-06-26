@@ -1013,6 +1013,10 @@ struct adreno_gpudev {
 	 * @lpac_fault_header: Print LPAC fault header
 	 */
 	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @power_feature_stats: Sample feature related perfcounter stats
+	 */
+	void (*power_feature_stats)(struct adreno_device *adreno_dev);
 };
 
 /**
