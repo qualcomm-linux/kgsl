@@ -582,17 +582,29 @@ int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 		return ret;
 
 	cmd.version = FIELD_PREP(GENMASK(31, 16), 0x2) | FIELD_PREP(GENMASK(15, 0), 0x1);
-	/* cmd.domain[0] is never used but needed per hfi spec */
+	/* GFX domain */
+	cmd.domain[0].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
+				FIELD_PREP(GENMASK(28, 28), 1) |
+				FIELD_PREP(GENMASK(27, 22), 4) |
+				FIELD_PREP(GENMASK(21, 16), 55) |
+				FIELD_PREP(GENMASK(15, 0), 0);
+	cmd.domain[0].clxt = 0;
+	cmd.domain[0].clxh = 0;
+	cmd.domain[0].urgmode = 1;
+	cmd.domain[0].lkgen = 0;
+	cmd.domain[0].currbudget = 100;
+
+	/* MxG domain */
 	cmd.domain[1].data0 = FIELD_PREP(GENMASK(31, 29), 1) |
 				FIELD_PREP(GENMASK(28, 28), 1) |
 				FIELD_PREP(GENMASK(27, 22), 1) |
-				FIELD_PREP(GENMASK(21, 16), 40) |
+				FIELD_PREP(GENMASK(21, 16), 55) |
 				FIELD_PREP(GENMASK(15, 0), 0);
 	cmd.domain[1].clxt = 0;
 	cmd.domain[1].clxh = 0;
 	cmd.domain[1].urgmode = 1;
 	cmd.domain[1].lkgen = 0;
-	cmd.domain[1].currbudget = 50;
+	cmd.domain[1].currbudget = 100;
 
 	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
 }
