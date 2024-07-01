@@ -664,6 +664,7 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
@@ -696,6 +697,12 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 		/* Initialize the GMU trace buffer header */
 		gmu_core_trace_header_init(&gmu->trace);
 	}
+
+	/* Set the CL infinite timeout VRB override (if declared in gpulist) */
+	if (gen8_core->cl_no_ft_timeout_ms)
+		gmu_core_set_vrb_register(gmu->vrb->hostptr,
+				VRB_CL_NO_FT_TIMEOUT,
+				gen8_core->cl_no_ft_timeout_ms);
 
 	return 0;
 }
