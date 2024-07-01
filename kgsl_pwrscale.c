@@ -335,9 +335,9 @@ static int kgsl_devfreq_get_dev_status(struct device *dev,
 		last_b->gpu_minfreq = pwrlevel->gpu_freq;
 	}
 
-	kgsl_pwrctrl_busy_time(device, stat->total_time, stat->busy_time);
+	kgsl_pwrctrl_busy_time(device, stat->total_time, stat->busy_time, 0);
 	trace_kgsl_pwrstats(device, stat->total_time,
-		&pwrscale->accum_stats, device->active_context_count);
+		&pwrscale->accum_stats, device->active_context_count, 0);
 	memset(&pwrscale->accum_stats, 0, sizeof(pwrscale->accum_stats));
 
 	mutex_unlock(&device->mutex);

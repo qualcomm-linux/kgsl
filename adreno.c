@@ -3529,7 +3529,7 @@ static int adreno_interconnect_bus_set(struct adreno_device *adreno_dev,
 	icc_set_bw(pwr->icc_path, MBps_to_icc(ab),
 		kBps_to_icc(pwr->ddr_table[level]));
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, level, ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, level, ab, 0);
 
 	return 0;
 }

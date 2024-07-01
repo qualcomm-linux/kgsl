@@ -703,7 +703,66 @@ int gmu_core_get_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 *val)
 	return 0;
 }
 
-static void stream_trace_data(struct gmu_trace_packet *pkt)
+static void _gmu_trace_dcvs_pwrlevel(struct kgsl_device *device, struct gmu_trace_packet *pkt)
+{
+	struct trace_dcvs_pwrlvl *data = (struct trace_dcvs_pwrlvl *)pkt->payload;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	/*
+	 * After a slumber, gmu will have the previous power level as num_pwrlevels.
+	 * Set the previous power level as the current level for the trace to be
+	 * accurate.
+	 */
+	if (data->prev_pwrlvl == pwr->num_pwrlevels)
+		data->prev_pwrlvl = pwr->active_pwrlevel;
+
+	if (pwr->active_pwrlevel != data->new_pwrlvl) {
+		trace_kgsl_pwrlevel(device, data->new_pwrlvl,
+					pwr->pwrlevels[data->new_pwrlvl].gpu_freq,
+					data->prev_pwrlvl,
+					pwr->pwrlevels[data->prev_pwrlvl].gpu_freq,
+					pkt->ticks);
+		trace_gpu_frequency(pwr->pwrlevels[data->new_pwrlvl].gpu_freq/1000,
+					0, pkt->ticks);
+	}
+
+	pwr->active_pwrlevel = data->new_pwrlvl;
+	pwr->previous_pwrlevel = data->prev_pwrlvl;
+}
+
+static void _gmu_trace_dcvs_buslevel(struct kgsl_device *device, struct gmu_trace_packet *pkt)
+{
+	struct trace_dcvs_buslvl *data = (struct trace_dcvs_buslvl *)pkt->payload;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	trace_kgsl_buslevel(device, data->gpu_pwrlvl, data->buslvl,
+				data->cur_abmbps, pkt->ticks);
+
+	pwr->cur_dcvs_buslevel = data->buslvl;
+	pwr->bus_ab_mbytes = data->cur_abmbps;
+}
+
+static void _gmu_trace_dcvs_pwrstats(struct kgsl_device *device, struct gmu_trace_packet *pkt)
+{
+	struct trace_dcvs_pwrstats *data = (struct trace_dcvs_pwrstats *)pkt->payload;
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_power_stats stats;
+
+	kgsl_pwrctrl_busy_time(device, data->total_time, data->gpu_time, pkt->ticks);
+
+	stats.busy_time = data->gpu_time;
+	stats.ram_time = data->ram_time;
+	stats.ram_wait = data->ram_wait;
+	trace_kgsl_pwrstats(device, data->total_time, &stats,
+				device->active_context_count, pkt->ticks);
+
+	pwr->clock_times[pwr->active_pwrlevel] += data->gpu_time;
+	pwr->time_in_pwrlevel[pwr->active_pwrlevel] += data->total_time;
+	if (pwr->thermal_pwrlevel)
+		pwr->thermal_time += data->gpu_time;
+}
+
+static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packet *pkt)
 {
 	switch (pkt->trace_id) {
 	case GMU_TRACE_PREEMPT_TRIGGER: {
@@ -735,6 +794,18 @@ static void stream_trace_data(struct gmu_trace_packet *pkt)
 				(struct trace_syncobj_retire *)pkt->payload;
 
 		trace_adreno_syncobj_retired(data->gmu_ctxt_id, data->timestamp, pkt->ticks);
+		break;
+		}
+	case GMU_TRACE_DCVS_PWRLVL: {
+		_gmu_trace_dcvs_pwrlevel(device, pkt);
+		break;
+		}
+	case GMU_TRACE_DCVS_BUSLVL: {
+		_gmu_trace_dcvs_buslevel(device, pkt);
+		break;
+		}
+	case GMU_TRACE_DCVS_PWRSTATS: {
+		_gmu_trace_dcvs_pwrstats(device, pkt);
 		break;
 		}
 	default: {
@@ -813,7 +884,7 @@ void gmu_core_process_trace_data(struct kgsl_device *device,
 	}
 
 	trace->seq_num = seq_num;
-	stream_trace_data(pkt);
+	stream_trace_data(device, pkt);
 done:
 	ridx = (ridx + size) % trace_hdr->payload_size;
 	writel(ridx, &trace_hdr->read_index);
