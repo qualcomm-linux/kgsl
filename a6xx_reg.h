@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _A6XX_REG_H
@@ -1019,8 +1019,6 @@
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_8_H	0x1F875
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_L	0x1F876
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_H	0x1F877
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_L	0x1F888
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_H	0x1F889
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_ENABLE	0x1F8A0
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_0	0x1F8A1
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_1	0x1F8A2
@@ -1128,15 +1126,15 @@
 #define A6XX_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
-#define A6XX_GPU_CC_GX_GDSCR                   0x24403
-#define A6XX_GPU_CC_GX_DOMAIN_MISC             0x24542
-#define A6XX_GPU_CC_GX_DOMAIN_MISC3            0x24563
-#define A6XX_GPU_CC_CX_GDSCR                   0x2441B
+#define A6XX_GPU_CC_GX_GDSCR			0x24403
+#define A6XX_GPU_CC_GX_DOMAIN_MISC		0x24542
+#define A6XX_GPU_CC_GX_DOMAIN_MISC3		0x24563
+#define A6XX_GPU_CC_CX_CFG_GDSCR		0x2441C
 
 /* GPUCC offsets are different for A662 */
-#define A662_GPU_CC_GX_GDSCR                   0x26417
-#define A662_GPU_CC_GX_DOMAIN_MISC3            0x26541
-#define A662_GPU_CC_CX_GDSCR                   0x26442
+#define A662_GPU_CC_GX_GDSCR			0x26417
+#define A662_GPU_CC_GX_DOMAIN_MISC3		0x26541
+#define A662_GPU_CC_CX_CFG_GDSCR		0x26443
 
 /* GPU CPR registers */
 #define A6XX_GPU_CPR_FSM_CTL			0x26801

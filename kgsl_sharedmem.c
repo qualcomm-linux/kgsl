@@ -963,7 +963,7 @@ void kgsl_get_memory_usage(char *name, size_t name_size, uint64_t memflags)
 	for (i = 0; memtype_attrs[i]; i++) {
 		memtype = container_of(memtype_attrs[i], struct kgsl_memtype, attr);
 		if (memtype->type == type) {
-			strlcpy(name, memtype->attr.name, name_size);
+			strscpy(name, memtype->attr.name, name_size);
 			return;
 		}
 	}
@@ -1429,6 +1429,9 @@ static void kgsl_free_pages_from_sgt(struct kgsl_memdesc *memdesc)
 	int i;
 	struct scatterlist *sg;
 
+	if (WARN_ON(!memdesc->sgt))
+		return;
+
 	for_each_sg(memdesc->sgt->sgl, sg, memdesc->sgt->nents, i) {
 		/*
 		 * sg_alloc_table_from_pages() will collapse any physically
@@ -1688,16 +1691,17 @@ static int kgsl_alloc_secure_pages(struct kgsl_device *device,
 	/* Now that we've moved to a sg table don't need the pages anymore */
 	kvfree(pages);
 
+	memdesc->sgt = sgt;
+
 	ret = kgsl_lock_sgt(sgt, size);
 	if (ret) {
 		if (ret != -EADDRNOTAVAIL)
 			kgsl_free_pages_from_sgt(memdesc);
 		sg_free_table(sgt);
 		kfree(sgt);
+		memdesc->sgt = NULL;
 		return ret;
 	}
-
-	memdesc->sgt = sgt;
 
 	KGSL_STATS_ADD(size, &kgsl_driver.stats.secure,
 		&kgsl_driver.stats.secure_max);

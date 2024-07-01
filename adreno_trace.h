@@ -18,6 +18,7 @@
 #include "adreno_a3xx.h"
 #include "adreno_a5xx.h"
 #include "adreno_gen7.h"
+#include "adreno_gen8.h"
 #include "adreno_hfi.h"
 
 #define ADRENO_FT_TYPES \
@@ -777,6 +778,70 @@ TRACE_EVENT(kgsl_gen7_irq_status,
 			{ BIT(GEN7_INT_ISDBCPUIRQ), "ISDBCPUIRQ" },
 			{ BIT(GEN7_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" },
 			{ BIT(GEN7_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" })
+			: "None"
+	)
+);
+
+/*
+ * Tracepoint for gen8 irq. Includes status info
+ */
+TRACE_EVENT(kgsl_gen8_irq_status,
+
+	TP_PROTO(struct adreno_device *adreno_dev, u32 status),
+
+	TP_ARGS(adreno_dev, status),
+
+	TP_STRUCT__entry(
+		__string(device_name, adreno_dev->dev.name)
+		__field(u32, status)
+	),
+
+	TP_fast_assign(
+		__assign_str(device_name, adreno_dev->dev.name);
+		__entry->status = status;
+	),
+
+	TP_printk(
+		"d_name=%s status=%s",
+		__get_str(device_name),
+		__entry->status ? __print_flags(__entry->status, "|",
+			{ BIT(GEN8_INT_GPUIDLE), "GPUIDLE" },
+			{ BIT(GEN8_INT_AHBERROR), "AHBERROR" },
+			{ BIT(GEN8_INT_CPIPCINT0), "CPIPCINT0" },
+			{ BIT(GEN8_INT_CPIPCINT1), "CPIPCINT1" },
+			{ BIT(GEN8_INT_ATBASYNCFIFOOVERFLOW),
+				"ATBASYNCFIFOOVERFLOW" },
+			{ BIT(GEN8_INT_GPCERROR), "GPCERROR" },
+			{ BIT(GEN8_INT_SWINTERRUPT), "SWINTERRUPT" },
+			{ BIT(GEN8_INT_HWERROR), "HWERROR" },
+			{ BIT(GEN8_INT_CCU_CLEAN_DEPTH_TS),
+				"CCU_CLEAN_DEPTH_TS" },
+			{ BIT(GEN8_INT_CCU_CLEAN_COLOR_TS),
+				"CCU_CLEAN_COLOR_TS" },
+			{ BIT(GEN8_INT_CCU_RESOLVE_CLEAN_TS),
+				"CCU_RESOLVE_CLEAN_TS" },
+			{ BIT(GEN8_INT_PM4CPINTERRUPT), "PM4CPINTERRUPT" },
+			{ BIT(GEN8_INT_PM4CPINTERRUPTLPAC),
+				"PM4CPINTERRUPTLPAC" },
+			{ BIT(GEN8_INT_RB_DONE_TS), "RB_DONE_TS" },
+			{ BIT(GEN8_INT_CACHE_CLEAN_TS), "CACHE_CLEAN_TS" },
+			{ BIT(GEN8_INT_CACHE_CLEAN_TS_LPAC),
+				"CACHE_CLEAN_TS_LPAC" },
+			{ BIT(GEN8_INT_ATBBUSOVERFLOW), "ATBBUSOVERFLOW" },
+			{ BIT(GEN8_INT_HANGDETECTINTERRUPT),
+				"HANGDETECTINTERRUPT" },
+			{ BIT(GEN8_INT_OUTOFBOUNDACCESS),
+				"OUTOFBOUNDACCESS" },
+			{ BIT(GEN8_INT_UCHETRAPINTERRUPT),
+				"UCHETRAPINTERRUPT" },
+			{ BIT(GEN8_INT_DEBUGBUSINTERRUPT0),
+				"DEBUGBUSINTERRUPT0" },
+			{ BIT(GEN8_INT_DEBUGBUSINTERRUPT1),
+				"DEBUGBUSINTERRUPT1" },
+			{ BIT(GEN8_INT_TSBWRITEERROR), "TSBWRITEERROR" },
+			{ BIT(GEN8_INT_SWFUSEVIOLATION), "SWFUSEVIOLATION" },
+			{ BIT(GEN8_INT_ISDBCPUIRQ), "ISDBCPUIRQ" },
+			{ BIT(GEN8_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" })
 			: "None"
 	)
 );

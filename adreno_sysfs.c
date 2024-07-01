@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/sysfs.h>
@@ -102,9 +102,11 @@ static u32 _rt_bus_hint_show(struct adreno_device *adreno_dev)
 static int _gpu_llc_slice_enable_store(struct adreno_device *adreno_dev,
 		bool val)
 {
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		adreno_dev->gpu_llc_slice_enable = val;
-	return 0;
+	if (IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice) ||
+		(adreno_dev->gpu_llc_slice_enable == val))
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->gpu_llc_slice_enable, val);
 }
 
 static bool _gpu_llc_slice_enable_show(struct adreno_device *adreno_dev)
@@ -115,9 +117,11 @@ static bool _gpu_llc_slice_enable_show(struct adreno_device *adreno_dev)
 static int _gpuhtw_llc_slice_enable_store(struct adreno_device *adreno_dev,
 		bool val)
 {
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		adreno_dev->gpuhtw_llc_slice_enable = val;
-	return 0;
+	if (IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice) ||
+		(adreno_dev->gpuhtw_llc_slice_enable == val))
+		return 0;
+
+	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->gpuhtw_llc_slice_enable, val);
 }
 
 static bool _gpuhtw_llc_slice_enable_show(struct adreno_device *adreno_dev)

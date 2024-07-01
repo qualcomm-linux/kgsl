@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2015,2017,2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_PERFCOUNTER_H
 #define __ADRENO_PERFCOUNTER_H
@@ -12,6 +13,8 @@ struct adreno_device;
 
 #define PERFCOUNTER_FLAG_NONE 0x0
 #define PERFCOUNTER_FLAG_KERNEL 0x1
+
+#define PERFCOUNTER_REG_DEPENDENCY_LEN 2
 
 /* Structs to maintain the list of active performance counters */
 
@@ -34,6 +37,11 @@ struct adreno_perfcount_register {
 	int load_bit;
 	unsigned int select;
 	uint64_t value;
+	/*
+	 * @reg_dependency: Dependent registers that should be programmed along
+	 * with this register.
+	 */
+	u32 reg_dependency[PERFCOUNTER_REG_DEPENDENCY_LEN];
 };
 
 /**
