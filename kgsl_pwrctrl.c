@@ -528,9 +528,11 @@ static ssize_t max_gpuclk_show(struct device *dev,
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 max_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+				READ_ONCE(pwr->pmqos_max_pwrlevel));
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-		device->pwrctrl.pwrlevels[pwr->thermal_pwrlevel].gpu_freq);
+		device->pwrctrl.pwrlevels[max_pwrlevel].gpu_freq);
 }
 
 static ssize_t gpuclk_store(struct device *dev,
@@ -939,9 +941,11 @@ static ssize_t min_clock_mhz_store(struct device *dev,
 static ssize_t _max_clock_mhz_show(struct kgsl_device *device, char *buf)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 max_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+				READ_ONCE(pwr->pmqos_max_pwrlevel));
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-		pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq / 1000000);
+		pwr->pwrlevels[max_pwrlevel].gpu_freq / 1000000);
 }
 
 static ssize_t max_clock_mhz_show(struct device *dev,
