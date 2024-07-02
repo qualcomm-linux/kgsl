@@ -8,6 +8,7 @@
 #include <linux/compat.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/scatterlist.h>
 #include <linux/qcom-iommu-util.h>
