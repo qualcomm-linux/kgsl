@@ -488,5 +488,4 @@ u32 gen8_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
  */
 int gen8_gmu_clock_set_rate(struct adreno_device *adreno_dev, u32 req_freq);
 
-bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device);
 #endif
