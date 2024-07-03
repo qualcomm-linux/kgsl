@@ -786,7 +786,7 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	header->slice_id = info->slice_id;
 
 	read_sel = GEN8_SP_READ_SEL_VAL(info->slice_id, info->location_id,
-			info->pipe_id, info->statetype_id, info->sp_id, info->usptp_id);
+			info->pipe_id, info->statetype_id, info->usptp_id, info->sp_id);
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
 
@@ -922,7 +922,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 					/* Program the aperture */
 					ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL, GEN8_SP_READ_SEL_VAL
 						(j, cluster->location_id, cluster->pipe_id,
-						cluster->statetype, sp, usptp));
+						cluster->statetype, usptp, sp));
 
 					for (; regs[0] != UINT_MAX; regs += 2) {
 						count = REG_COUNT(regs);
