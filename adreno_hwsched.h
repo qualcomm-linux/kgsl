@@ -291,4 +291,16 @@ int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem);
  */
 void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	struct adreno_hw_fence_entry *entry);
+
+/**
+ * adreno_gmu_context_queue_read - Read data from context queue
+ * @drawctxt: Pointer to the adreno draw context
+ * @output: Pointer to read the data into
+ * @read_idx: Index to read the data from
+ * @size: Number of dwords to read from the context queue
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_gmu_context_queue_read(struct adreno_context *drawctxt, u32 *output,
+	u32 read_idx, u32 size);
 #endif
