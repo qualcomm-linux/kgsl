@@ -772,6 +772,14 @@ bool gen7_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+static bool gen7_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN7_GPU_GMU_CX_GMU_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -1489,7 +1497,14 @@ static void gen7_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	_do_gbif_halt(device, GEN7_GBIF_HALT, GEN7_GBIF_HALT_ACK,
 			GEN7_GBIF_ARB_HALT_MASK, "CX");
 
-	if (gen7_gmu_gx_is_on(adreno_dev))
+	/*
+	 * GX_CXO_CLK is needed to access RBBM_SW_RESET_CMD register. There are
+	 * scenarios where the IFPC exit sequence is still in progress, and the
+	 * above clock may not be enabled. This situation leads to unclocked
+	 * access. Thus, trigger RBBM_SW_RESET_CMD only when GPU is fully active
+	 * i.e., IFPC sequence is completed.
+	 */
+	if (gen7_gmu_gx_is_on(adreno_dev) && gen7_gmu_rpmh_pwr_state_is_active(device))
 		kgsl_regwrite(device, GEN7_RBBM_SW_RESET_CMD, 0x1);
 
 	/* Make sure above writes are posted before turning off power resources */

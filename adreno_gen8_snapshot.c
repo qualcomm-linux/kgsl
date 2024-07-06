@@ -1438,82 +1438,6 @@ static void gen8_snapshot_debugbus(struct adreno_device *adreno_dev,
 	}
 }
 
-/* gen8_snapshot_sqe() - Dump SQE data in snapshot */
-static size_t gen8_snapshot_sqe(struct kgsl_device *device, u8 *buf,
-		size_t remain, void *priv)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
-	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
-
-	if (remain < DEBUG_SECTION_SZ(GEN8_SQE_FW_SNAPSHOT_DWORDS)) {
-		SNAPSHOT_ERR_NOMEM(device, "SQE VERSION DEBUG");
-		return 0;
-	}
-
-	/* Dump the SQE firmware version */
-	header->type = SNAPSHOT_DEBUG_SQE_VERSION;
-	header->size = GEN8_SQE_FW_SNAPSHOT_DWORDS;
-	memcpy(data, fw->memdesc->hostptr, (GEN8_SQE_FW_SNAPSHOT_DWORDS * sizeof(u32)));
-
-	return DEBUG_SECTION_SZ(GEN8_SQE_FW_SNAPSHOT_DWORDS);
-}
-
-/* gen8_snapshot_aqe() - Dump AQE data in snapshot */
-static size_t gen8_snapshot_aqe(struct kgsl_device *device, u8 *buf,
-		size_t remain, void *priv)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
-	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
-
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
-		return 0;
-
-	if (remain < DEBUG_SECTION_SZ(1)) {
-		SNAPSHOT_ERR_NOMEM(device, "AQE VERSION DEBUG");
-		return 0;
-	}
-
-	/* Dump the AQE firmware version */
-	header->type = SNAPSHOT_DEBUG_AQE_VERSION;
-	header->size = 1;
-	*data = fw->version;
-
-	return DEBUG_SECTION_SZ(1);
-}
-
-/* Snapshot the preemption related buffers */
-static size_t snapshot_preemption_record(struct kgsl_device *device,
-	u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-	u8 *ptr = buf + sizeof(*header);
-	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
-					device->snapshot_ctxt_record_size);
-
-	ctxt_record_size = min_t(u64, ctxt_record_size, memdesc->size);
-
-	if (remain < (ctxt_record_size + sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return 0;
-	}
-
-	header->size = ctxt_record_size >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, ctxt_record_size);
-
-	return ctxt_record_size + sizeof(*header);
-}
-
 static void gen8_reglist_snapshot(struct kgsl_device *device,
 					struct kgsl_snapshot *snapshot)
 {
@@ -1685,7 +1609,6 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_ringbuffer *rb;
 	u32 i;
 	const struct adreno_gen8_core *gpucore = to_gen8_core(ADRENO_DEVICE(device));
 	int is_current_rt;
@@ -1702,14 +1625,6 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_snapshot_debugbus(adreno_dev, snapshot);
 
 	gen8_cx_misc_regs_snapshot(device, snapshot);
-
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen8_snapshot_sqe, NULL);
-
-	/* AQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, gen8_snapshot_aqe, NULL);
 
 	if (!adreno_gx_is_on(adreno_dev))
 		return;
@@ -1742,6 +1657,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
 	}
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	/* Assert the isStatic bit before triggering snapshot */
 	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x1);
@@ -1795,14 +1713,8 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x0);
 
 	/* Preemption record */
-	if (adreno_is_preemption_enabled(adreno_dev)) {
-		FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
-			kgsl_snapshot_add_section(device,
-				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
-				snapshot, snapshot_preemption_record,
-				rb->preemption_desc);
-		}
-	}
+	adreno_snapshot_preemption_record(device, snapshot);
+
 	if (is_current_rt)
 		sched_set_fifo(current);
 }

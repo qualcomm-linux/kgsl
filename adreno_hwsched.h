@@ -52,7 +52,10 @@ struct adreno_hwsched_ops {
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
 		struct kgsl_sync_fence *kfence);
-
+	/**
+	 * @get_rb_hostptr - Target specific function to get ringbuffer host pointer
+	 */
+	void *(*get_rb_hostptr)(struct adreno_device *adreno_dev, u64 gpuaddr, u32 size);
 };
 
 /**
@@ -245,11 +248,13 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
 u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_log_pending_fences - Log any pending hardware fences if soccp vote failed
+ * adreno_hwsched_log_destroy_pending_fences - Log and destroy any pending hardware fences if soccp
+ * vote failed
  * @adreno_dev: pointer to the adreno device
  * @dev: Pointer to the gmu pdev device
  */
-void adreno_hwsched_log_pending_hw_fences(struct adreno_device *adreno_dev, struct device *dev);
+void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+	struct device *dev);
 
 /**
  * adreno_hwsched_syncobj_kfence_put - Put back kfence context refcounts for this sync object
@@ -279,4 +284,11 @@ bool adreno_hwsched_log_nonfatal_gpu_fault(struct adreno_device *adreno_dev,
  */
 int adreno_hwsched_poll_msg_queue_write_index(struct kgsl_memdesc *hfi_mem);
 
+/**
+ * adreno_hwsched_remove_hw_fence_entry - Remove hardware fence entry
+ * @adreno_dev: pointer to the adreno device
+ * @entry: Pointer to the hardware fence entry
+ */
+void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
+	struct adreno_hw_fence_entry *entry);
 #endif

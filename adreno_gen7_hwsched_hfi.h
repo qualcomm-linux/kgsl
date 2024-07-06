@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_HFI_H_
@@ -286,18 +286,6 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence);
 
 /**
- * gen7_hwsched_drain_context_hw_fences - Drain context's hardware fences via GMU
- * @adreno_dev: Pointer to adreno device
- * @drawctxt: Pointer to the adreno context which is to be flushed
- *
- * Trigger hardware fences that were never dispatched to GMU
- *
- * Return: Zero on success or negative error on failure
- */
-int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt);
-
-/**
  * gen7_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
  * from a context have been sent to the TxQueue or not
  * @adreno_dev: Pointer to adreno device
@@ -310,14 +298,6 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
  */
 int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt);
-
-/**
- * gen7_remove_hw_fence_entry - Remove hardware fence entry
- * @adreno_dev: pointer to the adreno device
- * @entry: Pointer to the hardware fence entry
- */
-void gen7_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
 
 /**
  * gen7_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset
@@ -349,4 +329,14 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev);
  */
 int gen7_hwsched_boot_gpu(struct adreno_device *adreno_dev);
 
+/**
+ * gen7_hwsched_get_rb_hostptr - Get rinbuffer host pointer
+ * @adreno_dev: pointer to the adreno device
+ * @gpuaddr: ringbuffer gpu address
+ * @size: size of the ringbuffer
+ *
+ * Return: Host pointer of the gpu ringbuffer
+ */
+void *gen7_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size);
 #endif

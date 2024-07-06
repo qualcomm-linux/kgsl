@@ -441,6 +441,24 @@ void kgsl_mem_entry_destroy_deferred(struct kref *kref)
 	queue_work(kgsl_driver.lockless_workqueue, &entry->work);
 }
 
+/* Scheduled by kgsl_context_destroy_deferred() */
+static void _deferred_context_destroy(struct work_struct *work)
+{
+	struct kgsl_context *context =
+		container_of(work, struct kgsl_context, deferred_destroy_ws);
+
+	kgsl_context_destroy(&context->refcount);
+}
+
+void kgsl_context_destroy_deferred(struct kref *kref)
+{
+	struct kgsl_context *context =
+		container_of(kref, struct kgsl_context, refcount);
+
+	INIT_WORK(&context->deferred_destroy_ws, _deferred_context_destroy);
+	queue_work(kgsl_driver.lockless_workqueue, &context->deferred_destroy_ws);
+}
+
 /* Commit the entry to the process so it can be accessed by other operations */
 static void kgsl_mem_entry_commit_process(struct kgsl_mem_entry *entry)
 {

@@ -140,7 +140,6 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
-	GEN8_VSC_BIN_SIZE,
 	GEN8_VSC_KMD_DBG_ECO_CNTL,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
@@ -165,7 +164,6 @@ static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_TRAP_BASE_LO,
 	GEN8_UCHE_TRAP_BASE_HI,
 	GEN8_UCHE_CLIENT_PF,
-	GEN8_VSC_BIN_SIZE,
 	GEN8_RB_CMP_NC_MODE_CNTL,
 	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
 	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO,
@@ -920,6 +918,9 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       FIELD_PREP(GENMASK(30, 18), count) |
 				       FIELD_PREP(BIT(31), regs[i].noaccess),
 				       PIPE_LPAC, 0, 0);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 }
 
 static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
@@ -1165,6 +1166,9 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 	}
 	mutex_unlock(&gen8_dev->nc_mutex);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }
@@ -2397,6 +2401,8 @@ int gen8_probe_common(struct platform_device *pdev,
 static u32 gen8_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE, GEN8_CP_RB_BASE_LO_GC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE_HI, GEN8_CP_RB_BASE_HI_GC),
+	ADRENO_REG_DEFINE(ADRENO_REG_CP_LPAC_RB_BASE, GEN8_CP_RB_BASE_LO_LPAC),
+	ADRENO_REG_DEFINE(ADRENO_REG_CP_LPAC_RB_BASE_HI, GEN8_CP_RB_BASE_HI_LPAC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR, GEN8_CP_RB_RPTR_BR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_WPTR, GEN8_CP_RB_WPTR_GC),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_ME_CNTL, GEN8_CP_SQE_CNTL),

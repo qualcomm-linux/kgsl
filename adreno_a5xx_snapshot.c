@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -721,34 +721,6 @@ out:
 	return (count * 8) + sizeof(*header);
 }
 
-/* Snapshot a preemption record buffer */
-static size_t snapshot_preemption_record(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-
-	u8 *ptr = buf + sizeof(*header);
-
-	if (remain < (SZ_64K + sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return 0;
-	}
-
-	header->size = SZ_64K >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, SZ_64K);
-
-	return SZ_64K + sizeof(*header);
-}
-
-
 static void _a5xx_do_crashdump(struct kgsl_device *device)
 {
 	unsigned long wait_time;
@@ -938,9 +910,7 @@ void a5xx_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	unsigned int i;
 	u32 hi, lo;
-	struct adreno_ringbuffer *rb;
 	struct registers regs;
 
 	/* Disable Clock gating temporarily for the debug bus to work */
@@ -1038,15 +1008,7 @@ void a5xx_snapshot(struct adreno_device *adreno_dev,
 	a5xx_snapshot_shader(device, snapshot);
 
 	/* Preemption record */
-	if (adreno_is_preemption_enabled(adreno_dev)) {
-		FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
-			kgsl_snapshot_add_section(device,
-				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
-				snapshot, snapshot_preemption_record,
-				rb->preemption_desc);
-		}
-	}
-
+	adreno_snapshot_preemption_record(device, snapshot);
 }
 
 static int _a5xx_crashdump_init_shader(struct a5xx_shader_block *block,

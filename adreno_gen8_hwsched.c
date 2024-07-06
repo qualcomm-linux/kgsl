@@ -62,264 +62,6 @@ void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
 	adreno_hwsched_fault(adreno_dev, fault);
 }
 
-static size_t gen8_hwsched_snapshot_rb(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv)
-{
-	struct kgsl_snapshot_rb_v2 *header = (struct kgsl_snapshot_rb_v2 *)buf;
-	u32 *data = (u32 *)(buf + sizeof(*header));
-	struct kgsl_memdesc *rb = (struct kgsl_memdesc *)priv;
-
-	if (remain < rb->size + sizeof(*header)) {
-		SNAPSHOT_ERR_NOMEM(device, "RB");
-		return 0;
-	}
-
-	header->start = 0;
-	header->end = rb->size >> 2;
-	header->rptr = 0;
-	header->rbsize = rb->size >> 2;
-	header->count = rb->size >> 2;
-	header->timestamp_queued = 0;
-	header->timestamp_retired = 0;
-	header->gpuaddr = rb->gpuaddr;
-	header->id = 0;
-
-	memcpy(data, rb->hostptr, rb->size);
-
-	return rb->size + sizeof(*header);
-}
-
-static void gen8_hwsched_snapshot_preemption_record(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md, u64 offset)
-{
-	struct kgsl_snapshot_section_header *section_header =
-		(struct kgsl_snapshot_section_header *)snapshot->ptr;
-	u8 *dest = snapshot->ptr + sizeof(*section_header);
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)dest;
-	u64 ctxt_record_size = max_t(u64, GEN8_SNAPSHOT_CTXRECORD_SIZE_IN_BYTES,
-				device->snapshot_ctxt_record_size);
-	size_t section_size;
-
-	section_size = sizeof(*section_header) + sizeof(*header) + ctxt_record_size;
-	if (snapshot->remain < section_size) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return;
-	}
-
-	section_header->magic = SNAPSHOT_SECTION_MAGIC;
-	section_header->id = KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2;
-	section_header->size = section_size;
-
-	header->size = ctxt_record_size >> 2;
-	header->gpuaddr = md->gpuaddr + offset;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	dest += sizeof(*header);
-
-	memcpy(dest, md->hostptr + offset, ctxt_record_size);
-
-	snapshot->ptr += section_header->size;
-	snapshot->remain -= section_header->size;
-	snapshot->size += section_header->size;
-}
-
-static void snapshot_preemption_records(struct kgsl_device *device,
-	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
-{
-	u64 ctxt_record_size = md->size;
-	u64 offset;
-
-	do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
-
-	/* All preemption records exist as a single mem alloc entry */
-	for (offset = 0; offset < md->size; offset += ctxt_record_size)
-		gen8_hwsched_snapshot_preemption_record(device, snapshot, md,
-			offset);
-}
-
-static void *get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size)
-{
-	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
-	u64 offset;
-	u32 i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct kgsl_memdesc *md = hw_hfi->mem_alloc_table[i].md;
-
-		if (md && (gpuaddr >= md->gpuaddr) &&
-			((gpuaddr + size) <= (md->gpuaddr + md->size))) {
-			offset = gpuaddr - md->gpuaddr;
-			return md->hostptr + offset;
-		}
-	}
-
-	return NULL;
-}
-
-static u32 gen8_copy_gpu_global(void *out, void *in, u32 size)
-{
-	if (out && in) {
-		memcpy(out, in, size);
-		return size;
-	}
-
-	return 0;
-}
-
-static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot, struct payload_section *payload)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct kgsl_snapshot_section_header *section_header =
-		(struct kgsl_snapshot_section_header *)snapshot->ptr;
-	u8 *buf = snapshot->ptr + sizeof(*section_header);
-	struct kgsl_snapshot_rb_v2 *header = (struct kgsl_snapshot_rb_v2 *)buf;
-	u32 *data = (u32 *)(buf + sizeof(*header));
-	u32 size = gen8_hwsched_parse_payload(payload, KEY_RB_SIZEDWORDS) << 2;
-	u64 lo, hi, gpuaddr;
-	void *rb_hostptr;
-	char str[16];
-
-	lo = gen8_hwsched_parse_payload(payload, KEY_RB_GPUADDR_LO);
-	hi = gen8_hwsched_parse_payload(payload, KEY_RB_GPUADDR_HI);
-	gpuaddr = hi << 32 | lo;
-
-	/* Sanity check to make sure there is enough for the header */
-	if (snapshot->remain < sizeof(*section_header))
-		goto err;
-
-	rb_hostptr = get_rb_hostptr(adreno_dev, gpuaddr, size);
-
-	/* If the gpuaddress and size don't match any allocation, then abort */
-	if (((snapshot->remain - sizeof(*section_header)) <
-	    (size + sizeof(*header))) ||
-	    !gen8_copy_gpu_global(data, rb_hostptr, size))
-		goto err;
-
-	if (device->dump_all_ibs) {
-		u64 rbaddr, lpac_rbaddr;
-
-		kgsl_regread64(device, GEN8_CP_RB_BASE_LO_GC,
-			       GEN8_CP_RB_BASE_HI_GC, &rbaddr);
-		kgsl_regread64(device, GEN8_CP_RB_BASE_LO_LPAC,
-			       GEN8_CP_RB_BASE_HI_LPAC, &lpac_rbaddr);
-
-		/* Parse all IBs from current RB */
-		if ((rbaddr == gpuaddr) || (lpac_rbaddr == gpuaddr))
-			adreno_snapshot_dump_all_ibs(device, rb_hostptr, snapshot);
-	}
-
-	header->start = 0;
-	header->end = size >> 2;
-	header->rptr = gen8_hwsched_parse_payload(payload, KEY_RB_RPTR);
-	header->wptr = gen8_hwsched_parse_payload(payload, KEY_RB_WPTR);
-	header->rbsize = size >> 2;
-	header->count = size >> 2;
-	header->timestamp_queued = gen8_hwsched_parse_payload(payload,
-			KEY_RB_QUEUED_TS);
-	header->timestamp_retired = gen8_hwsched_parse_payload(payload,
-			KEY_RB_RETIRED_TS);
-	header->gpuaddr = gpuaddr;
-	header->id = gen8_hwsched_parse_payload(payload, KEY_RB_ID);
-
-	section_header->magic = SNAPSHOT_SECTION_MAGIC;
-	section_header->id = KGSL_SNAPSHOT_SECTION_RB_V2;
-	section_header->size = size + sizeof(*header) + sizeof(*section_header);
-
-	snapshot->ptr += section_header->size;
-	snapshot->remain -= section_header->size;
-	snapshot->size += section_header->size;
-
-	return;
-err:
-	snprintf(str, sizeof(str), "RB addr:0x%llx", gpuaddr);
-	SNAPSHOT_ERR_NOMEM(device, str);
-}
-
-static bool parse_payload_rb(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot)
-{
-	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-	bool ret = false;
-
-	/* Skip if we didn't receive a context bad HFI */
-	if (!cmd->hdr)
-		return false;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == PAYLOAD_RB) {
-			adreno_hwsched_snapshot_rb_payload(adreno_dev,
-							   snapshot, payload);
-			ret = true;
-		}
-
-		i += sizeof(*payload) + (payload->dwords << 2);
-	}
-
-	return ret;
-}
-
-static int snapshot_context_queue(int id, void *ptr, void *data)
-{
-	struct kgsl_snapshot *snapshot = data;
-	struct kgsl_context *context = ptr;
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
-	struct gmu_mem_type_desc desc;
-
-	if (!context->gmu_registered)
-		return 0;
-
-	desc.memdesc = &drawctxt->gmu_context_queue;
-	desc.type = SNAPSHOT_GMU_MEM_CONTEXT_QUEUE;
-	kgsl_snapshot_add_section(context->device,
-		KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, adreno_snapshot_gmu_mem, &desc);
-
-	return 0;
-}
-
-/* Snapshot AQE buffer */
-static size_t snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
-	size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-
-	u8 *ptr = buf + sizeof(*header);
-
-	if (IS_ERR_OR_NULL(memdesc) || memdesc->size == 0)
-		return 0;
-
-	if (remain < (memdesc->size + sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "AQE BUFFER");
-		return 0;
-	}
-
-	header->size = memdesc->size >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase = MMU_DEFAULT_TTBR0(device);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, memdesc->size);
-
-	return memdesc->size + sizeof(*header);
-}
-
 void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -339,7 +81,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	 * payloads are not present, fall back to dumping ringbuffers
 	 * based on MEMKIND_RB
 	 */
-	parse_payload = parse_payload_rb(adreno_dev, snapshot);
+	parse_payload = adreno_hwsched_parse_payload_rb(adreno_dev, snapshot);
 
 	if (parse_payload)
 		skip_memkind_rb = true;
@@ -350,7 +92,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 		if (entry->desc.mem_kind == HFI_MEMKIND_RB && !skip_memkind_rb)
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_RB_V2,
-				snapshot, gen8_hwsched_snapshot_rb,
+				snapshot, adreno_hwsched_snapshot_rb,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_SCRATCH)
@@ -372,7 +114,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_NON_SECURE)
-			snapshot_preemption_records(device, snapshot,
+			adreno_hwsched_snapshot_preemption_records(device, snapshot,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_PREEMPT_SCRATCH)
@@ -384,7 +126,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 		if (entry->desc.mem_kind == HFI_MEMKIND_AQE_BUFFER)
 			kgsl_snapshot_add_section(device,
 				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
-				snapshot, snapshot_aqe_buffer,
+				snapshot, adreno_hwsched_snapshot_aqe_buffer,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_HW_FENCE) {
@@ -399,9 +141,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 
 	}
 
-	read_lock(&device->context_lock);
-	idr_for_each(&device->context_idr, snapshot_context_queue, snapshot);
-	read_unlock(&device->context_lock);
+	adreno_hwsched_snapshot_context_queue(device, snapshot);
 }
 
 static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
@@ -465,14 +205,15 @@ static void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_o
 	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hw_hfi->hw_fence.flags);
 	spin_unlock(&hw_hfi->hw_fence.lock);
 
-	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
-
 	/*
 	 * It is possible that some hardware fences were created while we were in slumber. Since
 	 * soccp power vote failed, these hardware fences may never be signaled. Hence, log them
 	 * for debug purposes.
 	 */
-	adreno_hwsched_log_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+	adreno_hwsched_log_destroy_pending_hw_fences(adreno_dev, &gmu->pdev->dev);
+	adreno_mark_for_coldboot(adreno_dev);
+
+	adreno_hwsched_deregister_hw_fence(adreno_dev);
 }
 
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
@@ -1145,7 +886,7 @@ static void drain_ctx_hw_fences_cpu(struct adreno_device *adreno_dev,
 	spin_lock(&drawctxt->lock);
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
 		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
-		gen8_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
 	spin_unlock(&drawctxt->lock);
 }
@@ -1610,7 +1351,7 @@ static void process_context_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		/* Delete the fences that GMU has sent to the TxQueue */
 		if (timestamp_cmp(hdr->out_fence_ts, (u32)entry->cmd.ts) >= 0) {
-			gen8_remove_hw_fence_entry(adreno_dev, entry);
+			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 			continue;
 		}
 
@@ -1695,7 +1436,7 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 
 		context = &entry->drawctxt->base;
 
-		gen8_remove_hw_fence_entry(adreno_dev, entry);
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 
 		kgsl_context_put(context);
 	}
@@ -1703,26 +1444,69 @@ static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_d
 	return ret;
 }
 
-static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
+static int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_hw_fence_entry *entry, *tmp;
+	int ret = 0;
+
+	/* We don't need the drawctxt lock here as this context has already been invalidated */
+	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
+
+		/* Any error here is fatal */
+		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
+			HW_FENCE_FLAG_SKIP_MEMSTORE);
+		if (ret)
+			break;
+
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+	}
+
+	return ret;
+}
+
+static struct adreno_context *_get_guilty_context(struct kgsl_device *device)
+{
 	struct kgsl_context *context = NULL;
 	struct adreno_context *guilty = NULL;
 	int id;
 
 	read_lock(&device->context_lock);
 	idr_for_each_entry(&device->context_idr, context, id) {
-		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv)) {
+		if (test_and_clear_bit(KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE, &context->priv) &&
+			_kgsl_context_get(context)) {
 			guilty = ADRENO_CONTEXT(context);
 			break;
 		}
 	}
 	read_unlock(&device->context_lock);
 
-	if (!guilty)
-		return 0;
+	return guilty;
+}
 
-	return gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_context *guilty = _get_guilty_context(device);
+	int ret = 0;
+
+	/*
+	 * We don't need drawctxt spinlock to signal these fences since the only other place
+	 * which can retire these fences is the context detach path and device mutex
+	 * ensures mutual exclusion between recovery thread and detach thread.
+	 */
+	while (guilty) {
+		ret = gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+
+		kgsl_context_put(&guilty->base);
+
+		if (ret)
+			break;
+
+		guilty = _get_guilty_context(device);
+	}
+
+	return ret;
 }
 
 static int handle_hw_fences_after_reset(struct adreno_device *adreno_dev)
@@ -1821,6 +1605,7 @@ const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.submit_drawobj = gen8_hwsched_submit_drawobj,
 	.preempt_count = gen8_hwsched_preempt_count_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
+	.get_rb_hostptr = gen8_hwsched_get_rb_hostptr,
 };
 
 int gen8_hwsched_probe(struct platform_device *pdev,

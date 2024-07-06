@@ -53,6 +53,7 @@ def kgsl_get_srcs():
         "adreno_gen8_rpmh.c",
         "adreno_gen8_snapshot.c",
         "adreno_hwsched.c",
+        "adreno_hwsched_snapshot.c",
         "adreno_ioctl.c",
         "adreno_perfcounter.c",
         "adreno_ringbuffer.c",
@@ -102,6 +103,11 @@ def external_deps(target, variant):
         deplist = deplist + [
             "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
+            ]
+
+    if target in [ "monaco" ]:
+        deplist = deplist + [
+            "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
 
     native.genrule(

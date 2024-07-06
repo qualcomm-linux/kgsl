@@ -1355,6 +1355,11 @@ struct kgsl_gpuobj_alloc {
 /* Let the user know that this header supports the gpuobj metadata */
 #define KGSL_GPUOBJ_ALLOC_METADATA_MAX 64
 
+/*
+ * For 32 bit MMUs, this IOCTL returns 32-bit virtual address.
+ * For 64-bit MMUs, if KGSL_MEMFLAGS_FORCE_32BIT is not set, this
+ * IOCTL will return 64-bit VA for both 64-bit and compat tasks.
+ */
 #define IOCTL_KGSL_GPUOBJ_ALLOC \
 	_IOWR(KGSL_IOC_TYPE, 0x45, struct kgsl_gpuobj_alloc)
 
