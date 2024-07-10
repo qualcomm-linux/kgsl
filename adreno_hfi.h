@@ -244,6 +244,11 @@ enum hfi_mem_kind {
 	HFI_MEMKIND_AQE_BUFFER,
 	/** @HFI_MEMKIND_HW_FENCE_SHADOW: Shadow memory used for caching external input fences */
 	HFI_MEMKIND_HW_FENCE_SHADOW,
+	/**
+	 * @HFI_MEMKIND_FREQMGR_SCRATCH: Scratch memory for FreqMgr task to retain information
+	 * related to GMU based DCVS.
+	 */
+	HFI_MEMKIND_FREQMGR_SCRATCH,
 	HFI_MEMKIND_MAX,
 };
 
@@ -275,6 +280,7 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
+	[HFI_MEMKIND_FREQMGR_SCRATCH] = "GMU FREQMGR SCRATCH",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
