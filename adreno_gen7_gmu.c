@@ -2282,7 +2282,7 @@ static int gen7_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	if (buslevel == pwr->cur_buslevel)
 		buslevel = INVALID_DCVS_IDX;
 
-	if ((ab == pwr->cur_ab) || (ab == 0))
+	if ((ab == pwr->cur_ab) || ((ab == 0) && (adreno_dev->gmu_ab)))
 		ab = INVALID_AB_VALUE;
 
 	if ((ab == INVALID_AB_VALUE) && (buslevel == INVALID_DCVS_IDX))
