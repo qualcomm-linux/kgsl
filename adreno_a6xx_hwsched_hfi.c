@@ -5,7 +5,6 @@
  */
 
 #include <linux/iommu.h>
-#include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
 
 #include "adreno.h"
@@ -1570,67 +1569,6 @@ void a6xx_hwsched_hfi_remove(struct adreno_device *adreno_dev)
 		kthread_stop(hw_hfi->f2h_task);
 }
 
-static void a6xx_add_profile_events(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time)
-{
-	unsigned long flags;
-	u64 time_in_s;
-	unsigned long time_in_ns;
-	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
-	struct kgsl_context *context = drawobj->context;
-	struct submission_info info = {0};
-
-	if (!time)
-		return;
-
-	/*
-	 * Here we are attempting to create a mapping between the
-	 * GPU time domain (alwayson counter) and the CPU time domain
-	 * (local_clock) by sampling both values as close together as
-	 * possible. This is useful for many types of debugging and
-	 * profiling. In order to make this mapping as accurate as
-	 * possible, we must turn off interrupts to avoid running
-	 * interrupt handlers between the two samples.
-	 */
-
-	local_irq_save(flags);
-
-	/* Read always on registers */
-	time->ticks = a6xx_read_alwayson(adreno_dev);
-
-	/* Trace the GPU time to create a mapping to ftrace time */
-	trace_adreno_cmdbatch_sync(context->id, context->priority,
-		drawobj->timestamp, time->ticks);
-
-	/* Get the kernel clock for time since boot */
-	time->ktime = local_clock();
-
-	/* Get the timeofday for the wall time (for the user) */
-	ktime_get_real_ts64(&time->utime);
-
-	local_irq_restore(flags);
-
-	/* Return kernel clock time to the client if requested */
-	time_in_s = time->ktime;
-	time_in_ns = do_div(time_in_s, 1000000000);
-
-	info.inflight = -1;
-	info.rb_id = adreno_get_level(context);
-	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
-
-	cmdobj->submit_ticks = time->ticks;
-
-	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_SUBMIT,
-		pid_nr(context->proc_priv->pid),
-		context->id, drawobj->timestamp,
-		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
-	trace_adreno_cmdbatch_submitted(drawobj, &info, time->ticks,
-		(unsigned long) time_in_s, time_in_ns / 1000, 0);
-
-	log_kgsl_cmdbatch_submitted_event(context->id, drawobj->timestamp,
-		context->priority, drawobj->flags);
-}
-
 static u32 get_next_dq(u32 priority)
 {
 	struct dq_info *info = &a6xx_hfi_dqs[priority];
@@ -1820,7 +1758,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	if (!cmdobj)
 		goto done;
 
-	a6xx_add_profile_events(adreno_dev, cmdobj, time);
+	adreno_hwsched_add_profile_events(adreno_dev, cmdobj, time);
 
 	/*
 	 * Put the profiling information in the user profiling buffer.

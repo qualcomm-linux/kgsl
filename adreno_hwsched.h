@@ -303,4 +303,30 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
  */
 int adreno_gmu_context_queue_read(struct adreno_context *drawctxt, u32 *output,
 	u32 read_idx, u32 size);
+
+/**
+ * adreno_gmu_context_queue_write - Write data to context queue
+ *
+ * @adreno_dev: Pointer to adreno device structure
+ * @gmu_context_queue: Pointer to the memory descriptor for context queue
+ * @msg: Pointer to the message data to be written
+ * @size_bytes: Size of the message data in bytes
+ * @drawobj: Pointer to the draw object
+ * @time: Pointer to the submission time information
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_gmu_context_queue_write(struct adreno_device *adreno_dev,
+	struct kgsl_memdesc *gmu_context_queue, u32 *msg, u32 size_bytes,
+	struct kgsl_drawobj *drawobj, struct adreno_submit_time *time);
+
+/**
+ * adreno_hwsched_add_profile_events - Add profiling events
+ *
+ * @adreno_dev: Pointer to the adreno device structure
+ * @cmdobj: Pointer to the command object
+ * @time: Pointer to the submission time information
+ */
+void adreno_hwsched_add_profile_events(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time);
 #endif
