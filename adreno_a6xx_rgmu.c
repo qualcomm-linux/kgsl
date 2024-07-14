@@ -519,6 +519,8 @@ static int a6xx_rgmu_disable_gdsc(struct adreno_device *adreno_dev)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, true);
+
 	/* Wait up to 5 seconds for the regulator to go off */
 	if (kgsl_regulator_disable_wait(rgmu->cx_gdsc, 5000))
 		return 0;
@@ -591,6 +593,7 @@ static int a6xx_rgmu_enable_clks(struct adreno_device *adreno_dev)
 static int a6xx_rgmu_enable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
 	if (IS_ERR_OR_NULL(rgmu->cx_gdsc))
@@ -601,6 +604,7 @@ static int a6xx_rgmu_enable_gdsc(struct adreno_device *adreno_dev)
 		dev_err(&rgmu->pdev->dev,
 			"Fail to enable CX gdsc:%d\n", ret);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	return ret;
 }
 

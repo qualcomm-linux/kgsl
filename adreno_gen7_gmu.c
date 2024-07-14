@@ -360,6 +360,7 @@ int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 		dev_err(&gmu->pdev->dev,
 			"Failed to enable GMU CX gdsc, error %d\n", ret);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, false);
 	clear_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	return ret;
 }
@@ -367,7 +368,9 @@ int gen7_gmu_enable_gdsc(struct adreno_device *adreno_dev)
 void gen7_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	kgsl_mmu_send_tlb_hint(&device->mmu, true);
 	reinit_completion(&gmu->gdsc_gate);
 	set_bit(GMU_PRIV_CX_GDSC_WAIT, &gmu->flags);
 	regulator_disable(gmu->cx_gdsc);
@@ -2025,13 +2028,6 @@ static int gen7_gmu_boot(struct adreno_device *adreno_dev)
 	ret = gen7_gmu_enable_clks(adreno_dev, 0);
 	if (ret)
 		goto gdsc_off;
-
-	/*
-	 * TLB operations are skipped during slumber. Incase CX doesn't
-	 * go down, it can result in incorrect translations due to stale
-	 * TLB entries. Flush TLB before boot up to ensure fresh start.
-	 */
-	kgsl_mmu_flush_tlb(&device->mmu);
 
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
