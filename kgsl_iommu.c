@@ -306,12 +306,12 @@ flush:
 		struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
 
 		/* Skip TLB Operations if GPU is in slumber */
-		if (mutex_trylock(&device->mutex)) {
+		if (rt_mutex_trylock(&device->mutex)) {
 			if (device->state == KGSL_STATE_SLUMBER) {
-				mutex_unlock(&device->mutex);
+				rt_mutex_unlock(&device->mutex);
 				return 0;
 			}
-			mutex_unlock(&device->mutex);
+			rt_mutex_unlock(&device->mutex);
 		}
 	}
 
