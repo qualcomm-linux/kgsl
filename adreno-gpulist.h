@@ -2506,60 +2506,6 @@ static const struct kgsl_regmap_list a663_hwcg_regs[] = {
 	{A6XX_GMUCX_GMU_WFI_CONFIG, 0x00000000},
 };
 
-/* A633 protected register list */
-static const struct adreno_protected_regs a663_protected_regs[] = {
-	{ A6XX_CP_PROTECT_REG + 0, 0x00000, 0x004ff, 0 },
-	{ A6XX_CP_PROTECT_REG + 1, 0x00501, 0x00506, 0 },
-	{ A6XX_CP_PROTECT_REG + 2, 0x0050b, 0x007ff, 0 },
-	{ A6XX_CP_PROTECT_REG + 3, 0x0050e, 0x0050e, 1 },
-	{ A6XX_CP_PROTECT_REG + 4, 0x00510, 0x00510, 1 },
-	{ A6XX_CP_PROTECT_REG + 5, 0x00534, 0x00534, 1 },
-	{ A6XX_CP_PROTECT_REG + 6, 0x00800, 0x00882, 1 },
-	{ A6XX_CP_PROTECT_REG + 7, 0x008a0, 0x008a8, 1 },
-	{ A6XX_CP_PROTECT_REG + 8, 0x008ab, 0x008cf, 1 },
-	{ A6XX_CP_PROTECT_REG + 9, 0x008d0, 0x0098c, 0 },
-	{ A6XX_CP_PROTECT_REG + 10, 0x00900, 0x0094d, 1 },
-	{ A6XX_CP_PROTECT_REG + 11, 0x0098d, 0x00bff, 1 },
-	{ A6XX_CP_PROTECT_REG + 12, 0x00e00, 0x00e01, 1 },
-	{ A6XX_CP_PROTECT_REG + 13, 0x00e03, 0x00e0f, 1 },
-	{ A6XX_CP_PROTECT_REG + 14, 0x03c00, 0x03cc3, 1 },
-	{ A6XX_CP_PROTECT_REG + 15, 0x03cc4, 0x05cc3, 0 },
-	{ A6XX_CP_PROTECT_REG + 16, 0x08630, 0x087ff, 1 },
-	{ A6XX_CP_PROTECT_REG + 17, 0x08e00, 0x08e00, 1 },
-	{ A6XX_CP_PROTECT_REG + 18, 0x08e08, 0x08e08, 1 },
-	{ A6XX_CP_PROTECT_REG + 19, 0x08e50, 0x08e6f, 1 },
-	{ A6XX_CP_PROTECT_REG + 20, 0x08e80, 0x090ff, 1 },
-	{ A6XX_CP_PROTECT_REG + 21, 0x09624, 0x097ff, 1 },
-	{ A6XX_CP_PROTECT_REG + 22, 0x09e60, 0x09e71, 1 },
-	{ A6XX_CP_PROTECT_REG + 23, 0x09e78, 0x09fff, 1 },
-	{ A6XX_CP_PROTECT_REG + 24, 0x0a630, 0x0a7ff, 1 },
-	{ A6XX_CP_PROTECT_REG + 25, 0x0ae02, 0x0ae02, 1 },
-	{ A6XX_CP_PROTECT_REG + 26, 0x0ae50, 0x0af7f, 1 },
-	{ A6XX_CP_PROTECT_REG + 27, 0x0b604, 0x0b604, 1 },
-	{ A6XX_CP_PROTECT_REG + 28, 0x0b608, 0x0b60e, 1 },
-	{ A6XX_CP_PROTECT_REG + 29, 0x0be02, 0x0be03, 1 },
-	{ A6XX_CP_PROTECT_REG + 30, 0x0be20, 0x0bf7f, 1 },
-	{ A6XX_CP_PROTECT_REG + 31, 0x0d000, 0x0d5ff, 1 },
-	{ A6XX_CP_PROTECT_REG + 32, 0x0f000, 0x0fbff, 1 },
-	{ A6XX_CP_PROTECT_REG + 33, 0x0fc00, 0x11bff, 0 },
-	/* Note1:  lastspanunbound feature is enabled in
-	 *         CP_PROTECT_CNTL and hence this last
-	 *         protect register(REG_47) has infinite
-	 *         span.
-	 *
-	 * Note2:  Although we are protecting the SMMU
-	 *         range here the CP register protection
-	 *         interrupt will not fire for this range
-	 *         as GPU RAP can only cover the GPU 18-bit
-	 *         DW address space.  So max address offset
-	 *         is 0x3FFFF.  Also note that the max number
-	 *         of bits for address in violation in
-	 *         CP_PROT_STATUS is only 18.
-	 */
-	{ A6XX_CP_PROTECT_REG + 47, 0x11c00, 0x00000, 1 },
-	{ 0 },
-};
-
 static const struct adreno_a6xx_core adreno_gpu_core_a663 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A663, 6, 6, 3, ANY_ID),
@@ -2584,7 +2530,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a663 = {
 	.vbif_count = ARRAY_SIZE(a650_gbif_regs),
 	.hang_detect_cycles = 0xcfffff,
 	.veto_fal10 = true,
-	.protected_regs = a663_protected_regs,
+	.protected_regs = a660_protected_regs,
 	.disable_tseskip = true,
 	.highest_bank_bit = 13,
 	.pdc_in_aop = true,
