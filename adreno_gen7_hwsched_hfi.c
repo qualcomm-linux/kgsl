@@ -449,7 +449,7 @@ static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(dev,
 			"CP BV | Ringbuffer HW fault | status=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value_legacy(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
+				KEY_CP_BV_HW_FAULT));
 		break;
 	case GMU_CP_BV_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "CP BV Illegal instruction error\n");
@@ -654,7 +654,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(dev,
 			"CP BV | Ringbuffer HW fault | status=0x%8.8x\n",
 			gen7_hwsched_lookup_key_value(adreno_dev, PAYLOAD_FAULT_REGS,
-				KEY_CP_HW_FAULT));
+				KEY_CP_BV_HW_FAULT));
 		break;
 	case GMU_CP_BV_ILLEGAL_INST_ERROR:
 		dev_crit_ratelimited(dev, "CP BV Illegal instruction error\n");
