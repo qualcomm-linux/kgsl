@@ -496,7 +496,7 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	int i;
 	unsigned long flags;
 
-	/* Set up the CX timer just once */
+	/* Set it up during first boot or after suspend resume */
 	if (test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
 		return;
 
