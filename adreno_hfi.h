@@ -541,8 +541,8 @@ struct hfi_bwtable_cmd {
 
 struct opp_gx_desc {
 	u32 vote;
-	/* This is 'acdLvl' in gmu fw which is now repurposed for various dependency votes */
-	u32 dep_vote;
+	/* This is 'acdLvl' in gmu fw which is now repurposed for cx vote */
+	u32 cx_vote;
 	u32 freq;
 } __packed;
 

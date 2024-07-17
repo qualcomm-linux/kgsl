@@ -293,64 +293,27 @@ static int setup_cx_arc_votes(struct gen8_gmu_device *gmu,
 	return ret;
 }
 
-#define GEN8_DEP_VOTE_SET(cx, mx) \
-	(FIELD_PREP(GENMASK(31, 14), 0x3FFFF) | \
-	 FIELD_PREP(GENMASK(13, 8), mx) | \
-	 FIELD_PREP(GENMASK(7, 0), cx))
-
-static int setup_dependency_domain_tbl(u32 *votes,
-		struct rpmh_arc_vals *dep_rail, struct rpmh_arc_vals *cx_rail,
-		u16 *vlvl, u32 *cx_vlvl, u32 num_entries)
+static int to_cx_hlvl(struct rpmh_arc_vals *cx_rail, u32 vlvl, u32 *hlvl)
 {
-	u32 cx_vote, mx_vote;
-	int i, j;
+	u32 i;
 
-	for (i = 1; i < num_entries; i++) {
-		bool found_match = false;
-
-		if (cx_vlvl[i] == 0xffffffff) {
-			/* This means that the Gx level doesn't have a dependency on Cx level */
-			cx_vote = 0xff;
-			found_match = true;
-		} else {
-			for (j = 0; j < cx_rail->num; j++) {
-				if (cx_rail->val[j] >= cx_vlvl[i]) {
-					cx_vote = j;
-					found_match = true;
-					break;
-				}
-			}
-		}
-
-		/* If we did not find a matching VLVL level then abort */
-		if (!found_match) {
-			pr_err("kgsl: Unsupported cx corner: %u\n", cx_vlvl[i]);
-			return -EINVAL;
-		}
-
-		/*
-		 * Set Mx dependency domain votes for Gx level. Look for indexes
-		 * whose vlvl value is greater than or equal to the vlvl value
-		 * of the corresponding index of dependency rail
-		 */
-		for (j = 0; j < dep_rail->num; j++) {
-			if (dep_rail->val[j] >= vlvl[i]) {
-				mx_vote = j;
-				found_match = true;
-				break;
-			}
-		}
-
-		/* If we did not find a matching VLVL level then abort */
-		if (!found_match) {
-			pr_err("kgsl: Unsupported mx corner: %u\n", vlvl[i]);
-			return -EINVAL;
-		}
-
-		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, mx_vote);
+	/*
+	 * This means that the Gx level doesn't have a dependency on Cx level.
+	 * Return the same value to disable cx voting at GMU.
+	 */
+	if (vlvl == 0xffffffff) {
+		*hlvl = vlvl;
+		return 0;
 	}
 
-	return 0;
+	for (i = 0; i < cx_rail->num; i++) {
+		if (cx_rail->val[i] >= vlvl) {
+			*hlvl = i;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
 }
 
 /*
@@ -358,77 +321,71 @@ static int setup_dependency_domain_tbl(u32 *votes,
  * @hfi: Pointer to hfi device
  * @pri_rail: Pointer to primary power rail vlvl table
  * @sec_rail: Pointer to second/dependent power rail vlvl table
- * @gmxc_rail: Pointer to MxG power rail vlvl table
  *
  * This function initializes the gx votes for all gpu frequencies
  * for gpu dcvs
  */
 static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail,
-	struct rpmh_arc_vals *gmxc_rail, struct rpmh_arc_vals *cx_rail)
+	struct rpmh_arc_vals *cx_rail)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_dcvs_table *table = &gmu->dcvs_table;
+	u32 index;
 	u16 vlvl_tbl[MAX_GX_LEVELS];
-	u32 cx_vlvl_tbl[MAX_GX_LEVELS];
 	u32 gx_votes[MAX_GX_LEVELS];
-	u32 dep_votes[MAX_GX_LEVELS];
 	int ret, i;
 
-	table->gpu_level_num = pwr->num_pwrlevels + 1;
-
-	if (table->gpu_level_num > ARRAY_SIZE(vlvl_tbl)) {
+	if (pwr->num_pwrlevels + 1 > ARRAY_SIZE(vlvl_tbl)) {
 		dev_err(device->dev,
 			"Defined more GPU DCVS levels than RPMh can support\n");
 		return -ERANGE;
 	}
 
-	/* Initialize vlvl tables */
-	memset(vlvl_tbl, 0, sizeof(vlvl_tbl));
-	memset(cx_vlvl_tbl, 0, sizeof(cx_vlvl_tbl));
-
-	/* Fill the vlvl tables. GMU power levels are in ascending order */
-	for (i = 1; i < table->gpu_level_num; i++) {
-		vlvl_tbl[i] = pwr->pwrlevels[pwr->num_pwrlevels - i].voltage_level;
-		cx_vlvl_tbl[i] = pwr->pwrlevels[pwr->num_pwrlevels - i].cx_level;
-	}
-
-	/* If the target does not have a dedicated Mx rail, use secondary rail */
-	if (gmxc_rail == NULL)
-		ret = setup_volt_dependency_tbl(gx_votes, pri_rail, sec_rail,
-				vlvl_tbl, table->gpu_level_num);
-	else
-		ret = setup_volt_dependency_tbl(gx_votes, pri_rail, gmxc_rail,
-				vlvl_tbl, table->gpu_level_num);
-	if (ret)
-		return ret;
-
-	ret = setup_dependency_domain_tbl(dep_votes, sec_rail, cx_rail,
-			vlvl_tbl, cx_vlvl_tbl, table->gpu_level_num);
-	if (ret)
-		return ret;
-
-	/* Populate DCVS table with all the votes */
-	for (i = 1; i < table->gpu_level_num; i++) {
-		table->gx_votes[i].freq = pwr->pwrlevels[pwr->num_pwrlevels - i].gpu_freq / 1000;
-		table->gx_votes[i].vote = gx_votes[i];
-		table->gx_votes[i].dep_vote = dep_votes[i];
-	}
-
 	/* Add the zero powerlevel for the perf table */
+	table->gpu_level_num = pwr->num_pwrlevels + 1;
+
+	memset(vlvl_tbl, 0, sizeof(vlvl_tbl));
+
 	table->gx_votes[0].freq = 0;
-	table->gx_votes[0].vote = 0;
-	table->gx_votes[0].dep_vote = 0xFFFFFFFF;
+	table->gx_votes[0].cx_vote = 0;
+	/* Disable cx vote in gmu dcvs table if it is not supported in DT */
+	if (pwr->pwrlevels[0].cx_level == 0xffffffff)
+		table->gx_votes[0].cx_vote = 0xffffffff;
+
+	/* GMU power levels are in ascending order */
+	for (index = 1, i = pwr->num_pwrlevels - 1; i >= 0; i--, index++) {
+		u32 cx_vlvl = pwr->pwrlevels[i].cx_level;
+
+		vlvl_tbl[index] = pwr->pwrlevels[i].voltage_level;
+		table->gx_votes[index].freq = pwr->pwrlevels[i].gpu_freq / 1000;
+
+		ret = to_cx_hlvl(cx_rail, cx_vlvl,
+				&table->gx_votes[index].cx_vote);
+		if (ret) {
+			dev_err(device->dev, "Unsupported cx corner: %u\n",
+					cx_vlvl);
+			return ret;
+		}
+	}
+
+	ret = setup_volt_dependency_tbl(gx_votes, pri_rail,
+			sec_rail, vlvl_tbl, table->gpu_level_num);
+	if (!ret) {
+		for (i = 0; i < table->gpu_level_num; i++)
+			table->gx_votes[i].vote = gx_votes[i];
+	}
 
 	return ret;
+
 }
 
 static int build_dcvs_table(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc, gmxc_arc;
+	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc;
 	int ret;
 
 	ret = rpmh_arc_cmds(&gx_arc, "gfx.lvl");
@@ -449,15 +406,12 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 
 	/* If the target supports dedicated MxC rail, read the same */
 	if (cmd_db_read_addr("gmxc.lvl")) {
-		ret = rpmh_arc_cmds(&gmxc_arc, "gmxc.lvl");
+		ret = rpmh_arc_cmds(&mx_arc, "gmxc.lvl");
 		if (ret)
 			return ret;
-		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
-	} else {
-		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
 	}
 
-	return ret;
+	return setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &cx_arc);
 }
 
 /*
