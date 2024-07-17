@@ -180,6 +180,9 @@ static bool _gen7_do_crashdump(struct kgsl_device *device)
 	unsigned int reg = 0;
 	ktime_t timeout;
 
+	if (CD_SCRIPT_CHECK(device))
+		return false;
+
 	kgsl_regwrite(device, GEN7_CP_CRASH_SCRIPT_BASE_LO,
 			lower_32_bits(gen7_capturescript->gpuaddr));
 	kgsl_regwrite(device, GEN7_CP_CRASH_SCRIPT_BASE_HI,

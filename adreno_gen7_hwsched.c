@@ -562,7 +562,9 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	if (gen7_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1) {
+	if (gen7_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -617,6 +619,9 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	 * register access which happens to be just after enabling clocks.
 	 */
 	gen7_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen7_cx_timer_init(adreno_dev);
 
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -714,8 +719,15 @@ static int gen7_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
-	return gen7_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
+	ret = gen7_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN7_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
+	return ret;
 }
 static int gen7_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 {
@@ -1793,11 +1805,12 @@ static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_context *context = NULL;
 	struct adreno_context *guilty = NULL;
-	int id;
+	int id, ret = 0;
 
 	read_lock(&device->context_lock);
 	idr_for_each_entry(&device->context_idr, context, id) {
-		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv)) {
+		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv) &&
+			_kgsl_context_get(context)) {
 			guilty = ADRENO_CONTEXT(context);
 			break;
 		}
@@ -1807,7 +1820,16 @@ static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
 	if (!guilty)
 		return 0;
 
-	return gen7_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+	/*
+	 * We don't need drawctxt spinlock to signal these fences since the only other place
+	 * which can access these fences is the context detach path and device mutex
+	 * ensures mutual exclusion between recovery thread and detach thread.
+	 */
+	ret = gen7_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+
+	kgsl_context_put(&guilty->base);
+
+	return ret;
 }
 
 static int handle_hw_fences_after_reset(struct adreno_device *adreno_dev)

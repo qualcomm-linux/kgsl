@@ -485,6 +485,8 @@ struct adreno_gpu_core {
 	u32 bus_width;
 	/** @snapshot_size: Size of the static snapshot region in bytes */
 	u32 snapshot_size;
+	/** @num_ddr_channels: Number of DDR channels */
+	u32 num_ddr_channels;
 };
 
 /**

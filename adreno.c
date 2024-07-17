@@ -1550,6 +1550,10 @@ static int adreno_pm_resume(struct device *dev)
 
 		if (status)
 			return status;
+
+		status = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (status < 0)
+			return status;
 	}
 #endif
 
@@ -1598,6 +1602,12 @@ static int adreno_pm_suspend(struct device *dev)
 	if (status)
 		return status;
 
+	/*
+	 * When the device enters in suspend state, the CX can be collapsed causing
+	 * the GPU CX timer to pause. Clear the ADRENO_DEVICE_CX_TIMER_INITIALIZED
+	 * flag to ensure that the CX timer is reseeded during resume.
+	 */
+	clear_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
 	kgsl_reclaim_close();
 	kthread_flush_worker(device->events_worker);
 	flush_workqueue(kgsl_driver.lockless_workqueue);
@@ -3695,6 +3705,13 @@ static int adreno_hibernation_suspend(struct device *dev)
 		goto err;
 
 	/*
+	 * When the device enters in hibernation state, the CX will be collapsed causing
+	 * the GPU CX timer to pause. Clear the ADRENO_DEVICE_CX_TIMER_INITIALIZED flag
+	 * to ensure that the CX timer is reseeded during resume.
+	 */
+	clear_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
+
+	/*
 	 * Unload zap shader during device hibernation and reload it
 	 * during resume as there is possibility that TZ driver
 	 * is not aware of the hibernation.
@@ -3732,6 +3749,10 @@ static int adreno_hibernation_resume(struct device *dev)
 
 	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
 	if (ret)
+		goto err;
+
+	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+	if (ret < 0)
 		goto err;
 
 	gmu_core_dev_force_first_boot(device);

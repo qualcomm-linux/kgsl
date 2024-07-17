@@ -1845,6 +1845,14 @@ static void a6xx_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 
 	/* Disconnect GPU from BUS is not needed if CX GDSC goes off later */
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a635(adreno_dev)))
+		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	/* Check no outstanding RPMh voting */
 	a6xx_complete_rpmh_votes(adreno_dev, GPU_RESET_TIMEOUT);
 
@@ -1982,6 +1990,15 @@ static int a6xx_gmu_notify_slumber(struct adreno_device *adreno_dev)
 out:
 	/* Make sure the fence is in ALLOW mode */
 	gmu_core_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
+
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	if ((adreno_is_a662(adreno_dev) || adreno_is_a621(adreno_dev) ||
+			adreno_is_a635(adreno_dev)))
+		gmu_core_regwrite(device, A6XX_GPU_GMU_CX_GMU_CX_FALNEXT_INTF, 0x1);
+
 	return ret;
 }
 
@@ -2585,6 +2602,21 @@ static int a6xx_gmu_acd_set(struct kgsl_device *device, bool val)
 	return adreno_power_cycle(adreno_dev, set_acd, &val);
 }
 
+static void a6xx_send_tlb_hint(struct kgsl_device *device, bool val)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+
+	if (!gmu->domain)
+		return;
+
+#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+	qcom_skip_tlb_management(&gmu->pdev->dev, val);
+#endif
+	if (!val)
+		iommu_flush_iotlb_all(gmu->domain);
+}
+
 static const struct gmu_dev_ops a6xx_gmudev = {
 	.oob_set = a6xx_gmu_oob_set,
 	.oob_clear = a6xx_gmu_oob_clear,
@@ -2596,6 +2628,7 @@ static const struct gmu_dev_ops a6xx_gmudev = {
 	.acd_set = a6xx_gmu_acd_set,
 	.force_first_boot = a6xx_gmu_force_first_boot,
 	.send_nmi = a6xx_gmu_send_nmi,
+	.send_tlb_hint = a6xx_send_tlb_hint,
 };
 
 static int a6xx_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,

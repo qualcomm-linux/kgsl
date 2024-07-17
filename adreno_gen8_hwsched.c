@@ -241,38 +241,6 @@ err:
 	SNAPSHOT_ERR_NOMEM(device, str);
 }
 
-static bool parse_payload_rb_legacy(struct adreno_device *adreno_dev,
-	struct kgsl_snapshot *snapshot)
-{
-	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-	bool ret = false;
-
-	/* Skip if we didn't receive a context bad HFI */
-	if (!cmd->hdr)
-		return false;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd_legacy, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == PAYLOAD_RB) {
-			adreno_hwsched_snapshot_rb_payload(adreno_dev,
-							   snapshot, payload);
-			ret = true;
-		}
-
-		i += sizeof(*payload) + (payload->dwords << 2);
-	}
-
-	return ret;
-}
-
 static bool parse_payload_rb(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -356,7 +324,6 @@ static size_t snapshot_aqe_buffer(struct kgsl_device *device, u8 *buf,
 void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
 	bool skip_memkind_rb = false;
@@ -373,10 +340,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	 * payloads are not present, fall back to dumping ringbuffers
 	 * based on MEMKIND_RB
 	 */
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
-		parse_payload = parse_payload_rb_legacy(adreno_dev, snapshot);
-	else
-		parse_payload = parse_payload_rb(adreno_dev, snapshot);
+	parse_payload = parse_payload_rb(adreno_dev, snapshot);
 
 	if (parse_payload)
 		skip_memkind_rb = true;
@@ -482,6 +446,13 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen8_enable_ahb_timeout_detection(adreno_dev);
+
 	/* Initialize the CX timer */
 	gen8_cx_timer_init(adreno_dev);
 
@@ -502,9 +473,6 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	ret = gen8_gmu_version_info(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
-
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
-		set_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &adreno_dev->hwsched.flags);
 
 	gen8_gmu_irq_enable(adreno_dev);
 
@@ -536,7 +504,9 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1) {
+	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_GMU_AB_VOTE) == 1 &&
+		!WARN_ONCE(!adreno_dev->gpucore->num_ddr_channels,
+			"Number of DDR channel is not specified in gpu core")) {
 		adreno_dev->gmu_ab = true;
 		set_bit(ADRENO_DEVICE_GMU_AB, &adreno_dev->priv);
 	}
@@ -584,6 +554,16 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	ret = gen8_gmu_enable_clks(adreno_dev, GMU_MAX_PWRLEVELS - 1);
 	if (ret)
 		goto gdsc_off;
+
+	/*
+	 * Enable AHB timeout detection to catch any register access taking longer
+	 * time before NOC timeout gets detected. Enable this logic before any
+	 * register access which happens to be just after enabling clocks.
+	 */
+	gen8_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
 
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
@@ -681,8 +661,15 @@ static int gen8_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN8_GMUCX_POWER_COUNTER_ENABLE, 0);
 
-	return gen8_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
+	ret = gen8_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
+	/*
+	 * GEMNOC can enter power collapse state during GPU power down sequence.
+	 * This could abort CX GDSC collapse. Assert Qactive to avoid this.
+	 */
+	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
+
+	return ret;
 }
 static int gen8_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 {
@@ -1456,7 +1443,7 @@ static int gen8_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, buslevel, ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
 	return ret;
 }
 
@@ -1671,11 +1658,12 @@ static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_context *context = NULL;
 	struct adreno_context *guilty = NULL;
-	int id;
+	int id, ret = 0;
 
 	read_lock(&device->context_lock);
 	idr_for_each_entry(&device->context_idr, context, id) {
-		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv)) {
+		if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv) &&
+			_kgsl_context_get(context)) {
 			guilty = ADRENO_CONTEXT(context);
 			break;
 		}
@@ -1685,7 +1673,16 @@ static int drain_guilty_context_hw_fences(struct adreno_device *adreno_dev)
 	if (!guilty)
 		return 0;
 
-	return gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+	/*
+	 * We don't need drawctxt spinlock to signal these fences since the only other place
+	 * which can retire these fences is the context detach path and device mutex
+	 * ensures mutual exclusion between recovery thread and detach thread.
+	 */
+	ret = gen8_hwsched_drain_context_hw_fences(adreno_dev, guilty);
+
+	kgsl_context_put(&guilty->base);
+
+	return ret;
 }
 
 static int handle_hw_fences_after_reset(struct adreno_device *adreno_dev)
@@ -1815,11 +1812,6 @@ int gen8_hwsched_probe(struct platform_device *pdev,
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		adreno_dev->lpac_enabled = true;
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_DMS)) {
-		set_bit(ADRENO_DEVICE_DMS, &adreno_dev->priv);
-		adreno_dev->dms_enabled = true;
-	}
 
 	kgsl_mmu_set_feature(device, KGSL_MMU_PAGEFAULT_TERMINATE);
 

@@ -354,7 +354,10 @@ void gen7_cx_timer_init(struct adreno_device *adreno_dev)
 	int i;
 	unsigned long flags;
 
-	/* Only gen7_9_x has the CX timer. Set it up just once */
+	/*
+	 * Only gen7_9_x has the CX timer. Set it up during first boot or
+	 * after suspend resume.
+	 */
 	if (!adreno_is_gen7_9_x(adreno_dev) ||
 		test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
 		return;
@@ -1580,28 +1583,6 @@ static int gen7_irq_poll_fence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static irqreturn_t gen7_hwsched_irq_handler(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	irqreturn_t ret = IRQ_NONE;
-	u32 status;
-
-	if (gen7_irq_poll_fence(adreno_dev)) {
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
-		return ret;
-	}
-
-	kgsl_regread(device, GEN7_RBBM_INT_0_STATUS, &status);
-
-	kgsl_regwrite(device, GEN7_RBBM_INT_CLEAR_CMD, status);
-
-	ret = adreno_irq_callbacks(adreno_dev, gen7_irq_funcs, status);
-
-	trace_kgsl_gen7_irq_status(adreno_dev, status);
-
-	return ret;
-}
-
 static irqreturn_t gen7_irq_handler(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1658,8 +1639,8 @@ int gen7_probe_common(struct platform_device *pdev,
 	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
-	device->pwrctrl.cx_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
-					GEN7_11_0_GPU_CC_CX_GDSCR : GEN7_GPU_CC_CX_GDSCR;
+	device->pwrctrl.cx_cfg_gdsc_offset = adreno_is_gen7_11_0(adreno_dev) ?
+					GEN7_11_0_GPU_CC_CX_CFG_GDSCR : GEN7_GPU_CC_CX_CFG_GDSCR;
 
 	ret = adreno_device_probe(pdev, adreno_dev);
 	if (ret)
@@ -2186,7 +2167,7 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_hwsched_irq_handler,
+		.irq_handler = gen7_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,
@@ -2216,7 +2197,7 @@ const struct gen7_gpudev adreno_gen7_hwsched_gpudev = {
 		.reg_offsets = gen7_register_offsets,
 		.probe = gen7_hwsched_probe,
 		.snapshot = gen7_hwsched_snapshot,
-		.irq_handler = gen7_hwsched_irq_handler,
+		.irq_handler = gen7_irq_handler,
 		.iommu_fault_block = gen7_iommu_fault_block,
 		.preemption_context_init = gen7_preemption_context_init,
 		.context_detach = gen7_hwsched_context_detach,

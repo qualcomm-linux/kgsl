@@ -108,6 +108,9 @@ static bool _gen8_do_crashdump(struct kgsl_device *device)
 	u32 reg = 0;
 	ktime_t timeout;
 
+	if (CD_SCRIPT_CHECK(device))
+		return false;
+
 	kgsl_regwrite(device, GEN8_CP_CRASH_DUMP_SCRIPT_BASE_LO,
 			lower_32_bits(gen8_capturescript->gpuaddr));
 	kgsl_regwrite(device, GEN8_CP_CRASH_DUMP_SCRIPT_BASE_HI,
@@ -165,7 +168,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 	struct kgsl_snapshot_mvc_regs_v3 *header =
 			(struct kgsl_snapshot_mvc_regs_v3 *)buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
-	u32 size = adreno_snapshot_regs_count(ptr) * sizeof(*data);
+	u32 size = (adreno_snapshot_regs_count(ptr) * sizeof(*data)) + sizeof(*header);
 	u32 count, k;
 
 	if (remain < size) {
@@ -203,7 +206,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 			kgsl_regread(device, k, data++);
 	}
 
-	return (size + sizeof(*header));
+	return size;
 }
 
 static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
@@ -216,7 +219,7 @@ static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
 	u32 *data = (u32 *)(buf + sizeof(*header));
 	u32 *src;
 	u32 cnt;
-	u32 size = adreno_snapshot_regs_count(ptr) * sizeof(*data);
+	u32 size = (adreno_snapshot_regs_count(ptr) * sizeof(*data)) + sizeof(*header);
 
 	if (remain < size) {
 		SNAPSHOT_ERR_NOMEM(device, "REGISTERS");
@@ -758,6 +761,12 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
 
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+
 	for (; ptr[0] != UINT_MAX; ptr += 2) {
 		u32 count = REG_COUNT(ptr);
 
@@ -898,6 +907,7 @@ static void gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 					/* Marker for end of script */
 					CD_FINISH(ptr, offset);
 
+					func = gen8_legacy_snapshot_cluster_dbgahb;
 					/* Try to run the crash dumper */
 					if (_gen8_do_crashdump(device))
 						func = gen8_snapshot_cluster_dbgahb;
@@ -1077,6 +1087,7 @@ static void gen8_snapshot_mvc_regs(struct kgsl_device *device,
 			/* Marker for end of script */
 			CD_FINISH(ptr, offset);
 
+			func = gen8_legacy_snapshot_mvc;
 			/* Try to run the crash dumper */
 			if (_gen8_do_crashdump(device))
 				func = gen8_snapshot_mvc;
@@ -1528,6 +1539,7 @@ static void gen8_reglist_snapshot(struct kgsl_device *device,
 			/* Marker for end of script */
 			CD_FINISH(ptr, offset);
 
+			func = gen8_legacy_snapshot_registers;
 			/* Try to run the crash dumper */
 			if (_gen8_do_crashdump(device))
 				func = gen8_snapshot_registers;
@@ -1681,16 +1693,18 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size, PIPE_BR, 0, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-		GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
+		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
+			GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
+		gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
+			GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
 
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
+		gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
 			&snapshot->ib1size_lpac, PIPE_LPAC, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
+		gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
+	}
 
 	/* Assert the isStatic bit before triggering snapshot */
 	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x1);
