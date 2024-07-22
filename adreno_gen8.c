@@ -1443,6 +1443,9 @@ int gen8_start(struct adreno_device *adreno_dev)
 	kgsl_regmap_multi_write(&device->regmap, gen8_0_0_bicubic_regs,
 				ARRAY_SIZE(gen8_0_0_bicubic_regs));
 
+	kgsl_regwrite(device, GEN8_UCHE_CLIENT_PF, BIT(7) |
+			FIELD_PREP(GENMASK(6, 0), adreno_dev->uche_client_pf));
+
 	/* Program noncontext registers */
 	gen8_nonctxt_regconfig(adreno_dev);
 
@@ -1450,9 +1453,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_RBBM_INTERFACE_HANG_INT_CNTL, BIT(30) |
 			FIELD_PREP(GENMASK(27, 0), gen8_core->hang_detect_cycles));
 	kgsl_regwrite(device, GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL, BIT(30));
-
-	kgsl_regwrite(device, GEN8_UCHE_CLIENT_PF, BIT(7) |
-			FIELD_PREP(GENMASK(6, 0), adreno_dev->uche_client_pf));
 
 	/* Enable the GMEM save/restore feature for preemption */
 	if (adreno_is_preemption_enabled(adreno_dev)) {
