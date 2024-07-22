@@ -284,13 +284,13 @@ void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
 			uint64_t ibsize;
 
 			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
+				ibaddr = rbptr[(index + 1) % KGSL_RB_DWORDS];
+				ibsize = rbptr[(index + 2) % KGSL_RB_DWORDS];
 				index += 3;
 			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
+				ibaddr = rbptr[(index + 2) % KGSL_RB_DWORDS];
+				ibaddr = ibaddr << 32 | rbptr[(index + 1) % KGSL_RB_DWORDS];
+				ibsize = rbptr[(index + 3) % KGSL_RB_DWORDS];
 				index += 4;
 			}
 

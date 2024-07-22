@@ -1883,11 +1883,6 @@ static struct gen8_reg_list gen8_0_0_ahb_registers[] = {
 	{ UNSLICE, gen8_0_0_ahb_secure_gpu_registers },
 };
 
-static struct gen8_reg_list gen8_gmu_gx_registers[] = {
-	{ UNSLICE, gen8_0_0_gmugx_registers },
-	{ SLICE, gen8_0_0_gmugx_slice_registers },
-};
-
 /*
  * Block   : ['GDPM_LKG']
  * REGION  : UNSLICE
@@ -2056,16 +2051,39 @@ static const u32 gen8_0_0_rscc_rsc_registers[] = {
 };
 static_assert(IS_ALIGNED(sizeof(gen8_0_0_rscc_rsc_registers), 8));
 
+/*
+ * Block   : ['CPR']
+ * REGION  : UNSLICE
+ * Pipeline: PIPE_NONE
+ * pairs   : 20 (Regs:479)
+ */
+static const u32 gen8_0_0_cpr_registers[] = {
+	0x26800, 0x26805, 0x26808, 0x2680c, 0x26814, 0x26814, 0x2681c, 0x2681c,
+	0x26820, 0x26838, 0x26840, 0x26840, 0x26848, 0x26848, 0x26850, 0x26850,
+	0x26880, 0x2689f, 0x26980, 0x269b0, 0x269c0, 0x269c8, 0x269e0, 0x269ee,
+	0x269fb, 0x269ff, 0x26a02, 0x26a07, 0x26a09, 0x26a0b, 0x26a10, 0x26b0f,
+	0x27440, 0x27441, 0x27444, 0x27444, 0x27480, 0x274a2, 0x274ac, 0x274c4,
+	UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen8_0_0_cpr_registers), 8));
+
 static const u32 *gen8_0_0_external_core_regs[] = {
 	gen8_0_0_gdpm_lkg_registers,
 	gen8_0_0_gpu_cc_ahb2phy_broadcast_swman_registers,
 	gen8_0_0_gpu_cc_ahb2phy_swman_registers,
 	gen8_0_0_gpu_cc_gpu_cc_reg_registers,
 	gen8_0_0_gpu_cc_pll0_cm_pll_taycan_common_registers,
-	gen8_0_0_acd_acd_mnd_registers,
-	gen8_0_0_gx_clkctl_ahb2phy_broadcast_swman_registers,
-	gen8_0_0_gx_clkctl_ahb2phy_swman_registers,
-	gen8_0_0_gx_clkctl_pll0_cm_pll_taycan_common_registers,
-	gen8_0_0_gx_clkctl_gx_clkctl_reg_registers,
+	gen8_0_0_cpr_registers,
 };
+
+static struct gen8_reg_list gen8_gmu_gx_registers[] = {
+	{ UNSLICE, gen8_0_0_gmugx_registers },
+	{ UNSLICE, gen8_0_0_gx_clkctl_ahb2phy_broadcast_swman_registers },
+	{ UNSLICE, gen8_0_0_gx_clkctl_ahb2phy_swman_registers },
+	{ UNSLICE, gen8_0_0_gx_clkctl_pll0_cm_pll_taycan_common_registers },
+	{ UNSLICE, gen8_0_0_gx_clkctl_gx_clkctl_reg_registers },
+	{ UNSLICE, gen8_0_0_acd_acd_mnd_registers },
+	{ SLICE, gen8_0_0_gmugx_slice_registers },
+};
+
 #endif /*_ADRENO_GEN8_0_0_SNAPSHOT_H */

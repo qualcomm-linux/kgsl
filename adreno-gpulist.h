@@ -2059,6 +2059,16 @@ static const struct kgsl_regmap_list gen7_2_0_gbif_regs[] = {
 	{ GEN7_GMU_CX_MRC_GBIF_QOS_CTRL, 0x33 },
 };
 
+extern const struct gen7_snapshot_block_list gen7_3_0_snapshot_block_list;
+
+static const struct kgsl_regmap_list gen7_3_0_gbif_regs[] = {
+	{ GEN7_GBIF_QSB_SIDE0, 0x00071620 },
+	{ GEN7_GBIF_QSB_SIDE1, 0x00071620 },
+	{ GEN7_GBIF_QSB_SIDE2, 0x00071620 },
+	{ GEN7_GBIF_QSB_SIDE3, 0x00071620 },
+	{ GEN7_RBBM_GBIF_CLIENT_QOS_CNTL, 0x00000003 },
+};
+
 static const u32 gen7_6_0_gbif_client_qos_values[KGSL_PRIORITY_MAX_RB_LEVELS] = {
 	0x03230323,
 };
@@ -2111,6 +2121,58 @@ static const struct kgsl_regmap_list gen7_2_0_hwcg_regs[] = {
 	{ GEN7_RBBM_CLOCK_MODE_BV_LRZ, 0x55555552 },
 	{ GEN7_RBBM_CLOCK_HYST2_VFD, 0x00000000 },
 	{ GEN7_RBBM_CLOCK_MODE_CP, 0x00000222 },
+	{ GEN7_RBBM_CLOCK_CNTL, 0x8aa8aa82 },
+	{ GEN7_RBBM_ISDB_CNT, 0x00000182 },
+	{ GEN7_RBBM_RAC_THRESHOLD_CNT, 0x00000000 },
+	{ GEN7_RBBM_SP_HYST_CNT, 0x00000000 },
+	{ GEN7_RBBM_CLOCK_CNTL_GMU_GX, 0x00000222 },
+	{ GEN7_RBBM_CLOCK_DELAY_GMU_GX, 0x00000111 },
+	{ GEN7_RBBM_CLOCK_HYST_GMU_GX, 0x00000555 },
+};
+
+static const struct kgsl_regmap_list gen7_3_0_hwcg_regs[] = {
+	{ GEN7_RBBM_CLOCK_CNTL_SP0, 0x02222222 },
+	{ GEN7_RBBM_CLOCK_CNTL2_SP0, 0x02022222 },
+	{ GEN7_RBBM_CLOCK_HYST_SP0, 0x0000f3cf },
+	{ GEN7_RBBM_CLOCK_DELAY_SP0, 0x00000080 },
+	{ GEN7_RBBM_CLOCK_CNTL_TP0, 0x22222220 },
+	{ GEN7_RBBM_CLOCK_CNTL2_TP0, 0x22222222 },
+	{ GEN7_RBBM_CLOCK_CNTL3_TP0, 0x22222222 },
+	{ GEN7_RBBM_CLOCK_CNTL4_TP0, 0x00222222 },
+	{ GEN7_RBBM_CLOCK_HYST_TP0, 0x77777777 },
+	{ GEN7_RBBM_CLOCK_HYST2_TP0, 0x77777777 },
+	{ GEN7_RBBM_CLOCK_HYST3_TP0, 0x77777777 },
+	{ GEN7_RBBM_CLOCK_HYST4_TP0, 0x00077777 },
+	{ GEN7_RBBM_CLOCK_DELAY_TP0, 0x11111111 },
+	{ GEN7_RBBM_CLOCK_DELAY2_TP0, 0x11111111 },
+	{ GEN7_RBBM_CLOCK_DELAY3_TP0, 0x11111111 },
+	{ GEN7_RBBM_CLOCK_DELAY4_TP0, 0x00011111 },
+	{ GEN7_RBBM_CLOCK_CNTL_UCHE, 0x22222222 },
+	{ GEN7_RBBM_CLOCK_HYST_UCHE, 0x00000004 },
+	{ GEN7_RBBM_CLOCK_DELAY_UCHE, 0x00000002 },
+	{ GEN7_RBBM_CLOCK_CNTL_RB0, 0x22222222 },
+	{ GEN7_RBBM_CLOCK_CNTL2_RB0, 0x01002222 },
+	{ GEN7_RBBM_CLOCK_CNTL_CCU0, 0x00002220 },
+	{ GEN7_RBBM_CLOCK_HYST_RB_CCU0, 0x44000f00 },
+	{ GEN7_RBBM_CLOCK_CNTL_RAC, 0x25222022 },
+	{ GEN7_RBBM_CLOCK_CNTL2_RAC, 0x00555555 },
+	{ GEN7_RBBM_CLOCK_DELAY_RAC, 0x00000011 },
+	{ GEN7_RBBM_CLOCK_HYST_RAC, 0x00440044 },
+	{ GEN7_RBBM_CLOCK_CNTL_TSE_RAS_RBBM, 0x04222222 },
+	{ GEN7_RBBM_CLOCK_MODE2_GRAS, 0x00000222 },
+	{ GEN7_RBBM_CLOCK_MODE_GPC, 0x02222223 },
+	{ GEN7_RBBM_CLOCK_MODE_VFD, 0x00002222 },
+	{ GEN7_RBBM_CLOCK_HYST_TSE_RAS_RBBM, 0x00000000 },
+	{ GEN7_RBBM_CLOCK_HYST_GPC, 0x04104004 },
+	{ GEN7_RBBM_CLOCK_HYST_VFD, 0x00000000 },
+	{ GEN7_RBBM_CLOCK_DELAY_TSE_RAS_RBBM, 0x00004000 },
+	{ GEN7_RBBM_CLOCK_DELAY_GPC, 0x00000200 },
+	{ GEN7_RBBM_CLOCK_DELAY_VFD, 0x00002222 },
+	{ GEN7_RBBM_CLOCK_MODE_HLSQ, 0x00002222 },
+	{ GEN7_RBBM_CLOCK_DELAY_HLSQ, 0x00000000 },
+	{ GEN7_RBBM_CLOCK_HYST_HLSQ, 0x00000000 },
+	{ GEN7_RBBM_CLOCK_DELAY_HLSQ_2, 0x00000002 },
+	{ GEN7_RBBM_CLOCK_MODE_CP, 0x00000223 },
 	{ GEN7_RBBM_CLOCK_CNTL, 0x8aa8aa82 },
 	{ GEN7_RBBM_ISDB_CNT, 0x00000182 },
 	{ GEN7_RBBM_RAC_THRESHOLD_CNT, 0x00000000 },
@@ -2198,6 +2260,39 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_2_1 = {
 	.preempt_level = 1,
 	.ctxt_record_size = (4192 * SZ_1K),
 	.fast_bus_hint = true,
+};
+
+static const struct adreno_gen7_core adreno_gpu_core_gen7_3_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_3_0,
+				UINT_MAX, UINT_MAX, UINT_MAX, 0),
+		.compatible = "qcom,adreno-gpu-gen7-3-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+				ADRENO_CONTENT_PROTECTION | ADRENO_IFPC |
+				ADRENO_PREEMPTION | ADRENO_BCL | ADRENO_ACD,
+		.gpudev = &adreno_gen7_gmu_gpudev.base,
+		.perfcounters = &adreno_gen7_no_cb_perfcounters,
+		.uche_gmem_alignment = 0,
+		.gmem_size = SZ_512K,
+		.bus_width = 32,
+		.snapshot_size = SZ_2M,
+	},
+	.gmu_fw_version = GMU_VERSION(4, 0, 0),
+	.sqefw_name = "a710_sqe.fw",
+	.gmufw_name = "gmu_gen70000.bin",
+	.zap_name = "a710_zap.mdt",
+	.hwcg = gen7_3_0_hwcg_regs,
+	.hwcg_count = ARRAY_SIZE(gen7_3_0_hwcg_regs),
+	.ao_hwcg = gen7_0_0_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen7_0_0_ao_hwcg_regs),
+	.gbif = gen7_3_0_gbif_regs,
+	.gbif_count = ARRAY_SIZE(gen7_3_0_gbif_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen7_0_0_protected_regs,
+	.highest_bank_bit = 15,
+	.gen7_snapshot_block_list = &gen7_3_0_snapshot_block_list,
+	.preempt_level = 1,
+	.ctxt_record_size = (862 * SZ_1K),
 };
 
 static const struct adreno_gen7_core adreno_gpu_core_gen7_4_0 = {
@@ -2786,6 +2881,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
@@ -2824,6 +2920,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
+	.ctxt_record_size = (13536 * SZ_1K),
 };
 
 /* GEN8_4_0 noncontext register list */
@@ -2927,6 +3024,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.qos_value = gen8_4_0_gbif_client_qos_values,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.bcl_data = 1,
+	.ctxt_record_size = (13536 * SZ_1K),
+	.noc_timeout_us = 3410, /* 3.41 msec */
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;
@@ -2942,12 +3041,6 @@ static const struct kgsl_regmap_list gen8_3_0_gbif_cx_regs[] = {
 /* GEN8_3_0 noncontext register list */
 static const struct gen8_nonctxt_regs gen8_3_0_nonctxt_regs[] = {
 	{ GEN8_CP_SMMU_STREAM_ID_LPAC, 0x00000101, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_CNTLT, 0xf0004000, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_0, 0x00000003, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_2, 0xffffffff, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_MASKL_3, 0xffffffff, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_0, 0x00000008, BIT(PIPE_NONE) },
-	{ GEN8_DBGC_CFG_DBGBUS_BYTEL_1, 0x76543210, BIT(PIPE_NONE) },
 	{ GEN8_GRAS_DBG_ECO_CNTL, 0x00f80800, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_AUTO_VERTEX_STRIDE, 0x00000001, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_VIS_STREAM_CNTL, 0x10010000, BIT(PIPE_BV) | BIT(PIPE_BR) },
@@ -3065,6 +3158,7 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a662.base,
 	&adreno_gpu_core_gen7_2_0.base,
 	&adreno_gpu_core_gen7_2_1.base,
+	&adreno_gpu_core_gen7_3_0.base,
 	&adreno_gpu_core_gen7_4_0.base,
 	&adreno_gpu_core_gen7_6_0.base,
 	&adreno_gpu_core_gen7_9_0.base,

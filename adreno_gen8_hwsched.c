@@ -62,6 +62,36 @@ void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
 	adreno_hwsched_fault(adreno_dev, fault);
 }
 
+static void gen8_hwsched_snapshot_preemption_records(struct kgsl_device *device,
+	struct kgsl_snapshot *snapshot, struct kgsl_memdesc *md)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	u64 offset = 0, ctxt_record_size = md->size;
+	u64 rb0_ctxt_record_size = PAGE_ALIGN(gen8_core->ctxt_record_size);
+	int i;
+
+	/* Check whether GMU has removed GMEM size from RB0 context record */
+	if (md->size == (rb0_ctxt_record_size * KGSL_PRIORITY_MAX_RB_LEVELS)) {
+		do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS);
+	} else {
+		rb0_ctxt_record_size -= PAGE_ALIGN(adreno_dev->gpucore->gmem_size);
+		ctxt_record_size -= rb0_ctxt_record_size;
+		do_div(ctxt_record_size, KGSL_PRIORITY_MAX_RB_LEVELS - 1);
+	}
+
+	adreno_hwsched_snapshot_preemption_record(device, snapshot, md, offset,
+			rb0_ctxt_record_size);
+	offset += rb0_ctxt_record_size;
+
+	/* All preemption records exist as a single mem alloc entry */
+	for (i = 1; i < KGSL_PRIORITY_MAX_RB_LEVELS; i++) {
+		adreno_hwsched_snapshot_preemption_record(device, snapshot, md,
+			offset, ctxt_record_size);
+		offset += ctxt_record_size;
+	}
+}
+
 void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
@@ -114,7 +144,7 @@ void gen8_hwsched_snapshot(struct adreno_device *adreno_dev,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_CSW_PRIV_NON_SECURE)
-			adreno_hwsched_snapshot_preemption_records(device, snapshot,
+			gen8_hwsched_snapshot_preemption_records(device, snapshot,
 				entry->md);
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_PREEMPT_SCRATCH)
