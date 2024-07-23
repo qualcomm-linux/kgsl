@@ -1628,11 +1628,11 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_crashdump_timedout = false;
 	gen8_snapshot_block_list = gpucore->gen8_snapshot_block_list;
 
-	/* External registers are dumped in the beginning of gmu snapshot */
-	if (!gmu_core_isenabled(device))
+	/* External core and CX MISC regs are dumped in the beginning of gmu snapshot */
+	if (!gmu_core_isenabled(device)) {
 		gen8_snapshot_external_core_regs(device, snapshot);
-
-	gen8_cx_misc_regs_snapshot(device, snapshot);
+		gen8_cx_misc_regs_snapshot(device, snapshot);
+	}
 
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 
