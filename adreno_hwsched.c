@@ -2138,6 +2138,27 @@ void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev)
 	hwsched->global_ctxt_gmu_registered = false;
 }
 
+int adreno_gmu_context_queue_read(struct adreno_context *drawctxt, u32 *output,
+	u32 read_idx, u32 size_dwords)
+{
+	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+	u32 *queue = drawctxt->gmu_context_queue.hostptr + sizeof(*hdr);
+	u32 i;
+
+	if ((size_dwords > hdr->queue_size) || (read_idx >= hdr->queue_size))
+		return -EINVAL;
+
+	/* Clear the output data before populating */
+	memset(output, 0, size_dwords << 2);
+
+	for (i = 0; i < size_dwords; i++) {
+		output[i] = queue[read_idx];
+		read_idx = (read_idx + 1) % hdr->queue_size;
+	}
+
+	return 0;
+}
+
 static int hwsched_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
