@@ -24,6 +24,9 @@ static void gen8_rbbm_perfctr_flush(struct kgsl_device *device)
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_FLUSH_HOST_CMD, BIT(0));
 	kgsl_regwrite(device, GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD, BIT(0));
 
+	/* Ensure all writes are posted before polling status register */
+	wmb();
+
 	ret = kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS,
 		val, (val & PERFCOUNTER_FLUSH_DONE_MASK) == PERFCOUNTER_FLUSH_DONE_MASK,
 		100, 100 * 1000);
