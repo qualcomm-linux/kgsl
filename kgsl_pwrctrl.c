@@ -66,31 +66,25 @@ static void _bimc_clk_prepare_enable(struct kgsl_device *device,
 /**
  * _adjust_pwrlevel() - Given a requested power level do bounds checking on the
  * constraints and return the nearest possible level
- * @device: Pointer to the kgsl_device struct
+ * @pwr: kgsl_pwrctrl structure for the device
  * @level: Requested level
  * @pwrc: Pointer to the power constraint to be applied
  *
- * Apply thermal and max/min limits first.  Then force the level with a
+ * Apply thermal and max/min limits first. Then force the level with a
  * constraint if one exists.
  */
-static unsigned int _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, int level,
-					struct kgsl_pwr_constraint *pwrc)
+static u32 _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, u32 level, struct kgsl_pwr_constraint *pwrc)
 {
-	unsigned int thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	unsigned int max_pwrlevel = max_t(unsigned int, thermal_pwrlevel,
+	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
+	u32 max_pwrlevel = max_t(u32, thermal_pwrlevel,
 					pwr->max_pwrlevel);
-	unsigned int min_pwrlevel = min_t(unsigned int,
-					pwr->thermal_pwrlevel_floor,
-					pwr->min_pwrlevel);
+	u32 min_pwrlevel = pwr->min_pwrlevel;
 
 	/* Ensure that max pwrlevel is within pmqos max limit */
-	max_pwrlevel = max_t(unsigned int, max_pwrlevel,
-					READ_ONCE(pwr->pmqos_max_pwrlevel));
+	max_pwrlevel = max_t(u32, max_pwrlevel, READ_ONCE(pwr->pmqos_max_pwrlevel));
 
-	/* Ensure that max/min pwrlevels are within thermal max/min limits */
-	max_pwrlevel = min_t(unsigned int, max_pwrlevel,
-					pwr->thermal_pwrlevel_floor);
-	min_pwrlevel = max_t(unsigned int, min_pwrlevel, thermal_pwrlevel);
+	/* Ensure that min pwrlevel is within thermal limit */
+	min_pwrlevel = max_t(u32, min_pwrlevel, thermal_pwrlevel);
 
 	switch (pwrc->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {
@@ -1987,7 +1981,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 
 	/* Initialize the thermal clock constraints */
 	pwr->thermal_pwrlevel = 0;
-	pwr->thermal_pwrlevel_floor = pwr->num_pwrlevels - 1;
 	result = dev_pm_qos_add_request(&pdev->dev, &pwr->sysfs_thermal_req,
 			DEV_PM_QOS_MAX_FREQUENCY,
 			PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
