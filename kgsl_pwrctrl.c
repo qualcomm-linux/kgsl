@@ -1516,6 +1516,7 @@ static int kgsl_pwrctrl_probe_gx_gdsc(struct kgsl_device *device, struct platfor
 			return IS_ERR(gx_pd) ? PTR_ERR(gx_pd) : -EINVAL;
 		}
 		pwr->gx_pd = gx_pd;
+		dev_pm_syscore_device(pwr->gx_pd, true);
 	} else {
 		struct regulator *gx_regulator = devm_regulator_get(&pdev->dev, "vdd");
 
