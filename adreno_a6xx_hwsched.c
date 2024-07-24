@@ -798,7 +798,7 @@ static int a6xx_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	/* Do not set to XO and lower GPU clock vote from GMU */
 	if ((gpu_pwrlevel != INVALID_DCVS_IDX) &&
 			(gpu_pwrlevel >= table->gpu_level_num - 1)) {
-		dev_err(&gmu->pdev->dev, "Invalid gpu dcvs request: %d\n",
+		dev_err(GMU_PDEV_DEV(device), "Invalid gpu dcvs request: %d\n",
 			gpu_pwrlevel);
 		return -EINVAL;
 	}
@@ -820,7 +820,7 @@ static int a6xx_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	ret = a6xx_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
 	if (ret) {
-		dev_err_ratelimited(&gmu->pdev->dev,
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
 			"Failed to set GPU perf idx %u, bw idx %u\n",
 			req.freq, req.bw);
 
@@ -945,7 +945,6 @@ err:
 
 void a6xx_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 mask;
 
@@ -957,7 +956,7 @@ void a6xx_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 
 	a6xx_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
-	dev_err_ratelimited(&gmu->pdev->dev,
+	dev_err_ratelimited(GMU_PDEV_DEV(device),
 			"GMU watchdog expired interrupt received\n");
 
 	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
