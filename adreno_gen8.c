@@ -2121,12 +2121,10 @@ static const char *gen8_iommu_fault_block(struct kgsl_device *device,
 
 static void gen8_cp_callback(struct adreno_device *adreno_dev, int bit)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
 	if (adreno_is_preemption_enabled(adreno_dev))
 		gen8_preemption_trigger(adreno_dev, true);
 
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 /*
@@ -2148,7 +2146,7 @@ static void gen8_gpc_err_int_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_irqctrl(adreno_dev, 0);
 
 	/* Trigger a fault in the dispatcher - this will effect a restart */
-	adreno_dispatcher_fault(adreno_dev, ADRENO_SOFT_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_SOFT_FAULT);
 }
 
 /*
@@ -2184,7 +2182,7 @@ static void gen8_swfuse_violation_callback(struct adreno_device *adreno_dev, int
 	/* Trigger a fault in the dispatcher for LPAC and RAYTRACING violation */
 	if (status & GENMASK(GEN8_RAYTRACING_SW_FUSE, GEN8_LPAC_SW_FUSE)) {
 		adreno_irqctrl(adreno_dev, 0);
-		adreno_dispatcher_fault(adreno_dev, ADRENO_HARD_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
 	}
 }
 
@@ -2309,7 +2307,7 @@ static irqreturn_t gen8_irq_handler(struct adreno_device *adreno_dev)
 	gen8_gpu_keepalive(adreno_dev, true);
 
 	if (gen8_irq_poll_fence(adreno_dev)) {
-		adreno_dispatcher_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 		goto done;
 	}
 

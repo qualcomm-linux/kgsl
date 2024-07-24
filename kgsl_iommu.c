@@ -1250,9 +1250,7 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 		ctx->stalled_on_fault = true;
 
 		/* Go ahead with recovery*/
-		if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->fault)
-			adreno_dev->dispatch_ops->fault(adreno_dev,
-				ADRENO_IOMMU_PAGE_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_PAGE_FAULT);
 	}
 
 	kgsl_context_put(context);

@@ -884,7 +884,7 @@ static void adreno_dispatcher_issuecmds(struct adreno_device *adreno_dev)
 	_decrement_submit_now(device);
 	return;
 done:
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 /**
@@ -1889,9 +1889,28 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	int halt;
 	bool gx_on;
 
-	fault = atomic_xchg(&dispatcher->fault, 0);
+	fault = adreno_gpu_fault(adreno_dev);
 	if (fault == 0)
 		return 0;
+
+	/*
+	 * Return early if there is a concurrent suspend in progress. The suspend thread will error
+	 * out in the presence of this hwsched fault and requeue the dispatcher to handle this fault
+	 */
+	if (!mutex_trylock(&adreno_dev->fault_recovery_mutex))
+		return 1;
+
+	/*
+	 * Wait long enough to allow the system to come out of suspend completely, which can take
+	 * variable amount of time especially if it has to rewind suspend processes and devices.
+	 */
+	if (!wait_for_completion_timeout(&adreno_dev->suspend_recovery_gate,
+			msecs_to_jiffies(ADRENO_SUSPEND_RECOVERY_GATE_TIMEOUT_MS))) {
+		dev_err(device->dev, "suspend recovery gate timeout\n");
+		adreno_scheduler_queue(adreno_dev);
+		mutex_unlock(&adreno_dev->fault_recovery_mutex);
+		return 1;
+	}
 
 	mutex_lock(&device->mutex);
 
@@ -1901,6 +1920,7 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	 */
 	if (!kgsl_state_is_awake(device)) {
 		mutex_unlock(&device->mutex);
+		mutex_unlock(&adreno_dev->fault_recovery_mutex);
 		return 0;
 	}
 
@@ -1924,6 +1944,7 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) && gx_on) {
 		if (adreno_smmu_is_stalled(adreno_dev)) {
 			mutex_unlock(&device->mutex);
+			mutex_unlock(&adreno_dev->fault_recovery_mutex);
 			dev_err(device->dev,
 				"SMMU is stalled without a pagefault\n");
 			return -EBUSY;
@@ -2032,13 +2053,15 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 
 	ret = adreno_reset(device, fault);
 
-	mutex_unlock(&device->mutex);
-
 	/* If adreno_reset() fails then what hope do we have for the future? */
 	BUG_ON(ret);
 
 	/* if any other fault got in until reset then ignore */
-	atomic_set(&dispatcher->fault, 0);
+	adreno_clear_gpu_fault(adreno_dev);
+
+	mutex_unlock(&device->mutex);
+
+	mutex_unlock(&adreno_dev->fault_recovery_mutex);
 
 	/* recover all the dispatch_q's starting with the one that hung */
 	if (dispatch_q)
@@ -2295,10 +2318,9 @@ static void _dispatcher_power_down(struct adreno_device *adreno_dev)
 
 static void adreno_dispatcher_work(struct kthread_work *work)
 {
-	struct adreno_dispatcher *dispatcher =
-		container_of(work, struct adreno_dispatcher, work);
 	struct adreno_device *adreno_dev =
-		container_of(dispatcher, struct adreno_device, dispatcher);
+		container_of(work, struct adreno_device, scheduler_work);
+	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int count = 0;
@@ -2348,14 +2370,6 @@ static void adreno_dispatcher_work(struct kthread_work *work)
 	mutex_unlock(&dispatcher->mutex);
 }
 
-void adreno_dispatcher_schedule(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
-
-	kthread_queue_work(dispatcher->worker, &dispatcher->work);
-}
-
 /*
  * Put a draw context on the dispatcher pending queue and schedule the
  * dispatcher. This is used to reschedule changes that might have been blocked
@@ -2365,14 +2379,7 @@ static void adreno_dispatcher_queue_context(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
 	dispatcher_queue_context(adreno_dev, drawctxt);
-	adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
-}
-
-void adreno_dispatcher_fault(struct adreno_device *adreno_dev,
-		u32 fault)
-{
-	adreno_set_gpu_fault(adreno_dev, fault);
-	adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
+	adreno_scheduler_queue(adreno_dev);
 }
 
 /*
@@ -2385,7 +2392,7 @@ static void adreno_dispatcher_timer(struct timer_list *t)
 	struct adreno_device *adreno_dev = container_of(dispatcher,
 					struct adreno_device, dispatcher);
 
-	adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
+	adreno_scheduler_queue(adreno_dev);
 }
 
 /**
@@ -2398,7 +2405,7 @@ void adreno_dispatcher_start(struct kgsl_device *device)
 	complete_all(&device->halt_gate);
 
 	/* Schedule the work loop to get things going */
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(ADRENO_DEVICE(device));
 }
 
 /**
@@ -2544,7 +2551,7 @@ static void adreno_dispatcher_close(struct adreno_device *adreno_dev)
 
 	mutex_unlock(&dispatcher->mutex);
 
-	kthread_destroy_worker(dispatcher->worker);
+	kthread_destroy_worker(adreno_dev->scheduler_worker);
 
 	adreno_set_dispatch_ops(adreno_dev, NULL);
 
@@ -2687,8 +2694,6 @@ static const struct adreno_dispatch_ops swsched_ops = {
 	.queue_cmds = adreno_dispatcher_queue_cmds,
 	.setup_context = adreno_dispatcher_setup_context,
 	.queue_context = adreno_dispatcher_queue_context,
-	.fault = adreno_dispatcher_fault,
-	.get_fault = adreno_gpu_fault,
 };
 
 /**
@@ -2711,10 +2716,10 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	dispatcher->worker = kthread_create_worker(0, "kgsl_dispatcher");
-	if (IS_ERR(dispatcher->worker)) {
+	adreno_dev->scheduler_worker = kthread_create_worker(0, "kgsl_dispatcher");
+	if (IS_ERR(adreno_dev->scheduler_worker)) {
 		kobject_put(&dispatcher->kobj);
-		return PTR_ERR(dispatcher->worker);
+		return PTR_ERR(adreno_dev->scheduler_worker);
 	}
 
 	WARN_ON(sysfs_create_files(&device->dev->kobj, _dispatch_attr_list));
@@ -2723,7 +2728,7 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 
 	timer_setup(&dispatcher->timer, adreno_dispatcher_timer, 0);
 
-	kthread_init_work(&dispatcher->work, adreno_dispatcher_work);
+	kthread_init_work(&adreno_dev->scheduler_work, adreno_dispatcher_work);
 
 	init_completion(&dispatcher->idle_gate);
 	complete_all(&dispatcher->idle_gate);
@@ -2737,7 +2742,7 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 
 	adreno_set_dispatch_ops(adreno_dev, &swsched_ops);
 
-	sched_set_fifo(dispatcher->worker->task);
+	sched_set_fifo(adreno_dev->scheduler_worker->task);
 
 	set_bit(ADRENO_DISPATCHER_INIT, &dispatcher->priv);
 
@@ -2779,17 +2784,24 @@ int adreno_dispatcher_idle(struct adreno_device *adreno_dev)
 	 * or pending dispatcher works on worker are
 	 * finished
 	 */
-	kthread_flush_worker(dispatcher->worker);
+	kthread_flush_worker(adreno_dev->scheduler_worker);
 
-	ret = wait_for_completion_timeout(&dispatcher->idle_gate,
-			msecs_to_jiffies(ADRENO_IDLE_TIMEOUT));
-	if (ret == 0) {
-		ret = -ETIMEDOUT;
-		WARN(1, "Dispatcher halt timeout\n");
-	} else if (ret < 0) {
-		dev_err(device->dev, "Dispatcher halt failed %d\n", ret);
+	if (adreno_gpu_fault(adreno_dev) != 0) {
+		ret = -EDEADLK;
 	} else {
-		ret = 0;
+		ret = wait_for_completion_timeout(&dispatcher->idle_gate,
+				msecs_to_jiffies(ADRENO_IDLE_TIMEOUT));
+		if (ret == 0) {
+			ret = -ETIMEDOUT;
+			WARN(1, "Dispatcher halt timeout\n");
+		} else if (ret < 0) {
+			dev_err(device->dev, "Dispatcher halt failed %d\n", ret);
+		} else {
+			ret = 0;
+		}
+
+		if (adreno_gpu_fault(adreno_dev) != 0)
+			ret = -EDEADLK;
 	}
 
 	mutex_lock(&device->mutex);
@@ -2798,6 +2810,6 @@ int adreno_dispatcher_idle(struct adreno_device *adreno_dev)
 	 * requeue dispatcher work to resubmit pending commands
 	 * that may have been blocked due to this idling request
 	 */
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 	return ret;
 }

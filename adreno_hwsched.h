@@ -72,13 +72,8 @@ struct adreno_hwsched {
 	struct llist_head jobs[16];
 	/** @requeue - Array of lists for dispatch jobs that got requeued */
 	struct llist_head requeue[16];
-	/** @work: The work structure to execute dispatcher function */
-	struct kthread_work work;
 	/** @cmd_list: List of objects submitted to dispatch queues */
 	struct list_head cmd_list;
-	/** @fault: Atomic to record a fault */
-	atomic_t fault;
-	struct kthread_worker *worker;
 	/** @hwsched_ops: Container for target specific hwscheduler ops */
 	const struct adreno_hwsched_ops *hwsched_ops;
 	/** @ctxt_bad: Container for the context bad hfi packet */
@@ -125,14 +120,6 @@ enum adreno_hwsched_flags {
 };
 
 /**
- * adreno_hwsched_trigger - Function to schedule the hwsched thread
- * @adreno_dev: A handle to adreno device
- *
- * Schedule the hw dispatcher for retiring and submitting command objects
- */
-void adreno_hwsched_trigger(struct adreno_device *adreno_dev);
-
-/**
  * adreno_hwsched_start() - activate the hwsched dispatcher
  * @adreno_dev: pointer to the adreno device
  *
@@ -151,21 +138,6 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 	const struct adreno_hwsched_ops *hwsched_ops);
 
 /**
- * adreno_hwsched_fault - Set hwsched fault to request recovery
- * @adreno_dev: A handle to adreno device
- * @fault: The type of fault
- */
-void adreno_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
-
-/**
- * adreno_hwsched_clear_fault() - Clear the hwsched fault
- * @adreno_dev: A pointer to an adreno_device structure
- *
- * Clear the hwsched fault status for adreno device
- */
-void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
-
-/**
  * adreno_hwsched_parse_fault_ib - Parse the faulty submission
  * @adreno_dev: pointer to the adreno device
  * @snapshot: Pointer to the snapshot structure
@@ -175,8 +147,6 @@ void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
  */
 void adreno_hwsched_parse_fault_cmdobj(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot);
-
-void adreno_hwsched_flush(struct adreno_device *adreno_dev);
 
 /**
  * adreno_hwsched_unregister_contexts - Reset context gmu_registered bit

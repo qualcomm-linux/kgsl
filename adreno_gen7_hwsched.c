@@ -58,7 +58,7 @@ void gen7_hwsched_fault(struct adreno_device *adreno_dev, u32 fault)
 	 */
 	_wakeup_hw_fence_waiters(adreno_dev, fault);
 
-	adreno_hwsched_fault(adreno_dev, fault);
+	adreno_scheduler_fault(adreno_dev, fault);
 }
 
 static void gen7_hwsched_snapshot_preemption_records(struct kgsl_device *device,
@@ -234,7 +234,7 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
 	/* Clear any hwsched faults that might have been left over */
-	adreno_hwsched_clear_fault(adreno_dev);
+	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)
@@ -326,7 +326,7 @@ static int gen7_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	gen7_gmu_irq_enable(adreno_dev);
 
 	/* Clear any hwsched faults that might have been left over */
-	adreno_hwsched_clear_fault(adreno_dev);
+	adreno_clear_gpu_fault(adreno_dev);
 
 	ret = gen7_gmu_device_start(adreno_dev);
 	if (ret)

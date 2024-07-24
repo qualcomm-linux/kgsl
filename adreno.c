@@ -15,6 +15,7 @@
 #include <linux/msm_kgsl.h>
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
+#include <linux/pm_domain.h>
 #include <linux/reset.h>
 #include <linux/trace.h>
 #include <linux/units.h>
@@ -379,7 +380,7 @@ void adreno_hang_int_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_irqctrl(adreno_dev, 0);
 
 	/* Trigger a fault in the dispatcher - this will effect a restart */
-	adreno_dispatcher_fault(adreno_dev, ADRENO_HARD_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
 /*
@@ -391,9 +392,7 @@ void adreno_hang_int_callback(struct adreno_device *adreno_dev, int bit)
  */
 void adreno_cp_callback(struct adreno_device *adreno_dev, int bit)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 static irqreturn_t adreno_irq_handler(int irq, void *data)
@@ -1164,10 +1163,13 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 
 	init_completion(&adreno_dev->dev.hwaccess_gate);
 	init_completion(&adreno_dev->dev.halt_gate);
+	init_completion(&adreno_dev->suspend_recovery_gate);
+	complete_all(&adreno_dev->suspend_recovery_gate);
 
 	idr_init(&adreno_dev->dev.context_idr);
 
 	mutex_init(&adreno_dev->dev.mutex);
+	mutex_init(&adreno_dev->fault_recovery_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
 	/* Set the fault tolerance policy to replay, skip, throttle */
@@ -1218,6 +1220,73 @@ static int adreno_irq_setup(struct platform_device *pdev,
 		return 0;
 
 	return kgsl_request_irq(pdev, "kgsl_3d0_irq", adreno_irq_handler, KGSL_DEVICE(adreno_dev));
+}
+
+static int adreno_pm_notifier(struct notifier_block *nb, unsigned long event, void *unused)
+{
+	struct adreno_device *adreno_dev = container_of(nb, struct adreno_device, pm_nb);
+	struct kgsl_pwrctrl *pwr = &adreno_dev->dev.pwrctrl;
+	struct generic_pm_domain *pd = NULL;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if ((event != PM_SUSPEND_PREPARE) && (event != PM_POST_SUSPEND))
+		return NOTIFY_DONE;
+
+	if (pwr->gx_pd) {
+		pd = container_of(pwr->gx_pd->pm_domain, struct generic_pm_domain, domain);
+
+		if (pd->prepared_count) {
+			dev_err_ratelimited(device->dev,
+				"unexpected gx pd prepared_count:%d event:%lu\n",
+				pd->prepared_count, event);
+			return NOTIFY_BAD;
+		}
+	}
+
+	if (pwr->cx_pd) {
+		pd = container_of(pwr->cx_pd->pm_domain, struct generic_pm_domain, domain);
+
+		if (pd->prepared_count) {
+			dev_err_ratelimited(device->dev,
+				"unexpected cx pd prepared_count:%d event:%lu\n",
+				pd->prepared_count, event);
+			return NOTIFY_BAD;
+		}
+	}
+
+	if (event == PM_SUSPEND_PREPARE) {
+		/*
+		 * In presence of a hardware fault, cancel system suspend (by returning NOTIFY_BAD)
+		 * here to make sure system suspend doesn't increment the pd prepared_count. This
+		 * ensures that cx and gx gdscs can be toggled successfully during fault recovery.
+		 */
+		if (adreno_gpu_fault(adreno_dev)) {
+			dev_err_ratelimited(device->dev, "cancelling suspend because of fault\n");
+			complete_all(&adreno_dev->suspend_recovery_gate);
+			adreno_scheduler_queue(adreno_dev);
+			return NOTIFY_BAD;
+		}
+
+		reinit_completion(&adreno_dev->suspend_recovery_gate);
+		return NOTIFY_DONE;
+	}
+
+	/*
+	 * We get PM_POST_SUSPEND if we failed kgsl suspend in the presence of a hardware fault,
+	 * or when system resume finishes. In either case, this means the system has come out of
+	 * suspend and has put back the power domain prepared_count. This means we are safe to
+	 * perform fault recovery.
+	 */
+	if (event == PM_POST_SUSPEND) {
+		complete_all(&adreno_dev->suspend_recovery_gate);
+		/*
+		 * Queue the gpu scheduler to proceed with fault recovery in case there was a
+		 * fault
+		 */
+		adreno_scheduler_queue(adreno_dev);
+	}
+
+	return NOTIFY_DONE;
 }
 
 int adreno_device_probe(struct platform_device *pdev,
@@ -1402,6 +1471,18 @@ int adreno_device_probe(struct platform_device *pdev,
 		}
 	}
 #endif
+
+	/*
+	 * With power domains, we cannot perform recovery during a concurrent system suspend because
+	 * system suspend path increments power domain prepared_count, which prevents successful
+	 * toggling of the power domain gdsc while system is in suspend path. Hence, get
+	 * notifications when system has come out of suspend completely, so that we can perform
+	 * fault recovery.
+	 */
+	if (device->pwrctrl.gx_pd || device->pwrctrl.cx_pd) {
+		adreno_dev->pm_nb.notifier_call = adreno_pm_notifier;
+		register_pm_notifier(&adreno_dev->pm_nb);
+	}
 
 	kgsl_qcom_va_md_register(device);
 
@@ -1598,6 +1679,10 @@ static int adreno_pm_suspend(struct device *dev)
 	adreno_dev = ADRENO_DEVICE(device);
 	ops = ADRENO_POWER_OPS(adreno_dev);
 
+	/* Return early if fault recovery is in progress */
+	if (!mutex_trylock(&adreno_dev->fault_recovery_mutex))
+		return -EDEADLK;
+
 	mutex_lock(&device->mutex);
 	status = ops->pm_suspend(adreno_dev);
 
@@ -1607,6 +1692,7 @@ static int adreno_pm_suspend(struct device *dev)
 #endif
 
 	mutex_unlock(&device->mutex);
+	mutex_unlock(&adreno_dev->fault_recovery_mutex);
 
 	if (status)
 		return status;
@@ -3237,10 +3323,7 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 		return (val & BIT(24));
 	}
 
-	if (WARN_ON(!adreno_dev->dispatch_ops || !adreno_dev->dispatch_ops->get_fault))
-		return false;
-
-	fault = adreno_dev->dispatch_ops->get_fault(adreno_dev);
+	fault = adreno_gpu_fault(adreno_dev);
 
 	return ((fault & ADRENO_IOMMU_PAGE_FAULT) &&
 		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;

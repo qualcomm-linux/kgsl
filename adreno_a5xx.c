@@ -2112,7 +2112,7 @@ static void a5xx_irq_storm_worker(struct work_struct *work)
 	mutex_unlock(&device->mutex);
 
 	/* Reschedule just to make sure everything retires */
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 static void a5xx_cp_callback(struct adreno_device *adreno_dev, int bit)
@@ -2162,7 +2162,7 @@ static void a5xx_cp_callback(struct adreno_device *adreno_dev, int bit)
 	}
 
 	a5xx_preemption_trigger(adreno_dev);
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_queue(adreno_dev);
 }
 
 static const char *gpmu_int_msg[32] = {
@@ -2237,8 +2237,7 @@ static void a5x_gpc_err_int_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_irqctrl(adreno_dev, 0);
 
 	/* Trigger a fault in the dispatcher - this will effect a restart */
-	adreno_dispatcher_fault(adreno_dev, ADRENO_SOFT_FAULT);
-	adreno_dispatcher_schedule(device);
+	adreno_scheduler_fault(adreno_dev, ADRENO_SOFT_FAULT);
 }
 
 u64 a5xx_read_alwayson(struct adreno_device *adreno_dev)
