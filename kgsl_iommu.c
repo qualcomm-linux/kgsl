@@ -1079,6 +1079,7 @@ static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 	const char *fault_type = NULL;
 	const char *comm = NULL;
 	u32 ptname = KGSL_MMU_GLOBAL_PT;
+	struct adreno_context *drawctxt = context ? ADRENO_CONTEXT(context) : NULL;
 	int id;
 
 	if (private) {
@@ -1112,8 +1113,9 @@ static void kgsl_iommu_print_fault(struct kgsl_mmu *mmu,
 		return;
 
 	dev_crit(device->dev,
-		"GPU PAGE FAULT: addr = %lX pid= %d name=%s drawctxt=%d context pid = %d\n", addr,
-		ptname, comm, contextid, context ? context->tid : 0);
+		"GPU PAGE FAULT: addr = %lX group id= %d name=%s drawctxt=%d context pid = %d ctx_type=%s\n",
+		addr, ptname, comm, contextid, context ? context->tid : 0,
+		drawctxt ? kgsl_context_type(drawctxt->type) : "ANY");
 
 	dev_crit(device->dev,
 		"context=%s TTBR0=0x%llx (%s %s fault)\n",
