@@ -359,6 +359,7 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
+	u32 bitmask = adreno_is_gen8_2_0(adreno_dev) ? BIT(30) : BIT(16);
 
 	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))
 		return 0;
@@ -377,7 +378,7 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 	wmb();
 
 	ret = gen8_timed_poll_check_rscc(gmu, GEN8_GPU_RSCC_RSC_STATUS0_DRV0,
-			BIT(16), 100, BIT(16));
+			bitmask, 100, bitmask);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device), "GPU RSC power off fail\n");
 		return -ETIMEDOUT;

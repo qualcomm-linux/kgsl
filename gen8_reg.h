@@ -56,6 +56,8 @@
 #define GEN8_RBBM_SW_FUSE_INT_STATUS             0x071
 #define GEN8_RBBM_SW_FUSE_INT_MASK               0x072
 #define GEN8_RBBM_SW_RESET_CMD                   0x073
+#define GEN8_RBBM_POWER_UP_RESET_SW_OVERRIDE     0x07d
+#define GEN8_RBBM_POWER_UP_RESET_SW_BV_OVERRIDE  0x07e
 #define GEN8_RBBM_CLOCK_CNTL_GLOBAL              0x09a
 #define GEN8_RBBM_CGC_GLOBAL_LOAD_CMD            0x09b
 #define GEN8_RBBM_CGC_P2S_TRIG_CMD               0x09c
