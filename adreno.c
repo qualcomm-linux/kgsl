@@ -119,7 +119,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	return ret;
 }
 
-#if (IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
+#if (IS_ENABLED(CONFIG_HIBERNATION) || IS_ENABLED(CONFIG_DEEPSLEEP))
 static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3562,7 +3562,7 @@ static int adreno_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
+#if IS_ENABLED(CONFIG_HIBERNATION)
 #if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)
 /*
  * Issue hyp_assign call to assign non-used internal/userspace secure
@@ -3778,7 +3778,7 @@ static const struct dev_pm_ops adreno_pm_ops = {
 static const struct dev_pm_ops adreno_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(adreno_pm_suspend, adreno_pm_resume)
 };
-#endif /* IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION) */
+#endif /* IS_ENABLED(CONFIG_HIBERNATION) */
 
 static struct platform_driver adreno_platform_driver = {
 	.probe = adreno_probe,
