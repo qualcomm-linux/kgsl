@@ -131,7 +131,7 @@ static int gen8_counter_gbif_enable(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 shift = counter << 3;
+	u32 shift = (counter % 4) << 3;
 	u32 select = BIT(counter);
 
 	if (countable > 0xff)
@@ -160,7 +160,7 @@ static int gen8_counter_gbif_pwr_enable(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 shift = counter << 3;
+	u32 shift = (counter % 4) << 3;
 	u32 select = BIT(16 + counter);
 
 	if (countable > 0xff)
