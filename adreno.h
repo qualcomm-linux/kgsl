@@ -834,6 +834,20 @@ struct adreno_drawobj_profile_entry {
 	 ((_index) * sizeof(struct adreno_drawobj_profile_entry) \
 	  + offsetof(struct adreno_drawobj_profile_entry, _member))
 
+/**
+ * struct adreno_submit_time - utility structure to store the wall clock / GPU
+ * ticks at command submit time
+ * @ticks: GPU ticks at submit time (from the 19.2Mhz timer)
+ * @ktime: local clock time (in nanoseconds)
+ * @utime: Wall clock time
+ * @drawobj: the object that we want to profile
+ */
+struct adreno_submit_time {
+	u64 ticks;
+	u64 ktime;
+	struct timespec64 utime;
+	struct kgsl_drawobj *drawobj;
+};
 
 /**
  * adreno_regs: List of registers that are used in kgsl driver for all

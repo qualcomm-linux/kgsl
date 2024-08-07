@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_RINGBUFFER_H
 #define __ADRENO_RINGBUFFER_H
@@ -51,21 +51,6 @@
 
 struct kgsl_device;
 struct kgsl_device_private;
-
-/**
- * struct adreno_submit_time - utility structure to store the wall clock / GPU
- * ticks at command submit time
- * @ticks: GPU ticks at submit time (from the 19.2Mhz timer)
- * @ktime: local clock time (in nanoseconds)
- * @utime: Wall clock time
- * @drawobj: the object that we want to profile
- */
-struct adreno_submit_time {
-	uint64_t ticks;
-	u64 ktime;
-	struct timespec64 utime;
-	struct kgsl_drawobj *drawobj;
-};
 
 /**
  * This is to keep track whether the SET_PSEUDO_REGISTER packet needs to be submitted

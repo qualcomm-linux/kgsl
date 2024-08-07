@@ -87,6 +87,7 @@ enum adreno_dispatcher_flags {
 };
 
 struct adreno_device;
+struct adreno_submit_time;
 struct kgsl_device;
 
 void adreno_dispatcher_start(struct kgsl_device *device);
