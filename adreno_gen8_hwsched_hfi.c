@@ -2049,6 +2049,13 @@ err:
 	return ret;
 }
 
+static void print_warmboot_gpu_error(struct device *dev, struct pending_cmd *ret_cmd)
+{
+	dev_err(dev,
+		"HFI ACK: Req=0x%8.8X, Result=0x%8.8X Error:0x%8.8X\n",
+		ret_cmd->results[1], ret_cmd->results[2], ret_cmd->results[3]);
+}
+
 static int gen8_hwsched_warmboot_gpu(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -2056,25 +2063,42 @@ static int gen8_hwsched_warmboot_gpu(struct adreno_device *adreno_dev)
 	int ret = 0;
 
 	ret = gen8_hwsched_hfi_warmboot_gpu_cmd(adreno_dev, &ret_cmd);
-	if (!ret)
-		return ret;
-
-	if (MSG_HDR_GET_TYPE(ret_cmd.results[1]) != H2F_MSG_WARMBOOT_CMD)
+	if (ret)
 		goto err;
 
-	switch (MSG_HDR_GET_TYPE(ret_cmd.results[2])) {
-	case H2F_MSG_ISSUE_CMD_RAW: {
-		if (ret_cmd.results[2] == gmu->cp_init_hdr)
-			gen8_spin_idle_debug(adreno_dev,
-				"CP initialization failed to idle\n");
-		else if (ret_cmd.results[2] == gmu->switch_to_unsec_hdr)
-			gen8_spin_idle_debug(adreno_dev,
-				"Switch to unsecure failed to idle\n");
+	/* Check if the ack belongs to the warmboot command */
+	if (MSG_HDR_GET_ID(ret_cmd.results[0]) != H2F_MSG_WARMBOOT_CMD) {
+		ret = -EINVAL;
+		goto err;
+	}
+
+	switch (ret_cmd.results[3]) {
+	/* If ack has no error code then GPU executed raw commands just fine */
+	case GMU_SUCCESS:
+		return ret_cmd.results[2];
+	/* If GPU timedout processing raw commands, check which raw command failed */
+	case GMU_ERROR_TIMEOUT: {
+		if (MSG_HDR_GET_ID(ret_cmd.results[1]) == H2F_MSG_ISSUE_CMD_RAW) {
+
+			/* Based on sequence number we can differentiate which command failed */
+			if (ret_cmd.results[1] == gmu->cp_init_hdr)
+				gen8_spin_idle_debug(adreno_dev,
+					"CP initialization failed to idle\n");
+			else if (ret_cmd.results[1] == gmu->switch_to_unsec_hdr)
+				gen8_spin_idle_debug(adreno_dev,
+					"Switch to unsecure failed to idle\n");
+		} else if (MSG_HDR_GET_ID(ret_cmd.results[1]) == H2F_MSG_ISSUE_LPAC_CMD_RAW) {
+			gen8_spin_idle_debug_lpac(adreno_dev,
+				"LPAC CP initialization failed to idle\n");
+		} else {
+			print_warmboot_gpu_error(&gmu->pdev->dev, &ret_cmd);
 		}
+		ret = -EINVAL;
 		break;
-	case H2F_MSG_ISSUE_LPAC_CMD_RAW:
-		gen8_spin_idle_debug_lpac(adreno_dev,
-			"LPAC CP initialization failed to idle\n");
+	}
+	default:
+		print_warmboot_gpu_error(&gmu->pdev->dev, &ret_cmd);
+		ret = -EINVAL;
 		break;
 	}
 err:
