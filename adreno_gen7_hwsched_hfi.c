@@ -3248,7 +3248,7 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 	if (!DRAWCTXT_SLOT_AVAILABLE(drawctxt->hw_fence_count))
 		return NULL;
 
-	if (_kgsl_context_get(&drawctxt->base))
+	if (!_kgsl_context_get(&drawctxt->base))
 		return NULL;
 
 	entry = kmem_cache_zalloc(hwsched->hw_fence_cache, GFP_ATOMIC);
