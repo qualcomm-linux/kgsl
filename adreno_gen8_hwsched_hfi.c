@@ -2909,6 +2909,31 @@ static void move_detached_context_hardware_fences(struct adreno_device *adreno_d
 	}
 }
 
+static int drain_context_hw_fence_gmu(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
+{
+	struct adreno_hw_fence_entry *entry, *tmp;
+	int ret = 0;
+
+	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
+
+		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
+			HW_FENCE_FLAG_SKIP_MEMSTORE);
+		if (ret)
+			break;
+
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+	}
+
+	if (ret) {
+		move_detached_context_hardware_fences(adreno_dev, drawctxt);
+		gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev), GMU_FAULT_HW_FENCE);
+		gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+	}
+
+	return ret;
+}
+
 /**
  * check_detached_context_hardware_fences - When this context has been un-registered with the GMU,
  * make sure all the hardware fences(that were sent to GMU) for this context have been sent to
@@ -2939,17 +2964,7 @@ static int check_detached_context_hardware_fences(struct adreno_device *adreno_d
 	}
 
 	/* Send hardware fences (to TxQueue) that were not dispatched to GMU */
-	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
-
-		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
-			HW_FENCE_FLAG_SKIP_MEMSTORE);
-		if (ret)
-			goto fault;
-
-		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
-	}
-
-	return 0;
+	return drain_context_hw_fence_gmu(adreno_dev, drawctxt);
 
 fault:
 	move_detached_context_hardware_fences(adreno_dev, drawctxt);
@@ -3507,12 +3522,34 @@ static void drain_context_hw_fence_cpu(struct adreno_device *adreno_dev,
 {
 	struct adreno_hw_fence_entry *entry, *tmp;
 
+	/*
+	 * Triggering these fences from HLOS may send interrupts to soccp. Hence, vote for soccp
+	 * here
+	 */
+	gen8_hwsched_soccp_vote(adreno_dev, true);
+
 	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_list, node) {
 
 		kgsl_hw_fence_trigger_cpu(KGSL_DEVICE(adreno_dev), entry->kfence);
 
 		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	}
+
+	gen8_hwsched_soccp_vote(adreno_dev, false);
+}
+
+static void drain_context_hw_fences(struct adreno_device *adreno_dev,
+	struct adreno_context *drawctxt)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+
+	if (list_empty(&drawctxt->hw_fence_list))
+		return;
+
+	if (test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
+		drain_context_hw_fence_gmu(adreno_dev, drawctxt);
+	else
+		drain_context_hw_fence_cpu(adreno_dev, drawctxt);
 }
 
 static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
@@ -3539,7 +3576,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	/* Only send HFI if device is not in SLUMBER */
 	if (!context->gmu_registered ||
 		!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags)) {
-		drain_context_hw_fence_cpu(adreno_dev, drawctxt);
+		drain_context_hw_fences(adreno_dev, drawctxt);
 		return 0;
 	}
 
