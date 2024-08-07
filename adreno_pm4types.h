@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_PM4TYPES_H
 #define __ADRENO_PM4TYPES_H
@@ -163,6 +163,7 @@
 /* This is a commonly used CP_EVENT_WRITE */
 #define CACHE_FLUSH_TS 4
 #define CACHE_CLEAN 0x31
+#define LRZ_CACHE_FLUSH 0x26
 
 /* Controls which threads execute the PM4 commands the follow this packet */
 #define CP_THREAD_CONTROL 0x17
