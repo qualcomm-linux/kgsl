@@ -24,6 +24,9 @@ static void gen8_rbbm_perfctr_flush(struct kgsl_device *device)
 	kgsl_regwrite(device, GEN8_RBBM_PERFCTR_FLUSH_HOST_CMD, BIT(0));
 	kgsl_regwrite(device, GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD, BIT(0));
 
+	/* Ensure all writes are posted before polling status register */
+	wmb();
+
 	ret = kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS,
 		val, (val & PERFCOUNTER_FLUSH_DONE_MASK) == PERFCOUNTER_FLUSH_DONE_MASK,
 		100, 100 * 1000);
@@ -55,21 +58,15 @@ static int gen8_counter_br_enable(struct adreno_device *adreno_dev,
 		const struct adreno_perfcount_group *group,
 		u32 counter, u32 countable)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	int ret = 0;
-	u32 val = 0;
+	int ret;
 
-	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(15, 12), PIPE_BR));
+	gen8_host_aperture_set(adreno_dev, PIPE_BR, 0, 0);
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
 			FIELD_PREP(GENMASK(15, 12), PIPE_BR), group->flags);
 
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
-
-	/* Ensure all writes are posted before reading the piped register */
-	mb();
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	if (!ret)
 		reg->value = 0;
@@ -81,21 +78,15 @@ static int gen8_counter_bv_enable(struct adreno_device *adreno_dev,
 		const struct adreno_perfcount_group *group,
 		u32 counter, u32 countable)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	int ret = 0;
-	u32 val = 0;
+	int ret;
 
-	kgsl_regread(device, GEN8_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(15, 12), PIPE_BV));
+	gen8_host_aperture_set(adreno_dev, PIPE_BV, 0, 0);
 
 	ret = gen8_perfcounter_update(adreno_dev, reg, true,
 				FIELD_PREP(GENMASK(15, 12), PIPE_BV), group->flags);
 
-	kgsl_regwrite(device, GEN8_CP_APERTURE_CNTL_HOST, val);
-
-	/* Ensure all writes are posted before reading the piped register */
-	mb();
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	if (!ret)
 		reg->value = 0;

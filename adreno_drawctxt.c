@@ -567,7 +567,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 		mutex_unlock(&device->mutex);
 
 		/* Schedule dispatcher to kick in recovery */
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 
 		/* Wait for context to be invalidated and release context */
 		wait_event_interruptible_timeout(drawctxt->timeout,

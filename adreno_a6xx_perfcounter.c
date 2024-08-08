@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -135,7 +135,7 @@ static int a6xx_counter_inline_enable(struct adreno_device *adreno_dev,
 	 * rb[0] will not get scheduled to run
 	 */
 	if (adreno_dev->cur_rb != rb)
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 
 	/* wait for the above commands submitted to complete */
 	ret = adreno_ringbuffer_waittimestamp(rb, rb->timestamp,

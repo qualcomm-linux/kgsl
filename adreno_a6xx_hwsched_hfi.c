@@ -439,7 +439,7 @@ static void process_ctx_bad(struct adreno_device *adreno_dev)
 	else
 		log_gpu_fault(adreno_dev);
 
-	adreno_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
 static u32 peek_next_header(struct a6xx_gmu_device *gmu, uint32_t queue_idx)
@@ -495,7 +495,7 @@ static void a6xx_hwsched_process_msgq(struct adreno_device *adreno_dev)
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
 			a6xx_receive_ack_async(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_TS_RETIRE) {
-			adreno_hwsched_trigger(adreno_dev);
+			adreno_scheduler_queue(adreno_dev);
 			log_profiling_info(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_RELEASE) {
 			struct hfi_gmu_cntr_release_cmd *cmd =
@@ -554,7 +554,7 @@ static void a6xx_hwsched_process_dbgq(struct adreno_device *adreno_dev, bool lim
 	if (!recovery)
 		return;
 
-	adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 /* HFI interrupt handler */
@@ -583,7 +583,7 @@ static irqreturn_t a6xx_hwsched_hfi_handler(int irq, void *data)
 
 	if (status & (HFI_IRQ_MSGQ_MASK | HFI_IRQ_DBGQ_MASK)) {
 		wake_up_interruptible(&hfi->f2h_wq);
-		adreno_hwsched_trigger(adreno_dev);
+		adreno_scheduler_queue(adreno_dev);
 	}
 	if (status & HFI_IRQ_CM3_FAULT_MASK) {
 		atomic_set(&gmu->cm3_fault, 1);
@@ -594,7 +594,7 @@ static irqreturn_t a6xx_hwsched_hfi_handler(int irq, void *data)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"GMU CM3 fault interrupt received\n");
 
-		adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 
 	/* Ignore OOB bits */
@@ -1238,8 +1238,7 @@ int a6xx_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	ret = a6xx_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_A6XX_KPROF,
-			1, 0);
+	ret = a6xx_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_KPROF, 1, 0);
 	if (ret)
 		goto err;
 
@@ -1717,7 +1716,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+			adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -1729,7 +1728,7 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 			context->id, ret);
 
 		if (device->gmu_fault)
-			adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+			adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 
 		return ret;
 	}
@@ -1936,7 +1935,7 @@ int a6xx_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	int ret;
 	static bool active;
 
-	if (adreno_gpu_halt(adreno_dev) || adreno_hwsched_gpu_fault(adreno_dev))
+	if (adreno_gpu_halt(adreno_dev) || adreno_gpu_fault(adreno_dev))
 		return -EBUSY;
 
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {
@@ -2027,7 +2026,7 @@ static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
 	 * replayed after recovery.
 	 */
 	adreno_drawctxt_set_guilty(device, context);
-	adreno_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
 static int send_context_unregister_hfi(struct adreno_device *adreno_dev,

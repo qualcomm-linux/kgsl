@@ -139,7 +139,7 @@ static int gen7_counter_inline_enable(struct adreno_device *adreno_dev,
 	 * rb[0] will not get scheduled to run
 	 */
 	if (adreno_dev->cur_rb != rb)
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 
 	/* wait for the above commands submitted to complete */
 	ret = adreno_ringbuffer_waittimestamp(rb, rb->timestamp,

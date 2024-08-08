@@ -298,16 +298,22 @@ static void _get_syncobj_string(char *str, u32 max_size, struct hfi_syncobj_lega
 	}
 }
 
-static void log_syncobj(struct gen7_gmu_device *gmu, struct hfi_submit_syncobj *cmd)
+static void log_syncobj(struct gen7_gmu_device *gmu, struct adreno_context *drawctxt,
+		struct hfi_submit_syncobj *cmd, u32 syncobj_read_idx)
 {
-	struct hfi_syncobj_legacy *syncobj = (struct hfi_syncobj_legacy *)&cmd[1];
+	struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+	struct hfi_syncobj_legacy syncobj;
 	char str[128];
 	u32 i = 0;
 
 	for (i = 0; i < cmd->num_syncobj; i++) {
-		_get_syncobj_string(str, sizeof(str), syncobj, i);
+		if (adreno_gmu_context_queue_read(drawctxt, (u32 *) &syncobj, syncobj_read_idx,
+			sizeof(syncobj) >> 2))
+			break;
+
+		_get_syncobj_string(str, sizeof(str), &syncobj, i);
 		dev_err(&gmu->pdev->dev, "%s\n", str);
-		syncobj++;
+		syncobj_read_idx = (syncobj_read_idx + (sizeof(syncobj) >> 2)) % hdr->queue_size;
 	}
 }
 
@@ -318,7 +324,7 @@ static void find_timeout_syncobj(struct adreno_device *adreno_dev, u32 ctxt_id, 
 	struct adreno_context *drawctxt;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gmu_context_queue_header *hdr;
-	struct hfi_submit_syncobj *cmd;
+	struct hfi_submit_syncobj cmd;
 	u32 *queue, i;
 	int ret;
 
@@ -342,10 +348,12 @@ static void find_timeout_syncobj(struct adreno_device *adreno_dev, u32 ctxt_id, 
 			continue;
 		}
 
-		cmd = (struct hfi_submit_syncobj *)&queue[i];
+		if (adreno_gmu_context_queue_read(drawctxt, (u32 *) &cmd, i, sizeof(cmd) >> 2))
+			break;
 
-		if (cmd->timestamp == ts) {
-			log_syncobj(gmu, cmd);
+		if (cmd.timestamp == ts) {
+			log_syncobj(gmu, drawctxt, &cmd,
+				(i + (sizeof(cmd) >> 2)) % hdr->queue_size);
 			break;
 		}
 		i = (i + MSG_HDR_GET_SIZE(queue[i])) % hdr->queue_size;
@@ -928,7 +936,6 @@ static void gen7_trigger_syncobj_query(struct adreno_device *adreno_dev,
 	u32 *rcvd)
 {
 	struct syncobj_query_work *query_work;
-	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_syncobj_query_cmd *cmd = (struct hfi_syncobj_query_cmd *)rcvd;
 	struct kgsl_context *context = NULL;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -961,7 +968,7 @@ static void gen7_trigger_syncobj_query(struct adreno_device *adreno_dev,
 	memcpy(&query_work->cmd, cmd, sizeof(*cmd));
 	query_work->context = context;
 
-	kthread_queue_work(hwsched->worker, &query_work->work);
+	kthread_queue_work(adreno_dev->scheduler_worker, &query_work->work);
 }
 
 /*
@@ -1125,7 +1132,7 @@ static void _disable_hw_fence_throttle(struct adreno_device *adreno_dev, bool cl
 	/* Wake up dispatcher and any sleeping threads that want to create hardware fences */
 	if (max) {
 		adreno_put_gpu_halt(adreno_dev);
-		adreno_hwsched_trigger(adreno_dev);
+		adreno_scheduler_queue(adreno_dev);
 		wake_up_all(&hfi->hw_fence.unack_wq);
 	}
 }
@@ -1219,7 +1226,7 @@ static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 received_
 	 */
 	if (drawctxt) {
 		kthread_init_work(&hfi->defer_hw_fence_work, gen7_defer_hw_fence_work);
-		kthread_queue_work(adreno_dev->hwsched.worker, &hfi->defer_hw_fence_work);
+		kthread_queue_work(adreno_dev->scheduler_worker, &hfi->defer_hw_fence_work);
 		return;
 	}
 
@@ -1270,7 +1277,7 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			break;
 		case F2H_MSG_TS_RETIRE:
 			log_profiling_info(adreno_dev, rcvd);
-			adreno_hwsched_trigger(adreno_dev);
+			adreno_scheduler_queue(adreno_dev);
 			break;
 		case F2H_MSG_SYNCOBJ_QUERY:
 			gen7_trigger_syncobj_query(adreno_dev, rcvd);
@@ -1365,7 +1372,7 @@ static irqreturn_t gen7_hwsched_hfi_handler(int irq, void *data)
 
 	if (status & (HFI_IRQ_MSGQ_MASK | HFI_IRQ_DBGQ_MASK)) {
 		wake_up_interruptible(&hfi->f2h_wq);
-		adreno_hwsched_trigger(adreno_dev);
+		adreno_scheduler_queue(adreno_dev);
 	}
 	if (status & HFI_IRQ_CM3_FAULT_MASK) {
 		atomic_set(&gmu->cm3_fault, 1);
@@ -3819,7 +3826,7 @@ int gen7_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
 	int ret;
 	static bool active;
 
-	if (adreno_gpu_halt(adreno_dev) || adreno_hwsched_gpu_fault(adreno_dev))
+	if (adreno_gpu_halt(adreno_dev) || adreno_gpu_fault(adreno_dev))
 		return -EBUSY;
 
 	if (test_bit(CMDOBJ_RECURRING_STOP, &cmdobj->priv)) {
