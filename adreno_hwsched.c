@@ -2452,10 +2452,10 @@ static void adreno_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 		if ((payload->type == type) && (payload->data[i] == key)) {
 			u32 j = 1;
 
-			do {
+			while (num_values--) {
 				ptr[j - 1] = payload->data[i + j];
 				j++;
-			} while (num_values--);
+			}
 			break;
 		}
 
