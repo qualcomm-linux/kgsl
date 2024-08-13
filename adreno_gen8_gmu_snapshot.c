@@ -264,7 +264,8 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 		adreno_snapshot_registers_v2,
 		(void *) gen8_snapshot_block_list->gmu_cx_unsliced_regs);
 
-	if (!gen8_gmu_gx_is_on(adreno_dev))
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) ||
+		!gen8_gmu_gx_is_on(adreno_dev))
 		goto dtcm;
 
 	/* Set fence to ALLOW mode so registers can be read */

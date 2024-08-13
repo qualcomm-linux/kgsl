@@ -686,6 +686,14 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN8_GMUCX_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -856,6 +864,9 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 	/* Clear any previously set cm3 fault */
 	atomic_set(&gmu->cm3_fault, 0);
+
+	/* Init the power state register before GMU turns on GX */
+	gmu_core_regwrite(device, GEN8_GMUCX_RPMH_POWER_STATE, 0xF);
 
 	/* Vote veto for FAL10 */
 	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
