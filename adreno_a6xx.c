@@ -275,7 +275,7 @@ __get_rbbm_clock_cntl_on(struct adreno_device *adreno_dev)
 {
 	if (adreno_is_a630(adreno_dev))
 		return 0x8AA8AA02;
-	else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev))
+	else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev))
 		return 0xAAA8AA82;
 	else if (adreno_is_a702(adreno_dev))
 		return 0xAAAAAA82;
@@ -378,7 +378,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 */
 
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 1, 0);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -398,7 +398,7 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Hence skip GMU_GX registers for A612.
 	 */
 	if (gmu_core_isenabled(device) && !adreno_is_a612(adreno_dev) &&
-		!adreno_is_a610(adreno_dev) && !adreno_is_a702(adreno_dev))
+		!adreno_is_a610_family(adreno_dev) && !adreno_is_a702(adreno_dev))
 		gmu_core_regrmw(device,
 			A6XX_GPU_GMU_GX_SPTPRAC_CLOCK_CONTROL, 0, 1);
 	else if (adreno_is_a619_holi(adreno_dev))
@@ -624,8 +624,8 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		       !adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x02000140);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x8040362C);
-	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev) ||
-			adreno_is_a702(adreno_dev)) {
+	} else if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev) ||
+		adreno_is_a702(adreno_dev)) {
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_2, 0x00800060);
 		kgsl_regwrite(device, A6XX_CP_ROQ_THRESHOLDS_1, 0x40201b16);
 	} else {
@@ -642,7 +642,7 @@ void a6xx_start(struct adreno_device *adreno_dev)
 		kgsl_regwrite(device, A6XX_CP_LPAC_PROG_FIFO_SIZE, 0x00000020);
 	}
 
-	if (adreno_is_a612(adreno_dev) || adreno_is_a610(adreno_dev)) {
+	if (adreno_is_a612(adreno_dev) || adreno_is_a610_family(adreno_dev)) {
 		/* For A612 and A610 Mem pool size is reduced to 48 */
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_SIZE, 48);
 		kgsl_regwrite(device, A6XX_CP_MEM_POOL_DBG_ADDR, 47);
@@ -1230,6 +1230,25 @@ static int a6xx_sptprac_enable(struct adreno_device *adreno_dev)
 static void a6xx_sptprac_disable(struct adreno_device *adreno_dev)
 {
 	a6xx_gmu_sptprac_disable(adreno_dev);
+}
+
+/*
+ * a6xx_prepare_for_regulator_disable() - Prepare for regulator disable
+ * @adreno_dev: Pointer to Adreno device
+ */
+static void a6xx_prepare_for_regulator_disable(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	/* This sequence is only required for A611 */
+	if (!adreno_is_a611(adreno_dev))
+		return;
+
+	kgsl_regwrite(device, A6XX_RBBM_SW_RESET_CMD, 0x1);
+	/* Make sure above writes are posted before turning off power resource.*/
+	wmb();
+	/*wait for 100usecs, to allow the software reset to complete*/
+	udelay(100);
 }
 
 /*
@@ -2336,8 +2355,7 @@ const struct adreno_gpudev adreno_a6xx_gpudev = {
 	.init = a6xx_nogmu_init,
 	.irq_handler = a6xx_irq_handler,
 	.rb_start = a6xx_rb_start,
-	.regulator_enable = a6xx_sptprac_enable,
-	.regulator_disable = a6xx_sptprac_disable,
+	.regulator_disable = a6xx_prepare_for_regulator_disable,
 	.gpu_keepalive = a6xx_gpu_keepalive,
 	.hw_isidle = a6xx_hw_isidle,
 	.iommu_fault_block = a6xx_iommu_fault_block,
