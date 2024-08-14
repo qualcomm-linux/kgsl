@@ -1629,6 +1629,36 @@ ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *bu
 	return count;
 }
 
+void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev,
+		u32 context_id)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_context *context = kgsl_context_get(device, context_id);
+	struct hfi_context_rule_cmd cmd = {0};
+	int ret;
+
+	if ((!context) || (!context->gmu_registered) || (device->state != KGSL_STATE_ACTIVE))
+		goto done;
+
+	ret = CMD_MSG_HDR(cmd, H2F_MSG_CONTEXT_RULE);
+
+	if (ret)
+		goto done;
+
+	cmd.ctxt_id = context->id;
+	cmd.type = context->pwr_constraint.type;
+	cmd.sub_type = context->pwr_constraint.sub_type;
+
+	ret = gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
+			"Failed to set perf hint type %d, sub type %d for context %d, ret: %d\n",
+			cmd.type, cmd.sub_type, cmd.ctxt_id, ret);
+done:
+	kgsl_context_put(context);
+}
+
 static void gen8_hwsched_set_thermal_index(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1704,6 +1734,14 @@ static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev
 		break;
 	case GPU_PWRLEVEL_OP_GPUCLK:
 		gen8_hwsched_set_gpuclk(adreno_dev, arg);
+		break;
+	case GPU_PWRLEVEL_OP_PERF_HINT: {
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+		mutex_lock(&device->mutex);
+		gen8_hwsched_set_pwrconstraint(adreno_dev, arg);
+		mutex_unlock(&device->mutex);
+		}
 		break;
 	}
 }

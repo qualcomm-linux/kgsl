@@ -3054,6 +3054,11 @@ static int hfi_context_register(struct adreno_device *adreno_dev,
 	context->gmu_registered = true;
 	context->gmu_dispatch_queue = UINT_MAX;
 
+	if ((!device->host_based_dcvs) &&
+			(context->pwr_constraint.type) &&
+			(context->flags & KGSL_CONTEXT_PWR_CONSTRAINT))
+		gen8_hwsched_set_pwrconstraint(adreno_dev, context->id);
+
 	return 0;
 }
 

@@ -106,4 +106,11 @@ void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
  */
 void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on);
 
+/**
+ * gen8_hwsched_set_pwrconstraint - Send perf hint to GMU
+ * @adreno_dev: A handle to adreno device
+ * @context_id: Id for the context associated with hint
+ */
+void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev, u32 context_id);
+
 #endif

@@ -924,7 +924,7 @@ struct hfi_context_rule_cmd {
 	u32 hdr;
 	u32 ctxt_id;
 	u32 type;
-	u32 status;
+	u32 sub_type;
 } __packed;
 
 struct fault_info {
