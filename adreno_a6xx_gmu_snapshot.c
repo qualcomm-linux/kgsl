@@ -428,7 +428,7 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 		adreno_snapshot_registers(device, snapshot,
 			a662_gmu_gpucc_registers,
 			ARRAY_SIZE(a662_gmu_gpucc_registers) / 2);
-	else if (adreno_is_a663(adreno_dev))
+	else if (adreno_is_a663(adreno_dev) || adreno_is_a623(adreno_dev))
 		adreno_snapshot_registers(device, snapshot,
 			a663_gmu_gpucc_registers,
 			ARRAY_SIZE(a663_gmu_gpucc_registers) / 2);
