@@ -303,25 +303,7 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 	if (unmapped != size)
 		return -EINVAL;
 
-	/*
-	 * Skip below logic for 6.1 kernel version and above as
-	 * qcom_skip_tlb_management() API takes care of avoiding
-	 * TLB operations during slumber.
-	 */
 flush:
-	if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE) {
-		struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
-
-		/* Skip TLB Operations if GPU is in slumber */
-		if (mutex_trylock(&device->mutex)) {
-			if (device->state == KGSL_STATE_SLUMBER) {
-				mutex_unlock(&device->mutex);
-				return 0;
-			}
-			mutex_unlock(&device->mutex);
-		}
-	}
-
 	kgsl_iommu_flush_tlb(pt->base.mmu);
 	return 0;
 }
@@ -370,7 +352,6 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 
 static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
 {
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
 	struct kgsl_iommu *iommu = &mmu->iommu;
 
 	/*
@@ -380,7 +361,6 @@ static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
 	qcom_skip_tlb_management(&iommu->user_context.pdev->dev, hint);
 	if (iommu->lpac_context.domain)
 		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev, hint);
-#endif
 
 	/*
 	 * TLB operations are skipped during slumber. Incase CX doesn't
