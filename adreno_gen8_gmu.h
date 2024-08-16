@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_GMU_H
@@ -495,4 +495,11 @@ size_t gen8_snapshot_gmu_mem(struct kgsl_device *device,
  */
 u32 gen8_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
+/**
+ * gen8_gmu_rpmh_pwr_state_is_active - Check the state of GPU HW
+ * @device: Pointer to the kgsl device
+ *
+ * Returns true on active or false otherwise
+ */
+bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device);
 #endif

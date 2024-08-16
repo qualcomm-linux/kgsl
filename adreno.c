@@ -1602,6 +1602,12 @@ static int adreno_pm_suspend(struct device *dev)
 	if (status)
 		return status;
 
+	/*
+	 * When the device enters in suspend state, the CX can be collapsed causing
+	 * the GPU CX timer to pause. Clear the ADRENO_DEVICE_CX_TIMER_INITIALIZED
+	 * flag to ensure that the CX timer is reseeded during resume.
+	 */
+	clear_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
 	kgsl_reclaim_close();
 	kthread_flush_worker(device->events_worker);
 	flush_workqueue(kgsl_driver.lockless_workqueue);
@@ -3697,6 +3703,13 @@ static int adreno_hibernation_suspend(struct device *dev)
 	status = ops->pm_suspend(adreno_dev);
 	if (status)
 		goto err;
+
+	/*
+	 * When the device enters in hibernation state, the CX will be collapsed causing
+	 * the GPU CX timer to pause. Clear the ADRENO_DEVICE_CX_TIMER_INITIALIZED flag
+	 * to ensure that the CX timer is reseeded during resume.
+	 */
+	clear_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
 
 	/*
 	 * Unload zap shader during device hibernation and reload it
