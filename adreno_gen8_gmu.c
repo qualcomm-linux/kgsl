@@ -686,6 +686,14 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN8_GMUCX_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -856,6 +864,9 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 	/* Clear any previously set cm3 fault */
 	atomic_set(&gmu->cm3_fault, 0);
+
+	/* Init the power state register before GMU turns on GX */
+	gmu_core_regwrite(device, GEN8_GMUCX_RPMH_POWER_STATE, 0xF);
 
 	/* Vote veto for FAL10 */
 	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
@@ -1941,6 +1952,9 @@ static int gen8_gmu_boot(struct adreno_device *adreno_dev)
 	 * register access which happens to be just after enabling clocks.
 	 */
 	gen8_enable_ahb_timeout_detection(adreno_dev);
+
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
 
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)

@@ -1920,11 +1920,6 @@ static struct gen8_reg_list gen8_3_0_ahb_registers[] = {
 	{ UNSLICE, gen8_3_0_ahb_secure_gpu_registers },
 };
 
-static struct gen8_reg_list gen8_3_0_gmu_gx_regs[] = {
-	{ UNSLICE, gen8_3_0_gmugx_registers },
-	{ SLICE, gen8_3_0_gmugx_slice_registers },
-};
-
 /*
  * Block   : ['GDPM_LKG']
  * REGION  : UNSLICE
@@ -2098,10 +2093,16 @@ static const u32 *gen8_3_0_external_core_regs[] = {
 	gen8_3_0_gpu_cc_ahb2phy_swman_registers,
 	gen8_3_0_gpu_cc_gpu_cc_reg_registers,
 	gen8_3_0_gpu_cc_pll0_cm_pll_lucid_ole_registers,
-	gen8_3_0_acd_acd_mnd_registers,
-	gen8_3_0_gx_clkctl_ahb2phy_broadcast_swman_registers,
-	gen8_3_0_gx_clkctl_ahb2phy_swman_registers,
-	gen8_3_0_gx_clkctl_pll0_cm_pll_lucid_ole_registers,
-	gen8_3_0_gx_clkctl_gx_clkctl_reg_registers,
 };
+
+static struct gen8_reg_list gen8_3_0_gmu_gx_regs[] = {
+	{ UNSLICE, gen8_3_0_gmugx_registers },
+	{ UNSLICE, gen8_3_0_gx_clkctl_ahb2phy_broadcast_swman_registers },
+	{ UNSLICE, gen8_3_0_gx_clkctl_ahb2phy_swman_registers },
+	{ UNSLICE, gen8_3_0_gx_clkctl_pll0_cm_pll_lucid_ole_registers },
+	{ UNSLICE, gen8_3_0_gx_clkctl_gx_clkctl_reg_registers },
+	{ UNSLICE, gen8_3_0_acd_acd_mnd_registers },
+	{ SLICE, gen8_3_0_gmugx_registers },
+};
+
 #endif /*_ADRENO_GEN8_3_0_SNAPSHOT_H */
