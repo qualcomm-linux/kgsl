@@ -9,8 +9,11 @@
 #include "adreno_snapshot.h"
 #include "adreno_sysfs.h"
 #include "adreno_trace.h"
+#include "kgsl_eventlog.h"
 #include "kgsl_timeline.h"
+#include "kgsl_trace.h"
 #include <linux/msm_kgsl.h>
+#include <linux/sched/clock.h>
 #include <soc/qcom/msm_performance.h>
 
 #define POLL_SLEEP_US 100
@@ -2449,10 +2452,10 @@ static void adreno_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 		if ((payload->type == type) && (payload->data[i] == key)) {
 			u32 j = 1;
 
-			do {
+			while (num_values--) {
 				ptr[j - 1] = payload->data[i + j];
 				j++;
-			} while (num_values--);
+			}
 			break;
 		}
 
@@ -2551,3 +2554,133 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 	kgsl_context_put_deferred(&drawctxt->base);
 }
 
+void adreno_hwsched_add_profile_events(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time)
+{
+	unsigned long flags;
+	u64 time_in_s;
+	unsigned long time_in_ns;
+	struct kgsl_drawobj *drawobj = DRAWOBJ(cmdobj);
+	struct kgsl_context *context = drawobj->context;
+	struct submission_info info = {0};
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (!time)
+		return;
+
+	/*
+	 * Here we are attempting to create a mapping between the
+	 * GPU time domain (alwayson counter) and the CPU time domain
+	 * (local_clock) by sampling both values as close together as
+	 * possible. This is useful for many types of debugging and
+	 * profiling. In order to make this mapping as accurate as
+	 * possible, we must turn off interrupts to avoid running
+	 * interrupt handlers between the two samples.
+	 */
+
+	local_irq_save(flags);
+
+	/* Read always on registers */
+	time->ticks = gpudev->read_alwayson(adreno_dev);
+
+	/* Trace the GPU time to create a mapping to ftrace time */
+	trace_adreno_cmdbatch_sync(context->id, context->priority,
+		drawobj->timestamp, time->ticks);
+
+	/* Get the kernel clock for time since boot */
+	time->ktime = local_clock();
+
+	/* Get the timeofday for the wall time (for the user) */
+	ktime_get_real_ts64(&time->utime);
+
+	local_irq_restore(flags);
+
+	/* Return kernel clock time to the client if requested */
+	time_in_s = time->ktime;
+	time_in_ns = do_div(time_in_s, 1000000000);
+
+	info.inflight = hwsched->inflight;
+	info.rb_id = adreno_get_level(context);
+	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
+
+	cmdobj->submit_ticks = time->ticks;
+
+	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_SUBMIT,
+		pid_nr(context->proc_priv->pid),
+		context->id, drawobj->timestamp,
+		!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
+	trace_adreno_cmdbatch_submitted(drawobj, &info, time->ticks,
+		(unsigned long) time_in_s, time_in_ns / 1000, 0);
+
+	log_kgsl_cmdbatch_submitted_event(context->id, drawobj->timestamp,
+			context->priority, drawobj->flags);
+}
+
+int adreno_gmu_context_queue_write(struct adreno_device *adreno_dev,
+	struct kgsl_memdesc *gmu_context_queue, u32 *msg, u32 size_bytes,
+	struct kgsl_drawobj *drawobj, struct adreno_submit_time *time)
+{
+	struct gmu_context_queue_header *hdr = gmu_context_queue->hostptr;
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u32 *queue = gmu_context_queue->hostptr + sizeof(*hdr);
+	u32 i, empty_space, write_idx = hdr->write_index, read_idx = hdr->read_index;
+	u32 size_dwords = size_bytes >> 2;
+	u32 align_size = ALIGN(size_dwords, SZ_4);
+	u32 id = MSG_HDR_GET_ID(*msg);
+	struct kgsl_drawobj_cmd *cmdobj = NULL;
+
+	empty_space = (write_idx >= read_idx) ?
+			(hdr->queue_size - (write_idx - read_idx))
+			: (read_idx - write_idx);
+
+	if (empty_space <= align_size)
+		return -ENOSPC;
+
+	if (!IS_ALIGNED(size_bytes, sizeof(u32)))
+		return -EINVAL;
+
+	for (i = 0; i < size_dwords; i++) {
+		queue[write_idx] = msg[i];
+		write_idx = (write_idx + 1) % hdr->queue_size;
+	}
+
+	/* Cookify any non used data at the end of the write buffer */
+	for (; i < align_size; i++) {
+		queue[write_idx] = 0xfafafafa;
+		write_idx = (write_idx + 1) % hdr->queue_size;
+	}
+
+	/* Ensure packet is written out before proceeding */
+	wmb();
+
+	if (!drawobj)
+		goto done;
+
+	if (drawobj->type & SYNCOBJ_TYPE) {
+		struct kgsl_drawobj_sync *syncobj = SYNCOBJ(drawobj);
+
+		trace_adreno_syncobj_submitted(drawobj->context->id, drawobj->timestamp,
+			syncobj->num_hw_fence, gpudev->read_alwayson(adreno_dev));
+		goto done;
+	}
+
+	cmdobj = CMDOBJ(drawobj);
+
+	adreno_hwsched_add_profile_events(adreno_dev, cmdobj, time);
+
+	/*
+	 * Put the profiling information in the user profiling buffer.
+	 * The hfi_update_write_idx below has a wmb() before the actual
+	 * write index update to ensure that the GMU does not see the
+	 * packet before the profile data is written out.
+	 */
+	adreno_profile_submit_time(time);
+
+done:
+	trace_kgsl_hfi_send(id, size_dwords, MSG_HDR_GET_SEQNUM(*msg));
+
+	hfi_update_write_idx(&hdr->write_index, write_idx);
+
+	return 0;
+}

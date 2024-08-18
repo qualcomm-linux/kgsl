@@ -214,6 +214,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A530 = 530,
 	ADRENO_REV_A540 = 540,
 	ADRENO_REV_A610 = 610,
+	ADRENO_REV_A611 = 611,
 	ADRENO_REV_A612 = 612,
 	ADRENO_REV_A615 = 615,
 	ADRENO_REV_A616 = 616,
@@ -834,6 +835,20 @@ struct adreno_drawobj_profile_entry {
 	 ((_index) * sizeof(struct adreno_drawobj_profile_entry) \
 	  + offsetof(struct adreno_drawobj_profile_entry, _member))
 
+/**
+ * struct adreno_submit_time - utility structure to store the wall clock / GPU
+ * ticks at command submit time
+ * @ticks: GPU ticks at submit time (from the 19.2Mhz timer)
+ * @ktime: local clock time (in nanoseconds)
+ * @utime: Wall clock time
+ * @drawobj: the object that we want to profile
+ */
+struct adreno_submit_time {
+	u64 ticks;
+	u64 ktime;
+	struct timespec64 utime;
+	struct kgsl_drawobj *drawobj;
+};
 
 /**
  * adreno_regs: List of registers that are used in kgsl driver for all
@@ -1066,6 +1081,7 @@ extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
 extern const struct adreno_gpudev adreno_a619_holi_gpudev;
+extern const struct adreno_gpudev adreno_a611_gpudev;
 
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
@@ -1189,6 +1205,7 @@ static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 }
 
 ADRENO_TARGET(a610, ADRENO_REV_A610)
+ADRENO_TARGET(a611, ADRENO_REV_A611)
 ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
@@ -1262,6 +1279,13 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
+}
+
+static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
+{
+	u32 rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A610 || rev == ADRENO_REV_A611);
 }
 
 static inline int adreno_is_a640v2(struct adreno_device *adreno_dev)

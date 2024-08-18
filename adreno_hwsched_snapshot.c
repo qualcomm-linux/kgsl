@@ -56,7 +56,7 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 	u32 size = adreno_hwsched_parse_payload(payload, KEY_RB_SIZEDWORDS) << 2;
 	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
 	u64 lo, hi, gpuaddr;
-	void *rb_hostptr;
+	void *rb_hostptr = NULL;
 	char str[16];
 
 	lo = adreno_hwsched_parse_payload(payload, KEY_RB_GPUADDR_LO);
@@ -69,6 +69,9 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 
 	if (hwsched_ops->get_rb_hostptr)
 		rb_hostptr = hwsched_ops->get_rb_hostptr(adreno_dev, gpuaddr, size);
+
+	if (rb_hostptr == NULL)
+		goto err;
 
 	/* If the gpuaddress and size don't match any allocation, then abort */
 	if (((snapshot->remain - sizeof(*section_header)) < (size + sizeof(*header))) ||

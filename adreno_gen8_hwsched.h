@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_H_
@@ -102,5 +102,12 @@ int gen8_hwsched_send_recurring_cmdobj(struct adreno_device *adreno_dev,
  * @fault: The type of fault
  */
 void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
+
+/**
+ * gen8_hwsched_soccp_vote - Vote for soccp power
+ * @adreno_dev: A handle to adreno device
+ * @pwr_on: Boolean to turn soccp on/off
+ */
+void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on);
 
 #endif

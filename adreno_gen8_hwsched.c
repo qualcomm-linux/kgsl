@@ -218,7 +218,7 @@ static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
 	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
 }
 
-static void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
+void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
