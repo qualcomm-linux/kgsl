@@ -3682,10 +3682,16 @@ void gen8_hwsched_context_detach(struct adreno_context *drawctxt)
 
 u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 {
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret, preempt_count = 0;
 
-	if (device->state != KGSL_STATE_ACTIVE)
+	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_TOTAL, &preempt_count);
+	if (ret)
 		return 0;
+
+	if ((preempt_count != 0) || (device->state != KGSL_STATE_ACTIVE))
+		return preempt_count;
 
 	return gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_PREEMPT_COUNT);
 }

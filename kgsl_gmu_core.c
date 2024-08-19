@@ -241,6 +241,24 @@ int gmu_core_set_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 val)
 	return 0;
 }
 
+int gmu_core_get_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 *val)
+{
+	u32 *vrb_buf;
+
+	if (IS_ERR_OR_NULL(vrb))
+		return -ENODEV;
+
+	if (WARN_ON(index >= (vrb->size >> 2))) {
+		pr_err("kgsl: Unable to get VRB register for index %u\n", index);
+		return -EINVAL;
+	}
+
+	vrb_buf = vrb->hostptr;
+	*val = vrb_buf[index];
+
+	return 0;
+}
+
 static void stream_trace_data(struct gmu_trace_packet *pkt)
 {
 	switch (pkt->trace_id) {
