@@ -239,6 +239,7 @@ struct kgsl_drawobj_sync_event {
  * @CMDOBJ_RECURRING_START: To track recurring command object at GMU
  * @CMDOBJ_RECURRING_STOP: To untrack recurring command object from GMU
  * @CMDOBJ_MARKER_EXPIRED: Whether this MARKER object is retired or not
+ * @CMDOBJ_NOP_SUBMISSION: NOP submission to do force retire via GMU
  */
 enum kgsl_drawobj_cmd_priv {
 	CMDOBJ_SKIP = 0,
@@ -249,6 +250,7 @@ enum kgsl_drawobj_cmd_priv {
 	CMDOBJ_RECURRING_START,
 	CMDOBJ_RECURRING_STOP,
 	CMDOBJ_MARKER_EXPIRED,
+	CMDOBJ_NOP_SUBMISSION,
 };
 
 struct kgsl_ibdesc;

@@ -860,7 +860,7 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_INDIRECT		BIT(9)
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
-
+#define CMDBATCH_NOP_SUBMISSION	BIT(20)
 
 /* This indicates that the SYNCOBJ is kgsl output fence */
 #define GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT		0

@@ -299,6 +299,11 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
 		adreno_irq_free(adreno_dev);
 
+	/* GMU supports force retire command from this GMU FW */
+	if (gmu_core_capabilities_enabled(&device->gmu_core.common_caps,
+		FAC_FORCE_RETIRE_COMMAND))
+		set_bit(ADRENO_HWSCHED_FORCE_RETIRE_GMU, &adreno_dev->hwsched.flags);
+
 	gen8_hwsched_soccp_vote(adreno_dev, true);
 
 	/* Clear any hwsched faults that might have been left over */

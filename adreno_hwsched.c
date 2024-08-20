@@ -1347,6 +1347,15 @@ static void adreno_hwsched_dispatcher_close(struct adreno_device *adreno_dev)
 static void force_retire_timestamp(struct kgsl_device *device,
 	struct kgsl_drawobj *drawobj)
 {
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	if (test_bit(ADRENO_HWSCHED_FORCE_RETIRE_GMU, &adreno_dev->hwsched.flags)) {
+		struct kgsl_drawobj_cmd *cmdobj = CMDOBJ(drawobj);
+
+		set_bit(CMDOBJ_NOP_SUBMISSION, &cmdobj->priv);
+		return;
+	}
+
 	kgsl_sharedmem_writel(device->memstore,
 		KGSL_MEMSTORE_OFFSET(drawobj->context->id, soptimestamp),
 		drawobj->timestamp);

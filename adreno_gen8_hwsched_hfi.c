@@ -3521,6 +3521,9 @@ int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev, struct kgsl_dr
 		cmd->flags |= CMDBATCH_PROFILING;
 	}
 
+	if (test_and_clear_bit(CMDOBJ_NOP_SUBMISSION, &cmdobj->priv))
+		cmd->flags |= CMDBATCH_NOP_SUBMISSION;
+
 skipib:
 	adreno_drawobj_set_constraint(KGSL_DEVICE(adreno_dev), drawobj);
 
