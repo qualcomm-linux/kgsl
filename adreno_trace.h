@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_ADRENO_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -983,6 +983,25 @@ TRACE_EVENT(adreno_ifpc_count,
 		__entry->ifpc_count = ifpc_count;
 	),
 	TP_printk("total times GMU entered IFPC = %d", __entry->ifpc_count)
+);
+
+TRACE_EVENT(adreno_dcvs_tuning,
+	TP_PROTO(u32 param, u32 mingap, u32 penalty, u32 numbusy),
+	TP_ARGS(param, mingap, penalty, numbusy),
+	TP_STRUCT__entry(
+		__field(u32, param)
+		__field(u32, mingap)
+		__field(u32, penalty)
+		__field(u32, numbusy)
+	),
+	TP_fast_assign(
+		__entry->param = param;
+		__entry->mingap = mingap;
+		__entry->penalty = penalty;
+		__entry->numbusy = numbusy;
+	),
+	TP_printk("param=%u mingap=%u penalty=%u numbusy=%u",
+		__entry->param, __entry->mingap, __entry->penalty, __entry->numbusy)
 );
 
 #endif /* _ADRENO_TRACE_H */
