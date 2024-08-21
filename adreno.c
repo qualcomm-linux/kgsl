@@ -1189,6 +1189,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 
 	mutex_init(&adreno_dev->dev.mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
+	mutex_init(&adreno_dev->dcvs_tuning_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
 	/* Set the fault tolerance policy to replay, skip, throttle */
