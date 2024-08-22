@@ -1396,6 +1396,8 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	/* Make sure above writes are committed before we proceed to recovery */
 	wmb();
 
+	gmu_core_regwrite(device, GEN8_GMUCX_CM3_SYSRESET, 1);
+
 	/* Halt CX traffic */
 	_do_gbif_halt(device, GEN8_GBIF_HALT, GEN8_GBIF_HALT_ACK,
 			GEN8_GBIF_ARB_HALT_MASK, "CX");
