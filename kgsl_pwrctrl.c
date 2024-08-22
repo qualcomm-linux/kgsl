@@ -1765,7 +1765,6 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
 	u32 max_freq = val * 1000;
 	int level;
-	u32 thermal_pwrlevel;
 
 	if (!device->pwrscale.devfreq_enabled)
 		return NOTIFY_DONE;
@@ -1783,14 +1782,6 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 		return NOTIFY_OK;
 
 	pwr->pmqos_max_pwrlevel = level;
-
-	/*
-	 * Since thermal constraint is already applied prior to this, if qos constraint is same as
-	 * thermal constraint, we can return early here.
-	 */
-	thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	if (pwr->pmqos_max_pwrlevel == thermal_pwrlevel)
-		return NOTIFY_OK;
 
 	trace_kgsl_thermal_constraint(max_freq);
 
