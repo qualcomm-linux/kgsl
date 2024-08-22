@@ -539,11 +539,13 @@ void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**
  * gmu_core_set_vrb_register - set vrb register value at specified index
- * @ptr: vrb host pointer
+ * @vrb: GMU virtual register bank memory
  * @index: vrb index to write the value
  * @val: value to be writen into vrb
+ *
+ * Return: Negative error on failure and zero on success.
  */
-void gmu_core_set_vrb_register(void *ptr, u32 index, u32 val);
+int gmu_core_set_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 val);
 
 /**
  * gmu_core_process_trace_data - Process gmu trace buffer data writes to default linux trace buffer

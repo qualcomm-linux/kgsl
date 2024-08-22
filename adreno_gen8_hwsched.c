@@ -195,8 +195,11 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 
 	of_node_put(node);
 
-	gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_HW_FENCE_SHADOW_NUM_ENTRIES,
-		shadow_num_entries);
+	/*
+	 * The return value is ignored as it does not need to be returned to the caller.
+	 * Any errors are logged within the VRB set API if a failure occurs.
+	 */
+	gmu_core_set_vrb_register(gmu->vrb, VRB_HW_FENCE_SHADOW_NUM_ENTRIES, shadow_num_entries);
 }
 
 static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
@@ -680,6 +683,7 @@ static int gen8_gmu_warmboot_init(struct adreno_device *adreno_dev)
 static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	int ret;
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
@@ -690,8 +694,9 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->vrb);
 
 		/* Populate size of the virtual register bank */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_SIZE_IDX,
-					gmu->vrb->size >> 2);
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_SIZE_IDX, gmu->vrb->size >> 2);
+		if (ret)
+			return ret;
 	}
 
 	/* GMU trace log */
@@ -703,9 +708,10 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->trace.md);
 
 		/* Pass trace buffer address to GMU through the VRB */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr,
-					VRB_TRACE_BUFFER_ADDR_IDX,
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_TRACE_BUFFER_ADDR_IDX,
 					gmu->trace.md->gmuaddr);
+		if (ret)
+			return ret;
 
 		/* Initialize the GMU trace buffer header */
 		gmu_core_trace_header_init(&gmu->trace);
