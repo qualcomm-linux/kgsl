@@ -178,8 +178,6 @@ struct kgsl_pwrctrl {
 	struct thermal_cooling_device *cooling_dev;
 	/* pmqos_max_freq: Handle to raise PMQOS MAX FREQUENCY request */
 	struct dev_pm_qos_request pmqos_max_freq;
-	/* cooling_ws: Work which updates PMQOS during thermal event */
-	struct work_struct cooling_ws;
 	/** @time_in_pwrlevel: Each pwrlevel active duration in usec */
 	u64 time_in_pwrlevel[KGSL_MAX_PWRLEVELS];
 	/** @last_stat_updated: The last time stats were updated */

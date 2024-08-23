@@ -1846,7 +1846,6 @@ static int kgsl_cooling_set_cur_state(struct thermal_cooling_device *cooling_dev
 
 	mutex_unlock(&device->mutex);
 
-	queue_work(kgsl_driver.workqueue, &pwr->cooling_ws);
 	return 0;
 }
 
@@ -1855,15 +1854,6 @@ static const struct thermal_cooling_device_ops kgsl_cooling_ops = {
 	.get_cur_state = kgsl_cooling_get_cur_state,
 	.set_cur_state = kgsl_cooling_set_cur_state,
 };
-
-static void do_pmqos_update(struct work_struct *work)
-{
-	struct kgsl_pwrctrl *pwr = container_of(work, struct kgsl_pwrctrl, cooling_ws);
-	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	u32 freq = pwr->pwrlevels[thermal_pwrlevel].gpu_freq;
-
-	dev_pm_qos_update_request(&pwr->pmqos_max_freq, DIV_ROUND_UP(freq, HZ_PER_KHZ));
-}
 
 static int register_thermal_cooling_device(struct kgsl_device *device, struct device_node *np)
 {
@@ -1875,8 +1865,6 @@ static int register_thermal_cooling_device(struct kgsl_device *device, struct de
 			DEV_PM_QOS_MAX_FREQUENCY, PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
 	if (ret)
 		goto err;
-
-	INIT_WORK(&pwr->cooling_ws, do_pmqos_update);
 
 	pwr->cooling_dev = thermal_of_cooling_device_register(np, name, device,
 			&kgsl_cooling_ops);
