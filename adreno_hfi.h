@@ -79,6 +79,9 @@
 #define HFI_FEATURE_DMS		27
 #define HFI_FEATURE_THERMAL		28
 #define HFI_FEATURE_AQE		29
+#define HFI_FEATURE_TDCVS		30
+#define HFI_FEATURE_DCE		31
+#define HFI_FEATURE_SOFT_RESET		0x10000001
 
 /* Types to be used with H2F_MSG_TABLE */
 enum hfi_table_type {
@@ -954,9 +957,10 @@ struct hfi_context_bad_cmd_legacy {
 } __packed;
 
 /* H2F */
-struct hfi_context_bad_reply_cmd {
+struct hfi_msg_ret_cmd {
 	u32 hdr;
 	u32 req_hdr;
+	u32 error;
 } __packed;
 
 /* H2F */
@@ -1168,6 +1172,7 @@ struct payload_section {
 #define PAYLOAD_FAULT_REGS 1
 #define PAYLOAD_RB 2
 #define PAYLOAD_PREEMPT_TIMEOUT 3
+#define PAYLOAD_FAULT_RESET_POLICY 4
 
 /* Keys for PAYLOAD_FAULT_REGS type payload */
 #define KEY_CP_OPCODE_ERROR 1
@@ -1215,6 +1220,9 @@ struct payload_section {
 /* Keys for PAYLOAD_PREEMPT_TIMEOUT type payload */
 #define KEY_PREEMPT_TIMEOUT_CUR_RB_ID 1
 #define KEY_PREEMPT_TIMEOUT_NEXT_RB_ID 2
+
+/* Keys for PAYLOAD_FAULT_RESET_POLICY type payload */
+#define KEY_GPU_RESET_POLICY 1
 
 /* Types of errors that trigger context bad HFI */
 

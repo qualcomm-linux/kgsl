@@ -113,4 +113,9 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on);
  */
 void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev, u32 context_id);
 
+/**
+ * gen8_hwsched_init_ucode_regs - Initializes CP ucode registers
+ * @adreno_dev: A handle to adreno device
+ */
+void gen8_hwsched_init_ucode_regs(struct adreno_device *adreno_dev);
 #endif

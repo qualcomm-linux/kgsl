@@ -216,6 +216,17 @@ int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev,
  */
 void gen8_hwsched_context_detach(struct adreno_context *drawctxt);
 
+/**
+ * gen8_hwsched_soft_reset - Do a soft reset of the GPU hardware
+ * @adreno_dev: Pointer to adreno device structure
+ * @context: Pointer to the KGSL context
+ * @ctx_guilty: Set to true if context is invalidated on the fault
+ *
+ * Return: 0 on success and negative error on failure
+ */
+int gen8_hwsched_soft_reset(struct adreno_device *adreno_dev,
+		struct kgsl_context *context, bool ctx_guilty);
+
 /* Helper function to get to gen8 hwsched hfi device from adreno device */
 struct gen8_hwsched_hfi *to_gen8_hwsched_hfi(struct adreno_device *adreno_dev);
 
@@ -305,6 +316,17 @@ int gen8_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
  */
 void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence);
+
+/**
+ * gen8_hwsched_process_detached_hw_fences - Send fences that couldn't be sent to GMU when a context
+ * got detached. We must wait for ack when sending each of these fences to GMU so as to avoid
+ * sending a large number of hardware fences in a short span of time.
+ * @adreno_dev: Pointer to adreno device
+ *
+ * Return: Zero on success or negative error on failure
+ *
+ */
+int gen8_hwsched_process_detached_hw_fences(struct adreno_device *adreno_dev);
 
 /**
  * gen8_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
