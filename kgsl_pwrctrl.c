@@ -1795,6 +1795,20 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	return NOTIFY_OK;
 }
 
+static void kgsl_set_thermal_constraint(struct kthread_work *work)
+{
+	struct kgsl_pwrctrl *pwr = container_of(work, struct kgsl_pwrctrl, cooling_work);
+	struct kgsl_device *device = container_of(pwr, struct kgsl_device, pwrctrl);
+
+	mutex_lock(&device->mutex);
+
+	/* Update the current level using the new limit */
+	if (device->state == KGSL_STATE_ACTIVE)
+		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
+
+	mutex_unlock(&device->mutex);
+}
+
 static int kgsl_cooling_get_max_state(struct thermal_cooling_device *cooling_dev,
 		unsigned long *state)
 {
@@ -1831,13 +1845,7 @@ static int kgsl_cooling_set_cur_state(struct thermal_cooling_device *cooling_dev
 	trace_kgsl_thermal_constraint(freq);
 	WRITE_ONCE(pwr->thermal_pwrlevel, state);
 
-	mutex_lock(&device->mutex);
-
-	/* Update the current level using the new limit */
-	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
-
-	mutex_unlock(&device->mutex);
-
+	kthread_queue_work(pwr->cooling_worker, &pwr->cooling_work);
 	return 0;
 }
 
@@ -1976,6 +1984,17 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		dev_err(device->dev, "Unable to register notifier call for PMQOS updates: %d\n",
 				result);
 
+	pwr->cooling_worker = kthread_create_worker(0, "kgsl_cooling_worker");
+	if (IS_ERR(pwr->cooling_worker)) {
+		result = PTR_ERR(pwr->cooling_worker);
+		dev_err(device->dev, "Failed to create cooling worker: %d\n", result);
+		goto err;
+	}
+
+	kthread_init_work(&pwr->cooling_work, kgsl_set_thermal_constraint);
+
+	sched_set_fifo(pwr->cooling_worker->task);
+
 	result = register_thermal_cooling_device(device, pdev->dev.of_node);
 	if (result) {
 		dev_pm_qos_remove_notifier(&pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
@@ -1989,6 +2008,9 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	return 0;
 
 err:
+	if (!IS_ERR_OR_NULL(pwr->cooling_worker))
+		kthread_destroy_worker(pwr->cooling_worker);
+
 	if (dev_pm_qos_request_active(&pwr->sysfs_thermal_req))
 		dev_pm_qos_remove_request(&pwr->sysfs_thermal_req);
 
@@ -2007,6 +2029,9 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 						DEV_PM_QOS_MAX_FREQUENCY);
 		thermal_cooling_device_unregister(pwr->cooling_dev);
 	}
+
+	if (!IS_ERR_OR_NULL(pwr->cooling_worker))
+		kthread_destroy_worker(pwr->cooling_worker);
 
 	if (dev_pm_qos_request_active(&pwr->sysfs_thermal_req))
 		dev_pm_qos_remove_request(&pwr->sysfs_thermal_req);
