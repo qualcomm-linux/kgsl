@@ -2582,7 +2582,6 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	struct kgsl_context *context;
 	long result = -EINVAL;
 
-	mutex_lock(&device->mutex);
 	context = kgsl_context_get_owner(dev_priv, param->context_id);
 
 	if (context) {
@@ -2594,7 +2593,6 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	}
 
 	kgsl_context_put(context);
-	mutex_unlock(&device->mutex);
 	return result;
 }
 
