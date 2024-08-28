@@ -2032,6 +2032,9 @@ static int gen7_gmu_boot(struct adreno_device *adreno_dev)
 	 */
 	gen7_enable_ahb_timeout_detection(adreno_dev);
 
+	/* Initialize the CX timer */
+	gen7_cx_timer_init(adreno_dev);
+
 	ret = gen7_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;

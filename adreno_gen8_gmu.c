@@ -13,7 +13,6 @@
 #include <linux/interconnect.h>
 #include <linux/io.h>
 #include <linux/kobject.h>
-#include <linux/mailbox/qmp.h>
 #include <linux/of_platform.h>
 #include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
@@ -686,6 +685,14 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	return is_on(val);
 }
 
+bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device)
+{
+	u32 val;
+
+	gmu_core_regread(device, GEN8_GMUCX_RPMH_POWER_STATE, &val);
+	return (val == GPU_HW_ACTIVE) ? true : false;
+}
+
 static const char *idle_level_name(int level)
 {
 	if (level == GPU_HW_ACTIVE)
@@ -856,6 +863,9 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 	/* Clear any previously set cm3 fault */
 	atomic_set(&gmu->cm3_fault, 0);
+
+	/* Init the power state register before GMU turns on GX */
+	gmu_core_regwrite(device, GEN8_GMUCX_RPMH_POWER_STATE, 0xF);
 
 	/* Vote veto for FAL10 */
 	gmu_core_regwrite(device, GEN8_GMUCX_CX_FALNEXT_INTF, 0x1);
@@ -1759,26 +1769,20 @@ static irqreturn_t gen8_gmu_irq_handler(int irq, void *data)
 
 void gen8_gmu_aop_send_acd_state(struct gen8_gmu_device *gmu, bool flag)
 {
-	struct qmp_pkt msg;
 	char msg_buf[36];
 	u32 size;
 	int ret;
 
-	if (IS_ERR_OR_NULL(gmu->mailbox.channel))
+	if (IS_ERR_OR_NULL(gmu->qmp))
 		return;
 
 	size = scnprintf(msg_buf, sizeof(msg_buf),
 			"{class: gpu, res: acd, val: %d}", flag);
 
-	/* mailbox controller expects 4-byte aligned buffer */
-	msg.size = ALIGN((size + 1), SZ_4);
-	msg.data = msg_buf;
-
-	ret = mbox_send_message(gmu->mailbox.channel, &msg);
-
+	ret = qmp_send(gmu->qmp, msg_buf, ALIGN((size + 1), SZ_4));
 	if (ret < 0)
 		dev_err(&gmu->pdev->dev,
-			"AOP mbox send message failed: %d\n", ret);
+			"AOP qmp send message failed: %d\n", ret);
 }
 
 int gen8_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level)
@@ -1942,6 +1946,9 @@ static int gen8_gmu_boot(struct adreno_device *adreno_dev)
 	 */
 	gen8_enable_ahb_timeout_detection(adreno_dev);
 
+	/* Initialize the CX timer */
+	gen8_cx_timer_init(adreno_dev);
+
 	ret = gen8_rscc_wakeup_sequence(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
@@ -2007,7 +2014,7 @@ static int gen8_gmu_acd_set(struct kgsl_device *device, bool val)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (IS_ERR_OR_NULL(gmu->mailbox.channel))
+	if (IS_ERR_OR_NULL(gmu->qmp))
 		return -EINVAL;
 
 	/* Don't do any unneeded work if ACD is already in the correct state */
@@ -2210,19 +2217,12 @@ static void gen8_free_gmu_globals(struct gen8_gmu_device *gmu)
 	gmu->global_entries = 0;
 }
 
-static int gen8_gmu_aop_mailbox_init(struct adreno_device *adreno_dev,
+static int gen8_gmu_qmp_aoss_init(struct adreno_device *adreno_dev,
 		struct gen8_gmu_device *gmu)
 {
-	struct kgsl_mailbox *mailbox = &gmu->mailbox;
-
-	mailbox->client.dev = &gmu->pdev->dev;
-	mailbox->client.tx_block = true;
-	mailbox->client.tx_tout = 1000;
-	mailbox->client.knows_txdone = false;
-
-	mailbox->channel = mbox_request_channel(&mailbox->client, 0);
-	if (IS_ERR(mailbox->channel))
-		return PTR_ERR(mailbox->channel);
+	gmu->qmp = qmp_get(&gmu->pdev->dev);
+	if (IS_ERR(gmu->qmp))
+		return PTR_ERR(gmu->qmp);
 
 	adreno_dev->acd_enabled = true;
 	return 0;
@@ -2265,10 +2265,10 @@ static void gen8_gmu_acd_probe(struct kgsl_device *device,
 
 	cmd->num_levels = cmd_idx;
 
-	ret = gen8_gmu_aop_mailbox_init(adreno_dev, gmu);
+	ret = gen8_gmu_qmp_aoss_init(adreno_dev, gmu);
 	if (ret)
 		dev_err(&gmu->pdev->dev,
-			"AOP mailbox init failed: %d\n", ret);
+			"AOP qmp init failed: %d\n", ret);
 }
 
 static int gen8_gmu_reg_probe(struct adreno_device *adreno_dev)
@@ -2372,8 +2372,8 @@ void gen8_gmu_remove(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(gmu->mailbox.channel))
-		mbox_free_channel(gmu->mailbox.channel);
+	if (!IS_ERR_OR_NULL(gmu->qmp))
+		qmp_put(gmu->qmp);
 
 	adreno_dev->acd_enabled = false;
 
