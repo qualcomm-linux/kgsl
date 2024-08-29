@@ -50,6 +50,7 @@ static const char * const clocks[KGSL_MAX_CLKS] = {
 	"ahb_clk",
 	"smmu_vote",
 	"apb_pclk",
+	"hub_cx_int_clk",
 };
 
 static void kgsl_pwrctrl_clk(struct kgsl_device *device, bool state,
