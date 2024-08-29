@@ -2021,7 +2021,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	ret = check_ack_failure(adreno_dev, &pending_ack);
 
 done:
-	a6xx_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 	del_waiter(hfi, &pending_ack);
 
 	return ret;

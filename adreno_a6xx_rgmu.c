@@ -50,29 +50,6 @@ static struct a6xx_rgmu_device *to_a6xx_rgmu(struct adreno_device *adreno_dev)
 	return &a6xx_dev->rgmu;
 }
 
-static void a6xx_rgmu_active_count_put(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
-		return;
-
-	if (WARN(atomic_read(&device->active_cnt) == 0,
-		"Unbalanced get/put calls to KGSL active count\n"))
-		return;
-
-	if (atomic_dec_and_test(&device->active_cnt)) {
-		kgsl_pwrscale_update_stats(device);
-		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
-	}
-
-	trace_kgsl_active_count(device,
-		(unsigned long) __builtin_return_address(0));
-
-	wake_up(&device->active_cnt_wq);
-}
-
 static irqreturn_t a6xx_rgmu_irq_handler(int irq, void *data)
 {
 	struct kgsl_device *device = data;
@@ -1024,7 +1001,7 @@ static int a6xx_rgmu_first_open(struct adreno_device *adreno_dev)
 	 * check by incrementing the active count and immediately releasing it.
 	 */
 	atomic_inc(&device->active_cnt);
-	a6xx_rgmu_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	return 0;
 }
@@ -1273,7 +1250,6 @@ const struct adreno_power_ops a6xx_rgmu_power_ops = {
 	.first_open = a6xx_rgmu_first_open,
 	.last_close = a6xx_power_off,
 	.active_count_get = a6xx_rgmu_active_count_get,
-	.active_count_put = a6xx_rgmu_active_count_put,
 	.pm_suspend = a6xx_rgmu_pm_suspend,
 	.pm_resume = a6xx_rgmu_pm_resume,
 	.touch_wakeup = a6xx_rgmu_touch_wakeup,

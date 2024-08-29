@@ -68,15 +68,6 @@ void gen8_hwsched_handle_watchdog(struct adreno_device *adreno_dev);
 int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev);
 
 /**
- * gen8_hwsched_active_count_put - Put back the active count
- * @adreno_dev: Pointer to the adreno device
- *
- * This function decrements the active count sets the idle
- * timer if active count is zero.
- */
-void gen8_hwsched_active_count_put(struct adreno_device *adreno_dev);
-
-/**
  * gen8_hwsched_add_to_minidump - Register hwsched_device with va minidump
  * @adreno_dev: Pointer to the adreno device
  */

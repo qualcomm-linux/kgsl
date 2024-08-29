@@ -447,11 +447,6 @@ struct adreno_power_ops {
 	 * collapsing
 	 */
 	int (*active_count_get)(struct adreno_device *adreno_dev);
-	/**
-	 * @active_count_put: Target specific function to allow gpu to power
-	 * collapse
-	 */
-	void (*active_count_put)(struct adreno_device *adreno_dev);
 	/** @pm_suspend: Target specific function to suspend the driver */
 	int (*pm_suspend)(struct adreno_device *adreno_dev);
 	/** @pm_resume: Target specific function to resume the driver */
@@ -1143,7 +1138,7 @@ u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
 int adreno_active_count_get(struct adreno_device *adreno_dev);
 
 /**
- * adreno_active_count_put - Wrapper for target specific active count put
+ * adreno_active_count_put - Decrement the active count
  * @adreno_dev: pointer to the adreno device
  *
  * Decrease the active or the KGSL device and schedule the idle thread to
