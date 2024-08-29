@@ -116,7 +116,6 @@ static void _adreno_coresight_get_and_clear(struct adreno_device *adreno_dev,
 	if (IS_ERR_OR_NULL(adreno_csdev->dev) || !adreno_csdev->enabled)
 		return;
 
-	kgsl_pre_hwaccess(device);
 	/*
 	 * Save the current value of each coresight register
 	 * and then clear each register
