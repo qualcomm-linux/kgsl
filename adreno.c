@@ -2595,6 +2595,49 @@ int adreno_set_constraint(struct kgsl_device *device,
 	return status;
 }
 
+static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
+		u32 type, void __user *value, u32 sizebytes)
+{
+	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 enable;
+
+	if (type != KGSL_PROP_PWRCTRL)
+		return -ENODEV;
+
+	if (sizebytes != sizeof(enable))
+		return -EINVAL;
+
+	if (copy_from_user(&enable, value, sizeof(enable)))
+		return -EFAULT;
+
+	mutex_lock(&device->mutex);
+
+	if (enable) {
+		if (gmu_core_isenabled(device))
+			clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+		else
+			device->pwrctrl.ctrl_flags = 0;
+
+		kgsl_pwrscale_enable(device);
+	} else {
+		if (gmu_core_isenabled(device)) {
+			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+
+			if (!adreno_active_count_get(adreno_dev))
+				adreno_active_count_put(adreno_dev);
+		} else {
+			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
+			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
+		}
+		kgsl_pwrscale_disable(device, true);
+	}
+
+	mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
 static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 				unsigned int type,
 				void __user *value,
@@ -2602,8 +2645,6 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 {
 	int status = -EINVAL;
 	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
 	switch (type) {
 	case KGSL_PROP_PWR_CONSTRAINT:
@@ -2633,7 +2674,7 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 		}
 		break;
 	default:
-		status = gpudev->setproperty(dev_priv, type, value, sizebytes);
+		status = adreno_default_setproperty(dev_priv, type, value, sizebytes);
 		break;
 	}
 

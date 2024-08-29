@@ -2205,49 +2205,6 @@ static void a6xx_power_stats(struct adreno_device *adreno_dev,
 		a6xx_read_bus_stats(device, stats, busy);
 }
 
-static int a6xx_setproperty(struct kgsl_device_private *dev_priv,
-		u32 type, void __user *value, u32 sizebytes)
-{
-	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	u32 enable;
-
-	if (type != KGSL_PROP_PWRCTRL)
-		return -ENODEV;
-
-	if (sizebytes != sizeof(enable))
-		return -EINVAL;
-
-	if (copy_from_user(&enable, value, sizeof(enable)))
-		return -EFAULT;
-
-	mutex_lock(&device->mutex);
-
-	if (enable) {
-		if (gmu_core_isenabled(device))
-			clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-		else
-			device->pwrctrl.ctrl_flags = 0;
-
-		kgsl_pwrscale_enable(device);
-	} else {
-		if (gmu_core_isenabled(device)) {
-			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-
-			if (!adreno_active_count_get(adreno_dev))
-				adreno_active_count_put(adreno_dev);
-		} else {
-			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
-			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
-		}
-		kgsl_pwrscale_disable(device, true);
-	}
-
-	mutex_unlock(&device->mutex);
-
-	return 0;
-}
-
 static int a6xx_dev_add_to_minidump(struct adreno_device *adreno_dev)
 {
 	return kgsl_add_va_to_minidump(adreno_dev->dev.dev, KGSL_ADRENO_DEVICE,
@@ -2369,7 +2326,6 @@ const struct adreno_gpudev adreno_a6xx_gpudev = {
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.is_hw_collapsible = adreno_isidle,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_dev_add_to_minidump,
 	.gx_is_on = a6xx_gx_is_on,
 };
@@ -2386,7 +2342,6 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.reset = a6xx_hwsched_reset_replay,
 		.power_ops = &a6xx_hwsched_power_ops,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.hw_isidle = a6xx_hw_isidle,
 		.add_to_va_minidump = a6xx_hwsched_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
@@ -2417,7 +2372,6 @@ const struct a6xx_gpudev adreno_a6xx_gmu_gpudev = {
 		.remove = a6xx_remove,
 		.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.add_to_va_minidump = a6xx_gmu_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
 		.set_isdb_breakpoint_registers = a6xx_set_isdb_breakpoint_registers,
@@ -2444,7 +2398,6 @@ const struct adreno_gpudev adreno_a6xx_rgmu_gpudev = {
 	.remove = a6xx_remove,
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_rgmu_add_to_minidump,
 	.gx_is_on = a6xx_rgmu_gx_is_on,
 };
@@ -2473,7 +2426,6 @@ const struct adreno_gpudev adreno_a619_holi_gpudev = {
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.is_hw_collapsible = adreno_isidle,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_dev_add_to_minidump,
 	.gx_is_on = a619_holi_gx_is_on,
 };
@@ -2497,7 +2449,6 @@ const struct a6xx_gpudev adreno_a630_gpudev = {
 		.remove = a6xx_remove,
 		.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.add_to_va_minidump = a6xx_gmu_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
 	},
