@@ -471,15 +471,6 @@ void gen8_gmu_send_nmi(struct kgsl_device *device, bool force,
 int gen8_gmu_add_to_minidump(struct adreno_device *adreno_dev);
 
 /**
- * gen8_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
- * @adreno_dev: Handle to the adreno device
- * @ab: ab request that needs to be scaled in MBps
- *
- * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
- */
-u32 gen8_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
-
-/**
  * gen8_gmu_clock_set_rate - Set the gmu clock rate
  * @adreno_dev: Handle to the adreno device
  * @req_freq: Requested freq to set gmu to

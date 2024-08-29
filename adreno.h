@@ -1955,6 +1955,15 @@ void adreno_set_active_ctxs_null(struct adreno_device *adreno_dev);
 void adreno_get_bus_counters(struct adreno_device *adreno_dev);
 
 /**
+ * adreno_gmu_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
+ * @adreno_dev: Handle to the adreno device
+ * @ab: ab request that needs to be scaled in MBps
+ *
+ * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
+ */
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
+
+/**
  * adreno_suspend_context - Make sure device is idle
  * @device: Pointer to the kgsl device
  *

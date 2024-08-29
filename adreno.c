@@ -3457,6 +3457,53 @@ static int adreno_gpu_bus_set(struct kgsl_device *device, int level, u32 ab)
 	return adreno_interconnect_bus_set(adreno_dev, level, ab);
 }
 
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
+{
+	u16 vote = 0;
+	u32 max_bw, max_ab;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!adreno_dev->gmu_ab || (ab == INVALID_AB_VALUE))
+		return (FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE));
+
+	/*
+	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
+	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
+	 */
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * adreno_dev->gpucore->num_ddr_channels;
+	max_ab = max_bw / 1000;
+
+	/*
+	 * If requested AB is higher than theoretical max bandwidth, set AB vote as max
+	 * allowable quantized AB value.
+	 *
+	 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
+	 * range to a 16 bit space and the quantized value can be used to vote for AB though
+	 * GMU. Quantization can be performed as below.
+	 *
+	 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
+	 */
+	if (ab >= max_ab)
+		vote = MAX_AB_VALUE;
+	else
+		vote = (u16)(((u64)ab * 1000 * (1 << 16)) / max_bw);
+
+	/*
+	 * Vote will be calculated as 0 for smaller AB values.
+	 * Set a minimum non-zero vote in such cases.
+	 */
+	if (ab && !vote)
+		vote = 0x1;
+
+	/*
+	 * Set ab enable mask and valid AB vote. req.bw is 32 bit value 0xABABENIB
+	 * and with this return we want to set the upper 16 bits and EN field specifies
+	 * if the AB vote is valid or not.
+	 */
+	return (FIELD_PREP(GENMASK(31, 16), vote) | FIELD_PREP(GENMASK(15, 8), 1));
+}
+
 static void adreno_deassert_gbif_halt(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);

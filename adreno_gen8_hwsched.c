@@ -490,7 +490,7 @@ static int gen8_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	req.freq = gmu->dcvs_table.gpu_level_num - pwr->default_pwrlevel - 1;
 	req.bw = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
 
-	req.bw |= gen8_bus_ab_quantize(adreno_dev, 0);
+	req.bw |= adreno_gmu_bus_ab_quantize(adreno_dev, 0);
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN8_GMUCX_POWER_COUNTER_ENABLE, 0);
 
@@ -1170,7 +1170,7 @@ static int gen8_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	if (bus_level < pwr->ddr_table_count && bus_level > 0)
 		req.bw = bus_level;
 
-	req.bw |=  gen8_bus_ab_quantize(adreno_dev, ab);
+	req.bw |= adreno_gmu_bus_ab_quantize(adreno_dev, ab);
 
 	/* GMU will vote for slumber levels through the sleep sequence */
 	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_BW_VOTE))
