@@ -15,6 +15,7 @@
 
 #define GEN8_0_0_NUM_PHYSICAL_SLICES	3
 #define GEN8_3_0_NUM_PHYSICAL_SLICES	1
+#define GEN8_6_0_NUM_PHYSICAL_SLICES	2
 
 /* Forward struct declaration */
 struct gen8_snapshot_block_list;
@@ -631,6 +632,9 @@ static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
 {
 	if (adreno_is_gen8_3_0(adreno_dev))
 		return GEN8_3_0_NUM_PHYSICAL_SLICES;
-	return GEN8_0_0_NUM_PHYSICAL_SLICES;
+	else if (adreno_is_gen8_6_0(adreno_dev))
+		return GEN8_6_0_NUM_PHYSICAL_SLICES;
+	else
+		return GEN8_0_0_NUM_PHYSICAL_SLICES;
 }
 #endif
