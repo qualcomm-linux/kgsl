@@ -3440,7 +3440,7 @@ static void setup_hw_fence_deferred_ctxt(struct adreno_device *adreno_dev,
 	 * Increment the active count so that device doesn't get powered off until this fence has
 	 * been sent to GMU
 	 */
-	gen7_hwsched_active_count_get(adreno_dev);
+	adreno_active_count_get(adreno_dev);
 }
 
 /**
@@ -3813,7 +3813,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	 * take an active count before releasing the mutex so as to avoid a
 	 * concurrent SLUMBER sequence while GMU is un-registering this context.
 	 */
-	ret = gen7_hwsched_active_count_get(adreno_dev);
+	ret = adreno_active_count_get(adreno_dev);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, drawctxt);
 		return ret;

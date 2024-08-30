@@ -1098,7 +1098,7 @@ static int gen8_hwsched_first_open(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
+static int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);

@@ -734,7 +734,7 @@ static int a6xx_hwsched_first_open(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int a6xx_hwsched_active_count_get(struct adreno_device *adreno_dev)
+static int a6xx_hwsched_active_count_get(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
