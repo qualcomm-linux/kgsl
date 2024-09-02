@@ -539,12 +539,13 @@ static ssize_t gpuclk_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	mutex_lock(&device->mutex);
 	level = _get_nearest_pwrlevel(pwr, val);
-	if (level >= 0)
+	if (level >= 0) {
+		mutex_lock(&device->mutex);
 		kgsl_pwrctrl_pwrlevel_change(device, (unsigned int) level);
+		mutex_unlock(&device->mutex);
+	}
 
-	mutex_unlock(&device->mutex);
 	return count;
 }
 
