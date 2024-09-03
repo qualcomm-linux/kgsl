@@ -894,7 +894,7 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	device->pwrctrl.interval_timeout = CONFIG_QCOM_KGSL_IDLE_TIMEOUT;
+	atomic64_set(&device->pwrctrl.interval_timeout, CONFIG_QCOM_KGSL_IDLE_TIMEOUT);
 
 	/* Set default bus control to true on all targets */
 	device->pwrctrl.bus_control = true;
