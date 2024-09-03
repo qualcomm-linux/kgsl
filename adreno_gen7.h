@@ -363,14 +363,6 @@ int gen7_probe_common(struct platform_device *pdev,
 	const struct adreno_gpu_core *gpucore);
 
 /**
- * gen7_hw_isidle - Check whether gen7 gpu is idle or not
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: True if gpu is idle, otherwise false
- */
-bool gen7_hw_isidle(struct adreno_device *adreno_dev);
-
-/**
  * gen7_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
  * @str: String describing the failure
