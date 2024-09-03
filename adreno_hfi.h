@@ -1355,6 +1355,27 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
 
 /**
+ * adreno_hwsched_ctxt_unregister_wait_completion - Wait for HFI ack for context unregister
+ * adreno_dev: Pointer to the adreno device
+ * dev: Pointer to the device structure
+ * ack: Pointer to the pending ack
+ * process_msgq: Function pointer to the msgq processing function
+ * cmd: Pointer to the hfi packet header and data
+ *
+ * This function waits for the completion structure for context unregister hfi ack,
+ * which gets signaled asynchronously. In case there is a timeout, process the msgq
+ * one last time. If the ack is present, log an error and move on. If the ack isn't
+ * present, log an error and return -ETIMEDOUT.
+ *
+ * Return: 0 on success and -ETIMEDOUT on failure
+ */
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd);
+
+/**
  * hfi_get_minidump_string - Get the va-minidump string from entry
  * mem_kind: mem_kind type
  * hfi_minidump_str: Pointer to the output string

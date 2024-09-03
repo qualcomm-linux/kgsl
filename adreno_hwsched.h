@@ -151,11 +151,11 @@ void adreno_hwsched_trigger(struct adreno_device *adreno_dev);
  */
 void adreno_hwsched_start(struct adreno_device *adreno_dev);
 /**
- * adreno_hwsched_dispatcher_init() - Initialize the hwsched dispatcher
+ * adreno_hwsched_init() - Initialize the hwsched
  * @adreno_dev: pointer to the adreno device
  * @hwsched_ops: Pointer to target specific hwsched ops
  *
- * Set up the dispatcher resources.
+ * Set up the hwsched resources.
  * Return: 0 on success or negative on failure.
  */
 int adreno_hwsched_init(struct adreno_device *adreno_dev,

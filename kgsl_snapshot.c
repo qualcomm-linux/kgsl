@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -101,7 +101,7 @@ static void kgsl_snapshot_put_object(struct kgsl_snapshot_object *obj)
 /**
  * kgsl_snapshot_have_object() - return 1 if the object has been processed
  * @snapshot: the snapshot data
- * @process: The process that owns the the object to freeze
+ * @process: The process that owns the object to freeze
  * @gpuaddr: The gpu address of the object to freeze
  * @size: the size of the object (may not always be the size of the region)
  *
@@ -617,16 +617,17 @@ static void kgsl_device_snapshot_atomic(struct kgsl_device *device)
 }
 
 /**
- * kgsl_snapshot() - construct a device snapshot
+ * kgsl_device_snapshot() - construct a device snapshot
  * @device: device to snapshot
  * @context: the context that is hung, might be NULL if unknown.
+ * @context_lpac: the lpac context that is hung, might be NULL if unknown.
  * @gmu_fault: whether this snapshot is triggered by a GMU fault.
  *
  * Given a device, construct a binary snapshot dump of the current device state
  * and store it in the device snapshot memory.
  */
 void kgsl_device_snapshot(struct kgsl_device *device,
-		struct kgsl_context *context,  struct kgsl_context *context_lpac,
+		struct kgsl_context *context, struct kgsl_context *context_lpac,
 		bool gmu_fault)
 {
 	struct kgsl_snapshot *snapshot;

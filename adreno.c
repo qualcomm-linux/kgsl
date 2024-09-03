@@ -53,7 +53,7 @@ static bool adreno_preemption_enable;
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
 
-/* Number of milliseconds to stay active active after a wake on touch */
+/* Number of milliseconds to stay active after a wake on touch */
 unsigned int adreno_wake_timeout = 100;
 
 static u32 get_ucode_version(const u32 *data)
@@ -136,7 +136,7 @@ static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 /**
  * adreno_readreg64() - Read a 64bit register by getting its offset from the
  * offset array defined in gpudev node
- * @adreno_dev:		Pointer to the the adreno device
+ * @adreno_dev: Pointer to the adreno device
  * @lo:	lower 32bit register enum that is to be read
  * @hi:	higher 32bit register enum that is to be read
  * @val: 64 bit Register value read is placed here
@@ -727,6 +727,7 @@ static void adreno_of_get_initial_pwrlevels(struct kgsl_pwrctrl *pwr,
 	if (level < 0 || level >= pwr->num_pwrlevels || level < pwr->default_pwrlevel)
 		level = pwr->num_pwrlevels - 1;
 
+	pwr->min_render_pwrlevel = level;
 	pwr->min_pwrlevel = level;
 }
 
@@ -1549,6 +1550,10 @@ static int adreno_pm_resume(struct device *dev)
 
 		if (status)
 			return status;
+
+		status = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (status < 0)
+			return status;
 	}
 #endif
 
@@ -2157,7 +2162,7 @@ static int adreno_prop_gpu_model(struct kgsl_device *device,
 {
 	struct kgsl_gpu_model model = {0};
 
-	strlcpy(model.gpu_model, adreno_get_gpu_model(device),
+	strscpy(model.gpu_model, adreno_get_gpu_model(device),
 			sizeof(model.gpu_model));
 
 	return copy_prop(param, &model, sizeof(model));
@@ -3261,8 +3266,6 @@ static void adreno_set_isdb_breakpoint_registers(struct kgsl_device *device)
 
 	if (gpudev->set_isdb_breakpoint_registers)
 		gpudev->set_isdb_breakpoint_registers(adreno_dev);
-
-	return;
 }
 
 static void adreno_drawctxt_sched(struct kgsl_device *device,
@@ -3735,6 +3738,10 @@ static int adreno_hibernation_resume(struct device *dev)
 	if (ret)
 		goto err;
 
+	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+	if (ret < 0)
+		goto err;
+
 	gmu_core_dev_force_first_boot(device);
 
 	msm_adreno_tz_reinit(pwrscale->devfreqptr);
@@ -3812,6 +3819,6 @@ module_exit(kgsl_3d_exit);
 MODULE_DESCRIPTION("3D Graphics driver");
 MODULE_LICENSE("GPL v2");
 MODULE_SOFTDEP("pre: arm_smmu nvmem_qfprom socinfo");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

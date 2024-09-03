@@ -1907,7 +1907,6 @@ static struct gen8_cp_indexed_reg gen8_3_0_cp_mempool_reg_list[] = {
 static struct gen8_reg_list gen8_3_0_reg_list[] = {
 	{ UNSLICE, gen8_3_0_gpu_registers },
 	{ SLICE, gen8_3_0_gpu_slice_registers },
-	{ UNSLICE, gen8_3_0_cx_misc_registers },
 	{ UNSLICE, gen8_3_0_dbgc_registers },
 	{ SLICE, gen8_3_0_dbgc_slice_registers },
 	{ UNSLICE, gen8_3_0_cx_dbgc_registers },

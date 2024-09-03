@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/interconnect.h>
@@ -351,7 +352,7 @@ int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
 /**
  * adreno_ringbuffer_wait_callback() - Callback function for event registered
  * on a ringbuffer timestamp
- * @device: Device for which the the callback is valid
+ * @device: Device for which the callback is valid
  * @context: The context of the event
  * @priv: The private parameter of the event
  * @result: Result of the event trigger
