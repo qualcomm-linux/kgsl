@@ -847,13 +847,21 @@ static int register_l3_voter(struct kgsl_device *device)
 {
 	int ret = 0;
 
+	/*
+	 * The L3 vote setup is performed only once. Once set up is done, it is
+	 * safe to access num_l3_pwrlevels without acquiring the device mutex.
+	 * Therefore, an early check can be added without taking the mutex.
+	 */
+	if (READ_ONCE(device->num_l3_pwrlevels))
+		return ret;
+
 	mutex_lock(&device->mutex);
 
 	if (!device->l3_vote)
 		goto done;
 
-	/* This indicates that we are already set up */
-	if (device->num_l3_pwrlevels != 0)
+	/* Verify again if the L3 vote is set up to handle races */
+	if (device->num_l3_pwrlevels)
 		goto done;
 
 	memset(device->l3_freq, 0x0, sizeof(device->l3_freq));
@@ -876,7 +884,7 @@ static int register_l3_voter(struct kgsl_device *device)
 		goto done;
 	}
 
-	device->num_l3_pwrlevels = 3;
+	WRITE_ONCE(device->num_l3_pwrlevels, 3);
 
 done:
 	mutex_unlock(&device->mutex);
