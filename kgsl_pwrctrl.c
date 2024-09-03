@@ -50,6 +50,7 @@ static const char * const clocks[KGSL_MAX_CLKS] = {
 	"ahb_clk",
 	"smmu_vote",
 	"apb_pclk",
+	"hub_cx_int_clk",
 };
 
 static void kgsl_pwrctrl_clk(struct kgsl_device *device, bool state,
@@ -75,16 +76,12 @@ static void _bimc_clk_prepare_enable(struct kgsl_device *device,
  */
 static u32 _adjust_pwrlevel(struct kgsl_pwrctrl *pwr, u32 level, struct kgsl_pwr_constraint *pwrc)
 {
-	u32 thermal_pwrlevel = READ_ONCE(pwr->thermal_pwrlevel);
-	u32 max_pwrlevel = max_t(u32, thermal_pwrlevel,
-					pwr->max_pwrlevel);
-	u32 min_pwrlevel = pwr->min_pwrlevel;
-
+	u32 thermal_pwrlevel = max_t(u32, READ_ONCE(pwr->thermal_pwrlevel),
+			READ_ONCE(pwr->pmqos_max_pwrlevel));
 	/* Ensure that max pwrlevel is within pmqos max limit */
-	max_pwrlevel = max_t(u32, max_pwrlevel, READ_ONCE(pwr->pmqos_max_pwrlevel));
-
+	u32 max_pwrlevel = max_t(u32, pwr->max_pwrlevel, thermal_pwrlevel);
 	/* Ensure that min pwrlevel is within thermal limit */
-	min_pwrlevel = max_t(u32, min_pwrlevel, thermal_pwrlevel);
+	u32 min_pwrlevel = max_t(u32, pwr->min_pwrlevel, thermal_pwrlevel);
 
 	switch (pwrc->type) {
 	case KGSL_CONSTRAINT_PWRLEVEL: {

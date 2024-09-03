@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2014, 2017, 2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_IB_PARSER__
@@ -92,8 +92,6 @@ enum adreno_cp_addr_regs {
 	ADRENO_CP_ADDR_SP_FS_PVT_MEM_ADDR,
 	ADRENO_CP_ADDR_SP_VS_OBJ_START_REG,
 	ADRENO_CP_ADDR_SP_FS_OBJ_START_REG,
-	ADRENO_CP_UCHE_INVALIDATE0,
-	ADRENO_CP_UCHE_INVALIDATE1,
 	ADRENO_CP_ADDR_MAX,
 };
 
@@ -115,36 +113,6 @@ static inline void adreno_ib_init_ib_obj(uint64_t gpuaddr,
 	ib_obj->size = size;
 	ib_obj->snapshot_obj_type = obj_type;
 	ib_obj->entry = entry;
-}
-
-/*
- * adreno_cp_parser_getreg() - Returns the value of register offset
- * @adreno_dev: The adreno device being operated upon
- * @reg_enum: Enum index of the register whose offset is returned
- */
-static inline int adreno_cp_parser_getreg(struct adreno_device *adreno_dev,
-					enum adreno_cp_addr_regs reg_enum)
-{
-	return -EEXIST;
-}
-
-/*
- * adreno_cp_parser_regindex() - Returns enum index for a given register offset
- * @adreno_dev: The adreno device being operated upon
- * @offset: Register offset
- * @start: The start index to search from
- * @end: The last index to search
- *
- * Checks the list of registers defined for the device and returns the index
- * whose offset value matches offset parameter.
- */
-static inline int adreno_cp_parser_regindex(struct adreno_device *adreno_dev,
-				unsigned int offset,
-				enum adreno_cp_addr_regs start,
-				enum adreno_cp_addr_regs end)
-{
-	return -EEXIST;
-
 }
 
 int adreno_ib_create_object_list(

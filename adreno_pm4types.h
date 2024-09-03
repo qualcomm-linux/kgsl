@@ -8,14 +8,10 @@
 
 #include "adreno.h"
 
-#define CP_TYPE0_PKT	(0 << 30)
-#define CP_TYPE3_PKT	(3 << 30)
 #define CP_TYPE4_PKT	(4 << 28)
 #define CP_TYPE7_PKT	(7 << 28)
 
 #define PM4_TYPE4_PKT_SIZE_MAX  128
-
-/* type3 packets */
 
 /* Enable preemption flag */
 #define CP_PREEMPT_ENABLE 0x1C
@@ -81,24 +77,6 @@
 /* generate an event that creates a write to memory when completed */
 #define CP_EVENT_WRITE		0x46
 
-/* initiate fetch of index buffer and draw */
-#define CP_DRAW_INDX		0x22
-
-/* New draw packets defined for A4XX */
-#define CP_DRAW_INDX_OFFSET	0x38
-#define CP_DRAW_INDIRECT	0x28
-#define CP_DRAW_INDX_INDIRECT	0x29
-#define CP_DRAW_AUTO		0x24
-
-/* load constant into chip and to memory */
-#define CP_SET_CONSTANT	0x2d
-
-/* selective invalidation of state pointers */
-#define CP_INVALIDATE_STATE	0x3b
-
-/* generate interrupt from the command stream */
-#define CP_INTERRUPT		0x40
-
 /* A5XX Enable yield in RB only */
 #define CP_YIELD_ENABLE 0x1C
 
@@ -115,16 +93,6 @@
 
 /* Inform CP about current render mode (needed for a5xx preemption) */
 #define CP_SET_RENDER_MODE          0x6C
-
-/* Write register, ignoring context state for context sensitive registers */
-#define CP_REG_WR_NO_CTXT  0x78
-
-/*
- * for A4xx
- * Write to register with address that does not fit into type-0 pkt
- */
-#define CP_WIDE_REG_WRITE           0x74
-
 
 /* PFP waits until the FIFO between the PFP and the ME is empty */
 #define CP_WAIT_FOR_ME		0x13
@@ -194,21 +162,6 @@ static inline uint pm4_calc_odd_parity_bit(uint val)
 	((val) >> 28)))) & 1;
 }
 
-/*
- * PM4 packet header functions
- * For all the packet functions the passed in count should be the size of the
- * payload excluding the header
- */
-static inline uint cp_type0_packet(uint regindx, uint cnt)
-{
-	return CP_TYPE0_PKT | ((cnt-1) << 16) | ((regindx) & 0x7FFF);
-}
-
-static inline uint cp_type3_packet(uint opcode, uint cnt)
-{
-	return CP_TYPE3_PKT | ((cnt-1) << 16) | (((opcode) & 0xFF) << 8);
-}
-
 static inline uint cp_type4_packet(uint opcode, uint cnt)
 {
 	return CP_TYPE4_PKT | ((cnt) << 0) |
@@ -225,23 +178,6 @@ static inline uint cp_type7_packet(uint opcode, uint cnt)
 	((pm4_calc_odd_parity_bit(opcode) << 23));
 
 }
-
-#define pkt_is_type0(pkt) (((pkt) & 0XC0000000) == CP_TYPE0_PKT)
-
-#define type0_pkt_size(pkt) ((((pkt) >> 16) & 0x3FFF) + 1)
-#define type0_pkt_offset(pkt) ((pkt) & 0x7FFF)
-
-/*
- * Check both for the type3 opcode and make sure that the reserved bits [1:7]
- * and 15 are 0
- */
-
-#define pkt_is_type3(pkt) \
-	((((pkt) & 0xC0000000) == CP_TYPE3_PKT) && \
-	 (((pkt) & 0x80FE) == 0))
-
-#define cp_type3_opcode(pkt) (((pkt) >> 8) & 0xFF)
-#define type3_pkt_size(pkt) ((((pkt) >> 16) & 0x3FFF) + 1)
 
 #define pkt_is_type4(pkt) \
 	((((pkt) & 0xF0000000) == CP_TYPE4_PKT) && \
@@ -270,9 +206,6 @@ static inline uint cp_type7_packet(uint opcode, uint cnt)
 /* gmem command buffer length */
 #define CP_REG(reg) ((0x4 << 16) | (SUBBLOCK_OFFSET(reg)))
 
-/* Return true if the hardware uses the legacy (A4XX and older) PM4 format */
-#define ADRENO_LEGACY_PM4(_d) (ADRENO_GPUREV(_d) < 500)
-
 /**
  * cp_packet - Generic CP packet to support different opcodes on
  * different GPU cores.
@@ -283,9 +216,6 @@ static inline uint cp_type7_packet(uint opcode, uint cnt)
 static inline uint cp_packet(struct adreno_device *adreno_dev,
 				int opcode, uint size)
 {
-	if (ADRENO_LEGACY_PM4(adreno_dev))
-		return cp_type3_packet(opcode, size);
-
 	return cp_type7_packet(opcode, size);
 }
 
@@ -300,9 +230,6 @@ static inline uint cp_packet(struct adreno_device *adreno_dev,
 static inline uint cp_mem_packet(struct adreno_device *adreno_dev,
 				int opcode, uint size, uint num_mem)
 {
-	if (ADRENO_LEGACY_PM4(adreno_dev))
-		return cp_type3_packet(opcode, size);
-
 	return cp_type7_packet(opcode, size + num_mem);
 }
 
@@ -332,12 +259,9 @@ static inline uint cp_gpuaddr(struct adreno_device *adreno_dev,
 {
 	uint *start = cmds;
 
-	if (ADRENO_LEGACY_PM4(adreno_dev))
-		*cmds++ = (uint)gpuaddr;
-	else {
-		*cmds++ = lower_32_bits(gpuaddr);
-		*cmds++ = upper_32_bits(gpuaddr);
-	}
+	*cmds++ = lower_32_bits(gpuaddr);
+	*cmds++ = upper_32_bits(gpuaddr);
+
 	return cmds - start;
 }
 
@@ -350,9 +274,6 @@ static inline uint cp_gpuaddr(struct adreno_device *adreno_dev,
 static inline uint cp_register(struct adreno_device *adreno_dev,
 			unsigned int reg, unsigned int size)
 {
-	if (ADRENO_LEGACY_PM4(adreno_dev))
-		return cp_type0_packet(reg, size);
-
 	return cp_type4_packet(reg, size);
 }
 
@@ -366,12 +287,7 @@ static inline uint cp_wait_for_me(struct adreno_device *adreno_dev,
 {
 	uint *start = cmds;
 
-	if (ADRENO_LEGACY_PM4(adreno_dev)) {
-		*cmds++ = cp_type3_packet(CP_WAIT_FOR_ME, 1);
-		*cmds++ = 0;
-	} else
-		*cmds++ = cp_type7_packet(CP_WAIT_FOR_ME, 0);
-
+	*cmds++ = cp_type7_packet(CP_WAIT_FOR_ME, 0);
 	return cmds - start;
 }
 
@@ -385,12 +301,7 @@ static inline uint cp_wait_for_idle(struct adreno_device *adreno_dev,
 {
 	uint *start = cmds;
 
-	if (ADRENO_LEGACY_PM4(adreno_dev)) {
-		*cmds++ = cp_type3_packet(CP_WAIT_FOR_IDLE, 1);
-		*cmds++ = 0;
-	} else
-		*cmds++ = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
-
+	*cmds++ = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
 	return cmds - start;
 }
 
