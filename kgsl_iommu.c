@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitfield.h>
@@ -17,6 +17,7 @@
 #include <linux/qcom_scm.h>
 #include <linux/random.h>
 #include <linux/regulator/consumer.h>
+#include <linux/version.h>
 #include <soc/qcom/secure_buffer.h>
 
 #include "adreno.h"
@@ -276,7 +277,6 @@ static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 
 static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 {
-	struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
 	struct io_pgtable_ops *ops = pt->pgtbl_ops;
 	int ret = 0;
 
@@ -296,13 +296,22 @@ static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
 	}
 
 flush:
-	/* Skip TLB Operations if GPU is in slumber */
-	if (mutex_trylock(&device->mutex)) {
-		if (device->state == KGSL_STATE_SLUMBER) {
+	/*
+	 * Skip below logic for 5.15 kernel version and above as
+	 * qcom_skip_tlb_management() API takes care of avoiding
+	 * TLB operations during slumber.
+	 */
+	if (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE) {
+		struct kgsl_device *device = KGSL_MMU_DEVICE(pt->base.mmu);
+
+		/* Skip TLB Operations if GPU is in slumber */
+		if (mutex_trylock(&device->mutex)) {
+			if (device->state == KGSL_STATE_SLUMBER) {
+				mutex_unlock(&device->mutex);
+				return 0;
+			}
 			mutex_unlock(&device->mutex);
-			return 0;
 		}
-		mutex_unlock(&device->mutex);
 	}
 
 	kgsl_iommu_flush_tlb(pt->base.mmu);
@@ -356,6 +365,29 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 	return mapped;
 }
 
+
+static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
+{
+#if (KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE)
+	struct kgsl_iommu *iommu = &mmu->iommu;
+
+	/*
+	 * Send hint to SMMU driver for skipping TLB operations during slumber.
+	 * This will help to avoid unnecessary cx gdsc toggling.
+	 */
+	qcom_skip_tlb_management(&iommu->user_context.pdev->dev, hint);
+	if (iommu->lpac_context.domain)
+		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev, hint);
+#endif
+
+	/*
+	 * TLB operations are skipped during slumber. Incase CX doesn't
+	 * go down, it can result in incorrect translations due to stale
+	 * TLB entries. Flush TLB before boot up to ensure fresh start.
+	 */
+	if (!hint)
+		kgsl_iommu_flush_tlb(mmu);
+}
 
 static int
 kgsl_iopgtbl_map_child(struct kgsl_pagetable *pt, struct kgsl_memdesc *memdesc,
@@ -2681,7 +2713,7 @@ static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_pagefault_resume = kgsl_iommu_pagefault_resume,
 	.mmu_getpagetable = kgsl_iommu_getpagetable,
 	.mmu_map_global = kgsl_iommu_map_global,
-	.mmu_flush_tlb = kgsl_iommu_flush_tlb,
+	.mmu_send_tlb_hint = kgsl_iommu_send_tlb_hint,
 };
 
 static const struct kgsl_mmu_pt_ops iopgtbl_pt_ops = {
