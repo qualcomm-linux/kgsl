@@ -21,7 +21,6 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/pm_runtime.h>
-#include <linux/qcom_dma_heap.h>
 #include <linux/security.h>
 #include <linux/sort.h>
 #include <linux/string_helpers.h>
