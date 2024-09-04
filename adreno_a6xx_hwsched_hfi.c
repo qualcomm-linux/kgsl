@@ -1285,15 +1285,7 @@ int a6xx_hwsched_hfi_start(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		goto err;
-
-	/* Request default BW vote */
-	ret = kgsl_pwrctrl_axi(device, true);
-	if (ret)
-		goto err;
+	ret = kgsl_pwrctrl_setup_default_votes(device);
 
 err:
 	if (ret)

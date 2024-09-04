@@ -782,13 +782,7 @@ int gen8_hfi_start(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	/* Request default DCVS level */
-	result = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (result)
-		goto err;
-
-	/* Request default BW vote */
-	result = kgsl_pwrctrl_axi(device, true);
+	result = kgsl_pwrctrl_setup_default_votes(device);
 
 err:
 	if (result)

@@ -796,12 +796,7 @@ static int a6xx_rgmu_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		goto err;
-
-	ret = kgsl_pwrctrl_axi(device, true);
+	ret = kgsl_pwrctrl_setup_default_votes(device);
 	if (ret)
 		goto err;
 

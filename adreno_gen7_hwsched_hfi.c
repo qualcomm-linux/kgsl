@@ -2300,20 +2300,6 @@ int gen7_hwsched_boot_gpu(struct adreno_device *adreno_dev)
 		return gen7_hwsched_coldboot_gpu(adreno_dev);
 }
 
-static int gen7_hwsched_setup_default_votes(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret = 0;
-
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		return ret;
-
-	/* Request default BW vote */
-	return kgsl_pwrctrl_axi(device, true);
-}
-
 int gen7_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
@@ -2329,7 +2315,7 @@ int gen7_hwsched_warmboot_init_gmu(struct adreno_device *adreno_dev)
 
 	set_bit(GMU_PRIV_HFI_STARTED, &gmu->flags);
 
-	ret = gen7_hwsched_setup_default_votes(adreno_dev);
+	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
 
 err:
 	if (ret) {
@@ -2511,7 +2497,7 @@ int gen7_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (adreno_dev->warmboot_enabled)
 		set_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
 
-	ret = gen7_hwsched_setup_default_votes(adreno_dev);
+	ret = kgsl_pwrctrl_setup_default_votes(KGSL_DEVICE(adreno_dev));
 
 err:
 	if (ret)

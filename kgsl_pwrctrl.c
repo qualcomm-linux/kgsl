@@ -2515,7 +2515,7 @@ int kgsl_active_count_wait(struct kgsl_device *device, int count,
  * kgsl_pwrctrl_set_default_gpu_pwrlevel() - Set GPU to default power level
  * @device: Pointer to the kgsl_device struct
  */
-int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
+static int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	unsigned int new_level = pwr->default_pwrlevel;
@@ -2532,6 +2532,19 @@ int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 
 	/* Request adjusted DCVS level */
 	return device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
+}
+
+int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device)
+{
+	int ret;
+
+	/* Request default DCVS level */
+	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
+	if (ret)
+		return ret;
+
+	/* Request default BW vote */
+	return kgsl_pwrctrl_axi(device, true);
 }
 
 u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq)
