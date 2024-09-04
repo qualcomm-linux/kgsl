@@ -2324,13 +2324,13 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	if (completion_done(&ack->complete)) {
 		unprocessed++;
 		if (__ratelimit(&_rs))
-			dev_err(dev, "Ack unprocessed for id:%d sequence=%d count=%d/%d ticks=%llu/%llu\n",
+			dev_err(dev, "Ack unprocessed for id:%d sequence=%d count=%d/%d ticks=0x%llx/0x%llx\n",
 				MSG_HDR_GET_ID(ack->sent_hdr), MSG_HDR_GET_SEQNUM(ack->sent_hdr),
 				unprocessed, processed, start, end);
 		return 0;
 	}
 
-	dev_err(dev, "Ack timeout for id:%d sequence=%d ticks=%llu/%llu\n",
+	dev_err(dev, "Ack timeout for id:%d sequence=%d ticks=0x%llx/0x%llx\n",
 		MSG_HDR_GET_ID(ack->sent_hdr), MSG_HDR_GET_SEQNUM(ack->sent_hdr), start, end);
 	gmu_core_fault_snapshot(KGSL_DEVICE(adreno_dev), GMU_FAULT_WAIT_ACK_COMPLETION);
 	return -ETIMEDOUT;
@@ -2367,14 +2367,14 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 
 	if (completion_done(&ack->complete)) {
 		dev_err_ratelimited(dev,
-			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
 			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
 			cmd->ts, start, end);
 		return 0;
 	}
 
 	dev_err_ratelimited(dev,
-		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=%llu/%llu\n",
+		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }
