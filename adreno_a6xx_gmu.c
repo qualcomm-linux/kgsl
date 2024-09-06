@@ -14,7 +14,6 @@
 #include <linux/io.h>
 #include <linux/kobject.h>
 #include <linux/of_platform.h>
-#include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
@@ -1603,7 +1602,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
 	if (!addr)
 		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr,
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device),
@@ -1653,7 +1652,7 @@ struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
 			goto done;
 	}
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device),
 			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
@@ -2682,7 +2681,7 @@ static void a6xx_free_gmu_globals(struct a6xx_gmu_device *gmu)
 		if (!md->gmuaddr)
 			continue;
 
-		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
+		iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size);
 
 		if (md->priv & KGSL_MEMDESC_SYSMEM)
 			kgsl_sharedmem_free(md);
@@ -2690,10 +2689,10 @@ static void a6xx_free_gmu_globals(struct a6xx_gmu_device *gmu)
 		memset(md, 0, sizeof(*md));
 	}
 
-	if (gmu->domain) {
-		iommu_detach_device(gmu->domain, GMU_PDEV_DEV(device));
-		iommu_domain_free(gmu->domain);
-		gmu->domain = NULL;
+	if (device->gmu_core.domain) {
+		iommu_detach_device(device->gmu_core.domain, GMU_PDEV_DEV(device));
+		iommu_domain_free(device->gmu_core.domain);
+		device->gmu_core.domain = NULL;
 	}
 
 	gmu->global_entries = 0;
@@ -2877,62 +2876,6 @@ void a6xx_gmu_remove(struct kgsl_device *device)
 	kobject_put(&gmu->stats_kobj);
 }
 
-static int a6xx_gmu_iommu_fault_handler(struct iommu_domain *domain,
-		struct device *dev, unsigned long addr, int flags, void *token)
-{
-	char *fault_type = "unknown";
-
-	if (flags & IOMMU_FAULT_TRANSLATION)
-		fault_type = "translation";
-	else if (flags & IOMMU_FAULT_PERMISSION)
-		fault_type = "permission";
-	else if (flags & IOMMU_FAULT_EXTERNAL)
-		fault_type = "external";
-	else if (flags & IOMMU_FAULT_TRANSACTION_STALLED)
-		fault_type = "transaction stalled";
-
-	dev_err(dev, "GMU fault addr = %lX, context=kernel (%s %s fault)\n",
-			addr,
-			(flags & IOMMU_FAULT_WRITE) ? "write" : "read",
-			fault_type);
-
-	return 0;
-}
-
-static int a6xx_gmu_iommu_init(struct a6xx_gmu_device *gmu)
-{
-	struct kgsl_device *device = KGSL_DEVICE(a6xx_gmu_to_adreno(gmu));
-	int ret;
-
-	gmu->domain = iommu_domain_alloc(&platform_bus_type);
-	if (gmu->domain == NULL) {
-		dev_err(GMU_PDEV_DEV(device),
-			"Unable to allocate GMU IOMMU domain\n");
-		return -ENODEV;
-	}
-
-	/*
-	 * Disable stall on fault for the GMU context bank.
-	 * This sets SCTLR.CFCFG = 0.
-	 * Also note that, the smmu driver sets SCTLR.HUPCF = 0 by default.
-	 */
-	qcom_iommu_set_fault_model(gmu->domain, QCOM_IOMMU_FAULT_MODEL_NO_STALL);
-
-	ret = iommu_attach_device(gmu->domain, GMU_PDEV_DEV(device));
-	if (!ret) {
-		iommu_set_fault_handler(gmu->domain,
-			a6xx_gmu_iommu_fault_handler, gmu);
-		return 0;
-	}
-
-	dev_err(GMU_PDEV_DEV(device),
-		"Unable to attach GMU IOMMU domain: %d\n", ret);
-	iommu_domain_free(gmu->domain);
-	gmu->domain = NULL;
-
-	return ret;
-}
-
 int a6xx_gmu_probe(struct kgsl_device *device,
 		struct platform_device *pdev)
 {
@@ -2973,7 +2916,7 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 		return ret;
 
 	/* Set up GMU IOMMU and shared memory with GMU */
-	ret = a6xx_gmu_iommu_init(gmu);
+	ret = gmu_core_iommu_init(device);
 	if (ret)
 		goto error;
 

@@ -447,6 +447,8 @@ struct gmu_core_device {
 	enum gmu_fault_panic_policy gf_panic;
 	/** @pdev: platform device for the gmu */
 	struct platform_device *pdev;
+	/** @domain: IOMMU domain for the gmu context */
+	struct iommu_domain *domain;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -538,6 +540,15 @@ struct gmu_mem_type_desc {
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+
+/**
+ * gmu_core_iommu_init - Set up GMU IOMMU and shared memory with GMU
+ * @device: Pointer to KGSL device
+ *
+ * Return: 0 on success or error value on failure
+ */
+int gmu_core_iommu_init(struct kgsl_device *device);
+
 void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**
