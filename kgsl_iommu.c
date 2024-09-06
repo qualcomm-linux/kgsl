@@ -276,6 +276,7 @@ static int _iopgtbl_unmap_pages(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 
 static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 {
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
 	struct kgsl_iommu *iommu = &mmu->iommu;
 
 	iommu_flush_iotlb_all(to_iommu_domain(&iommu->user_context));
@@ -283,6 +284,10 @@ static void kgsl_iommu_flush_tlb(struct kgsl_mmu *mmu)
 	/* As LPAC is optional, check LPAC domain is present before flush */
 	if (iommu->lpac_context.domain)
 		iommu_flush_iotlb_all(to_iommu_domain(&iommu->lpac_context));
+
+	/* Flush iotbl for GMU domian */
+	if (device->gmu_core.domain)
+		iommu_flush_iotlb_all(device->gmu_core.domain);
 }
 
 static int _iopgtbl_unmap(struct kgsl_iommu_pt *pt, u64 gpuaddr, size_t size)
@@ -352,16 +357,19 @@ static size_t _iopgtbl_map_sg(struct kgsl_iommu_pt *pt, u64 gpuaddr,
 
 static void kgsl_iommu_send_tlb_hint(struct kgsl_mmu *mmu, bool hint)
 {
+	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
 	struct kgsl_iommu *iommu = &mmu->iommu;
 
 	/*
-	 * Send hint to SMMU driver for skipping TLB operations during slumber.
-	 * This will help to avoid unnecessary cx gdsc toggling.
+	 * Send skip TLB hints for user context, LPAC context, and GMU domains
+	 * to the SMMU driver to skip TLB operations during slumber. This will
+	 * help avoid unnecessary CX GDSC toggling.
 	 */
 	qcom_skip_tlb_management(&iommu->user_context.pdev->dev, hint);
 	if (iommu->lpac_context.domain)
 		qcom_skip_tlb_management(&iommu->lpac_context.pdev->dev, hint);
-
+	if (device->gmu_core.domain)
+		qcom_skip_tlb_management(&device->gmu_core.pdev->dev, hint);
 	/*
 	 * TLB operations are skipped during slumber. Incase CX doesn't
 	 * go down, it can result in incorrect translations due to stale
