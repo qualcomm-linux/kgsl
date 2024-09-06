@@ -78,8 +78,6 @@ struct gen7_gmu_device {
 	unsigned long flags;
 	/** @rscc_virt: Pointer where RSCC block is mapped */
 	void __iomem *rscc_virt;
-	/** @domain: IOMMU domain for the kernel context */
-	struct iommu_domain *domain;
 	/** @log_stream_enable: GMU log streaming enable. Disabled by default */
 	bool log_stream_enable;
 	/** @log_group_mask: Allows overriding default GMU log group mask */
