@@ -345,7 +345,7 @@ static void log_gpu_fault_legacy(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(gmu_pdev_dev, "MISC: GPU hang detected\n");
 		break;
 	case GMU_GPU_SW_HANG:
-		dev_crit_ratelimited(gmu_pdev_dev, "gpu timeout ctx %d ts %u\n",
+		dev_crit_ratelimited(gmu_pdev_dev, "gpu timeout ctx %u ts %u\n",
 			cmd->ctxt_id, cmd->ts);
 		break;
 	case GMU_CP_OPCODE_ERROR:
@@ -518,7 +518,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(gmu_pdev_dev, "MISC: GPU hang detected\n");
 		break;
 	case GMU_GPU_SW_HANG:
-		dev_crit_ratelimited(gmu_pdev_dev, "gpu timeout ctx %d ts %d\n",
+		dev_crit_ratelimited(gmu_pdev_dev, "gpu timeout ctx %u ts %u\n",
 			cmd->gc.ctxt_id, cmd->gc.ts);
 		break;
 	case GMU_CP_OPCODE_ERROR:
@@ -627,7 +627,7 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		dev_crit_ratelimited(gmu_pdev_dev, "CP LPAC ucode error interrupt\n");
 		break;
 	case GMU_GPU_LPAC_SW_HANG:
-		dev_crit_ratelimited(gmu_pdev_dev, "LPAC: gpu timeout ctx %d ts %d\n",
+		dev_crit_ratelimited(gmu_pdev_dev, "LPAC: gpu timeout ctx %u ts %u\n",
 			cmd->lpac.ctxt_id, cmd->lpac.ts);
 		break;
 	case GMU_GPU_SW_FUSE_VIOLATION:
