@@ -496,7 +496,7 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	int i;
 	unsigned long flags;
 
-	/* Set up the CX timer just once */
+	/* Set it up during first boot or after suspend resume */
 	if (test_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv))
 		return;
 
@@ -680,6 +680,9 @@ static void gen8_protect_init(struct adreno_device *adreno_dev)
 				       FIELD_PREP(GENMASK(30, 18), count) |
 				       FIELD_PREP(BIT(31), regs[i].noaccess),
 				       PIPE_LPAC, 0, 0);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 }
 
 static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
@@ -905,6 +908,9 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 	}
 	mutex_unlock(&gen8_dev->nc_mutex);
+
+	/* Clear aperture register */
+	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	lock->dynamic_list_len = gen8_dev->ext_pwrup_list_len;
 }
@@ -2603,7 +2609,7 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	pr_context(device, drawobj->context, "lpac cmdline: %s\n",
 		   drawctxt->base.proc_priv->cmdline);
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_LPAC_STATUS, &status);
@@ -2659,7 +2665,7 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 			   drawctxt->base.proc_priv->cmdline);
 	}
 
-	if (!gx_on)
+	if (!gen8_gmu_rpmh_pwr_state_is_active(device) || !gx_on)
 		goto done;
 
 	kgsl_regread(device, GEN8_RBBM_STATUS, &status);
