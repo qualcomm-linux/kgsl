@@ -1373,6 +1373,27 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
 	dev_err(device->dev, "%s GBIF halt timed out\n", client);
 }
 
+/**
+ * gen8_gbif_gx_reinit - Apply reinit sequence and wait for ack during GPU recovery
+ * @device: Pointer to the KGSL device
+ */
+static inline void gen8_gbif_gx_reinit(struct kgsl_device *device)
+{
+	u32 ack;
+	int ret;
+
+	kgsl_regwrite(device, GEN8_GBIF_REINIT_ENABLE, 0x1);
+	/* Dummy write to take effect of reinit */
+	kgsl_regwrite(device, GEN8_GBIF_REINIT_DONE, 0x0);
+
+	ret = kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_GBIF_REINIT_DONE,
+		ack, (ack & GEN8_GBIF_REINIT_GX_IDLE_MASK) == GEN8_GBIF_REINIT_GX_IDLE_MASK,
+		100, 100 * 1000);
+
+	if (ret)
+		dev_err(device->dev, "GBIF reinit timed out: ack = 0x%x\n", ack);
+}
+
 static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1397,6 +1418,9 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	wmb();
 
 	gmu_core_regwrite(device, GEN8_GMUCX_CM3_SYSRESET, 1);
+
+	/* Flush out pending GX transactions using GBIF reinit mechanism */
+	gen8_gbif_gx_reinit(device);
 
 	/* Halt CX traffic */
 	_do_gbif_halt(device, GEN8_GBIF_HALT, GEN8_GBIF_HALT_ACK,
