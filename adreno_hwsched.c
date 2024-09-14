@@ -1677,9 +1677,6 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd_legacy *cmd = hwsched->ctxt_bad;
 
-	if (device->state != KGSL_STATE_ACTIVE)
-		return;
-
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
@@ -1759,9 +1756,6 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd *cmd = hwsched->ctxt_bad;
-
-	if (device->state != KGSL_STATE_ACTIVE)
-		return;
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
@@ -1890,11 +1884,19 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 
 	mutex_lock(&device->mutex);
 
+	if (device->state != KGSL_STATE_ACTIVE)
+		goto skip_snapshot;
+
+	/* Halt CP for page faults here. CP is halted from GMU when required, for other faults. */
+	if ((fault & ADRENO_IOMMU_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
+		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
+
 	if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
 		adreno_hwsched_reset_and_snapshot_legacy(adreno_dev, fault);
 	else
 		adreno_hwsched_reset_and_snapshot(adreno_dev, fault);
 
+skip_snapshot:
 	adreno_scheduler_queue(adreno_dev);
 
 	mutex_unlock(&device->mutex);

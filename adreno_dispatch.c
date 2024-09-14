@@ -1965,11 +1965,8 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 		adreno_readreg64(adreno_dev, ADRENO_REG_CP_RB_BASE,
 			ADRENO_REG_CP_RB_BASE_HI, &base);
 
-	/*
-	 * Force the CP off for anything but a hard fault to make sure it is
-	 * good and stopped
-	 */
-	if (!(fault & ADRENO_HARD_FAULT) && gx_on) {
+	/* Force the CP off for all faults to make sure it is good and stopped */
+	if (gx_on) {
 		adreno_readreg(adreno_dev, ADRENO_REG_CP_ME_CNTL, &reg);
 
 		if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev))
