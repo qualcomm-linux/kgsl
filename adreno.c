@@ -1909,7 +1909,7 @@ static int adreno_pwrctrl_active_count_get(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-static void adreno_pwrctrl_active_count_put(struct adreno_device *adreno_dev)
+void adreno_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
@@ -1938,13 +1938,6 @@ int adreno_active_count_get(struct adreno_device *adreno_dev)
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
 	return ops->active_count_get(adreno_dev);
-}
-
-void adreno_active_count_put(struct adreno_device *adreno_dev)
-{
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-
-	ops->active_count_put(adreno_dev);
 }
 
 void adreno_get_bus_counters(struct adreno_device *adreno_dev)
@@ -3627,7 +3620,6 @@ const struct adreno_power_ops adreno_power_operations = {
 	.first_open = adreno_open,
 	.last_close = adreno_close,
 	.active_count_get = adreno_pwrctrl_active_count_get,
-	.active_count_put = adreno_pwrctrl_active_count_put,
 	.pm_suspend = adreno_suspend,
 	.pm_resume = adreno_resume,
 	.touch_wakeup = adreno_touch_wakeup,

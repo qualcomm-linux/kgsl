@@ -1060,7 +1060,7 @@ static void gen8_defer_hw_fence_work(struct kthread_work *work)
 	 */
 	kgsl_context_put(&drawctxt->base);
 
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	_disable_hw_fence_throttle(adreno_dev, false);
 
@@ -3631,7 +3631,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		ret = check_ack_failure(adreno_dev, &pending_ack);
 
 done:
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 	del_waiter(hfi, &pending_ack);
 
 	return ret;
@@ -3715,7 +3715,7 @@ int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 
 	kgsl_context_put(&drawctxt->base);
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 done:
 	_disable_hw_fence_throttle(adreno_dev, true);
