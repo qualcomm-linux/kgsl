@@ -232,7 +232,7 @@ void adreno_touch_wake(struct kgsl_device *device)
 	if (device->pwrctrl.wake_on_touch)
 		return;
 
-	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
+	if (device->state == KGSL_STATE_SLUMBER)
 		schedule_work(&adreno_dev->input_work);
 }
 
