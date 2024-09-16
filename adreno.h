@@ -948,8 +948,6 @@ struct adreno_gpudev {
 	 */
 	void (*power_stats)(struct adreno_device *adreno_dev,
 			struct kgsl_power_stats *stats);
-	int (*setproperty)(struct kgsl_device_private *priv, u32 type,
-		void __user *value, u32 sizebytes);
 	int (*add_to_va_minidump)(struct adreno_device *adreno_dev);
 	/**
 	 * @gx_is_on - Return true if both gfx clock and gxgdsc are enabled.

@@ -2755,42 +2755,6 @@ static void gen8_power_stats(struct adreno_device *adreno_dev,
 	}
 }
 
-static int gen8_setproperty(struct kgsl_device_private *dev_priv,
-		u32 type, void __user *value, u32 sizebytes)
-{
-	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	u32 enable;
-
-	if (type != KGSL_PROP_PWRCTRL)
-		return -ENODEV;
-
-	if (sizebytes != sizeof(enable))
-		return -EINVAL;
-
-	if (copy_from_user(&enable, value, sizeof(enable)))
-		return -EFAULT;
-
-	mutex_lock(&device->mutex);
-
-	if (enable) {
-		clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-
-		kgsl_pwrscale_enable(device);
-	} else {
-		set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-
-		if (!adreno_active_count_get(adreno_dev))
-			adreno_active_count_put(adreno_dev);
-
-		kgsl_pwrscale_disable(device, true);
-	}
-
-	mutex_unlock(&device->mutex);
-
-	return 0;
-}
-
 static void gen8_set_isdb_breakpoint_registers(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2983,7 +2947,6 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.reset = gen8_hwsched_reset_replay,
 		.power_ops = &gen8_hwsched_power_ops,
 		.power_stats = gen8_power_stats,
-		.setproperty = gen8_setproperty,
 		.hw_isidle = gen8_hw_isidle,
 		.add_to_va_minidump = gen8_hwsched_add_to_minidump,
 		.gx_is_on = gen8_gmu_gx_is_on,
@@ -3018,7 +2981,6 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.remove = gen8_remove,
 		.ringbuffer_submitcmd = gen8_ringbuffer_submitcmd,
 		.power_stats = gen8_power_stats,
-		.setproperty = gen8_setproperty,
 		.add_to_va_minidump = gen8_gmu_add_to_minidump,
 		.gx_is_on = gen8_gmu_gx_is_on,
 		.perfcounter_remove = gen8_perfcounter_remove,
