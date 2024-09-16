@@ -595,6 +595,7 @@ static int gen7_gmu_warmboot_init(struct adreno_device *adreno_dev)
 static int gen7_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	int ret;
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
@@ -605,8 +606,9 @@ static int gen7_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->vrb);
 
 		/* Populate size of the virtual register bank */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_SIZE_IDX,
-					gmu->vrb->size >> 2);
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_SIZE_IDX, gmu->vrb->size >> 2);
+		if (ret)
+			return ret;
 	}
 
 	/* GMU trace log */
@@ -618,9 +620,10 @@ static int gen7_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->trace.md);
 
 		/* Pass trace buffer address to GMU through the VRB */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr,
-					VRB_TRACE_BUFFER_ADDR_IDX,
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_TRACE_BUFFER_ADDR_IDX,
 					gmu->trace.md->gmuaddr);
+		if (ret)
+			return ret;
 
 		/* Initialize the GMU trace buffer header */
 		gmu_core_trace_header_init(&gmu->trace);
