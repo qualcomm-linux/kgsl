@@ -1029,7 +1029,7 @@ static int _kgsl_shmem_alloc_page(struct kgsl_memdesc *memdesc, u32 order)
 	gfp_t gfp_mask = kgsl_gfp_mask(order);
 
 	if (fatal_signal_pending(current))
-		return -ENOMEM;
+		return -EINTR;
 
 	/* Allocate non compound page to split 4K page chunks */
 	gfp_mask &= ~__GFP_COMP;
@@ -1126,7 +1126,7 @@ static int kgsl_alloc_page(struct kgsl_memdesc *memdesc, int *page_size,
 		return -EINVAL;
 
 	if (fatal_signal_pending(current))
-		return -ENOMEM;
+		return -EINTR;
 
 	page = shmem_read_mapping_page_gfp(memdesc->shmem_filp->f_mapping, page_off,
 			kgsl_gfp_mask(0));
@@ -1170,6 +1170,16 @@ static void kgsl_free_page(struct page *p)
 	put_page(p);
 }
 
+static void kgsl_memdesc_pagelist_cleanup(struct kgsl_memdesc *memdesc)
+{
+	while (!list_empty(&memdesc->shmem_page_list)) {
+		struct page *page = list_first_entry(&memdesc->shmem_page_list, struct page, lru);
+
+		list_del(&page->lru);
+		kgsl_free_page(page);
+	}
+}
+
 static void _kgsl_free_pages(struct kgsl_memdesc *memdesc)
 {
 	int i;
@@ -1198,7 +1208,7 @@ static int kgsl_alloc_page(struct kgsl_memdesc *memdesc, int *page_size,
 			unsigned int *align, unsigned int page_off)
 {
 	if (fatal_signal_pending(current))
-		return -ENOMEM;
+		return -EINTR;
 
 	return kgsl_pool_alloc_page(page_size, pages,
 			pages_len, align, memdesc->kgsl_dev);
@@ -1207,6 +1217,10 @@ static int kgsl_alloc_page(struct kgsl_memdesc *memdesc, int *page_size,
 static int kgsl_memdesc_file_setup(struct kgsl_memdesc *memdesc)
 {
 	return 0;
+}
+
+static void kgsl_memdesc_pagelist_cleanup(struct kgsl_memdesc *memdesc)
+{
 }
 
 static void kgsl_free_page(struct page *p)
@@ -1340,7 +1354,8 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 			if (memdesc->shmem_filp)
 				fput(memdesc->shmem_filp);
 
-			return -ENOMEM;
+			count = -ENOMEM;
+			goto done;
 		}
 
 		count += ret;
@@ -1353,6 +1368,8 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 
 	*pages = local;
 
+done:
+	kgsl_memdesc_pagelist_cleanup(memdesc);
 	return count;
 }
 
