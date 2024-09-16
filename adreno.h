@@ -895,13 +895,6 @@ struct adreno_debugbus_block {
 	unsigned int dwords;
 };
 
-enum adreno_cp_marker_type {
-	IFPC_DISABLE,
-	IFPC_ENABLE,
-	IB1LIST_START,
-	IB1LIST_END,
-};
-
 struct adreno_gpudev {
 	/*
 	 * These registers are in a different location on different devices,
