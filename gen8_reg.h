@@ -1351,6 +1351,7 @@
 #define GEN8_CX_DBGC_PERF_ATB_CFG                       0x18438
 #define GEN8_CX_DBGC_ECO_CNTL                           0x1843b
 #define GEN8_CX_DBGC_AHB_DBG_CNTL                       0x1843c
+#define GEN8_CX_DBGC_CFG_DBGBUS_MISC_MODE               0x18444
 #define GEN8_CX_DBGC_TCM_DBG_ADDR                       0x18580
 #define GEN8_CX_DBGC_TCM_DBG_DATA                       0x18581
 
