@@ -185,6 +185,10 @@ enum gmu_vrb_idx {
 	VRB_TRACE_BUFFER_ADDR_IDX = 2,
 	/* Contains the number of hw fence shadow table entries */
 	VRB_HW_FENCE_SHADOW_NUM_ENTRIES = 3,
+	/* Contains OpenCL no fault tolerance timeout in ms */
+	VRB_CL_NO_FT_TIMEOUT = 4,
+	/* Contains the total number of GPU preemptions */
+	VRB_PREEMPT_COUNT_TOTAL = 5,
 };
 
 /* For GMU Trace */
@@ -539,11 +543,23 @@ void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**
  * gmu_core_set_vrb_register - set vrb register value at specified index
- * @ptr: vrb host pointer
+ * @vrb: GMU virtual register bank memory
  * @index: vrb index to write the value
  * @val: value to be writen into vrb
+ *
+ * Return: Negative error on failure and zero on success.
  */
-void gmu_core_set_vrb_register(void *ptr, u32 index, u32 val);
+int gmu_core_set_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 val);
+
+/**
+ * gmu_core_get_vrb_register - get vrb register value at specified index
+ * @vrb: GMU virtual register bank memory
+ * @index: vrb index to write the value
+ * @val: Pointer to update the data after reading from vrb
+ *
+ * Return: Negative error on failure and zero on success.
+ */
+int gmu_core_get_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 *val);
 
 /**
  * gmu_core_process_trace_data - Process gmu trace buffer data writes to default linux trace buffer

@@ -220,14 +220,43 @@ void gmu_core_dev_force_first_boot(struct kgsl_device *device)
 		return ops->force_first_boot(device);
 }
 
-void gmu_core_set_vrb_register(void *ptr, u32 index, u32 val)
+int gmu_core_set_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 val)
 {
-	u32 *vrb = ptr;
+	u32 *vrb_buf;
 
-	vrb[index] = val;
+	if (WARN_ON(IS_ERR_OR_NULL(vrb)))
+		return -ENODEV;
+
+	if (WARN_ON(index >= (vrb->size >> 2))) {
+		pr_err("kgsl: Unable to set VRB register for index %u\n", index);
+		return -EINVAL;
+	}
+
+	vrb_buf = vrb->hostptr;
+	vrb_buf[index] = val;
 
 	/* Make sure the vrb write is posted before moving ahead */
 	wmb();
+
+	return 0;
+}
+
+int gmu_core_get_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 *val)
+{
+	u32 *vrb_buf;
+
+	if (IS_ERR_OR_NULL(vrb))
+		return -ENODEV;
+
+	if (WARN_ON(index >= (vrb->size >> 2))) {
+		pr_err("kgsl: Unable to get VRB register for index %u\n", index);
+		return -EINVAL;
+	}
+
+	vrb_buf = vrb->hostptr;
+	*val = vrb_buf[index];
+
+	return 0;
 }
 
 static void stream_trace_data(struct gmu_trace_packet *pkt)

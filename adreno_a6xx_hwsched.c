@@ -265,29 +265,6 @@ gdsc_off:
 	return ret;
 }
 
-void a6xx_hwsched_active_count_put(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
-		return;
-
-	if (WARN(atomic_read(&device->active_cnt) == 0,
-		"Unbalanced get/put calls to KGSL active count\n"))
-		return;
-
-	if (atomic_dec_and_test(&device->active_cnt)) {
-		kgsl_pwrscale_update_stats(device);
-		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
-	}
-
-	trace_kgsl_active_count(device,
-		(unsigned long) __builtin_return_address(0));
-
-	wake_up(&device->active_cnt_wq);
-}
-
 static int a6xx_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -438,6 +415,7 @@ static void hwsched_idle_timer(struct timer_list *t)
 static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	int ret;
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
@@ -448,8 +426,9 @@ static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->vrb);
 
 		/* Populate size of the virtual register bank */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr, VRB_SIZE_IDX,
-					gmu->vrb->size >> 2);
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_SIZE_IDX, gmu->vrb->size >> 2);
+		if (ret)
+			return ret;
 	}
 
 	/* GMU trace log */
@@ -461,9 +440,10 @@ static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 			return PTR_ERR(gmu->trace.md);
 
 		/* Pass trace buffer address to GMU through the VRB */
-		gmu_core_set_vrb_register(gmu->vrb->hostptr,
-					VRB_TRACE_BUFFER_ADDR_IDX,
+		ret = gmu_core_set_vrb_register(gmu->vrb, VRB_TRACE_BUFFER_ADDR_IDX,
 					gmu->trace.md->gmuaddr);
+		if (ret)
+			return ret;
 
 		/* Initialize the GMU trace buffer header */
 		gmu_core_trace_header_init(&gmu->trace);
@@ -749,7 +729,7 @@ static int a6xx_hwsched_first_open(struct adreno_device *adreno_dev)
 	 * check by incrementing the active count and immediately releasing it.
 	 */
 	atomic_inc(&device->active_cnt);
-	a6xx_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	return 0;
 }
@@ -1037,7 +1017,6 @@ const struct adreno_power_ops a6xx_hwsched_power_ops = {
 	.first_open = a6xx_hwsched_first_open,
 	.last_close = a6xx_hwsched_power_off,
 	.active_count_get = a6xx_hwsched_active_count_get,
-	.active_count_put = a6xx_hwsched_active_count_put,
 	.touch_wakeup = a6xx_hwsched_touch_wakeup,
 	.pm_suspend = a6xx_hwsched_pm_suspend,
 	.pm_resume = a6xx_hwsched_pm_resume,

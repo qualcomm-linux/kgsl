@@ -232,7 +232,7 @@ void adreno_touch_wake(struct kgsl_device *device)
 	if (device->pwrctrl.wake_on_touch)
 		return;
 
-	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
+	if (device->state == KGSL_STATE_SLUMBER)
 		schedule_work(&adreno_dev->input_work);
 }
 
@@ -1188,6 +1188,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 	idr_init(&adreno_dev->dev.context_idr);
 
 	mutex_init(&adreno_dev->dev.mutex);
+	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
@@ -1909,7 +1910,7 @@ static int adreno_pwrctrl_active_count_get(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-static void adreno_pwrctrl_active_count_put(struct adreno_device *adreno_dev)
+void adreno_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
@@ -1938,13 +1939,6 @@ int adreno_active_count_get(struct adreno_device *adreno_dev)
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
 	return ops->active_count_get(adreno_dev);
-}
-
-void adreno_active_count_put(struct adreno_device *adreno_dev)
-{
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-
-	ops->active_count_put(adreno_dev);
 }
 
 void adreno_get_bus_counters(struct adreno_device *adreno_dev)
@@ -2595,6 +2589,49 @@ int adreno_set_constraint(struct kgsl_device *device,
 	return status;
 }
 
+static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
+		u32 type, void __user *value, u32 sizebytes)
+{
+	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 enable;
+
+	if (type != KGSL_PROP_PWRCTRL)
+		return -ENODEV;
+
+	if (sizebytes != sizeof(enable))
+		return -EINVAL;
+
+	if (copy_from_user(&enable, value, sizeof(enable)))
+		return -EFAULT;
+
+	mutex_lock(&device->mutex);
+
+	if (enable) {
+		if (gmu_core_isenabled(device))
+			clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+		else
+			device->pwrctrl.ctrl_flags = 0;
+
+		kgsl_pwrscale_enable(device);
+	} else {
+		if (gmu_core_isenabled(device)) {
+			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+
+			if (!adreno_active_count_get(adreno_dev))
+				adreno_active_count_put(adreno_dev);
+		} else {
+			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
+			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
+		}
+		kgsl_pwrscale_disable(device, true);
+	}
+
+	mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
 static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 				unsigned int type,
 				void __user *value,
@@ -2602,8 +2639,6 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 {
 	int status = -EINVAL;
 	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
 	switch (type) {
 	case KGSL_PROP_PWR_CONSTRAINT:
@@ -2633,7 +2668,7 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 		}
 		break;
 	default:
-		status = gpudev->setproperty(dev_priv, type, value, sizebytes);
+		status = adreno_default_setproperty(dev_priv, type, value, sizebytes);
 		break;
 	}
 
@@ -3627,7 +3662,6 @@ const struct adreno_power_ops adreno_power_operations = {
 	.first_open = adreno_open,
 	.last_close = adreno_close,
 	.active_count_get = adreno_pwrctrl_active_count_get,
-	.active_count_put = adreno_pwrctrl_active_count_put,
 	.pm_suspend = adreno_suspend,
 	.pm_resume = adreno_resume,
 	.touch_wakeup = adreno_touch_wakeup,

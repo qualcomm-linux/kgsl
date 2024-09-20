@@ -448,11 +448,6 @@ struct adreno_power_ops {
 	 * collapsing
 	 */
 	int (*active_count_get)(struct adreno_device *adreno_dev);
-	/**
-	 * @active_count_put: Target specific function to allow gpu to power
-	 * collapse
-	 */
-	void (*active_count_put)(struct adreno_device *adreno_dev);
 	/** @pm_suspend: Target specific function to suspend the driver */
 	int (*pm_suspend)(struct adreno_device *adreno_dev);
 	/** @pm_resume: Target specific function to resume the driver */
@@ -858,13 +853,10 @@ struct adreno_submit_time {
  * and are indexed by the enumeration values defined in this enum
  */
 enum adreno_regs {
-	ADRENO_REG_CP_ME_RAM_DATA,
 	ADRENO_REG_CP_RB_BASE,
 	ADRENO_REG_CP_RB_BASE_HI,
 	ADRENO_REG_CP_LPAC_RB_BASE,
 	ADRENO_REG_CP_LPAC_RB_BASE_HI,
-	ADRENO_REG_CP_RB_RPTR_ADDR_LO,
-	ADRENO_REG_CP_RB_RPTR_ADDR_HI,
 	ADRENO_REG_CP_RB_RPTR,
 	ADRENO_REG_CP_RB_WPTR,
 	ADRENO_REG_CP_ME_CNTL,
@@ -875,44 +867,12 @@ enum adreno_regs {
 	ADRENO_REG_CP_IB2_BASE,
 	ADRENO_REG_CP_IB2_BASE_HI,
 	ADRENO_REG_CP_IB2_BUFSZ,
-	ADRENO_REG_CP_TIMESTAMP,
-	ADRENO_REG_CP_SCRATCH_REG6,
-	ADRENO_REG_CP_SCRATCH_REG7,
-	ADRENO_REG_CP_PROTECT_STATUS,
-	ADRENO_REG_CP_PREEMPT,
-	ADRENO_REG_CP_PREEMPT_DEBUG,
-	ADRENO_REG_CP_PREEMPT_DISABLE,
-	ADRENO_REG_CP_PROTECT_REG_0,
-	ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_PREEMPT_LEVEL_STATUS,
 	ADRENO_REG_RBBM_STATUS,
 	ADRENO_REG_RBBM_STATUS3,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD0,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD1,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD2,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD3,
-	ADRENO_REG_RBBM_PERFCTR_PWR_1_LO,
 	ADRENO_REG_RBBM_INT_0_MASK,
-	ADRENO_REG_RBBM_PM_OVERRIDE2,
 	ADRENO_REG_RBBM_SW_RESET_CMD,
-	ADRENO_REG_RBBM_CLOCK_CTL,
-	ADRENO_REG_PA_SC_AA_CONFIG,
-	ADRENO_REG_SQ_GPR_MANAGEMENT,
-	ADRENO_REG_SQ_INST_STORE_MANAGEMENT,
-	ADRENO_REG_TP0_CHICKEN,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_LO,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_HI,
 	ADRENO_REG_GMU_AO_HOST_INTERRUPT_MASK,
-	ADRENO_REG_GMU_AHB_FENCE_STATUS,
 	ADRENO_REG_GMU_GMU2HOST_INTR_MASK,
-	ADRENO_REG_GPMU_POWER_COUNTER_ENABLE,
 	ADRENO_REG_REGISTER_MAX,
 };
 
@@ -933,13 +893,6 @@ struct adreno_irq_funcs {
 struct adreno_debugbus_block {
 	unsigned int block_id;
 	unsigned int dwords;
-};
-
-enum adreno_cp_marker_type {
-	IFPC_DISABLE,
-	IFPC_ENABLE,
-	IB1LIST_START,
-	IB1LIST_END,
 };
 
 struct adreno_gpudev {
@@ -995,8 +948,6 @@ struct adreno_gpudev {
 	 */
 	void (*power_stats)(struct adreno_device *adreno_dev,
 			struct kgsl_power_stats *stats);
-	int (*setproperty)(struct kgsl_device_private *priv, u32 type,
-		void __user *value, u32 sizebytes);
 	int (*add_to_va_minidump)(struct adreno_device *adreno_dev);
 	/**
 	 * @gx_is_on - Return true if both gfx clock and gxgdsc are enabled.
@@ -1144,7 +1095,7 @@ u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
 int adreno_active_count_get(struct adreno_device *adreno_dev);
 
 /**
- * adreno_active_count_put - Wrapper for target specific active count put
+ * adreno_active_count_put - Decrement the active count
  * @adreno_dev: pointer to the adreno device
  *
  * Decrease the active or the KGSL device and schedule the idle thread to

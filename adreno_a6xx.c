@@ -2010,10 +2010,6 @@ static unsigned int a6xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE, A6XX_CP_RB_BASE),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE_HI, A6XX_CP_RB_BASE_HI),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR_ADDR_LO,
-				A6XX_CP_RB_RPTR_ADDR_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR_ADDR_HI,
-				A6XX_CP_RB_RPTR_ADDR_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR, A6XX_CP_RB_RPTR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_WPTR, A6XX_CP_RB_WPTR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_CNTL, A6XX_CP_RB_CNTL),
@@ -2024,38 +2020,12 @@ static unsigned int a6xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BASE, A6XX_CP_IB2_BASE),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BASE_HI, A6XX_CP_IB2_BASE_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BUFSZ, A6XX_CP_IB2_REM_SIZE),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PREEMPT, A6XX_CP_CONTEXT_SWITCH_CNTL),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_LO,
-			A6XX_CP_CONTEXT_SWITCH_SMMU_INFO_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_HI,
-			A6XX_CP_CONTEXT_SWITCH_SMMU_INFO_HI),
-	ADRENO_REG_DEFINE(
-		ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_LO,
-			A6XX_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_LO),
-	ADRENO_REG_DEFINE(
-		ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_HI,
-			A6XX_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_HI),
-	ADRENO_REG_DEFINE(
-		ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO,
-			A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO),
-	ADRENO_REG_DEFINE(
-		ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI,
-			A6XX_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_LO,
-			A6XX_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_HI,
-			A6XX_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_HI),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PREEMPT_LEVEL_STATUS,
-			A6XX_CP_CONTEXT_SWITCH_LEVEL_STATUS),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_STATUS, A6XX_RBBM_STATUS),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_STATUS3, A6XX_RBBM_STATUS3),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_INT_0_MASK, A6XX_RBBM_INT_0_MASK),
-	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_CLOCK_CTL, A6XX_RBBM_CLOCK_CNTL),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_SW_RESET_CMD, A6XX_RBBM_SW_RESET_CMD),
 	ADRENO_REG_DEFINE(ADRENO_REG_GMU_AO_HOST_INTERRUPT_MASK,
 				A6XX_GMU_AO_HOST_INTERRUPT_MASK),
-	ADRENO_REG_DEFINE(ADRENO_REG_GMU_AHB_FENCE_STATUS,
-				A6XX_GMU_AHB_FENCE_STATUS),
 	ADRENO_REG_DEFINE(ADRENO_REG_GMU_GMU2HOST_INTR_MASK,
 				A6XX_GMU_GMU2HOST_INTR_MASK),
 };
@@ -2217,49 +2187,6 @@ static void a6xx_power_stats(struct adreno_device *adreno_dev,
 		a6xx_read_bus_stats(device, stats, busy);
 }
 
-static int a6xx_setproperty(struct kgsl_device_private *dev_priv,
-		u32 type, void __user *value, u32 sizebytes)
-{
-	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	u32 enable;
-
-	if (type != KGSL_PROP_PWRCTRL)
-		return -ENODEV;
-
-	if (sizebytes != sizeof(enable))
-		return -EINVAL;
-
-	if (copy_from_user(&enable, value, sizeof(enable)))
-		return -EFAULT;
-
-	mutex_lock(&device->mutex);
-
-	if (enable) {
-		if (gmu_core_isenabled(device))
-			clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-		else
-			device->pwrctrl.ctrl_flags = 0;
-
-		kgsl_pwrscale_enable(device);
-	} else {
-		if (gmu_core_isenabled(device)) {
-			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
-
-			if (!adreno_active_count_get(adreno_dev))
-				adreno_active_count_put(adreno_dev);
-		} else {
-			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
-			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
-		}
-		kgsl_pwrscale_disable(device, true);
-	}
-
-	mutex_unlock(&device->mutex);
-
-	return 0;
-}
-
 static int a6xx_dev_add_to_minidump(struct adreno_device *adreno_dev)
 {
 	return kgsl_add_va_to_minidump(adreno_dev->dev.dev, KGSL_ADRENO_DEVICE,
@@ -2381,7 +2308,6 @@ const struct adreno_gpudev adreno_a6xx_gpudev = {
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.is_hw_collapsible = adreno_isidle,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_dev_add_to_minidump,
 	.gx_is_on = a6xx_gx_is_on,
 };
@@ -2398,7 +2324,6 @@ const struct a6xx_gpudev adreno_a6xx_hwsched_gpudev = {
 		.reset = a6xx_hwsched_reset_replay,
 		.power_ops = &a6xx_hwsched_power_ops,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.hw_isidle = a6xx_hw_isidle,
 		.add_to_va_minidump = a6xx_hwsched_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
@@ -2429,7 +2354,6 @@ const struct a6xx_gpudev adreno_a6xx_gmu_gpudev = {
 		.remove = a6xx_remove,
 		.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.add_to_va_minidump = a6xx_gmu_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
 		.set_isdb_breakpoint_registers = a6xx_set_isdb_breakpoint_registers,
@@ -2456,7 +2380,6 @@ const struct adreno_gpudev adreno_a6xx_rgmu_gpudev = {
 	.remove = a6xx_remove,
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_rgmu_add_to_minidump,
 	.gx_is_on = a6xx_rgmu_gx_is_on,
 };
@@ -2485,7 +2408,6 @@ const struct adreno_gpudev adreno_a619_holi_gpudev = {
 	.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 	.is_hw_collapsible = adreno_isidle,
 	.power_stats = a6xx_power_stats,
-	.setproperty = a6xx_setproperty,
 	.add_to_va_minidump = a6xx_dev_add_to_minidump,
 	.gx_is_on = a619_holi_gx_is_on,
 };
@@ -2509,7 +2431,6 @@ const struct a6xx_gpudev adreno_a630_gpudev = {
 		.remove = a6xx_remove,
 		.ringbuffer_submitcmd = a6xx_ringbuffer_submitcmd,
 		.power_stats = a6xx_power_stats,
-		.setproperty = a6xx_setproperty,
 		.add_to_va_minidump = a6xx_gmu_add_to_minidump,
 		.gx_is_on = a6xx_gmu_gx_is_on,
 	},

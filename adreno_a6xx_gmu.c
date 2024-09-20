@@ -3037,29 +3037,6 @@ error:
 	return ret;
 }
 
-static void a6xx_gmu_active_count_put(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
-		return;
-
-	if (WARN(atomic_read(&device->active_cnt) == 0,
-		"Unbalanced get/put calls to KGSL active count\n"))
-		return;
-
-	if (atomic_dec_and_test(&device->active_cnt)) {
-		kgsl_pwrscale_update_stats(device);
-		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
-	}
-
-	trace_kgsl_active_count(device,
-		(unsigned long) __builtin_return_address(0));
-
-	wake_up(&device->active_cnt_wq);
-}
-
 int a6xx_halt_gbif(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3545,7 +3522,7 @@ static int a6xx_gmu_first_open(struct adreno_device *adreno_dev)
 	 * check by incrementing the active count and immediately releasing it.
 	 */
 	atomic_inc(&device->active_cnt);
-	a6xx_gmu_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	return 0;
 }
@@ -3693,7 +3670,6 @@ const struct adreno_power_ops a6xx_gmu_power_ops = {
 	.first_open = a6xx_gmu_first_open,
 	.last_close = a6xx_gmu_last_close,
 	.active_count_get = a6xx_gmu_active_count_get,
-	.active_count_put = a6xx_gmu_active_count_put,
 	.pm_suspend = a6xx_gmu_pm_suspend,
 	.pm_resume = a6xx_gmu_pm_resume,
 	.touch_wakeup = a6xx_gmu_touch_wakeup,
@@ -3705,7 +3681,6 @@ const struct adreno_power_ops a630_gmu_power_ops = {
 	.first_open = a6xx_gmu_first_open,
 	.last_close = a6xx_gmu_last_close,
 	.active_count_get = a6xx_gmu_active_count_get,
-	.active_count_put = a6xx_gmu_active_count_put,
 	.pm_suspend = a6xx_gmu_pm_suspend,
 	.pm_resume = a6xx_gmu_pm_resume,
 	.touch_wakeup = a6xx_gmu_touch_wakeup,

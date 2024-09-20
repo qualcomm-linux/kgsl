@@ -1060,7 +1060,7 @@ static void gen8_defer_hw_fence_work(struct kthread_work *work)
 	 */
 	kgsl_context_put(&drawctxt->base);
 
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	_disable_hw_fence_throttle(adreno_dev, false);
 
@@ -3631,7 +3631,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 		ret = check_ack_failure(adreno_dev, &pending_ack);
 
 done:
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 	del_waiter(hfi, &pending_ack);
 
 	return ret;
@@ -3668,10 +3668,16 @@ void gen8_hwsched_context_detach(struct adreno_context *drawctxt)
 
 u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 {
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret, preempt_count = 0;
 
-	if (device->state != KGSL_STATE_ACTIVE)
+	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_TOTAL, &preempt_count);
+	if (ret)
 		return 0;
+
+	if ((preempt_count != 0) || (device->state != KGSL_STATE_ACTIVE))
+		return preempt_count;
 
 	return gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_PREEMPT_COUNT);
 }
@@ -3709,7 +3715,7 @@ int gen8_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
 
 	kgsl_context_put(&drawctxt->base);
-	gen8_hwsched_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 done:
 	_disable_hw_fence_throttle(adreno_dev, true);

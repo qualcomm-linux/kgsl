@@ -203,9 +203,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
 int kgsl_pwrctrl_change_state(struct kgsl_device *device, int state);
 
-unsigned int kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device,
-	unsigned int new_level);
-
 /*
  * kgsl_pwrctrl_active_freq - get currently configured frequency
  * @pwr: kgsl_pwrctrl structure for the device

@@ -133,11 +133,10 @@ static void kgsl_pwrctrl_pwrlevel_change_settings(struct kgsl_device *device,
  * @device: Pointer to the kgsl_device struct
  * @new_level: Requested powerlevel, an index into the pwrlevel array
  */
-unsigned int kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device,
-				unsigned int new_level)
+static u32 kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device, u32 new_level)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	unsigned int old_level = pwr->active_pwrlevel;
+	u32 old_level = pwr->active_pwrlevel;
 	bool reset = false;
 
 	/* If a pwr constraint is expired, remove it */
@@ -539,12 +538,13 @@ static ssize_t gpuclk_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	mutex_lock(&device->mutex);
 	level = _get_nearest_pwrlevel(pwr, val);
-	if (level >= 0)
+	if (level >= 0) {
+		mutex_lock(&device->mutex);
 		kgsl_pwrctrl_pwrlevel_change(device, (unsigned int) level);
+		mutex_unlock(&device->mutex);
+	}
 
-	mutex_unlock(&device->mutex);
 	return count;
 }
 

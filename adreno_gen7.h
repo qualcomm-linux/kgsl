@@ -264,9 +264,6 @@ u32 gen7_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 *cmds);
 
-unsigned int gen7_set_marker(unsigned int *cmds,
-		enum adreno_cp_marker_type type);
-
 void gen7_preemption_callback(struct adreno_device *adreno_dev, int bit);
 
 void gen7_preemption_context_destroy(struct kgsl_context *context);
