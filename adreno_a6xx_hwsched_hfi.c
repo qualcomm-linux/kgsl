@@ -681,31 +681,17 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	return PTR_ERR_OR_ZERO(hw_hfi->f2h_task);
 }
 
-static int get_attrs(u32 flags)
-{
-	int attrs = IOMMU_READ;
-
-	if (flags & HFI_MEMFLAG_GMU_PRIV)
-		attrs |= IOMMU_PRIV;
-
-	if (flags & HFI_MEMFLAG_GMU_WRITEABLE)
-		attrs |= IOMMU_WRITE;
-
-	return attrs;
-}
-
 static int gmu_import_buffer(struct adreno_device *adreno_dev,
 	struct hfi_mem_alloc_entry *entry)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct hfi_mem_alloc_desc *desc = &entry->desc;
-	int attrs = get_attrs(desc->flags);
-	struct gmu_vma_entry *vma = &gmu->vma[GMU_NONCACHED_KERNEL];
+	int attrs = gmu_core_get_attrs(desc->flags);
+	struct gmu_vma_entry *vma = &device->gmu_core.vma[GMU_NONCACHED_KERNEL];
 	int ret;
 
 	if (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE)
-		vma = &gmu->vma[GMU_CACHE];
+		vma = &device->gmu_core.vma[GMU_CACHE];
 
 	if ((vma->next_va + desc->size) > (vma->start + vma->size)) {
 		dev_err(GMU_PDEV_DEV(device),
@@ -793,8 +779,8 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 		if (desc->mem_kind == HFI_MEMKIND_MMIO_IPC_CORE)
 			entry->md = reserve_gmu_kernel_block_fixed(gmu, 0, desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
-					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					"qcom,ipc-core", get_attrs(desc->flags), desc->align);
+					GMU_CACHE : GMU_NONCACHED_KERNEL, "qcom,ipc-core",
+					gmu_core_get_attrs(desc->flags), desc->align);
 		else
 			entry->md = reserve_gmu_kernel_block(gmu, 0, desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?

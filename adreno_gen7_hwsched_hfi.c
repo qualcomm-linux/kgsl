@@ -1437,13 +1437,13 @@ static int hfi_f2h_main(void *arg);
 
 int gen7_hwsched_hfi_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct gen7_hfi *hfi = to_gen7_hfi(adreno_dev);
 
 	if (IS_ERR_OR_NULL(hw_hfi->big_ib)) {
-		hw_hfi->big_ib = gen7_reserve_gmu_kernel_block(
-				to_gen7_gmu(adreno_dev), 0,
-				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
+		hw_hfi->big_ib = gmu_core_reserve_kernel_block(
+				device, 0, HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hw_hfi->big_ib))
 			return PTR_ERR(hw_hfi->big_ib);
@@ -1451,18 +1451,16 @@ int gen7_hwsched_hfi_init(struct adreno_device *adreno_dev)
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LSR) &&
 			IS_ERR_OR_NULL(hw_hfi->big_ib_recurring)) {
-		hw_hfi->big_ib_recurring = gen7_reserve_gmu_kernel_block(
-				to_gen7_gmu(adreno_dev), 0,
-				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
+		hw_hfi->big_ib_recurring = gmu_core_reserve_kernel_block(
+				device, 0, HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hw_hfi->big_ib_recurring))
 			return PTR_ERR(hw_hfi->big_ib_recurring);
 	}
 
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = gen7_reserve_gmu_kernel_block(
-				to_gen7_gmu(adreno_dev),
-				0, HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(
+				device, 0, HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hfi->hfi_mem))
 			return PTR_ERR(hfi->hfi_mem);
 		init_queues(hfi);
@@ -1475,29 +1473,6 @@ int gen7_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	}
 
 	return PTR_ERR_OR_ZERO(hw_hfi->f2h_task);
-}
-
-static int get_attrs(u32 flags)
-{
-	int attrs = IOMMU_READ;
-
-	if (flags & HFI_MEMFLAG_GMU_PRIV)
-		attrs |= IOMMU_PRIV;
-
-	if (flags & HFI_MEMFLAG_GMU_WRITEABLE)
-		attrs |= IOMMU_WRITE;
-
-	return attrs;
-}
-
-static int gmu_import_buffer(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_entry *entry)
-{
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct hfi_mem_alloc_desc *desc = &entry->desc;
-	u32 vma_id = (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
-
-	return gen7_gmu_import_buffer(gmu, vma_id, entry->md, get_attrs(desc->flags), desc->align);
 }
 
 static struct hfi_mem_alloc_entry *lookup_mem_alloc_table(
@@ -1525,7 +1500,6 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct hfi_mem_alloc_entry *entry =
 		lookup_mem_alloc_table(adreno_dev, desc);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	u64 flags = 0;
 	u32 priv = 0;
 	int ret;
@@ -1565,14 +1539,14 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	if (!(desc->flags & HFI_MEMFLAG_GFX_ACC) &&
 		(desc->mem_kind != HFI_MEMKIND_HW_FENCE)) {
 		if (desc->mem_kind == HFI_MEMKIND_MMIO_IPC_CORE)
-			entry->md = gen7_reserve_gmu_kernel_block_fixed(gmu, 0,
+			entry->md = gmu_core_reserve_kernel_block_fixed(device, 0,
 					desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					"qcom,ipc-core", get_attrs(desc->flags),
+					"qcom,ipc-core", gmu_core_get_attrs(desc->flags),
 					desc->align);
 		else
-			entry->md = gen7_reserve_gmu_kernel_block(gmu, 0,
+			entry->md = gmu_core_reserve_kernel_block(device, 0,
 					desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL,
@@ -1623,7 +1597,7 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	  * If gmu mapping fails, then we have to live with
 	  * leaking the gpu global buffer allocated above.
 	  */
-	ret = gmu_import_buffer(adreno_dev, entry);
+	ret = gmu_core_import_buffer(device, entry);
 	if (ret) {
 		dev_err(gmu_pdev_dev,
 			"gpuaddr: 0x%llx size: %lld bytes lost\n",
@@ -2710,6 +2684,7 @@ static u32 get_dq_id(struct adreno_device *adreno_dev, struct kgsl_context *cont
 static int allocate_context_queues(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret = 0;
 
 	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
@@ -2717,8 +2692,8 @@ static int allocate_context_queues(struct adreno_device *adreno_dev,
 
 	if (test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags) &&
 		!drawctxt->gmu_hw_fence_queue.gmuaddr) {
-		ret = gen7_alloc_gmu_kernel_block(
-			to_gen7_gmu(adreno_dev), &drawctxt->gmu_hw_fence_queue,
+		ret = gmu_core_alloc_kernel_block(
+			device, &drawctxt->gmu_hw_fence_queue,
 			HW_FENCE_QUEUE_SIZE, GMU_NONCACHED_KERNEL,
 			IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 		if (ret) {
@@ -2729,8 +2704,8 @@ static int allocate_context_queues(struct adreno_device *adreno_dev,
 	}
 
 	if (!drawctxt->gmu_context_queue.gmuaddr) {
-		ret = gen7_alloc_gmu_kernel_block(
-			to_gen7_gmu(adreno_dev), &drawctxt->gmu_context_queue,
+		ret = gmu_core_alloc_kernel_block(
+			device, &drawctxt->gmu_context_queue,
 			SZ_4K, GMU_NONCACHED_KERNEL,
 			IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 		if (ret) {
@@ -3831,14 +3806,16 @@ u32 gen7_hwsched_preempt_count_get(struct adreno_device *adreno_dev)
 void gen7_hwsched_context_destroy(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
 	if (!adreno_hwsched_context_queue_enabled(adreno_dev))
 		return;
 
 	if (drawctxt->gmu_context_queue.gmuaddr)
-		gen7_free_gmu_block(to_gen7_gmu(adreno_dev), &drawctxt->gmu_context_queue);
+		gmu_core_free_block(device, &drawctxt->gmu_context_queue);
 
 	if (drawctxt->gmu_hw_fence_queue.gmuaddr)
-		gen7_free_gmu_block(to_gen7_gmu(adreno_dev), &drawctxt->gmu_hw_fence_queue);
+		gmu_core_free_block(device, &drawctxt->gmu_hw_fence_queue);
 }
 
 static int register_global_ctxt(struct adreno_device *adreno_dev)
@@ -3855,7 +3832,7 @@ static int register_global_ctxt(struct adreno_device *adreno_dev)
 	if (adreno_hwsched_context_queue_enabled(adreno_dev) && !hwsched->global_ctxtq.hostptr) {
 		struct gmu_context_queue_header *hdr;
 
-		ret = gen7_alloc_gmu_kernel_block(to_gen7_gmu(adreno_dev), &hwsched->global_ctxtq,
+		ret = gmu_core_alloc_kernel_block(device, &hwsched->global_ctxtq,
 			SZ_4K, GMU_NONCACHED_KERNEL, IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV);
 		if (ret) {
 			memset(&hwsched->global_ctxtq, 0x0, sizeof(hwsched->global_ctxtq));

@@ -51,11 +51,6 @@ struct a6xx_gmu_device {
 	u32 vlvls[GMU_MAX_PWRLEVELS];
 	struct kgsl_mailbox mailbox;
 	bool preallocations;
-	/** @gmu_globals: Array to store gmu global buffers */
-	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
-	/** @global_entries: To keep track of number of gmu buffers */
-	u32 global_entries;
-	struct gmu_vma_entry *vma;
 	unsigned int log_wptr_retention;
 	/** @cm3_fault: whether gmu received a cm3 fault interrupt */
 	atomic_t cm3_fault;

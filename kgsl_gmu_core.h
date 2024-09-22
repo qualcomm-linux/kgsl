@@ -12,6 +12,8 @@
 #include <linux/remoteproc/qcom_rproc.h>
 #endif
 
+#include "kgsl_sharedmem.h"
+
 /* GMU_DEVICE - Given an KGSL device return the GMU specific struct */
 #define GMU_DEVICE_OPS(_a) ((_a)->gmu_core.dev_ops)
 
@@ -456,6 +458,12 @@ struct gmu_core_device {
 	struct platform_device *pdev;
 	/** @domain: IOMMU domain for the gmu context */
 	struct iommu_domain *domain;
+	/** @gmu_globals: Array to store gmu global buffers */
+	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
+	/** @global_entries: To keep track of number of gmu buffers */
+	u32 global_entries;
+	/** @vma: VMA entry for GMU */
+	struct gmu_vma_entry *vma;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -528,6 +536,7 @@ int gmu_core_timed_poll_check(struct kgsl_device *device,
 
 struct kgsl_memdesc;
 struct iommu_domain;
+struct hfi_mem_alloc_entry;
 
 struct gmu_mem_type_desc {
 	/** @memdesc: Pointer to the memory descriptor */
@@ -547,6 +556,113 @@ struct gmu_mem_type_desc {
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+
+/**
+ * gmu_core_find_memdesc - Find the GMU memory descriptor for a given address and size
+ * @device: Pointer to KGSL device
+ * @addr: Address of the memory region
+ * @size: Size of the memory region
+ *
+ * Return: Pointer to the matching kgsl_memdesc structure if found, NULL otherwise.
+ */
+struct kgsl_memdesc *gmu_core_find_memdesc(struct kgsl_device *device, u32 addr, u32 size);
+
+/**
+ * gmu_core_find_vma_block - Find the VMA block for a given address and size
+ * @device: Pointer to KGSL device
+ * @addr: Address of the memory region
+ * @size: Size of the memory region
+ *
+ * Return: The index of the matching VMA entry if found, -ENOENT otherwise.
+ */
+int gmu_core_find_vma_block(struct kgsl_device *device, u32 addr, u32 size);
+
+/**
+ * gmu_core_free_globals - Free the GMU global memory descriptors
+ * @device: Pointer to KGSL device
+ */
+void gmu_core_free_globals(struct kgsl_device *device);
+
+/**
+ * gmu_core_get_attrs - Get the IOMMU attributes based on flags
+ * @flags: The memory flags indicating the attributes
+ *
+ * Return: IOMMU attributes.
+ */
+int gmu_core_get_attrs(u32 flags);
+
+/**
+ * gmu_core_import_buffer - Import a gmu buffer
+ * @device: Pointer to KGSL device
+ * @entry: GMU memory entry
+ * This function imports and maps a buffer to a gmu vma
+ *
+ * Return: 0 on success or error code on failure
+ */
+int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry);
+
+/**
+ * gmu_core_reserve_kernel_block - Allocate a gmu buffer
+ * @device: Pointer to KGSL device
+ * @addr: Desired gmu virtual address
+ * @size: Size of the buffer in bytes
+ * @vma_id: Target gmu vma where this buffer should be mapped
+ * @align: Alignment as a power of two(2^n) bytes for the GMU VA
+ *
+ * This function allocates a buffer and maps it in the desired gmu vma
+ *
+ * Return: Pointer to the memory descriptor or error pointer on failure
+ */
+struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
+	u32 addr, u32 size, u32 vma_id, u32 align);
+
+/**
+ * gmu_core_reserve_kernel_block_fixed - Maps phyical resource address to gmu
+ * @device: Pointer to KGSL device
+ * @addr: Desired gmu virtual address
+ * @size: Size of the buffer in bytes
+ * @vma_id: Target gmu vma where this buffer should be mapped
+ * @resource: Name of the resource to get the size and address to allocate
+ * @attrs: Attributes for the mapping
+ * @align: Alignment as a power of two(2^n) bytes for the GMU VA
+ *
+ * This function maps the physcial resource address to desired gmu vma
+ *
+ * Return: Pointer to the memory descriptor or error pointer on failure
+ */
+struct kgsl_memdesc *gmu_core_reserve_kernel_block_fixed(struct kgsl_device *device,
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align);
+
+/**
+ * gmu_core_alloc_kernel_block - Allocate a gmu buffer
+ * @device: Pointer to KGSL device
+ * @md: Pointer to the memdesc
+ * @size: Size of the buffer in bytes
+ * @vma_id: Target gmu vma where this buffer should be mapped
+ * @attrs: Attributes for the mapping
+ *
+ * This function allocates a buffer and maps it in the desired gmu vma
+ *
+ * Return: 0 on success or error code on failure
+ */
+int gmu_core_alloc_kernel_block(struct kgsl_device *device,
+	struct kgsl_memdesc *md, u32 size, u32 vma_id, int attrs);
+
+/**
+ * gmu_core_free_block - Free a gmu buffer
+ * @device: Pointer to KGSL device
+ * @md: Pointer to the memdesc that is to be freed
+ */
+void gmu_core_free_block(struct kgsl_device *device, struct kgsl_memdesc *md);
+
+/**
+ * gmu_core_process_prealloc - Process preallocate GMU blocks
+ * @device: Pointer to the KGSL device structure
+ * @blk: Pointer to the GMU block header structure
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
+int gmu_core_process_prealloc(struct kgsl_device *device, struct gmu_block_header *blk);
 
 /**
  * gmu_core_iommu_init - Set up GMU IOMMU and shared memory with GMU
