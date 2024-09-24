@@ -68,15 +68,6 @@ enum oob_request {
 	oob_max,
 };
 
-enum gmu_pwrctrl_mode {
-	GMU_FW_START,
-	GMU_FW_STOP,
-	GMU_SUSPEND,
-	GMU_DCVS_NOHFI,
-	GMU_NOTIFY_SLUMBER,
-	INVALID_POWER_CTRL
-};
-
 #define GPU_HW_ACTIVE	0x00
 #define GPU_HW_IFPC	0x03
 #define GPU_HW_SLUMBER	0x0f
