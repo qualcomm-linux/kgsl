@@ -65,7 +65,8 @@ static size_t gen7_gmu_snapshot_itcm(struct kgsl_device *device,
 	struct gen7_gmu_device *gmu = (struct gen7_gmu_device *)priv;
 
 	if (!gmu->itcm_shadow) {
-		dev_err(&gmu->pdev->dev, "No memory allocated for ITCM shadow capture\n");
+		dev_err(GMU_PDEV_DEV(device),
+			"No memory allocated for ITCM shadow capture\n");
 		return 0;
 	}
 
@@ -229,7 +230,7 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 	 * DTCM can be read through side-band DBGC interface on gen7_2_x family.
 	 */
 	if (adreno_smmu_is_stalled(adreno_dev) && !adreno_is_gen7_2_x_family(adreno_dev)) {
-		dev_err(&gmu->pdev->dev,
+		dev_err(GMU_PDEV_DEV(device),
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;
 	}

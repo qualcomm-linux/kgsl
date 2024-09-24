@@ -189,7 +189,7 @@ static size_t a6xx_gmu_snapshot_itcm(struct kgsl_device *device,
 	struct a6xx_gmu_device *gmu = (struct a6xx_gmu_device *)priv;
 
 	if (!gmu->itcm_shadow) {
-		dev_err(&gmu->pdev->dev, "ITCM not captured\n");
+		dev_err(GMU_PDEV_DEV(device), "ITCM not captured\n");
 		return 0;
 	}
 
@@ -402,7 +402,7 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 
 	/* A stalled SMMU can lead to NoC timeouts when host accesses DTCM */
 	if (adreno_smmu_is_stalled(adreno_dev)) {
-		dev_err(&gmu->pdev->dev,
+		dev_err(GMU_PDEV_DEV(device),
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;
 	}

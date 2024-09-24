@@ -39,7 +39,6 @@ struct gen8_gmu_device {
 		u32 pwr_dev;
 		u32 hfi;
 	} ver;
-	struct platform_device *pdev;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;

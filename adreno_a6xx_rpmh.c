@@ -85,7 +85,7 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 
 	if (table->gpu_level_num > pri_rail->num ||
 		table->gpu_level_num > ARRAY_SIZE(vlvl_tbl)) {
-		dev_err(&gmu->pdev->dev,
+		dev_err(GMU_PDEV_DEV(device),
 			"Defined more GPU DCVS levels than RPMh can support\n");
 		return -ERANGE;
 	}
@@ -108,7 +108,7 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 		ret = adreno_rpmh_to_cx_hlvl(cx_rail, cx_vlvl,
 				&table->gx_votes[index].dep_vote);
 		if (ret) {
-			dev_err(&gmu->pdev->dev, "Unsupported cx corner: %u\n",
+			dev_err(GMU_PDEV_DEV(device), "Unsupported cx corner: %u\n",
 					cx_vlvl);
 			return ret;
 		}
