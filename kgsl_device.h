@@ -688,7 +688,8 @@ static inline bool kgsl_state_is_awake(struct kgsl_device *device)
  */
 static inline void kgsl_start_idle_timer(struct kgsl_device *device)
 {
-	device->idle_jiffies = jiffies + msecs_to_jiffies(device->pwrctrl.interval_timeout);
+	device->idle_jiffies = jiffies +
+		msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
 	mod_timer(&device->idle_timer, device->idle_jiffies);
 }
 

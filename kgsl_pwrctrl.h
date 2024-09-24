@@ -144,7 +144,7 @@ struct kgsl_pwrctrl {
 	unsigned int min_render_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int throttle_mask;
-	u32 interval_timeout;
+	atomic64_t interval_timeout;
 	u64 clock_times[KGSL_MAX_PWRLEVELS];
 	/** @thermal_time: Time in usecs the GPU is limited by thermal constraints */
 	u64 thermal_time;
