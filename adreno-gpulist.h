@@ -1076,7 +1076,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a621 = {
 		.compatible = "qcom,adreno-gpu-a621",
 		.features = ADRENO_CONTENT_PROTECTION | ADRENO_IOCOHERENT |
 			ADRENO_APRIV | ADRENO_LSR | ADRENO_PREEMPTION |
-			ADRENO_IFPC,
+			ADRENO_IFPC | ADRENO_ACD | ADRENO_BCL,
 		.gpudev = &adreno_a6xx_hwsched_gpudev.base,
 		.perfcounters = &adreno_a6xx_hwsched_perfcounters,
 		.uche_gmem_alignment = 0,
@@ -1100,6 +1100,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a621 = {
 	.protected_regs = a620_protected_regs,
 	.disable_tseskip = true,
 	.highest_bank_bit = 13,
+	.gmu_hub_clk_freq = 200000000,
 };
 
 static const struct kgsl_regmap_list a640_hwcg_regs[] = {
