@@ -2758,7 +2758,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_3_0 = {
 		.compatible = "qcom,adreno-gpu-gen8-3-0",
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_CONTENT_PROTECTION | ADRENO_IFPC | ADRENO_BCL |
-			ADRENO_PREEMPTION,
+			ADRENO_PREEMPTION | ADRENO_ACD,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -2782,6 +2782,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_3_0 = {
 	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
 	.ctxt_record_size = (4558 * SZ_1K),
 	.bcl_data = 1,
+	.noc_timeout_us = 6800, /* 6.8 msec */
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
