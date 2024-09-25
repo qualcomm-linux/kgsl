@@ -1442,7 +1442,8 @@ int adreno_device_probe(struct platform_device *pdev,
 	/* Probe for the optional CX_MISC block */
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
 
-	kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL);
+	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL) == 0)
+		adreno_dev->isense_reg_mapped = true;
 
 	/* Allocate the memstore for storing timestamps and other useful info */
 

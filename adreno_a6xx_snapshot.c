@@ -1676,8 +1676,7 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	a6xx_snapshot_debugbus(adreno_dev, snapshot);
 
 	/* Isense registers are on cx */
-	if (adreno_is_a650_family(adreno_dev) &&
-		kgsl_regmap_valid_offset(&device->regmap, a650_isense_registers[0])) {
+	if (adreno_dev->isense_reg_mapped) {
 		struct kgsl_snapshot_registers r;
 
 		r.regs = a650_isense_registers;

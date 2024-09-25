@@ -633,6 +633,8 @@ struct adreno_device {
 	bool bcl_enabled;
 	/** @clx_enabled: True if CLX is enabled */
 	bool clx_enabled;
+	/** @isense_reg_mapped: True if isense registers are mapped to regmap */
+	bool isense_reg_mapped;
 	/** @lpac_enabled: True if LPAC is enabled */
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
