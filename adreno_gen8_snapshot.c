@@ -129,6 +129,7 @@ static void CD_FINISH(u64 *ptr, u32 offset)
 static bool CD_SCRIPT_CHECK(struct kgsl_device *device)
 {
 	return (adreno_smmu_is_stalled(ADRENO_DEVICE(device)) ||
+		(kgsl_mmu_ctx_terminated_on_fault(&device->mmu)) ||
 		(!device->snapshot_crashdumper) ||
 		IS_ERR_OR_NULL(gen8_capturescript) ||
 		IS_ERR_OR_NULL(gen8_crashdump_registers) ||

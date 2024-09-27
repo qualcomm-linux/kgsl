@@ -1708,7 +1708,7 @@ static void adreno_hwsched_snapshot_legacy(struct adreno_device *adreno_dev, int
 	 * faulted.
 	 */
 	obj = get_fault_cmdobj(adreno_dev, cmd->ctxt_id, cmd->ts);
-	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
 	if (obj) {
@@ -1787,7 +1787,7 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 	obj = get_fault_cmdobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
 	obj_lpac = get_fault_cmdobj(adreno_dev, cmd->lpac.ctxt_id, cmd->lpac.ts);
 
-	if (!obj && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj = get_active_cmdobj(adreno_dev);
 
 	if (obj) {
@@ -1803,7 +1803,7 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 
 	do_fault_header(adreno_dev, drawobj, fault);
 
-	if (!obj_lpac && (fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!obj_lpac && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		obj_lpac = get_active_cmdobj_lpac(adreno_dev);
 
 	if (!obj && !obj_lpac) {
@@ -1897,7 +1897,7 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 		 * Halt CP for page faults here. CP is halted from GMU when required,
 		 * for other faults.
 		 */
-		if ((fault & ADRENO_IOMMU_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
+		if ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
 			adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
 
 		if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))

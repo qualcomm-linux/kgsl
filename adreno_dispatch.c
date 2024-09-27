@@ -1941,7 +1941,7 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 	 * proceed if the fault handler has already run in the IRQ thread,
 	 * else return early to give the fault handler a chance to run.
 	 */
-	if (!(fault & ADRENO_IOMMU_PAGE_FAULT) && gx_on) {
+	if (!(fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) && gx_on) {
 		if (adreno_smmu_is_stalled(adreno_dev)) {
 			mutex_unlock(&device->mutex);
 			mutex_unlock(&adreno_dev->fault_recovery_mutex);
@@ -2016,7 +2016,7 @@ static int dispatcher_do_fault(struct adreno_device *adreno_dev)
 		gpudev->gpu_keepalive(adreno_dev, false);
 
 	/* Terminate the stalled transaction and resume the IOMMU */
-	if (fault & ADRENO_IOMMU_PAGE_FAULT)
+	if (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT)
 		kgsl_mmu_pagefault_resume(&device->mmu, true);
 
 	/* Reset the dispatcher queue */
