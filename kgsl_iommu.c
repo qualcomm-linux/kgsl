@@ -1200,7 +1200,7 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 	struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
 	u64 ptbase;
 	u32 contextidr;
-	bool stall;
+	bool stall, terminate;
 	struct kgsl_process_private *private;
 	struct kgsl_context *context;
 
@@ -1211,13 +1211,14 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 	context = kgsl_context_get(device, contextidr);
 
 	stall = kgsl_iommu_check_stall_on_fault(ctx, mmu, flags);
+	terminate = test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy) &&
+		test_bit(KGSL_MMU_PAGEFAULT_TERMINATE, &mmu->features);
 
 	kgsl_iommu_print_fault(mmu, ctx, addr, ptbase, contextidr, flags, private,
 		context);
 	kgsl_iommu_add_fault_info(context, addr, flags);
 
-	if (stall) {
-		struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	if (stall || terminate) {
 		u32 sctlr;
 
 		/*
@@ -1228,11 +1229,18 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 		sctlr &= ~(0x1 << KGSL_IOMMU_SCTLR_CFIE_SHIFT);
 		KGSL_IOMMU_SET_CTX_REG(ctx, KGSL_IOMMU_CTX_SCTLR, sctlr);
 
-		/* This is used by reset/recovery path */
-		ctx->stalled_on_fault = true;
+		/* Make sure the above write goes through before we return */
+		wmb();
 
-		/* Go ahead with recovery*/
-		adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_PAGE_FAULT);
+		/* This is used by reset/recovery path */
+		if (stall) {
+			struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+			ctx->stalled_on_fault = true;
+
+			/* Go ahead with recovery*/
+			adreno_scheduler_fault(adreno_dev, ADRENO_IOMMU_STALL_ON_PAGE_FAULT);
+		}
 	}
 
 	kgsl_context_put(context);
@@ -1242,11 +1250,11 @@ static int kgsl_iommu_fault_handler(struct kgsl_mmu *mmu,
 	 * Fallback to smmu fault handler during globals faults to print useful
 	 * debug information.
 	 */
-	if (!stall && kgsl_iommu_addr_is_global(mmu, addr))
+	if ((!(stall || terminate)) && kgsl_iommu_addr_is_global(mmu, addr))
 		return -ENOSYS;
 
-	/* Return -EBUSY to keep the IOMMU driver from resuming on a stall */
-	return stall ? -EBUSY : 0;
+	/* Return -EBUSY to keep the IOMMU driver from resuming on a stall or terminate */
+	return (stall || terminate) ? -EBUSY : 0;
 }
 
 static int kgsl_iommu_default_fault_handler(struct iommu_domain *domain,
@@ -1786,6 +1794,48 @@ static void kgsl_iommu_configure_gpu_sctlr(struct kgsl_mmu *mmu,
 	KGSL_IOMMU_SET_CTX_REG(ctx, KGSL_IOMMU_CTX_SCTLR, sctlr_val);
 }
 
+static bool _ctx_terminated_on_fault(struct kgsl_mmu *mmu, struct kgsl_iommu_context *ctx)
+{
+	u32 fsr;
+
+	/*
+	 * We only need this if SMMU is configured to be in TERMINATE mode in the presence of an
+	 * outstanding fault
+	 */
+	if (!test_bit(KGSL_MMU_PAGEFAULT_TERMINATE, &mmu->features) ||
+		!test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy))
+		return false;
+
+	kgsl_iommu_enable_clk(mmu);
+
+	fsr = KGSL_IOMMU_GET_CTX_REG(ctx, KGSL_IOMMU_CTX_FSR);
+
+	/* Make sure the above read finishes before we compare it */
+	rmb();
+
+	kgsl_iommu_disable_clk(mmu);
+
+	/* See if there is an outstanding fault */
+	if (fsr & ~KGSL_IOMMU_FSR_TRANSLATION_FORMAT_MASK)
+		return true;
+
+	return false;
+}
+
+/*
+ * kgsl_iommu_ctx_terminated_on_fault - Detect if GC SMMU is terminating transactions in the
+ * presense of an outstanding fault.
+ */
+static bool kgsl_iommu_ctx_terminated_on_fault(struct kgsl_mmu *mmu)
+{
+	struct kgsl_iommu *iommu = &mmu->iommu;
+
+	if (_ctx_terminated_on_fault(mmu, &iommu->user_context))
+		return true;
+
+	return false;
+}
+
 static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
@@ -1823,8 +1873,13 @@ static void kgsl_iommu_context_clear_fsr(struct kgsl_mmu *mmu, struct kgsl_iommu
 {
 	unsigned int sctlr_val;
 
-	if (ctx->stalled_on_fault) {
+	if (ctx->stalled_on_fault || _ctx_terminated_on_fault(mmu, ctx)) {
+		struct kgsl_device *device = KGSL_MMU_DEVICE(mmu);
+
 		kgsl_iommu_enable_clk(mmu);
+
+		dev_err_ratelimited(device->dev, "Clearing pagefault bits in FSR\n");
+
 		KGSL_IOMMU_SET_CTX_REG(ctx, KGSL_IOMMU_CTX_FSR, 0xffffffff);
 		/*
 		 * Re-enable context fault interrupts after clearing
@@ -1840,7 +1895,8 @@ static void kgsl_iommu_context_clear_fsr(struct kgsl_mmu *mmu, struct kgsl_iommu
 		 */
 		wmb();
 		kgsl_iommu_disable_clk(mmu);
-		ctx->stalled_on_fault = false;
+		if (ctx->stalled_on_fault)
+			ctx->stalled_on_fault = false;
 	}
 }
 
@@ -2937,6 +2993,7 @@ static void kgsl_iommu_sysfs_init(struct kgsl_mmu *mmu)
 static const struct kgsl_mmu_ops kgsl_iommu_ops = {
 	.mmu_close = kgsl_iommu_close,
 	.mmu_start = kgsl_iommu_start,
+	.mmu_ctx_terminated_on_fault = kgsl_iommu_ctx_terminated_on_fault,
 	.mmu_clear_fsr = kgsl_iommu_clear_fsr,
 	.mmu_get_current_ttbr0 = kgsl_iommu_get_current_ttbr0,
 	.mmu_enable_clk = kgsl_iommu_enable_clk,
