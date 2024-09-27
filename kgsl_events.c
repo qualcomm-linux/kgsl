@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -80,7 +80,7 @@ static void _process_event_group(struct kgsl_device *device,
 	context = group->context;
 
 	/*
-	 * Sanity check to be sure that we we aren't racing with the context
+	 * Sanity check to be sure that we aren't racing with the context
 	 * getting destroyed
 	 */
 	if (WARN_ON(context != NULL && !_kgsl_context_get(context)))

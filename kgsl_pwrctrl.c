@@ -314,7 +314,7 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		kgsl_pwrctrl_pwrlevel_change(device, constraint);
 		/* Trace the constraint being set by the driver */
 		trace_kgsl_constraint(device, pwrc_old->type, constraint, 1);
-	} else if (pwrc_old->type == pwrc->type) {
+	} else if ((pwrc_old->type == pwrc->type) && (pwrc_old->sub_type == pwrc->sub_type)) {
 		pwrc_old->owner_id = id;
 		pwrc_old->owner_timestamp = ts;
 		pwrc_old->expires = jiffies +
@@ -411,8 +411,9 @@ static void kgsl_pwrctrl_min_pwrlevel_set(struct kgsl_device *device,
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	mutex_lock(&device->mutex);
-	if (level >= pwr->num_pwrlevels)
-		level = pwr->num_pwrlevels - 1;
+
+	if (level > pwr->min_render_pwrlevel)
+		level = pwr->min_render_pwrlevel;
 
 	/* You can't set a minimum power level lower than the maximum */
 	if (level < pwr->max_pwrlevel)
@@ -1425,9 +1426,9 @@ static int kgsl_cx_gdsc_event(struct notifier_block *nb,
 	if (!(event & REGULATOR_EVENT_DISABLE) || !pwr->cx_gdsc_wait)
 		return 0;
 
-	if (pwr->cx_gdsc_offset) {
-		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_gdsc_offset,
-			val, !(val & BIT(31)), 100, 100 * 1000))
+	if (pwr->cx_cfg_gdsc_offset) {
+		if (kgsl_regmap_read_poll_timeout(&device->regmap, pwr->cx_cfg_gdsc_offset,
+			val, (val & BIT(15)), 100, 100 * 1000))
 			dev_err(device->dev, "GPU CX wait timeout.\n");
 	}
 
@@ -1493,11 +1494,15 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
+	if (!(device->freq_limiter_intr_num || pwr->interrupt_num))
+		return;
+
 	if (state) {
 		if (!test_and_set_bit(KGSL_PWRFLAGS_IRQ_ON,
 			&pwr->power_flags)) {
 			trace_kgsl_irq(device, state);
-			enable_irq(pwr->interrupt_num);
+			if (pwr->interrupt_num > 0)
+				enable_irq(pwr->interrupt_num);
 			if (device->freq_limiter_intr_num > 0)
 				enable_irq(device->freq_limiter_intr_num);
 		}
@@ -1507,9 +1512,9 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, bool state)
 			trace_kgsl_irq(device, state);
 			if (device->freq_limiter_intr_num > 0)
 				disable_irq(device->freq_limiter_intr_num);
-			if (in_interrupt())
+			if (in_interrupt() && (pwr->interrupt_num > 0))
 				disable_irq_nosync(pwr->interrupt_num);
-			else
+			else if (pwr->interrupt_num > 0)
 				disable_irq(pwr->interrupt_num);
 		}
 	}
@@ -2225,6 +2230,23 @@ int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device)
 
 	/* Request adjusted DCVS level */
 	return device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
+}
+
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int i;
+
+	if (!ddr_freq)
+		return (pwr->ddr_table_count - 1);
+
+	for (i = 0; i < pwr->ddr_table_count; i++) {
+		if (pwr->ddr_table[i] >= ddr_freq)
+			return i;
+	}
+
+	/* If DDR frequency is not found, vote perfmode for highest DDR level */
+	return (pwr->ddr_table_count - 1);
 }
 
 int kgsl_gpu_num_freqs(void)

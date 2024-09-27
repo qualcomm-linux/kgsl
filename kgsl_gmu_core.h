@@ -383,6 +383,7 @@ struct gmu_dev_ops {
 	u64 (*bcl_sid_get)(struct kgsl_device *device, u32 sid_id);
 	void (*force_first_boot)(struct kgsl_device *device);
 	void (*send_nmi)(struct kgsl_device *device, bool force);
+	void (*send_tlb_hint)(struct kgsl_device *device, bool val);
 };
 
 /**
@@ -399,9 +400,8 @@ struct gmu_core_device {
 
 extern struct platform_driver a6xx_gmu_driver;
 extern struct platform_driver a6xx_rgmu_driver;
-extern struct platform_driver a6xx_hwsched_driver;
 extern struct platform_driver gen7_gmu_driver;
-extern struct platform_driver gen7_hwsched_driver;
+extern struct platform_driver gen8_gmu_driver;
 
 /* GMU core functions */
 
@@ -485,6 +485,14 @@ struct gmu_mem_type_desc {
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+
+/**
+ * gmu_core_send_tlb_hint - Send tlb hint for GMU IOMMU domain
+ * @device: Pointer to KGSL device
+ * @val: tlb hint to be true/false
+ */
+void gmu_core_send_tlb_hint(struct kgsl_device *device, bool val);
+
 void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**
