@@ -77,6 +77,7 @@
 #define HFI_FEATURE_HW_FENCE	25
 #define HFI_FEATURE_PERF_NORETAIN	26
 #define HFI_FEATURE_DMS		27
+#define HFI_FEATURE_THERMAL		28
 #define HFI_FEATURE_AQE		29
 
 /* Types to be used with H2F_MSG_TABLE */
@@ -459,6 +460,7 @@ enum hfi_msg_type {
 	H2F_MSG_TEST			= 5,
 	H2F_MSG_ACD_TBL			= 7,
 	H2F_MSG_CLX_TBL			= 8,
+	H2F_MSG_THERM_TBL		= 9,
 	H2F_MSG_START			= 10,
 	H2F_MSG_FEATURE_CTRL		= 11,
 	H2F_MSG_GET_VALUE		= 12,
