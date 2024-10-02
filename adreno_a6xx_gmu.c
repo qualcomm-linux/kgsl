@@ -3395,15 +3395,7 @@ static int a6xx_power_off(struct adreno_device *adreno_dev)
 
 	WARN_ON(!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags));
 
-	adreno_suspend_context(device);
-
-	/*
-	 * adreno_suspend_context() unlocks the device mutex, which
-	 * could allow a concurrent thread to attempt SLUMBER sequence.
-	 * Hence, check the flags again before proceeding with SLUMBER.
-	 */
-	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-		return 0;
+	adreno_check_idle(device);
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
@@ -3588,7 +3580,7 @@ static int a6xx_gmu_pm_suspend(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
-	ret = adreno_idle(device);
+	ret = adreno_wait_idle(device);
 	if (ret)
 		goto err;
 

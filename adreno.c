@@ -1646,7 +1646,7 @@ static void adreno_resume(struct adreno_device *adreno_dev)
 		 * the right place when we resume.
 		 */
 		if (device->state == KGSL_STATE_ACTIVE)
-			adreno_idle(device);
+			adreno_wait_idle(device);
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
 		dev_err(device->dev, "resume invoked without a suspend\n");
 	}
@@ -2825,14 +2825,14 @@ int adreno_spin_idle(struct adreno_device *adreno_dev, unsigned int timeout)
 }
 
 /**
- * adreno_idle() - wait for the GPU hardware to go idle
+ * adreno_wait_idle() - wait for the GPU hardware to go idle
  * @device: Pointer to the KGSL device structure for the GPU
  *
  * Wait up to ADRENO_IDLE_TIMEOUT milliseconds for the GPU hardware to go quiet.
  * Caller must hold the device mutex, and must not hold the dispatcher mutex.
  */
 
-int adreno_idle(struct kgsl_device *device)
+int adreno_wait_idle(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
@@ -2869,17 +2869,31 @@ static int adreno_drain_and_idle(struct kgsl_device *device)
 	if (ret)
 		return ret;
 
-	return adreno_idle(device);
+	return adreno_wait_idle(device);
 }
 
 /* Caller must hold the device mutex. */
-int adreno_suspend_context(struct kgsl_device *device)
+void adreno_check_idle(struct kgsl_device *device)
 {
-	/* process any profiling results that are available */
-	adreno_profile_process_results(ADRENO_DEVICE(device));
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	/* Wait for the device to go idle */
-	return adreno_idle(device);
+	/* process any profiling results that are available */
+	adreno_profile_process_results(adreno_dev);
+
+	/*
+	 * Make sure the device mutex is held so the dispatcher can't send any
+	 * more commands to the hardware
+	 */
+	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+		return;
+
+	/* Make sure dispatcher is idle */
+	if (!completion_done(&adreno_dev->dispatcher.idle_gate))
+		dev_err_ratelimited(device->dev, "Dispatcher not idle before SLUMBER\n");
+
+	/* Make sure the device is idle */
+	if (!adreno_isidle(adreno_dev))
+		dev_err_ratelimited(device->dev, "Device not idle before SLUMBER\n");
 }
 
 bool adreno_gx_is_on(struct adreno_device *adreno_dev)
@@ -3668,7 +3682,7 @@ void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
-	.suspend_context = adreno_suspend_context,
+	.check_idle = adreno_check_idle,
 	.first_open = adreno_first_open,
 	.start = adreno_start,
 	.stop = adreno_stop,

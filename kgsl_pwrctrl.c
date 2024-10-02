@@ -2323,7 +2323,7 @@ _slumber(struct kgsl_device *device)
 		kgsl_pwrctrl_irq(device, false);
 		/* make sure power is on to stop the device*/
 		status = kgsl_pwrctrl_enable(device);
-		device->ftbl->suspend_context(device);
+		device->ftbl->check_idle(device);
 		device->ftbl->stop(device);
 		kgsl_pwrctrl_disable(device);
 		kgsl_pwrscale_sleep(device);

@@ -696,7 +696,7 @@ static ssize_t profile_assignments_write(struct file *filep,
 	 * all it's work.  This helps to synchronize the work flow to the
 	 * GPU and avoid racey conditions.
 	 */
-	ret = adreno_idle(device);
+	ret = adreno_wait_idle(device);
 	if (ret) {
 		size = -ETIMEDOUT;
 		goto error_put;
