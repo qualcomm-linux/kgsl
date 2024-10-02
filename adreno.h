@@ -140,6 +140,8 @@
 #define ADRENO_GMU_WARMBOOT BIT(19)
 /* The GPU supports CLX */
 #define ADRENO_CLX BIT(20)
+/* Enable GMU support for GMU based thermal mitigation */
+#define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

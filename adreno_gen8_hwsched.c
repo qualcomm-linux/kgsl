@@ -711,6 +711,9 @@ static int gen8_hwsched_gmu_init(struct adreno_device *adreno_dev)
 {
 	int ret;
 
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THERMAL_MITIGATION))
+		set_bit(GMU_THERMAL_MITIGATION, &KGSL_DEVICE(adreno_dev)->gmu_core.flags);
+
 	ret = gen8_gmu_parse_fw(adreno_dev);
 	if (ret)
 		return ret;
