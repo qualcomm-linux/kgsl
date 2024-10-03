@@ -178,7 +178,7 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev);
+		a6xx_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -249,7 +249,7 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev);
+		a6xx_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -344,7 +344,7 @@ static int a6xx_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 error:
 	a6xx_gmu_irq_disable(adreno_dev);
 	a6xx_hwsched_hfi_stop(adreno_dev);
-	a6xx_gmu_suspend(adreno_dev);
+	a6xx_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -1021,7 +1021,7 @@ int a6xx_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	a6xx_hwsched_hfi_stop(adreno_dev);
 
-	a6xx_gmu_suspend(adreno_dev);
+	a6xx_gmu_suspend(adreno_dev, true);
 
 	adreno_llcc_slice_deactivate(adreno_dev);
 
