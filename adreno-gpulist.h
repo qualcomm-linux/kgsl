@@ -2782,6 +2782,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_3_0 = {
 	.gmu_hub_clk_freq = 200000000,
 	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
 	.ctxt_record_size = (4558 * SZ_1K),
+	.preempt_level = 1,
 	.bcl_data = 1,
 	.noc_timeout_us = 6800, /* 6.8 msec */
 };
