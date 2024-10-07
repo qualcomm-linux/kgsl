@@ -55,7 +55,8 @@ static size_t gen8_gmu_snapshot_itcm(struct kgsl_device *device,
 	struct gen8_gmu_device *gmu = (struct gen8_gmu_device *)priv;
 
 	if (!gmu->itcm_shadow) {
-		dev_err(&gmu->pdev->dev, "No memory allocated for ITCM shadow capture\n");
+		dev_err(GMU_PDEV_DEV(device),
+				"No memory allocated for ITCM shadow capture\n");
 		return 0;
 	}
 
@@ -189,6 +190,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	const struct adreno_gen8_core *gpucore = to_gen8_core(adreno_dev);
 	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
 						gpucore->gen8_snapshot_block_list;
+	const u32 *regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
 	u32 i, slice, j;
 	struct gen8_reg_list_info info = {0};
 
@@ -202,6 +204,19 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		gen8_snapshot_rscc_registers, (void *) gen8_snapshot_block_list->rscc_regs);
 
+	/*
+	 * We want to capture these through AHB path here because we might skip them
+	 * in the crashdumper path if GX is OFF, and these are needed for debug.
+	 */
+	if (!kgsl_regmap_valid_offset(&device->regmap, regs_ptr[0]))
+		WARN_ONCE(1, "cx_misc registers are not defined in device tree");
+	else
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2,
+			snapshot, adreno_snapshot_registers_v2, (void *)regs_ptr);
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
+		snapshot, gen8_gmu_snapshot_dtcm, gmu);
+
 	/* Capture GMU registers which are on CX domain and unsliced */
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		adreno_snapshot_registers_v2,
@@ -209,7 +224,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 
 	if (!gen8_gmu_rpmh_pwr_state_is_active(device) ||
 		!gen8_gmu_gx_is_on(adreno_dev))
-		goto dtcm;
+		return;
 
 	/* Set fence to ALLOW mode so registers can be read */
 	kgsl_regwrite(device, GEN8_GMUAO_AHB_FENCE_CTRL, 0);
@@ -226,10 +241,6 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 				gen8_legacy_snapshot_registers, &info);
 		}
 	}
-
-dtcm:
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
-		snapshot, gen8_gmu_snapshot_dtcm, gmu);
 }
 
 void gen8_gmu_snapshot(struct adreno_device *adreno_dev,

@@ -21,7 +21,6 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/pm_runtime.h>
-#include <linux/qcom_dma_heap.h>
 #include <linux/security.h>
 #include <linux/sort.h>
 #include <linux/string_helpers.h>
@@ -1366,9 +1365,12 @@ static int kgsl_close_device(struct kgsl_device *device)
 {
 	int result = 0;
 
-	mutex_lock(&device->mutex);
-	if (device->open_count == 1)
+	mutex_lock(&device->file_mutex);
+	if (device->open_count == 1) {
+		mutex_lock(&device->mutex);
 		result = device->ftbl->last_close(device);
+		mutex_unlock(&device->mutex);
+	}
 
 	/*
 	 * We must decrement the open_count after last_close() has finished.
@@ -1381,7 +1383,7 @@ static int kgsl_close_device(struct kgsl_device *device)
 	 * last_close().
 	 */
 	device->open_count--;
-	mutex_unlock(&device->mutex);
+	mutex_unlock(&device->file_mutex);
 	return result;
 
 }
@@ -1446,15 +1448,18 @@ static int kgsl_open_device(struct kgsl_device *device)
 {
 	int result = 0;
 
-	mutex_lock(&device->mutex);
+	mutex_lock(&device->file_mutex);
 	if (device->open_count == 0) {
+		mutex_lock(&device->mutex);
 		result = device->ftbl->first_open(device);
+		mutex_unlock(&device->mutex);
+
 		if (result)
 			goto out;
 	}
 	device->open_count++;
 out:
-	mutex_unlock(&device->mutex);
+	mutex_unlock(&device->file_mutex);
 	return result;
 }
 
@@ -2582,7 +2587,6 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	struct kgsl_context *context;
 	long result = -EINVAL;
 
-	mutex_lock(&device->mutex);
 	context = kgsl_context_get_owner(dev_priv, param->context_id);
 
 	if (context) {
@@ -2594,7 +2598,6 @@ long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	}
 
 	kgsl_context_put(context);
-	mutex_unlock(&device->mutex);
 	return result;
 }
 

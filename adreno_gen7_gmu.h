@@ -39,7 +39,6 @@ struct gen7_gmu_device {
 		u32 pwr_dev;
 		u32 hfi;
 	} ver;
-	struct platform_device *pdev;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
@@ -483,15 +482,6 @@ void gen7_gmu_send_nmi(struct kgsl_device *device, bool force,
  * @adreno_dev: Pointer to the adreno device
  */
 int gen7_gmu_add_to_minidump(struct adreno_device *adreno_dev);
-
-/**
- * gen7_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
- * @adreno_dev: Handle to the adreno device
- * @ab: ab request that needs to be scaled in MBps
- *
- * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
- */
-u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
  * gen7_gmu_clock_set_rate - Set the gmu clock rate

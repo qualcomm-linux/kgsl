@@ -48,6 +48,8 @@ static struct device_node *
 
 static struct adreno_device device_3d0;
 static bool adreno_preemption_enable;
+static u32 kgsl_gpu_sku_override = U32_MAX;
+static u32 kgsl_gpu_speed_bin_override = U32_MAX;
 
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
@@ -230,7 +232,7 @@ void adreno_touch_wake(struct kgsl_device *device)
 	if (device->pwrctrl.wake_on_touch)
 		return;
 
-	if (gmu_core_isenabled(device) || (device->state == KGSL_STATE_SLUMBER))
+	if (device->state == KGSL_STATE_SLUMBER)
 		schedule_work(&adreno_dev->input_work);
 }
 
@@ -773,18 +775,10 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct device_node *node, *child;
-	int feature_code, pcode;
 
 	node = of_find_node_by_name(parent, "qcom,gpu-pwrlevel-bins");
 	if (node == NULL)
 		return adreno_of_get_legacy_pwrlevels(adreno_dev, parent);
-
-	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
-	pcode = (feature_code >= SOCINFO_FC_Y0 && feature_code < SOCINFO_FC_INT_RESERVE) ?
-		max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) : SOCINFO_PCODE_UNKNOWN;
-
-	device->soc_code = FIELD_PREP(GENMASK(31, 16), pcode) |
-					FIELD_PREP(GENMASK(15, 0), feature_code);
 
 	for_each_child_of_node(node, child) {
 		bool match = false;
@@ -853,13 +847,21 @@ static int register_l3_voter(struct kgsl_device *device)
 {
 	int ret = 0;
 
+	/*
+	 * The L3 vote setup is performed only once. Once set up is done, it is
+	 * safe to access num_l3_pwrlevels without acquiring the device mutex.
+	 * Therefore, an early check can be added without taking the mutex.
+	 */
+	if (READ_ONCE(device->num_l3_pwrlevels))
+		return ret;
+
 	mutex_lock(&device->mutex);
 
 	if (!device->l3_vote)
 		goto done;
 
-	/* This indicates that we are already set up */
-	if (device->num_l3_pwrlevels != 0)
+	/* Verify again if the L3 vote is set up to handle races */
+	if (device->num_l3_pwrlevels)
 		goto done;
 
 	memset(device->l3_freq, 0x0, sizeof(device->l3_freq));
@@ -882,7 +884,7 @@ static int register_l3_voter(struct kgsl_device *device)
 		goto done;
 	}
 
-	device->num_l3_pwrlevels = 3;
+	WRITE_ONCE(device->num_l3_pwrlevels, 3);
 
 done:
 	mutex_unlock(&device->mutex);
@@ -900,7 +902,7 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	device->pwrctrl.interval_timeout = CONFIG_QCOM_KGSL_IDLE_TIMEOUT;
+	atomic64_set(&device->pwrctrl.interval_timeout, CONFIG_QCOM_KGSL_IDLE_TIMEOUT);
 
 	/* Set default bus control to true on all targets */
 	device->pwrctrl.bus_control = true;
@@ -934,6 +936,31 @@ static int adreno_read_speed_bin(struct platform_device *pdev)
 	kfree(buf);
 
 	return val;
+}
+
+static void adreno_read_soc_code(struct kgsl_device *device)
+{
+	int feature_code, pcode;
+	bool internal_sku;
+
+	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
+	internal_sku = (feature_code >= SOCINFO_FC_Y0) && (feature_code < SOCINFO_FC_INT_RESERVE);
+
+	/* Pcode is significant only for internal SKUs */
+	pcode = internal_sku ? max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) :
+			SOCINFO_PCODE_UNKNOWN;
+
+	device->soc_code = FIELD_PREP(GENMASK(31, 16), pcode) |
+				FIELD_PREP(GENMASK(15, 0), feature_code);
+
+	/* Override soc_code and speed_bin for internal feature codes only */
+	if (internal_sku) {
+		if (kgsl_gpu_sku_override != U32_MAX)
+			device->soc_code = kgsl_gpu_sku_override;
+
+		if (kgsl_gpu_speed_bin_override != U32_MAX)
+			device->speed_bin = kgsl_gpu_speed_bin_override;
+	}
 }
 
 static int adreno_read_gpu_model_fuse(struct platform_device *pdev)
@@ -1169,6 +1196,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 	idr_init(&adreno_dev->dev.context_idr);
 
 	mutex_init(&adreno_dev->dev.mutex);
+	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
@@ -1315,6 +1343,8 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	device->speed_bin = status;
 
+	adreno_read_soc_code(device);
+
 	status = adreno_of_get_power(adreno_dev, pdev);
 	if (status)
 		goto err;
@@ -1412,7 +1442,8 @@ int adreno_device_probe(struct platform_device *pdev,
 	/* Probe for the optional CX_MISC block */
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", NULL, NULL);
 
-	kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL);
+	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", NULL, NULL) == 0)
+		adreno_dev->isense_reg_mapped = true;
 
 	/* Allocate the memstore for storing timestamps and other useful info */
 
@@ -1888,7 +1919,7 @@ static int adreno_pwrctrl_active_count_get(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-static void adreno_pwrctrl_active_count_put(struct adreno_device *adreno_dev)
+void adreno_active_count_put(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
@@ -1917,13 +1948,6 @@ int adreno_active_count_get(struct adreno_device *adreno_dev)
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 
 	return ops->active_count_get(adreno_dev);
-}
-
-void adreno_active_count_put(struct adreno_device *adreno_dev)
-{
-	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
-
-	ops->active_count_put(adreno_dev);
 }
 
 void adreno_get_bus_counters(struct adreno_device *adreno_dev)
@@ -2574,6 +2598,49 @@ int adreno_set_constraint(struct kgsl_device *device,
 	return status;
 }
 
+static int adreno_default_setproperty(struct kgsl_device_private *dev_priv,
+		u32 type, void __user *value, u32 sizebytes)
+{
+	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u32 enable;
+
+	if (type != KGSL_PROP_PWRCTRL)
+		return -ENODEV;
+
+	if (sizebytes != sizeof(enable))
+		return -EINVAL;
+
+	if (copy_from_user(&enable, value, sizeof(enable)))
+		return -EFAULT;
+
+	mutex_lock(&device->mutex);
+
+	if (enable) {
+		if (gmu_core_isenabled(device))
+			clear_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+		else
+			device->pwrctrl.ctrl_flags = 0;
+
+		kgsl_pwrscale_enable(device);
+	} else {
+		if (gmu_core_isenabled(device)) {
+			set_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags);
+
+			if (!adreno_active_count_get(adreno_dev))
+				adreno_active_count_put(adreno_dev);
+		} else {
+			kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
+			device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
+		}
+		kgsl_pwrscale_disable(device, true);
+	}
+
+	mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
 static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 				unsigned int type,
 				void __user *value,
@@ -2581,8 +2648,6 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 {
 	int status = -EINVAL;
 	struct kgsl_device *device = dev_priv->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
 	switch (type) {
 	case KGSL_PROP_PWR_CONSTRAINT:
@@ -2612,7 +2677,7 @@ static int adreno_setproperty(struct kgsl_device_private *dev_priv,
 		}
 		break;
 	default:
-		status = gpudev->setproperty(dev_priv, type, value, sizebytes);
+		status = adreno_default_setproperty(dev_priv, type, value, sizebytes);
 		break;
 	}
 
@@ -3436,6 +3501,53 @@ static int adreno_gpu_bus_set(struct kgsl_device *device, int level, u32 ab)
 	return adreno_interconnect_bus_set(adreno_dev, level, ab);
 }
 
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab)
+{
+	u16 vote = 0;
+	u32 max_bw, max_ab;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!adreno_dev->gmu_ab || (ab == INVALID_AB_VALUE))
+		return (FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE));
+
+	/*
+	 * max ddr bandwidth (kbps) = (Max bw in kbps per channel * number of channel)
+	 * max ab (Mbps) = max ddr bandwidth (kbps) / 1000
+	 */
+	max_bw = pwr->ddr_table[pwr->ddr_table_count - 1] * adreno_dev->gpucore->num_ddr_channels;
+	max_ab = max_bw / 1000;
+
+	/*
+	 * If requested AB is higher than theoretical max bandwidth, set AB vote as max
+	 * allowable quantized AB value.
+	 *
+	 * Power FW supports a 16 bit AB BW level. We can quantize the entire vote-able BW
+	 * range to a 16 bit space and the quantized value can be used to vote for AB though
+	 * GMU. Quantization can be performed as below.
+	 *
+	 * quantized_vote = (ab vote (kbps) * 2^16) / max ddr bandwidth (kbps)
+	 */
+	if (ab >= max_ab)
+		vote = MAX_AB_VALUE;
+	else
+		vote = (u16)(((u64)ab * 1000 * (1 << 16)) / max_bw);
+
+	/*
+	 * Vote will be calculated as 0 for smaller AB values.
+	 * Set a minimum non-zero vote in such cases.
+	 */
+	if (ab && !vote)
+		vote = 0x1;
+
+	/*
+	 * Set ab enable mask and valid AB vote. req.bw is 32 bit value 0xABABENIB
+	 * and with this return we want to set the upper 16 bits and EN field specifies
+	 * if the AB vote is valid or not.
+	 */
+	return (FIELD_PREP(GENMASK(31, 16), vote) | FIELD_PREP(GENMASK(15, 8), 1));
+}
+
 static void adreno_deassert_gbif_halt(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -3606,7 +3718,6 @@ const struct adreno_power_ops adreno_power_operations = {
 	.first_open = adreno_open,
 	.last_close = adreno_close,
 	.active_count_get = adreno_pwrctrl_active_count_get,
-	.active_count_put = adreno_pwrctrl_active_count_put,
 	.pm_suspend = adreno_suspend,
 	.pm_resume = adreno_resume,
 	.touch_wakeup = adreno_touch_wakeup,
@@ -3923,6 +4034,12 @@ static void __exit kgsl_3d_exit(void)
 
 module_param_named(preempt_enable, adreno_preemption_enable, bool, 0600);
 MODULE_PARM_DESC(preempt_enable, "Enable GPU HW Preemption");
+
+module_param_named(gpu_sku_override, kgsl_gpu_sku_override, uint, 0600);
+MODULE_PARM_DESC(gpu_sku_override, "Override SKU code identifier for GPU driver");
+
+module_param_named(gpu_speed_bin_override, kgsl_gpu_speed_bin_override, uint, 0600);
+MODULE_PARM_DESC(gpu_speed_bin_override, "Override GPU speed bin");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);

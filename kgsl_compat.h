@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2017,2019,2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_COMPAT_H
 #define __KGSL_COMPAT_H
@@ -126,15 +127,6 @@ struct kgsl_gpumem_alloc_compat {
 
 #define IOCTL_KGSL_GPUMEM_ALLOC_COMPAT \
 	_IOWR(KGSL_IOC_TYPE, 0x2f, struct kgsl_gpumem_alloc_compat)
-
-struct kgsl_cff_syncmem_compat {
-	compat_ulong_t gpuaddr;
-	compat_size_t len;
-	unsigned int __pad[2]; /* For future binary compatibility */
-};
-
-#define IOCTL_KGSL_CFF_SYNCMEM_COMPAT \
-	_IOW(KGSL_IOC_TYPE, 0x30, struct kgsl_cff_syncmem_compat)
 
 struct kgsl_timestamp_event_compat {
 	int type;                /* Type of event (see list below) */

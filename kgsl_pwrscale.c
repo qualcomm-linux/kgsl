@@ -53,7 +53,6 @@ void kgsl_pwrscale_sleep(struct kgsl_device *device)
 {
 	if (!device->pwrscale.enabled)
 		return;
-	device->pwrscale.on_time = 0;
 
 	/* to call devfreq_suspend_device() from a kernel thread */
 	queue_work(device->pwrscale.devfreq_wq,
@@ -87,21 +86,6 @@ void kgsl_pwrscale_wake(struct kgsl_device *device)
 
 	/* to call devfreq_resume_device() from a kernel thread */
 	queue_work(psc->devfreq_wq, &psc->devfreq_resume_ws);
-}
-
-/*
- * kgsl_pwrscale_busy - update pwrscale state for new work
- * @device: The device
- *
- * Called when new work is submitted to the device.
- * This function must be called with the device mutex locked.
- */
-void kgsl_pwrscale_busy(struct kgsl_device *device)
-{
-	if (!device->pwrscale.enabled)
-		return;
-	if (device->pwrscale.on_time == 0)
-		device->pwrscale.on_time = ktime_to_us(ktime_get());
 }
 
 /**
@@ -230,7 +214,7 @@ void kgsl_pwrscale_enable(struct kgsl_device *device)
  * thereby not recommending anything above the constraint.
  * This function expects the device mutex to be unlocked.
  */
-int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
+static int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrctrl *pwr;
@@ -290,7 +274,7 @@ int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
  *
  * This function expects the device mutex to be unlocked.
  */
-int kgsl_devfreq_get_dev_status(struct device *dev,
+static int kgsl_devfreq_get_dev_status(struct device *dev,
 				struct devfreq_dev_status *stat)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
@@ -368,7 +352,7 @@ int kgsl_devfreq_get_dev_status(struct device *dev,
  *
  * This function expects the device mutex to be unlocked.
  */
-int kgsl_devfreq_get_cur_freq(struct device *dev, unsigned long *freq)
+static int kgsl_devfreq_get_cur_freq(struct device *dev, unsigned long *freq)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrscale *pwrscale = &device->pwrscale;
@@ -407,7 +391,7 @@ int kgsl_devfreq_get_cur_freq(struct device *dev, unsigned long *freq)
  *
  * This function expects the device mutex to be unlocked.
  */
-int kgsl_busmon_get_dev_status(struct device *dev,
+static int kgsl_busmon_get_dev_status(struct device *dev,
 			struct devfreq_dev_status *stat)
 {
 	struct xstats *b;
@@ -454,7 +438,7 @@ static int _read_hint(u32 flags)
  *
  * This function expects the device mutex to be unlocked.
  */
-int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
+static int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 	struct kgsl_pwrctrl *pwr;
@@ -527,7 +511,7 @@ int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags)
 	return 0;
 }
 
-int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq)
+static int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq)
 {
 	return 0;
 }

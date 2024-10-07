@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __KGSL_PWRSCALE_H
@@ -33,7 +33,6 @@ struct kgsl_power_stats {
  * @accum_stats - Accumulated statistics for various frequency calculations
  * @enabled - Whether or not power scaling is enabled
  * @time - Last submitted sample timestamp
- * @on_time - Timestamp when gpu busy begins
  * @devfreq_wq - Main devfreq workqueue
  * @devfreq_suspend_ws - Pass device suspension to devfreq
  * @devfreq_resume_ws - Pass device resume to devfreq
@@ -54,7 +53,6 @@ struct kgsl_pwrscale {
 	struct kgsl_power_stats accum_stats;
 	bool enabled;
 	ktime_t time;
-	s64 on_time;
 	struct workqueue_struct *devfreq_wq;
 	struct work_struct devfreq_suspend_ws;
 	struct work_struct devfreq_resume_ws;
@@ -85,22 +83,11 @@ void kgsl_pwrscale_close(struct kgsl_device *device);
 
 void kgsl_pwrscale_update(struct kgsl_device *device);
 void kgsl_pwrscale_update_stats(struct kgsl_device *device);
-void kgsl_pwrscale_busy(struct kgsl_device *device);
 void kgsl_pwrscale_sleep(struct kgsl_device *device);
 void kgsl_pwrscale_wake(struct kgsl_device *device);
 
 void kgsl_pwrscale_enable(struct kgsl_device *device);
 void kgsl_pwrscale_disable(struct kgsl_device *device, bool turbo);
-
-int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags);
-int kgsl_devfreq_get_dev_status(struct device *dev,
-			struct devfreq_dev_status *stat);
-int kgsl_devfreq_get_cur_freq(struct device *dev, unsigned long *freq);
-
-int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags);
-int kgsl_busmon_get_dev_status(struct device *dev,
-			struct devfreq_dev_status *stat);
-int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq);
 
 #if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
 static inline int msm_adreno_tz_init(void)

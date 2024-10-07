@@ -15,6 +15,12 @@
 /* GMU_DEVICE - Given an KGSL device return the GMU specific struct */
 #define GMU_DEVICE_OPS(_a) ((_a)->gmu_core.dev_ops)
 
+/* GMU_PDEV - Given a KGSL device return the GMU platform device struct */
+#define GMU_PDEV(device) ((device)->gmu_core.pdev)
+
+/* GMU_PDEV_DEV - Given a KGSL device return pointer to struct dev for GMU platform device */
+#define GMU_PDEV_DEV(device) (&((GMU_PDEV(device))->dev))
+
 #define MAX_GX_LEVELS		32
 #define MAX_GX_LEVELS_LEGACY	16
 #define MAX_CX_LEVELS		4
@@ -66,15 +72,6 @@ enum oob_request {
 	oob_boot_slumber = 6, /* reserved special case */
 	oob_dcvs = 7, /* reserved special case */
 	oob_max,
-};
-
-enum gmu_pwrctrl_mode {
-	GMU_FW_START,
-	GMU_FW_STOP,
-	GMU_SUSPEND,
-	GMU_DCVS_NOHFI,
-	GMU_NOTIFY_SLUMBER,
-	INVALID_POWER_CTRL
 };
 
 #define GPU_HW_ACTIVE	0x00
@@ -185,6 +182,10 @@ enum gmu_vrb_idx {
 	VRB_TRACE_BUFFER_ADDR_IDX = 2,
 	/* Contains the number of hw fence shadow table entries */
 	VRB_HW_FENCE_SHADOW_NUM_ENTRIES = 3,
+	/* Contains OpenCL no fault tolerance timeout in ms */
+	VRB_CL_NO_FT_TIMEOUT = 4,
+	/* Contains the total number of GPU preemptions */
+	VRB_PREEMPT_COUNT_TOTAL = 5,
 };
 
 /* For GMU Trace */
@@ -444,6 +445,8 @@ struct gmu_core_device {
 	unsigned long flags;
 	/** @gf_panic: GMU fault panic policy */
 	enum gmu_fault_panic_policy gf_panic;
+	/** @pdev: platform device for the gmu */
+	struct platform_device *pdev;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -539,11 +542,23 @@ void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**
  * gmu_core_set_vrb_register - set vrb register value at specified index
- * @ptr: vrb host pointer
+ * @vrb: GMU virtual register bank memory
  * @index: vrb index to write the value
  * @val: value to be writen into vrb
+ *
+ * Return: Negative error on failure and zero on success.
  */
-void gmu_core_set_vrb_register(void *ptr, u32 index, u32 val);
+int gmu_core_set_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 val);
+
+/**
+ * gmu_core_get_vrb_register - get vrb register value at specified index
+ * @vrb: GMU virtual register bank memory
+ * @index: vrb index to write the value
+ * @val: Pointer to update the data after reading from vrb
+ *
+ * Return: Negative error on failure and zero on success.
+ */
+int gmu_core_get_vrb_register(struct kgsl_memdesc *vrb, u32 index, u32 *val);
 
 /**
  * gmu_core_process_trace_data - Process gmu trace buffer data writes to default linux trace buffer

@@ -70,6 +70,9 @@ endif
 ifeq ($(CONFIG_ARCH_PARROT), y)
 	include $(KGSL_PATH)/config/gki_parrot.conf
 endif
+ifeq ($(CONFIG_ARCH_SCUBA), y)
+	include $(KGSL_PATH)/config/gki_scuba.conf
+endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
 
@@ -148,6 +151,7 @@ msm_kgsl-y += \
 	adreno_gen8_ringbuffer.o \
 	adreno_gen8_rpmh.o \
 	adreno_gen8_snapshot.o \
+	adreno_rpmh.o \
 	adreno_hwsched.o \
 	adreno_hwsched_snapshot.o \
 	adreno_ioctl.o \

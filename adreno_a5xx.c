@@ -1939,10 +1939,6 @@ static int a5xx_microcode_read(struct adreno_device *adreno_dev)
 static unsigned int a5xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE, A5XX_CP_RB_BASE),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_BASE_HI, A5XX_CP_RB_BASE_HI),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR_ADDR_LO,
-			A5XX_CP_RB_RPTR_ADDR_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR_ADDR_HI,
-			A5XX_CP_RB_RPTR_ADDR_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_RPTR, A5XX_CP_RB_RPTR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_RB_WPTR, A5XX_CP_RB_WPTR),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_ME_CNTL, A5XX_CP_ME_CNTL),
@@ -1953,21 +1949,10 @@ static unsigned int a5xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BASE, A5XX_CP_IB2_BASE),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BASE_HI, A5XX_CP_IB2_BASE_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_CP_IB2_BUFSZ, A5XX_CP_IB2_BUFSZ),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PROTECT_REG_0, A5XX_CP_PROTECT_REG_0),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PREEMPT, A5XX_CP_CONTEXT_SWITCH_CNTL),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PREEMPT_DEBUG, ADRENO_REG_SKIP),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_PREEMPT_DISABLE, ADRENO_REG_SKIP),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_LO,
-				A5XX_CP_CONTEXT_SWITCH_SMMU_INFO_LO),
-	ADRENO_REG_DEFINE(ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_HI,
-				A5XX_CP_CONTEXT_SWITCH_SMMU_INFO_HI),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_STATUS, A5XX_RBBM_STATUS),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_STATUS3, A5XX_RBBM_STATUS3),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_INT_0_MASK, A5XX_RBBM_INT_0_MASK),
-	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_CLOCK_CTL, A5XX_RBBM_CLOCK_CNTL),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_SW_RESET_CMD, A5XX_RBBM_SW_RESET_CMD),
-	ADRENO_REG_DEFINE(ADRENO_REG_GPMU_POWER_COUNTER_ENABLE,
-				A5XX_GPMU_POWER_COUNTER_ENABLE),
 };
 
 static void a5xx_cp_hw_err_callback(struct adreno_device *adreno_dev, int bit)
@@ -2449,37 +2434,6 @@ static void a5xx_power_stats(struct adreno_device *adreno_dev,
 		&busy->bif_starved_ram);
 }
 
-static int a5xx_setproperty(struct kgsl_device_private *dev_priv,
-		u32 type, void __user *value, u32 sizebytes)
-{
-	struct kgsl_device *device = dev_priv->device;
-	u32 enable;
-
-	if (type != KGSL_PROP_PWRCTRL)
-		return -ENODEV;
-
-	if (sizebytes != sizeof(enable))
-		return -EINVAL;
-
-	if (copy_from_user(&enable, value, sizeof(enable)))
-		return -EFAULT;
-
-	mutex_lock(&device->mutex);
-
-	if (enable) {
-		device->pwrctrl.ctrl_flags = 0;
-		kgsl_pwrscale_enable(device);
-	} else {
-		kgsl_pwrctrl_change_state(device, KGSL_STATE_ACTIVE);
-		device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
-		kgsl_pwrscale_disable(device, true);
-	}
-
-	mutex_unlock(&device->mutex);
-
-	return 0;
-}
-
 const struct adreno_gpudev adreno_a5xx_gpudev = {
 	.reg_offsets = a5xx_register_offsets,
 	.probe = a5xx_probe,
@@ -2500,5 +2454,4 @@ const struct adreno_gpudev adreno_a5xx_gpudev = {
 	.ringbuffer_submitcmd = a5xx_ringbuffer_submitcmd,
 	.is_hw_collapsible = a5xx_is_hw_collapsible,
 	.power_stats = a5xx_power_stats,
-	.setproperty = a5xx_setproperty,
 };

@@ -65,7 +65,7 @@ static int gen8_rb_context_switch(struct adreno_device *adreno_dev,
 		adreno_drawctxt_get_pagetable(drawctxt);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int count = 0;
-	u32 cmds[57];
+	u32 cmds[63];
 
 	/* Sync both threads */
 	cmds[count++] = cp_type7_packet(CP_THREAD_CONTROL, 1);
@@ -84,6 +84,16 @@ static int gen8_rb_context_switch(struct adreno_device *adreno_dev,
 	cmds[count++] = CP_SYNC_THREADS | CP_SET_THREAD_BR;
 
 	if (adreno_drawctxt_get_pagetable(rb->drawctxt_active) != pagetable) {
+		/* Flush LRZ before every pagetable switch */
+		cmds[count++] = cp_type7_packet(CP_THREAD_CONTROL, 1);
+		cmds[count++] = CP_SET_THREAD_BOTH;
+
+		cmds[count++] = cp_type7_packet(CP_EVENT_WRITE, 1);
+		/* Add event ID for LRZ flush as packet payload */
+		cmds[count++] = LRZ_CACHE_FLUSH;
+
+		cmds[count++] = cp_type7_packet(CP_THREAD_CONTROL, 1);
+		cmds[count++] = CP_SYNC_THREADS | CP_SET_THREAD_BR;
 
 		/* Clear performance counters during context switches */
 		if (!adreno_dev->perfcounter) {
@@ -177,7 +187,6 @@ int gen8_ringbuffer_submit(struct adreno_ringbuffer *rb,
 	spin_lock_irqsave(&rb->preempt_lock, flags);
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE)) {
 		if (adreno_dev->cur_rb == rb) {
-			kgsl_pwrscale_busy(device);
 			ret = gen8_fenced_write(adreno_dev,
 				GEN8_CP_RB_WPTR_GC, rb->_wptr,
 				FENCE_STATUS_WRITEDROPPED0_MASK);

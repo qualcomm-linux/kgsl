@@ -1621,18 +1621,18 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 i;
+	u32 i, slice_mask;
 	const struct adreno_gen8_core *gpucore = to_gen8_core(ADRENO_DEVICE(device));
 	int is_current_rt;
 
 	gen8_crashdump_timedout = false;
 	gen8_snapshot_block_list = gpucore->gen8_snapshot_block_list;
 
-	/* External registers are dumped in the beginning of gmu snapshot */
-	if (!gmu_core_isenabled(device))
+	/* External core and CX MISC regs are dumped in the beginning of gmu snapshot */
+	if (!gmu_core_isenabled(device)) {
 		gen8_snapshot_external_core_regs(device, snapshot);
-
-	gen8_cx_misc_regs_snapshot(device, snapshot);
+		gen8_cx_misc_regs_snapshot(device, snapshot);
+	}
 
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 
@@ -1676,8 +1676,14 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	/* Clear aperture register */
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
-	/* Assert the isStatic bit before triggering snapshot */
-	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, 0x1);
+	/*
+	 * Assert the isStatic bit before triggering snapshot.
+	 * BIT(0): GPU activity during snapshot dump
+	 * BIT(1): GPU UNSLICE activity during snapshot dump
+	 * Similarly, BIT(4) for slice-0, BIT(5) for slice-1 and so on.
+	 */
+	slice_mask = ((1 << gen8_get_num_slices(adreno_dev)) - 1) << 4;
+	kgsl_regwrite(device, GEN8_RBBM_SNAPSHOT_STATUS, BIT(0) | BIT(1) | slice_mask);
 
 	/* Dump the registers which get affected by crash dumper trigger */
 	for (i = 0; i < gen8_snapshot_block_list->num_pre_crashdumper_regs; i++) {

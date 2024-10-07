@@ -12,7 +12,7 @@
 /*****************************************************************************
  * power flags
  ****************************************************************************/
-#define KGSL_MAX_CLKS 18
+#define KGSL_MAX_CLKS 19
 
 #define KGSL_MAX_PWRLEVELS 32
 
@@ -144,7 +144,7 @@ struct kgsl_pwrctrl {
 	unsigned int min_render_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int throttle_mask;
-	u32 interval_timeout;
+	atomic64_t interval_timeout;
 	u64 clock_times[KGSL_MAX_PWRLEVELS];
 	/** @thermal_time: Time in usecs the GPU is limited by thermal constraints */
 	u64 thermal_time;
@@ -178,8 +178,6 @@ struct kgsl_pwrctrl {
 	struct thermal_cooling_device *cooling_dev;
 	/* pmqos_max_freq: Handle to raise PMQOS MAX FREQUENCY request */
 	struct dev_pm_qos_request pmqos_max_freq;
-	/* cooling_ws: Work which updates PMQOS during thermal event */
-	struct work_struct cooling_ws;
 	/** @time_in_pwrlevel: Each pwrlevel active duration in usec */
 	u64 time_in_pwrlevel[KGSL_MAX_PWRLEVELS];
 	/** @last_stat_updated: The last time stats were updated */
@@ -204,9 +202,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	unsigned int level);
 int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
 int kgsl_pwrctrl_change_state(struct kgsl_device *device, int state);
-
-unsigned int kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device,
-	unsigned int new_level);
 
 /*
  * kgsl_pwrctrl_active_freq - get currently configured frequency
@@ -246,7 +241,6 @@ void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy);
  */
 void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 			struct kgsl_pwr_constraint *pwrc, u32 id, u32 ts);
-int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device);
 
 /**
  * kgsl_pwrctrl_request_state - Request a specific power state
@@ -345,4 +339,13 @@ int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device 
  * Return: DDR vote level from where GPU should vote for performance mode
  */
 u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq);
+
+/**
+ * kgsl_pwrctrl_setup_default_votes - Set up default power level and bandwidth vote
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device);
+
 #endif /* __KGSL_PWRCTRL_H */

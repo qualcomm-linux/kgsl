@@ -148,7 +148,6 @@ int a6xx_ringbuffer_submit(struct adreno_ringbuffer *rb,
 	spin_lock_irqsave(&rb->preempt_lock, flags);
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE)) {
 		if (adreno_dev->cur_rb == rb) {
-			kgsl_pwrscale_busy(device);
 			ret = a6xx_fenced_write(adreno_dev,
 				A6XX_CP_RB_WPTR, rb->_wptr,
 				FENCE_STATUS_WRITEDROPPED0_MASK);

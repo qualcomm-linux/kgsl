@@ -470,6 +470,9 @@ u32 kgsl_get_page_size(size_t size, unsigned int align)
 {
 	u32 pool;
 
+	if (!size)
+		return 0;
+
 	for (pool = rounddown_pow_of_two(size); pool > PAGE_SIZE; pool >>= 1)
 		if ((align >= ilog2(pool)) && (size >= pool) &&
 			kgsl_pool_available(pool))

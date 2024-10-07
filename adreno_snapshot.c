@@ -283,16 +283,10 @@ void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[(index + 1) % KGSL_RB_DWORDS];
-				ibsize = rbptr[(index + 2) % KGSL_RB_DWORDS];
-				index += 3;
-			} else {
-				ibaddr = rbptr[(index + 2) % KGSL_RB_DWORDS];
-				ibaddr = ibaddr << 32 | rbptr[(index + 1) % KGSL_RB_DWORDS];
-				ibsize = rbptr[(index + 3) % KGSL_RB_DWORDS];
-				index += 4;
-			}
+			ibaddr = rbptr[(index + 2) % KGSL_RB_DWORDS];
+			ibaddr = ibaddr << 32 | rbptr[(index + 1) % KGSL_RB_DWORDS];
+			ibsize = rbptr[(index + 3) % KGSL_RB_DWORDS];
+			index += 4;
 
 			/* Don't parse known global IBs */
 			if (kgsl_gpuaddr_in_memdesc(iommu->setstate,
@@ -356,10 +350,7 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 		index--;
 
 		if (index < 0) {
-			if (ADRENO_LEGACY_PM4(adreno_dev))
-				index = KGSL_RB_DWORDS - 3;
-			else
-				index = KGSL_RB_DWORDS - 4;
+			index = KGSL_RB_DWORDS - 4;
 
 			/* We wrapped without finding what we wanted */
 			if (index < rb->wptr) {
@@ -372,14 +363,9 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
-			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
-			}
+			ibaddr = rbptr[index + 2];
+			ibaddr = ibaddr << 32 | rbptr[index + 1];
+			ibsize = rbptr[index + 3];
 
 			if (adreno_ib_addr_overlap(snapshot->ib1base,
 					ibaddr, ibsize)) {
@@ -467,14 +453,9 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
-			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
-			}
+			ibaddr = rbptr[index + 2];
+			ibaddr = ibaddr << 32 | rbptr[index + 1];
+			ibsize = rbptr[index + 3];
 
 			index = (index + 1) % KGSL_RB_DWORDS;
 
@@ -989,7 +970,7 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 	header->seconds = ktime_get_real_seconds();
 	header->power_flags = device->pwrctrl.power_flags;
 	header->power_level = device->pwrctrl.active_pwrlevel;
-	header->power_interval_timeout = device->pwrctrl.interval_timeout;
+	header->power_interval_timeout = atomic64_read(&device->pwrctrl.interval_timeout);
 	header->grpclk = clk_get_rate(device->pwrctrl.grp_clks[0]);
 
 	/* Get the current PT base */

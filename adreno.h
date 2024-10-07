@@ -214,6 +214,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A530 = 530,
 	ADRENO_REV_A540 = 540,
 	ADRENO_REV_A610 = 610,
+	ADRENO_REV_A611 = 611,
 	ADRENO_REV_A612 = 612,
 	ADRENO_REV_A615 = 615,
 	ADRENO_REV_A616 = 616,
@@ -231,11 +232,12 @@ enum adreno_gpurev {
 	ADRENO_REV_A680 = 680,
 	ADRENO_REV_A702 = 702,
 	/*
-	 * Gen7 and higher version numbers may exceed 1 digit
+	 * Version numbers may exceed 1 digit
 	 * Bits 16-23: Major
 	 * Bits 8-15: Minor
 	 * Bits 0-7: Patch id
 	 */
+	ADRENO_REV_GEN6_3_26_0 = ADRENO_GPUREV_VALUE(3, 26, 0),
 	ADRENO_REV_GEN7_0_0 = ADRENO_GPUREV_VALUE(7, 0, 0),
 	ADRENO_REV_GEN7_0_1 = ADRENO_GPUREV_VALUE(7, 0, 1),
 	ADRENO_REV_GEN7_2_0 = ADRENO_GPUREV_VALUE(7, 2, 0),
@@ -446,11 +448,6 @@ struct adreno_power_ops {
 	 * collapsing
 	 */
 	int (*active_count_get)(struct adreno_device *adreno_dev);
-	/**
-	 * @active_count_put: Target specific function to allow gpu to power
-	 * collapse
-	 */
-	void (*active_count_put)(struct adreno_device *adreno_dev);
 	/** @pm_suspend: Target specific function to suspend the driver */
 	int (*pm_suspend)(struct adreno_device *adreno_dev);
 	/** @pm_resume: Target specific function to resume the driver */
@@ -636,6 +633,8 @@ struct adreno_device {
 	bool bcl_enabled;
 	/** @clx_enabled: True if CLX is enabled */
 	bool clx_enabled;
+	/** @isense_reg_mapped: True if isense registers are mapped to regmap */
+	bool isense_reg_mapped;
 	/** @lpac_enabled: True if LPAC is enabled */
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
@@ -834,6 +833,20 @@ struct adreno_drawobj_profile_entry {
 	 ((_index) * sizeof(struct adreno_drawobj_profile_entry) \
 	  + offsetof(struct adreno_drawobj_profile_entry, _member))
 
+/**
+ * struct adreno_submit_time - utility structure to store the wall clock / GPU
+ * ticks at command submit time
+ * @ticks: GPU ticks at submit time (from the 19.2Mhz timer)
+ * @ktime: local clock time (in nanoseconds)
+ * @utime: Wall clock time
+ * @drawobj: the object that we want to profile
+ */
+struct adreno_submit_time {
+	u64 ticks;
+	u64 ktime;
+	struct timespec64 utime;
+	struct kgsl_drawobj *drawobj;
+};
 
 /**
  * adreno_regs: List of registers that are used in kgsl driver for all
@@ -842,13 +855,10 @@ struct adreno_drawobj_profile_entry {
  * and are indexed by the enumeration values defined in this enum
  */
 enum adreno_regs {
-	ADRENO_REG_CP_ME_RAM_DATA,
 	ADRENO_REG_CP_RB_BASE,
 	ADRENO_REG_CP_RB_BASE_HI,
 	ADRENO_REG_CP_LPAC_RB_BASE,
 	ADRENO_REG_CP_LPAC_RB_BASE_HI,
-	ADRENO_REG_CP_RB_RPTR_ADDR_LO,
-	ADRENO_REG_CP_RB_RPTR_ADDR_HI,
 	ADRENO_REG_CP_RB_RPTR,
 	ADRENO_REG_CP_RB_WPTR,
 	ADRENO_REG_CP_ME_CNTL,
@@ -859,44 +869,12 @@ enum adreno_regs {
 	ADRENO_REG_CP_IB2_BASE,
 	ADRENO_REG_CP_IB2_BASE_HI,
 	ADRENO_REG_CP_IB2_BUFSZ,
-	ADRENO_REG_CP_TIMESTAMP,
-	ADRENO_REG_CP_SCRATCH_REG6,
-	ADRENO_REG_CP_SCRATCH_REG7,
-	ADRENO_REG_CP_PROTECT_STATUS,
-	ADRENO_REG_CP_PREEMPT,
-	ADRENO_REG_CP_PREEMPT_DEBUG,
-	ADRENO_REG_CP_PREEMPT_DISABLE,
-	ADRENO_REG_CP_PROTECT_REG_0,
-	ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_SMMU_INFO_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_NON_SECURE_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_PRIV_SECURE_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_LO,
-	ADRENO_REG_CP_CONTEXT_SWITCH_NON_PRIV_RESTORE_ADDR_HI,
-	ADRENO_REG_CP_PREEMPT_LEVEL_STATUS,
 	ADRENO_REG_RBBM_STATUS,
 	ADRENO_REG_RBBM_STATUS3,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD0,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD1,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD2,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_CMD3,
-	ADRENO_REG_RBBM_PERFCTR_PWR_1_LO,
 	ADRENO_REG_RBBM_INT_0_MASK,
-	ADRENO_REG_RBBM_PM_OVERRIDE2,
 	ADRENO_REG_RBBM_SW_RESET_CMD,
-	ADRENO_REG_RBBM_CLOCK_CTL,
-	ADRENO_REG_PA_SC_AA_CONFIG,
-	ADRENO_REG_SQ_GPR_MANAGEMENT,
-	ADRENO_REG_SQ_INST_STORE_MANAGEMENT,
-	ADRENO_REG_TP0_CHICKEN,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_LO,
-	ADRENO_REG_RBBM_PERFCTR_LOAD_VALUE_HI,
 	ADRENO_REG_GMU_AO_HOST_INTERRUPT_MASK,
-	ADRENO_REG_GMU_AHB_FENCE_STATUS,
 	ADRENO_REG_GMU_GMU2HOST_INTR_MASK,
-	ADRENO_REG_GPMU_POWER_COUNTER_ENABLE,
 	ADRENO_REG_REGISTER_MAX,
 };
 
@@ -917,13 +895,6 @@ struct adreno_irq_funcs {
 struct adreno_debugbus_block {
 	unsigned int block_id;
 	unsigned int dwords;
-};
-
-enum adreno_cp_marker_type {
-	IFPC_DISABLE,
-	IFPC_ENABLE,
-	IB1LIST_START,
-	IB1LIST_END,
 };
 
 struct adreno_gpudev {
@@ -979,8 +950,6 @@ struct adreno_gpudev {
 	 */
 	void (*power_stats)(struct adreno_device *adreno_dev,
 			struct kgsl_power_stats *stats);
-	int (*setproperty)(struct kgsl_device_private *priv, u32 type,
-		void __user *value, u32 sizebytes);
 	int (*add_to_va_minidump)(struct adreno_device *adreno_dev);
 	/**
 	 * @gx_is_on - Return true if both gfx clock and gxgdsc are enabled.
@@ -1066,6 +1035,7 @@ extern const struct adreno_gpudev adreno_a5xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_gpudev;
 extern const struct adreno_gpudev adreno_a6xx_rgmu_gpudev;
 extern const struct adreno_gpudev adreno_a619_holi_gpudev;
+extern const struct adreno_gpudev adreno_a611_gpudev;
 
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
@@ -1127,7 +1097,7 @@ u64 adreno_read_cx_timer(struct adreno_device *adreno_dev);
 int adreno_active_count_get(struct adreno_device *adreno_dev);
 
 /**
- * adreno_active_count_put - Wrapper for target specific active count put
+ * adreno_active_count_put - Decrement the active count
  * @adreno_dev: pointer to the adreno device
  *
  * Decrease the active or the KGSL device and schedule the idle thread to
@@ -1176,8 +1146,9 @@ static inline int adreno_is_a505_or_a506(struct adreno_device *adreno_dev)
 
 static inline int adreno_is_a6xx(struct adreno_device *adreno_dev)
 {
-	return ADRENO_GPUREV(adreno_dev) >= 600 &&
-			ADRENO_GPUREV(adreno_dev) <= 702;
+	return (ADRENO_GPUREV(adreno_dev) >= 600 &&
+			ADRENO_GPUREV(adreno_dev) <= 702) ||
+			ADRENO_GPUREV(adreno_dev) == ADRENO_REV_GEN6_3_26_0;
 }
 
 static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
@@ -1189,6 +1160,7 @@ static inline int adreno_is_a660_shima(struct adreno_device *adreno_dev)
 }
 
 ADRENO_TARGET(a610, ADRENO_REV_A610)
+ADRENO_TARGET(a611, ADRENO_REV_A611)
 ADRENO_TARGET(a612, ADRENO_REV_A612)
 ADRENO_TARGET(a618, ADRENO_REV_A618)
 ADRENO_TARGET(a619, ADRENO_REV_A619)
@@ -1200,6 +1172,7 @@ ADRENO_TARGET(a640, ADRENO_REV_A640)
 ADRENO_TARGET(a650, ADRENO_REV_A650)
 ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
+ADRENO_TARGET(gen6_3_26_0, ADRENO_REV_GEN6_3_26_0)
 ADRENO_TARGET(a702, ADRENO_REV_A702)
 
 /* A635 is derived from A660 and shares same logic */
@@ -1262,6 +1235,20 @@ static inline int adreno_is_a620(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A620 || rev == ADRENO_REV_A621);
+}
+
+static inline int adreno_is_a610_family(struct adreno_device *adreno_dev)
+{
+	u32 rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A610 || rev == ADRENO_REV_A611);
+}
+
+static inline int adreno_is_a612_family(struct adreno_device *adreno_dev)
+{
+	unsigned int rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A612 || rev == ADRENO_REV_GEN6_3_26_0);
 }
 
 static inline int adreno_is_a640v2(struct adreno_device *adreno_dev)
@@ -1929,6 +1916,15 @@ void adreno_set_active_ctxs_null(struct adreno_device *adreno_dev);
  * gpu bus usage for bus dcvs
  */
 void adreno_get_bus_counters(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_gmu_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
+ * @adreno_dev: Handle to the adreno device
+ * @ab: ab request that needs to be scaled in MBps
+ *
+ * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
+ */
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
  * adreno_suspend_context - Make sure device is idle
