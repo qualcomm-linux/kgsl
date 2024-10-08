@@ -3206,6 +3206,7 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_rb_start(adreno_dev);
 	if (ret) {
 		a6xx_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto oob_clear;
 	}
 
