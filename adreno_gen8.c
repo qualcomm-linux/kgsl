@@ -353,7 +353,6 @@ static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR)},
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR)},
 	{ GEN8_RB_GC_GMEM_PROTECT, BIT(PIPE_BR)},
-	{ GEN8_RB_LPAC_GMEM_PROTECT, BIT(PIPE_BR)},
 	{ GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE, BIT(PIPE_BR)},
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR)},
 	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR)},
@@ -1335,8 +1334,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 			upper_32_bits(adreno_dev->uche_gmem_base));
 
 	if (adreno_dev->lpac_enabled) {
-		gen8_regwrite_aperture(device, GEN8_RB_LPAC_GMEM_PROTECT,
-			0x0c000000, PIPE_BR, 0, 0);
 
 		/* Clear aperture register  */
 		gen8_host_aperture_set(adreno_dev, 0, 0, 0);
