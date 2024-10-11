@@ -3235,11 +3235,18 @@ static int gen8_gmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &gen8_gmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void gen8_gmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &gen8_gmu_component_ops);
+}
+#else
 static int gen8_gmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &gen8_gmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id gen8_gmu_match_table[] = {
 	{ .compatible = "qcom,gen8-gmu" },

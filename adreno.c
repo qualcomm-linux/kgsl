@@ -3764,12 +3764,19 @@ static int adreno_probe(struct platform_device *pdev)
 			&adreno_ops, match);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void adreno_remove(struct platform_device *pdev)
+{
+	component_master_del(&pdev->dev, &adreno_ops);
+}
+#else
 static int adreno_remove(struct platform_device *pdev)
 {
 	component_master_del(&pdev->dev, &adreno_ops);
 
 	return 0;
 }
+#endif
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
 #if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)

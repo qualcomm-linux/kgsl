@@ -3836,11 +3836,18 @@ static int a6xx_gmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &a6xx_gmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void a6xx_gmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &a6xx_gmu_component_ops);
+}
+#else
 static int a6xx_gmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &a6xx_gmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id a6xx_gmu_match_table[] = {
 	{ .compatible = "qcom,gpu-gmu" },
