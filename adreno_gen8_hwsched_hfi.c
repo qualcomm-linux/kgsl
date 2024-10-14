@@ -2154,6 +2154,14 @@ done:
 	if (ret)
 		gen8_disable_gpu_irq(adreno_dev);
 
+	/*
+	 * Request counters for bus DCVS. This is only invoked in coldboot path as we
+	 * dont need to allocate it every boot and because we need to reallocate it
+	 * when switched to host based DCVS. If counters are already allocated,
+	 * we would return early
+	 */
+	adreno_get_bus_counters(adreno_dev);
+
 	return ret;
 }
 

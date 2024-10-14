@@ -775,6 +775,7 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 		devfreq_gpubw_exit();
 		dev_pm_opp_remove_all_dynamic(&pwrscale->busmondev);
 		device_unregister(&pwrscale->busmondev);
+		memset(&pwrscale->busmondev, 0, sizeof(pwrscale->busmondev));
 	}
 
 	if (!pwrscale->devfreqptr)

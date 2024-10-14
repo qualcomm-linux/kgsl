@@ -7,6 +7,8 @@
 #include <linux/debugfs.h>
 
 #include "adreno.h"
+#include "kgsl_pwrscale.h"
+
 extern struct dentry *kgsl_debugfs_dir;
 
 static void set_isdb(struct adreno_device *adreno_dev, void *priv)
@@ -647,6 +649,53 @@ static int _gmu_fp_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(gmu_fp_fops, _gmu_fp_show, _gmu_fp_store, "%llu\n");
 
+static void _toggle_host_based_dcvs(struct adreno_device *adreno_dev, void *priv)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool val = *((bool *)priv);
+
+	if (val) {
+		/* Enable host based DCVS */
+		device->pwrscale.devfreq_enabled = true;
+		device->pwrctrl.bus_control = true;
+		kgsl_pwrscale_init(device, device->pdev, CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR);
+		kgsl_pwrscale_enable(device);
+	} else {
+		/* Disable host based DCVS */
+		kgsl_pwrscale_disable(device, false);
+		kgsl_pwrscale_close(device);
+		device->pwrscale.devfreq_enabled = false;
+		device->pwrctrl.bus_control = false;
+	}
+
+	device->host_based_dcvs = val;
+}
+
+static int _host_based_dcvs_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	*val = (u64)device->host_based_dcvs;
+	return 0;
+}
+
+static int _host_based_dcvs_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool host_based_dcvs;
+
+	if ((val == device->host_based_dcvs) || (val > 1))
+		return 0;
+
+	host_based_dcvs = (bool)val;
+	return adreno_power_cycle(adreno_dev, _toggle_host_based_dcvs, &host_based_dcvs);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(host_based_dcvs_fops, _host_based_dcvs_show,
+				_host_based_dcvs_store, "%llu\n");
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -713,4 +762,8 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("skipsaverestore", 0644, adreno_dev->preemption_debugfs_dir,
 			device, &skipsaverestore_fops);
 	}
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
+		debugfs_create_file("host_based_dcvs", 0644, device->d_debugfs,
+				device, &host_based_dcvs_fops);
 }

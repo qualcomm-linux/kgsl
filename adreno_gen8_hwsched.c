@@ -864,8 +864,6 @@ static int gen8_hwsched_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	adreno_get_bus_counters(adreno_dev);
-
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 						 ADRENO_COOP_RESET);
 
