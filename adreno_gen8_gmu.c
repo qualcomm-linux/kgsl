@@ -2985,18 +2985,7 @@ static int gen8_gmu_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/* wait for active count so device can be put in slumber */
-	ret = kgsl_active_count_wait(device, 0, HZ);
-	if (ret) {
-		dev_err(device->dev,
-			"Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_wait_idle(device);
+	ret = adreno_drain_and_idle(device);
 	if (ret)
 		goto err;
 

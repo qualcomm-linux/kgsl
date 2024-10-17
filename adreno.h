@@ -2075,6 +2075,17 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
 void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
 
+
+/**
+ * adreno_drain - Halt new submissions and drain pending work by waiting for active count to become
+ * zero
+ * @device: A handle to kgsl device
+ * @wait_jiffies: jiffies to wait for active count to become zero
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_drain(struct kgsl_device *device, unsigned long wait_jiffies);
+
 /**
  * adreno_irq_free - Free an interrupt allocated for GPU
  * @adreno_dev: Adreno device handle

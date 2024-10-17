@@ -1196,20 +1196,7 @@ static int gen7_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/*
-	 * Wait for the dispatcher to retire everything by waiting
-	 * for the active count to go to zero.
-	 */
-	ret = kgsl_active_count_wait(device, 0, msecs_to_jiffies(100));
-	if (ret) {
-		dev_err(device->dev, "Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_hwsched_idle(adreno_dev);
+	ret = adreno_hwsched_drain_and_idle(adreno_dev);
 	if (ret)
 		goto err;
 

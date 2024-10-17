@@ -2859,17 +2859,22 @@ int adreno_wait_idle(struct kgsl_device *device)
 	return adreno_spin_idle(adreno_dev, ADRENO_IDLE_TIMEOUT);
 }
 
-static int adreno_drain_and_idle(struct kgsl_device *device)
+int adreno_drain(struct kgsl_device *device, unsigned long wait_jiffies)
 {
 	int ret;
 
+	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
 
-	ret = kgsl_active_count_wait(device, 0, HZ);
+	/**
+	 * Wait for the dispatcher to retire everything by waiting
+	 * for the active count to go to zero.
+	 */
+	ret = kgsl_active_count_wait(device, 0, wait_jiffies);
 	if (ret)
-		return ret;
+		dev_err(device->dev, "Timed out waiting for the active count\n");
 
-	return adreno_wait_idle(device);
+	return ret;
 }
 
 /* Caller must hold the device mutex. */
