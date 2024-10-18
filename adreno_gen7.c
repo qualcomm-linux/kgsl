@@ -532,6 +532,14 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 		gmu_core_regwrite(device, gen7_core->ao_hwcg[i].offset,
 			on ? gen7_core->ao_hwcg[i].val : 0);
 
+	if (!adreno_is_gen7_9_x(adreno_dev))
+		kgsl_regrmw(device, GEN7_UCHE_GBIF_GX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), on ? 2 : 0));
+
+	if (!on)
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), 0));
+
 	if (!gen7_core->hwcg) {
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 1);
 		kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, on ? 1 : 0);

@@ -1025,6 +1025,14 @@ static void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
 			return;
 		}
 		kgsl_regwrite(device, GEN8_RBBM_CLOCK_CNTL_GLOBAL, 0);
+	} else {
+		/*
+		 * The CGC mode in GEN8_GBIF_CX_CONFIG register is set to off by default.
+		 * During GMU bootup, it is set to on by driver regardless of the on/off
+		 * setting. So, here override the register only for CGC off config.
+		 */
+		kgsl_regrmw(device, GEN8_GBIF_CX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), 0));
 	}
 }
 
