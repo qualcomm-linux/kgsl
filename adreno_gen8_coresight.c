@@ -55,6 +55,7 @@ static struct adreno_coresight_register gen8_coresight_regs[] = {
 	{ GEN8_DBGC_EVT_INTF_SEL_1 },
 	{ GEN8_DBGC_ECO_CNTL },
 	{ GEN8_DBGC_AHB_DBG_CNTL },
+	{ GEN8_DBGC_CFG_DBGBUS_MISC_MODE },
 };
 
 static struct adreno_coresight_register gen8_coresight_regs_cx[] = {
@@ -103,6 +104,7 @@ static struct adreno_coresight_register gen8_coresight_regs_cx[] = {
 	{ GEN8_CX_DBGC_PERF_ATB_CFG },
 	{ GEN8_CX_DBGC_ECO_CNTL },
 	{ GEN8_CX_DBGC_AHB_DBG_CNTL },
+	{ GEN8_CX_DBGC_CFG_DBGBUS_MISC_MODE },
 };
 
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_a, &gen8_coresight_regs[0]);
@@ -149,6 +151,7 @@ static ADRENO_CORESIGHT_ATTR(evt_intf_sel_0, &gen8_coresight_regs[40]);
 static ADRENO_CORESIGHT_ATTR(evt_intf_sel_1, &gen8_coresight_regs[41]);
 static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen8_coresight_regs[42]);
 static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen8_coresight_regs[43]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen8_coresight_regs[44]);
 
 /*CX debug registers*/
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_a,
@@ -241,6 +244,8 @@ static ADRENO_CORESIGHT_ATTR(cx_eco_cntl,
 				&gen8_coresight_regs_cx[43]);
 static ADRENO_CORESIGHT_ATTR(cx_ahb_dbg_cntl,
 				&gen8_coresight_regs_cx[44]);
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_misc_mode,
+				&gen8_coresight_regs_cx[45]);
 
 static struct attribute *gen8_coresight_attrs[] = {
 	&coresight_attr_cfg_dbgbus_sel_a.attr.attr,
@@ -287,6 +292,7 @@ static struct attribute *gen8_coresight_attrs[] = {
 	&coresight_attr_evt_intf_sel_1.attr.attr,
 	&coresight_attr_eco_cntl.attr.attr,
 	&coresight_attr_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 
@@ -337,6 +343,7 @@ static struct attribute *gen8_coresight_attrs_cx[] = {
 	&coresight_attr_cx_perf_atb_cfg.attr.attr,
 	&coresight_attr_cx_eco_cntl.attr.attr,
 	&coresight_attr_cx_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cx_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 
