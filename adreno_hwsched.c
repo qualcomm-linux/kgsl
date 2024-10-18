@@ -1262,6 +1262,20 @@ static unsigned int _preempt_count_show(struct adreno_device *adreno_dev)
 	return count;
 }
 
+ssize_t _preempt_info_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(dev_get_drvdata(dev));
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+
+	if (hwsched_ops->preempt_info)
+		return hwsched_ops->preempt_info(adreno_dev, buf);
+
+	return -EOPNOTSUPP;
+}
+
+static struct device_attribute adreno_attr_preempt_info =
+		__ATTR(preempt_info, 0444, _preempt_info_show, NULL);
+
 static int _ft_long_ib_detect_store(struct adreno_device *adreno_dev, bool val)
 {
 	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->long_ib_detect,
@@ -1280,6 +1294,7 @@ static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
 static const struct attribute *_hwsched_attr_list[] = {
 	&adreno_attr_preemption.attr.attr,
 	&adreno_attr_preempt_count.attr.attr,
+	&adreno_attr_preempt_info.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
 	NULL,
 };

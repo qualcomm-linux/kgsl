@@ -1603,6 +1603,32 @@ done:
 	return ret;
 }
 
+ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *buf)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	u32 preempt_count_l0, preempt_count_l1a, preempt_count_l1b;
+	u32 count = 0, max_size = PAGE_SIZE;
+	int ret;
+
+	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L0, &preempt_count_l0);
+	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1A, &preempt_count_l1a);
+	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1B, &preempt_count_l1b);
+
+	if (ret)
+		return ret;
+
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s %-8s\n", "Level:", "Count");
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L0:", preempt_count_l0);
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L1A:", preempt_count_l1a);
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L1B:", preempt_count_l1b);
+
+	return count;
+}
+
 const struct adreno_power_ops gen8_hwsched_power_ops = {
 	.first_open = gen8_hwsched_first_open,
 	.last_close = gen8_hwsched_power_off,
@@ -1617,6 +1643,7 @@ const struct adreno_power_ops gen8_hwsched_power_ops = {
 const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.submit_drawobj = gen8_hwsched_submit_drawobj,
 	.preempt_count = gen8_hwsched_preempt_count_get,
+	.preempt_info = gen8_hwsched_preempt_info_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
 	.get_rb_hostptr = gen8_hwsched_get_rb_hostptr,
 };

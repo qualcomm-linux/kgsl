@@ -186,6 +186,12 @@ enum gmu_vrb_idx {
 	VRB_CL_NO_FT_TIMEOUT = 4,
 	/* Contains the total number of GPU preemptions */
 	VRB_PREEMPT_COUNT_TOTAL = 5,
+	/* Contains the number of L0 GPU preemptions */
+	VRB_PREEMPT_COUNT_L0 = 6,
+	/* Contains the number of L1A GPU preemptions */
+	VRB_PREEMPT_COUNT_L1A = 7,
+	/* Contains the number of L1B GPU preemptions */
+	VRB_PREEMPT_COUNT_L1B = 8,
 };
 
 /* For GMU Trace */

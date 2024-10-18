@@ -48,6 +48,10 @@ struct adreno_hwsched_ops {
 	 */
 	u32 (*preempt_count)(struct adreno_device *adreno_dev);
 	/**
+	 * @preempt_info - Target specific function to get preemption information
+	 */
+	ssize_t (*preempt_info)(struct adreno_device *adreno_dev, char *buf);
+	/**
 	 * @create_hw_fence - Target specific function to create a hardware fence
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
