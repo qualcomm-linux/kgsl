@@ -171,6 +171,8 @@ struct adreno_gen8_core {
 	bool fast_bus_hint;
 	/** @noc_timeout_us: GPU config NOC port timeout in usec */
 	u32 noc_timeout_us;
+	/** @cl_no_ft_timeout_ms: Use this timeout for CL NO_FT instead of infinite */
+	u32 cl_no_ft_timeout_ms;
 };
 
 /**
