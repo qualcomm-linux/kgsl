@@ -17,6 +17,7 @@
 
 #include "kgsl_gmu_core.h"
 #include "kgsl_pwrscale.h"
+#include "kgsl_sharedmem.h"
 
 #define KGSL_L3_DEVICE "kgsl-l3"
 
@@ -213,111 +214,6 @@ struct kgsl_driver {
 extern struct kgsl_driver kgsl_driver;
 
 struct kgsl_pagetable;
-struct kgsl_memdesc;
-
-struct kgsl_memdesc_ops {
-	unsigned int vmflags;
-	vm_fault_t (*vmfault)(struct kgsl_memdesc *memdesc,
-		struct vm_area_struct *vma, struct vm_fault *vmf);
-	void (*free)(struct kgsl_memdesc *memdesc);
-	int (*map_kernel)(struct kgsl_memdesc *memdesc);
-	void (*unmap_kernel)(struct kgsl_memdesc *memdesc);
-	/**
-	 * @put_gpuaddr: Put away the GPU address and unmap the memory
-	 * descriptor
-	 */
-	void (*put_gpuaddr)(struct kgsl_memdesc *memdesc);
-};
-
-/* Internal definitions for memdesc->priv */
-#define KGSL_MEMDESC_GUARD_PAGE BIT(0)
-/* Set if the memdesc is mapped into all pagetables */
-#define KGSL_MEMDESC_GLOBAL BIT(1)
-/* The memdesc is frozen during a snapshot */
-#define KGSL_MEMDESC_FROZEN BIT(2)
-/* The memdesc is mapped into a pagetable */
-#define KGSL_MEMDESC_MAPPED BIT(3)
-/* The memdesc is secured for content protection */
-#define KGSL_MEMDESC_SECURE BIT(4)
-/* Memory is accessible in privileged mode */
-#define KGSL_MEMDESC_PRIVILEGED BIT(6)
-/* This is an instruction buffer */
-#define KGSL_MEMDESC_UCODE BIT(7)
-/* For global buffers, randomly assign an address from the region */
-#define KGSL_MEMDESC_RANDOM BIT(8)
-/* Allocate memory from the system instead of the pools */
-#define KGSL_MEMDESC_SYSMEM BIT(9)
-/* The memdesc pages can be reclaimed */
-#define KGSL_MEMDESC_CAN_RECLAIM BIT(10)
-/* The memdesc pages were reclaimed */
-#define KGSL_MEMDESC_RECLAIMED BIT(11)
-/* Skip reclaim of the memdesc pages */
-#define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
-/* The memdesc is hypassigned to HLOS*/
-#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(13)
-
-/**
- * struct kgsl_memdesc - GPU memory object descriptor
- * @pagetable: Pointer to the pagetable that the object is mapped in
- * @hostptr: Kernel virtual address
- * @hostptr_count: Number of threads using hostptr
- * @gpuaddr: GPU virtual address
- * @physaddr: Physical address of the memory object
- * @size: Size of the memory object
- * @priv: Internal flags and settings
- * @sgt: Scatter gather table for allocated pages
- * @ops: Function hooks for the memdesc memory type
- * @flags: Flags set from userspace
- * @dev: Pointer to the struct device that owns this memory
- * @attrs: dma attributes for this memory
- * @pages: An array of pointers to allocated pages
- * @page_count: Total number of pages allocated
- */
-struct kgsl_memdesc {
-	struct kgsl_pagetable *pagetable;
-	void *hostptr;
-	unsigned int hostptr_count;
-	uint64_t gpuaddr;
-	phys_addr_t physaddr;
-	uint64_t size;
-	unsigned int priv;
-	struct sg_table *sgt;
-	const struct kgsl_memdesc_ops *ops;
-	uint64_t flags;
-	struct device *dev;
-	unsigned long attrs;
-	struct page **pages;
-	unsigned int page_count;
-	/*
-	 * @lock: Spinlock to protect the gpuaddr from being accessed by
-	 * multiple entities trying to map the same SVM region at once
-	 */
-	spinlock_t lock;
-	/** @shmem_filp: Pointer to the shmem file backing this memdesc */
-	struct file *shmem_filp;
-	/** @ranges: rbtree base for the interval list of vbo ranges */
-	struct rb_root_cached ranges;
-	/** @ranges_lock: Mutex to protect the range database */
-	struct mutex ranges_lock;
-	/** @gmuaddr: GMU VA if this is mapped in GMU */
-	u32 gmuaddr;
-	/*@kgsl_dev: kgsl device dev instance */
-	struct device *kgsl_dev;
-	/*@shmem_page_list: shmem pages list */
-	struct list_head shmem_page_list;
-};
-
-/**
- * struct kgsl_global_memdesc  - wrapper for global memory objects
- */
-struct kgsl_global_memdesc {
-	/** @memdesc: Container for the GPU memory descriptor for the object */
-	struct kgsl_memdesc memdesc;
-	/** @name: Name of the object for the debugfs list */
-	const char *name;
-	/** @node: List node for the list of global objects */
-	struct list_head node;
-};
 
 /*
  * List of different memory entry types. The usermem enum
@@ -333,42 +229,6 @@ struct kgsl_global_memdesc {
 #define KGSL_WORK_PERIOD	0
 /* GPU work period time in msec to emulate application work stats */
 #define KGSL_WORK_PERIOD_MS	900
-
-/* symbolic table for trace and debugfs */
-/*
- * struct kgsl_mem_entry - a userspace memory allocation
- * @refcount: reference count. Currently userspace can only
- *  hold a single reference count, but the kernel may hold more.
- * @memdesc: description of the memory
- * @priv_data: type-specific data, such as the dma-buf attachment pointer.
- * @node: rb_node for the gpu address lookup rb tree
- * @id: idr index for this entry, can be used to find memory that does not have
- *  a valid GPU address.
- * @priv: back pointer to the process that owns this memory
- * @pending_free: if !0, userspace requested that his memory be freed, but there
- *  are still references to it.
- * @dev_priv: back pointer to the device file that created this entry.
- * @metadata: String containing user specified metadata for the entry
- * @work: Work struct used to schedule kgsl_mem_entry_destroy()
- */
-struct kgsl_mem_entry {
-	struct kref refcount;
-	struct kgsl_memdesc memdesc;
-	void *priv_data;
-	struct rb_node node;
-	unsigned int id;
-	struct kgsl_process_private *priv;
-	int pending_free;
-	char metadata[KGSL_GPUOBJ_ALLOC_METADATA_MAX + 1];
-	struct work_struct work;
-	/**
-	 * @map_count: Count how many vmas this object is mapped in - used for
-	 * debugfs accounting
-	 */
-	atomic_t map_count;
-	/** @vbo_count: Count how many VBO ranges this entry is mapped in */
-	atomic_t vbo_count;
-};
 
 struct kgsl_device_private;
 struct kgsl_event_group;
@@ -576,50 +436,6 @@ int kgsl_request_irq_optional(struct platform_device *pdev, const  char *name,
 
 int __init kgsl_core_init(void);
 void kgsl_core_exit(void);
-
-static inline bool kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
-				uint64_t gpuaddr, uint64_t size)
-{
-	if (IS_ERR_OR_NULL(memdesc))
-		return false;
-
-	/* set a minimum size to search for */
-	if (!size)
-		size = 1;
-
-	/* don't overflow */
-	if (size > U64_MAX - gpuaddr)
-		return false;
-
-	return (gpuaddr >= memdesc->gpuaddr &&
-	    ((gpuaddr + size) <= (memdesc->gpuaddr + memdesc->size)));
-}
-
-static inline void *kgsl_memdesc_map(struct kgsl_memdesc *memdesc)
-{
-	if (memdesc->ops && memdesc->ops->map_kernel)
-		memdesc->ops->map_kernel(memdesc);
-
-	return memdesc->hostptr;
-}
-
-static inline void kgsl_memdesc_unmap(struct kgsl_memdesc *memdesc)
-{
-	if (memdesc->ops && memdesc->ops->unmap_kernel)
-		memdesc->ops->unmap_kernel(memdesc);
-}
-
-static inline void *kgsl_gpuaddr_to_vaddr(struct kgsl_memdesc *memdesc,
-					     uint64_t gpuaddr)
-{
-	void *hostptr = NULL;
-
-	if ((gpuaddr >= memdesc->gpuaddr) &&
-		(gpuaddr < (memdesc->gpuaddr + memdesc->size)))
-		hostptr = kgsl_memdesc_map(memdesc);
-
-	return hostptr != NULL ? hostptr + (gpuaddr - memdesc->gpuaddr) : NULL;
-}
 
 static inline int timestamp_cmp(unsigned int a, unsigned int b)
 {
