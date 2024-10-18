@@ -313,37 +313,6 @@ static u32 gen8_hwsched_lookup_key_value(struct adreno_device *adreno_dev,
 	return 0;
 }
 
-static u32 get_payload_rb_key(struct adreno_device *adreno_dev,
-	u32 rb_id, u32 key)
-{
-	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
-	u32 i = 0, payload_bytes;
-	void *start;
-
-	if (!cmd->hdr)
-		return 0;
-
-	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
-			offsetof(struct hfi_context_bad_cmd, payload);
-
-	start = &cmd->payload[0];
-
-	while (i < payload_bytes) {
-		struct payload_section *payload = start + i;
-
-		if (payload->type == PAYLOAD_RB) {
-			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
-
-			if (id == rb_id)
-				return adreno_hwsched_parse_payload(payload, key);
-		}
-
-		i += struct_size(payload, data, payload->dwords);
-	}
-
-	return 0;
-}
-
 static bool log_gpu_fault(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -397,10 +366,10 @@ static bool log_gpu_fault(struct adreno_device *adreno_dev)
 		next = gen8_hwsched_lookup_key_value(adreno_dev,
 			PAYLOAD_PREEMPT_TIMEOUT,
 			KEY_PREEMPT_TIMEOUT_NEXT_RB_ID);
-		cur_rptr = get_payload_rb_key(adreno_dev, cur, KEY_RB_RPTR);
-		cur_wptr = get_payload_rb_key(adreno_dev, cur, KEY_RB_WPTR);
-		next_rptr = get_payload_rb_key(adreno_dev, next, KEY_RB_RPTR);
-		next_wptr = get_payload_rb_key(adreno_dev, next, KEY_RB_WPTR);
+		cur_rptr = adreno_hwsched_get_payload_rb_key(adreno_dev, cur, KEY_RB_RPTR);
+		cur_wptr = adreno_hwsched_get_payload_rb_key(adreno_dev, cur, KEY_RB_WPTR);
+		next_rptr = adreno_hwsched_get_payload_rb_key(adreno_dev, next, KEY_RB_RPTR);
+		next_wptr = adreno_hwsched_get_payload_rb_key(adreno_dev, next, KEY_RB_WPTR);
 
 		dev_crit_ratelimited(gmu_pdev_dev,
 			"Preemption Fault: cur=%d R/W=0x%x/0x%x, next=%d R/W=0x%x/0x%x\n",

@@ -2392,6 +2392,66 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	return 0;
 }
 
+u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u32 rb_id, u32 key)
+{
+	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return 0;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd_legacy, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		if (payload->type == PAYLOAD_RB) {
+			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
+
+			if (id == rb_id)
+				return adreno_hwsched_parse_payload(payload, key);
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+
+	return 0;
+}
+
+u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_id, u32 key)
+{
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return 0;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		if (payload->type == PAYLOAD_RB) {
+			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
+
+			if (id == rb_id)
+				return adreno_hwsched_parse_payload(payload, key);
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+
+	return 0;
+}
+
 void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
 	struct device *dev)
 {

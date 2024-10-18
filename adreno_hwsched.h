@@ -210,6 +210,27 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev);
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
 
 /**
+ * adreno_hwsched_get_payload_rb_key - Retrieve the payload based on ring buffer key
+ * @adreno_dev: Pointer to the adreno device
+ * @rb_id: Ring buffer ID to search for
+ * @key: Key to retrieve from the payload
+ *
+ * Return: The value of the key if found, otherwise 0.
+ */
+u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_id, u32 key);
+
+/**
+ * adreno_hwsched_get_payload_rb_key_legacy - Same as adreno_hwsched_get_payload_rb_key,
+ * but for legacy
+ * @adreno_dev: Pointer to the adreno device
+ * @rb_id: Ring buffer ID to search for
+ * @key: Key to retrieve from the payload
+ *
+ * Return: The value of the key if found, otherwise 0.
+ */
+u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u32 rb_id, u32 key);
+
+/**
  * adreno_hwsched_gpu_fault - Gets hwsched gpu fault info
  * @adreno_dev: pointer to the adreno device
  *
