@@ -1441,6 +1441,17 @@ int kgsl_set_smmu_aperture(struct kgsl_device *device,
 	return ret;
 }
 
+static void kgsl_iommu_enable_ptwalk(struct kgsl_iommu_context *context)
+{
+	u32 tcr = KGSL_IOMMU_GET_CTX_REG(context, KGSL_IOMMU_CTX_TCR_LPAE);
+
+	tcr &= ~(KGSL_IOMMU_TCR_LPAE_EPD0 | KGSL_IOMMU_TCR_LPAE_EPD1);
+	KGSL_IOMMU_SET_CTX_REG(context, KGSL_IOMMU_CTX_TCR_LPAE, tcr);
+
+	/* Make sure all of the preceding writes have posted */
+	wmb();
+}
+
 int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
@@ -1814,6 +1825,17 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 		_iommu_context_set_prr(mmu, &iommu->lpac_context);
 		kgsl_iommu_configure_gpu_sctlr(mmu, mmu->pfpolicy, &iommu->lpac_context);
 	}
+
+	/*
+	 * If CP is halted while executing SMMU_TABLE_UPDATE packet, there is a chance of
+	 * recovery failure. The problematic window is right after the page table walk
+	 * disable and before it is enabled in SMMU_TABLE_UPDATE packet.
+	 * So, enable page table walk in user and lpac contexts during boot. It is not needed
+	 * for secure context, as per process page table is not enabled for secure context.
+	 */
+	kgsl_iommu_enable_ptwalk(&iommu->user_context);
+	if (iommu->lpac_context.domain)
+		kgsl_iommu_enable_ptwalk(&iommu->lpac_context);
 
 	kgsl_iommu_disable_clk(mmu);
 	return 0;
