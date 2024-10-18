@@ -37,8 +37,6 @@
 
 /* RBBM registers */
 #define GEN8_RBBM_GBIF_CLIENT_QOS_CNTL           0x008
-#define GEN8_RBBM_GBIF_HALT                      0x00a
-#define GEN8_RBBM_GBIF_HALT_ACK                  0x00b
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL          0x010
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL2         0x011
 #define GEN8_RBBM_STATUS                         0x012
@@ -1271,10 +1269,12 @@
 #define GEN8_GBIF_QSB_SIDE3               0x3c06
 #define GEN8_GBIF_HALT                    0x3c45
 #define GEN8_GBIF_HALT_ACK                0x3c46
+#define GEN8_GBIF_REINIT_ENABLE           0x3c49
+#define GEN8_GBIF_REINIT_DONE             0x3c4a
 
 #define GEN8_GBIF_CLIENT_HALT_MASK        BIT(0)
 #define GEN8_GBIF_ARB_HALT_MASK           BIT(1)
-#define GEN8_GBIF_GX_HALT_MASK            BIT(0)
+#define GEN8_GBIF_REINIT_GX_IDLE_MASK     BIT(0)
 
 #define GEN8_GBIF_PERF_PWR_CNT_EN                0x3cc0
 #define GEN8_GBIF_PERF_PWR_CNT_CLR               0x3cc1
