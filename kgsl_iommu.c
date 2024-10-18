@@ -2681,12 +2681,12 @@ static void kgsl_iommu_check_config(struct kgsl_mmu *mmu,
 
 int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 {
-	u32 val[2];
 	int ret, i;
 	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
 	struct kgsl_mmu *mmu = &device->mmu;
 	struct device_node *node = pdev->dev.of_node;
 	struct kgsl_global_memdesc *md;
+	struct resource *res;
 
 	/* Create a kmem cache for the pagetable address objects */
 	if (!addr_entry_cache) {
@@ -2697,15 +2697,16 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 		}
 	}
 
-	ret = of_property_read_u32_array(node, "reg", val, 2);
-	if (ret) {
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		ret = -ENODEV;
 		dev_err(&device->pdev->dev,
 			"%pOF: Unable to read KGSL IOMMU register range\n",
 			node);
 		goto err;
 	}
 
-	iommu->regbase = devm_ioremap(&device->pdev->dev, val[0], val[1]);
+	iommu->regbase = devm_ioremap(&device->pdev->dev, res->start, resource_size(res));
 	if (!iommu->regbase) {
 		dev_err(&device->pdev->dev, "Couldn't map IOMMU registers\n");
 		ret = -ENOMEM;
