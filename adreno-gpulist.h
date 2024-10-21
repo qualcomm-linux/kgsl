@@ -3028,7 +3028,7 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	/* Enable cubemap small miplevel optimization settings */
 	{ GEN8_TPL1_DBG_ECO_CNTL1, 0x00000724, BIT(PIPE_NONE) },
 	/* Disable tag bank id hashing */
-	{ GEN8_UCHE_MODE_CNTL, 0x000a0000, BIT(PIPE_NONE) },
+	{ GEN8_UCHE_MODE_CNTL, 0x00080000, BIT(PIPE_NONE) },
 	{ GEN8_UCHE_CCHE_MODE_CNTL, 0x00001000, BIT(PIPE_NONE) },
 	/* Limit gmem number of ways for GMEM requests in each set */
 	{ GEN8_UCHE_CCHE_CACHE_WAYS, 0x00000800, BIT(PIPE_NONE)},
