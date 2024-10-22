@@ -12,6 +12,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/sched/signal.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 
 #include "kgsl_device.h"
 #include "kgsl_pool.h"

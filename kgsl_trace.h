@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #if !defined(_KGSL_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -19,6 +19,12 @@
 #include "kgsl.h"
 #include "kgsl_drawobj.h"
 #include "kgsl_sharedmem.h"
+
+#if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
+#define kgsl_assign_str(dst, src) __assign_str(dst, src)
+#else
+#define kgsl_assign_str(dst, src) __assign_str(dst)
+#endif
 
 #define show_memtype(type) \
 	__print_symbolic(type, \
@@ -63,7 +69,7 @@ TRACE_EVENT(kgsl_issueibcmds,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->drawctxt_id = drawctxt_id;
 		__entry->numibs = numibs;
 		__entry->timestamp = timestamp;
@@ -105,7 +111,7 @@ TRACE_EVENT(kgsl_readtimestamp,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->context_id = context_id;
 		__entry->type = type;
 		__entry->timestamp = timestamp;
@@ -142,7 +148,7 @@ TRACE_EVENT(kgsl_waittimestamp_entry,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->context_id = context_id;
 		__entry->curr_ts = curr_ts;
 		__entry->wait_ts = wait_ts;
@@ -176,7 +182,7 @@ TRACE_EVENT(kgsl_waittimestamp_exit,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->curr_ts = curr_ts;
 		__entry->result = result;
 	),
@@ -200,7 +206,7 @@ DECLARE_EVENT_CLASS(kgsl_pwr_template,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->on = on;
 	),
 
@@ -240,7 +246,7 @@ TRACE_EVENT(kgsl_clk,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->on = on;
 		__entry->freq = freq;
 	),
@@ -296,7 +302,7 @@ TRACE_EVENT(kgsl_pwrlevel,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->pwrlevel = pwrlevel;
 		__entry->freq = freq;
 		__entry->prev_pwrlevel = prev_pwrlevel;
@@ -348,7 +354,7 @@ TRACE_EVENT(kgsl_buslevel,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->pwrlevel = pwrlevel;
 		__entry->bus = bus;
 		__entry->avg_bw = avg_bw;
@@ -376,7 +382,7 @@ TRACE_EVENT(kgsl_gpubusy,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->busy = busy;
 		__entry->elapsed = elapsed;
 	),
@@ -405,7 +411,7 @@ TRACE_EVENT(kgsl_pwrstats,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->total_time = time;
 		__entry->busy_time = pstats->busy_time;
 		__entry->ram_time = pstats->ram_time;
@@ -431,7 +437,7 @@ DECLARE_EVENT_CLASS(kgsl_pwrstate_template,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->state = state;
 	),
 
@@ -750,7 +756,7 @@ DECLARE_EVENT_CLASS(kgsl_mem_timestamp_template,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->gpuaddr = mem_entry->memdesc.gpuaddr;
 		__entry->size = mem_entry->memdesc.size;
 		kgsl_get_memory_usage(__entry->usage, sizeof(__entry->usage),
@@ -804,7 +810,7 @@ TRACE_EVENT(kgsl_context_create,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->id = context->id;
 		__entry->flags = flags & ~(KGSL_CONTEXT_PRIORITY_MASK |
 						KGSL_CONTEXT_TYPE_MASK);
@@ -838,7 +844,7 @@ TRACE_EVENT(kgsl_context_detach,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->id = context->id;
 	),
 
@@ -860,7 +866,7 @@ TRACE_EVENT(kgsl_context_destroy,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->id = context->id;
 	),
 
@@ -885,7 +891,7 @@ TRACE_EVENT(kgsl_user_pwrlevel_constraint,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->id = id;
 		__entry->type = type;
 		__entry->sub_type = sub_type;
@@ -916,7 +922,7 @@ TRACE_EVENT(kgsl_constraint,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->type = type;
 		__entry->value = value;
 		__entry->on = on;
@@ -947,11 +953,11 @@ TRACE_EVENT(kgsl_mmu_pagefault,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->page = page;
 		__entry->pt = pt;
-		__assign_str(name, name);
-		__assign_str(op, op);
+		kgsl_assign_str(name, name);
+		kgsl_assign_str(op, op);
 	),
 
 	TP_printk(
@@ -974,7 +980,7 @@ TRACE_EVENT(kgsl_regwrite,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, "kgsl-3d0");
+		kgsl_assign_str(device_name, "kgsl-3d0");
 		__entry->offset = offset;
 		__entry->value = value;
 	),
@@ -1043,7 +1049,7 @@ TRACE_EVENT(kgsl_active_count,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, device->name);
+		kgsl_assign_str(device_name, device->name);
 		__entry->count = atomic_read(&device->active_cnt);
 		__entry->ip = ip;
 	),
@@ -1111,7 +1117,7 @@ DECLARE_EVENT_CLASS(syncpoint_fence_template,
 	),
 	TP_fast_assign(
 		__entry->syncobj_context_id = syncobj->base.context->id;
-		__assign_str(fence_name, name);
+		kgsl_assign_str(fence_name, name);
 	),
 	TP_printk("ctx=%u fence=%s",
 		__entry->syncobj_context_id, __get_str(fence_name))
@@ -1134,7 +1140,7 @@ TRACE_EVENT(kgsl_msg,
 		__string(msg, msg)
 	),
 	TP_fast_assign(
-		__assign_str(msg, msg);
+		kgsl_assign_str(msg, msg);
 	),
 	TP_printk(
 		"%s", __get_str(msg)

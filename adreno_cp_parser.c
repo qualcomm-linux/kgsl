@@ -5,6 +5,7 @@
  */
 
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 
 #include "adreno.h"
 #include "adreno_cp_parser.h"

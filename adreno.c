@@ -23,6 +23,9 @@
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
 #include <linux/suspend.h>
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+#include <linux/soc/qcom/socinfo.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_a5xx.h"

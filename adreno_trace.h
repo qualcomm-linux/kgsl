@@ -20,6 +20,12 @@
 #include "adreno_gen8.h"
 #include "adreno_hfi.h"
 
+#if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
+#define adreno_assign_str(dst, src) __assign_str(dst, src)
+#else
+#define adreno_assign_str(dst, src) __assign_str(dst)
+#endif
+
 #define ADRENO_FT_TYPES \
 	{ BIT(KGSL_FT_OFF), "off" }, \
 	{ BIT(KGSL_FT_REPLAY), "replay" }, \
@@ -70,8 +76,8 @@ TRACE_EVENT(adreno_hw_fence_query,
 		__entry->context = context;
 		__entry->seqno = seqno;
 		__entry->flags = flags;
-		__assign_str(fence_name, name);
-		__assign_str(val, val);
+		adreno_assign_str(fence_name, name);
+		adreno_assign_str(val, val);
 	),
 	TP_printk(
 		"id=%lld seqno=%lld sw_status=%s name=%s val=%s",
@@ -98,7 +104,7 @@ TRACE_EVENT(adreno_input_hw_fence,
 		__entry->context = context;
 		__entry->seqno = seqno;
 		__entry->flags = flags;
-		__assign_str(fence_name, name);
+		adreno_assign_str(fence_name, name);
 	),
 	TP_printk(
 		"ctx=%u id=%lld seqno=%lld flags=%s name=%s",
@@ -605,7 +611,7 @@ TRACE_EVENT(kgsl_a5xx_irq_status,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, adreno_dev->dev.name);
+		adreno_assign_str(device_name, adreno_dev->dev.name);
 		__entry->status = status;
 	),
 
@@ -675,7 +681,7 @@ TRACE_EVENT(kgsl_gen7_irq_status,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, adreno_dev->dev.name);
+		adreno_assign_str(device_name, adreno_dev->dev.name);
 		__entry->status = status;
 	),
 
@@ -740,7 +746,7 @@ TRACE_EVENT(kgsl_gen8_irq_status,
 	),
 
 	TP_fast_assign(
-		__assign_str(device_name, adreno_dev->dev.name);
+		adreno_assign_str(device_name, adreno_dev->dev.name);
 		__entry->status = status;
 	),
 
