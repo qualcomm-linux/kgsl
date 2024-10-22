@@ -7,6 +7,7 @@
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
 #include <linux/sched/signal.h>
+#include <linux/vmalloc.h>
 
 #include "adreno.h"
 #include "adreno_hwsched.h"

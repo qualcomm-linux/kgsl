@@ -20,6 +20,7 @@
 #include <linux/soc/qcom/llcc-qcom.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
+#include <linux/vmalloc.h>
 #include <soc/qcom/cmd-db.h>
 
 #include "adreno.h"
