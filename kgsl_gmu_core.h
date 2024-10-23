@@ -15,6 +15,12 @@
 /* GMU_DEVICE - Given an KGSL device return the GMU specific struct */
 #define GMU_DEVICE_OPS(_a) ((_a)->gmu_core.dev_ops)
 
+/* GMU_PDEV - Given a KGSL device return the GMU platform device struct */
+#define GMU_PDEV(device) ((device)->gmu_core.pdev)
+
+/* GMU_PDEV_DEV - Given a KGSL device return pointer to struct dev for GMU platform device */
+#define GMU_PDEV_DEV(device) (&((GMU_PDEV(device))->dev))
+
 #define MAX_GX_LEVELS		32
 #define MAX_GX_LEVELS_LEGACY	16
 #define MAX_CX_LEVELS		4
@@ -51,6 +57,7 @@ enum gmu_core_flags {
 	GMU_ENABLED,
 	GMU_RSCC_SLEEP_SEQ_DONE,
 	GMU_DISABLE_SLUMBER,
+	GMU_THERMAL_MITIGATION,
 };
 
 /*
@@ -66,15 +73,6 @@ enum oob_request {
 	oob_boot_slumber = 6, /* reserved special case */
 	oob_dcvs = 7, /* reserved special case */
 	oob_max,
-};
-
-enum gmu_pwrctrl_mode {
-	GMU_FW_START,
-	GMU_FW_STOP,
-	GMU_SUSPEND,
-	GMU_DCVS_NOHFI,
-	GMU_NOTIFY_SLUMBER,
-	INVALID_POWER_CTRL
 };
 
 #define GPU_HW_ACTIVE	0x00
@@ -448,6 +446,8 @@ struct gmu_core_device {
 	unsigned long flags;
 	/** @gf_panic: GMU fault panic policy */
 	enum gmu_fault_panic_policy gf_panic;
+	/** @pdev: platform device for the gmu */
+	struct platform_device *pdev;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

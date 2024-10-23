@@ -140,6 +140,8 @@
 #define ADRENO_GMU_WARMBOOT BIT(19)
 /* The GPU supports CLX */
 #define ADRENO_CLX BIT(20)
+/* Enable GMU support for GMU based thermal mitigation */
+#define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -1914,6 +1916,15 @@ void adreno_set_active_ctxs_null(struct adreno_device *adreno_dev);
  * gpu bus usage for bus dcvs
  */
 void adreno_get_bus_counters(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_gmu_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
+ * @adreno_dev: Handle to the adreno device
+ * @ab: ab request that needs to be scaled in MBps
+ *
+ * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
+ */
+u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
  * adreno_suspend_context - Make sure device is idle

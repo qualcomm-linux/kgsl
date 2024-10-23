@@ -382,7 +382,7 @@ static int gen7_hwsched_notify_slumber(struct adreno_device *adreno_dev)
 	req.freq = gmu->dcvs_table.gpu_level_num - pwr->default_pwrlevel - 1;
 	req.bw = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
 
-	req.bw |= gen7_bus_ab_quantize(adreno_dev, 0);
+	req.bw |= adreno_gmu_bus_ab_quantize(adreno_dev, 0);
 	/* Disable the power counter so that the GMU is not busy */
 	gmu_core_regwrite(device, GEN7_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0);
 
@@ -943,7 +943,6 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 {
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	u32 unack_count;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
@@ -958,7 +957,8 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 	if (!unack_count)
 		return;
 
-	dev_err(&gmu->pdev->dev, "hardware fence unack_count(%d) isn't zero before SLUMBER\n",
+	dev_err(GMU_PDEV_DEV(device),
+		"hardware fence unack_count(%d) isn't zero before SLUMBER\n",
 		unack_count);
 	gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
 }
@@ -1072,7 +1072,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	/* Do not set to XO and lower GPU clock vote from GMU */
 	if ((gpu_pwrlevel != INVALID_DCVS_IDX) &&
 			(gpu_pwrlevel >= table->gpu_level_num - 1)) {
-		dev_err(&gmu->pdev->dev, "Invalid gpu dcvs request: %d\n",
+		dev_err(GMU_PDEV_DEV(device), "Invalid gpu dcvs request: %d\n",
 			gpu_pwrlevel);
 		return -EINVAL;
 	}
@@ -1083,7 +1083,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	if (bus_level < pwr->ddr_table_count && bus_level > 0)
 		req.bw = bus_level;
 
-	req.bw |=  gen7_bus_ab_quantize(adreno_dev, ab);
+	req.bw |= adreno_gmu_bus_ab_quantize(adreno_dev, ab);
 
 	/* GMU will vote for slumber levels through the sleep sequence */
 	if ((req.freq == INVALID_DCVS_IDX) && (req.bw == INVALID_BW_VOTE))
@@ -1096,7 +1096,7 @@ static int gen7_hwsched_dcvs_set(struct adreno_device *adreno_dev,
 	ret = gen7_hfi_send_cmd_async(adreno_dev, &req, sizeof(req));
 
 	if (ret) {
-		dev_err_ratelimited(&gmu->pdev->dev,
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
 			"Failed to set GPU perf idx %u, bw idx %u\n",
 			req.freq, req.bw);
 
@@ -1246,7 +1246,6 @@ static void gen7_hwsched_pm_resume(struct adreno_device *adreno_dev)
 
 void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 mask;
 
@@ -1258,7 +1257,7 @@ void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev)
 
 	gen7_gmu_send_nmi(device, false, GMU_FAULT_PANIC_NONE);
 
-	dev_err_ratelimited(&gmu->pdev->dev,
+	dev_err_ratelimited(GMU_PDEV_DEV(device),
 			"GMU watchdog expired interrupt received\n");
 
 	gen7_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);

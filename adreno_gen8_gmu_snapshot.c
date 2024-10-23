@@ -55,7 +55,8 @@ static size_t gen8_gmu_snapshot_itcm(struct kgsl_device *device,
 	struct gen8_gmu_device *gmu = (struct gen8_gmu_device *)priv;
 
 	if (!gmu->itcm_shadow) {
-		dev_err(&gmu->pdev->dev, "No memory allocated for ITCM shadow capture\n");
+		dev_err(GMU_PDEV_DEV(device),
+				"No memory allocated for ITCM shadow capture\n");
 		return 0;
 	}
 

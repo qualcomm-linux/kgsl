@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -84,10 +84,8 @@ int a5xx_ringbuffer_submit(struct adreno_ringbuffer *rb,
 
 	spin_lock_irqsave(&rb->preempt_lock, flags);
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE)) {
-		if (adreno_dev->cur_rb == rb) {
-			kgsl_pwrscale_busy(device);
+		if (adreno_dev->cur_rb == rb)
 			kgsl_regwrite(device, A5XX_CP_RB_WPTR, rb->_wptr);
-		}
 	}
 
 	rb->wptr = rb->_wptr;

@@ -168,7 +168,7 @@ static u32 kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device, u32 new_leve
 		 * the timestamp retires
 		 */
 		pwr->constraint.expires = jiffies +
-			msecs_to_jiffies(device->pwrctrl.interval_timeout);
+			msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
 
 		kgsl_context_put(context);
 	}
@@ -307,7 +307,7 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		pwrc_old->sub_type = pwrc->sub_type;
 		pwrc_old->owner_id = id;
 		pwrc_old->expires = jiffies +
-			msecs_to_jiffies(device->pwrctrl.interval_timeout);
+			msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
 		pwrc_old->owner_timestamp = ts;
 		kgsl_pwrctrl_pwrlevel_change(device, constraint);
 		/* Trace the constraint being set by the driver */
@@ -316,7 +316,7 @@ void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 		pwrc_old->owner_id = id;
 		pwrc_old->owner_timestamp = ts;
 		pwrc_old->expires = jiffies +
-			msecs_to_jiffies(device->pwrctrl.interval_timeout);
+			msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
 	}
 }
 
@@ -418,10 +418,10 @@ static void kgsl_pwrctrl_min_pwrlevel_set(struct kgsl_device *device,
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	mutex_lock(&device->mutex);
-
 	if (level > pwr->min_render_pwrlevel)
 		level = pwr->min_render_pwrlevel;
+
+	mutex_lock(&device->mutex);
 
 	/* You can't set a minimum power level lower than the maximum */
 	if (level < pwr->max_pwrlevel)
@@ -578,9 +578,7 @@ static ssize_t idle_timer_store(struct device *dev, struct device_attribute *att
 	if (val > jiffies_to_usecs(MAX_JIFFY_OFFSET))
 		return -EINVAL;
 
-	mutex_lock(&device->mutex);
-	device->pwrctrl.interval_timeout = val;
-	mutex_unlock(&device->mutex);
+	atomic64_set(&device->pwrctrl.interval_timeout, val);
 
 	return count;
 }
@@ -590,7 +588,8 @@ static ssize_t idle_timer_show(struct device *dev,
 {
 	struct kgsl_device *device = dev_get_drvdata(dev);
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", device->pwrctrl.interval_timeout);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			atomic64_read(&device->pwrctrl.interval_timeout));
 }
 
 static ssize_t minbw_timer_store(struct device *dev,

@@ -2412,6 +2412,7 @@ void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_d
 			if (count < ARRAY_SIZE(entries))
 				memcpy(&entries[count], entry, sizeof(*entry));
 			count++;
+			kgsl_hw_fence_destroy(entry->kfence);
 			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 		}
 

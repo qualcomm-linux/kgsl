@@ -33,7 +33,6 @@ struct kgsl_power_stats {
  * @accum_stats - Accumulated statistics for various frequency calculations
  * @enabled - Whether or not power scaling is enabled
  * @time - Last submitted sample timestamp
- * @on_time - Timestamp when gpu busy begins
  * @devfreq_wq - Main devfreq workqueue
  * @devfreq_suspend_ws - Pass device suspension to devfreq
  * @devfreq_resume_ws - Pass device resume to devfreq
@@ -54,7 +53,6 @@ struct kgsl_pwrscale {
 	struct kgsl_power_stats accum_stats;
 	bool enabled;
 	ktime_t time;
-	s64 on_time;
 	struct workqueue_struct *devfreq_wq;
 	struct work_struct devfreq_suspend_ws;
 	struct work_struct devfreq_resume_ws;
@@ -85,7 +83,6 @@ void kgsl_pwrscale_close(struct kgsl_device *device);
 
 void kgsl_pwrscale_update(struct kgsl_device *device);
 void kgsl_pwrscale_update_stats(struct kgsl_device *device);
-void kgsl_pwrscale_busy(struct kgsl_device *device);
 void kgsl_pwrscale_sleep(struct kgsl_device *device);
 void kgsl_pwrscale_wake(struct kgsl_device *device);
 

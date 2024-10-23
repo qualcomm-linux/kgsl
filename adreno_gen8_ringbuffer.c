@@ -187,7 +187,6 @@ int gen8_ringbuffer_submit(struct adreno_ringbuffer *rb,
 	spin_lock_irqsave(&rb->preempt_lock, flags);
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE)) {
 		if (adreno_dev->cur_rb == rb) {
-			kgsl_pwrscale_busy(device);
 			ret = gen8_fenced_write(adreno_dev,
 				GEN8_CP_RB_WPTR_GC, rb->_wptr,
 				FENCE_STATUS_WRITEDROPPED0_MASK);
