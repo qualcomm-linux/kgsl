@@ -1691,21 +1691,20 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	kgsl_regread64(device, GEN7_CP_IB1_BASE_HI, GEN7_CP_IB1_BASE, &snapshot->ib1base);
+	kgsl_regread64(device, GEN7_CP_IB1_BASE, GEN7_CP_IB1_BASE_HI, &snapshot->ib1base);
 
-	kgsl_regread64(device, GEN7_CP_IB2_BASE_HI, GEN7_CP_IB2_BASE, &snapshot->ib2base);
+	kgsl_regread64(device, GEN7_CP_IB2_BASE, GEN7_CP_IB2_BASE_HI, &snapshot->ib2base);
 
-	kgsl_regread64(device, GEN7_CP_IB3_BASE_HI, GEN7_CP_IB3_BASE, &snapshot->ib3base);
+	kgsl_regread64(device, GEN7_CP_IB3_BASE, GEN7_CP_IB3_BASE_HI, &snapshot->ib3base);
 
 	kgsl_regread(device, GEN7_CP_IB1_REM_SIZE, &snapshot->ib1size);
 	kgsl_regread(device, GEN7_CP_IB2_REM_SIZE, &snapshot->ib2size);
 	kgsl_regread(device, GEN7_CP_IB3_REM_SIZE, &snapshot->ib3size);
 
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
-		GEN7_CP_LPAC_IB1_BASE, &snapshot->ib1base_lpac);
-
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
-		GEN7_CP_LPAC_IB2_BASE, &snapshot->ib2base_lpac);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
+		GEN7_CP_LPAC_IB1_BASE_HI, &snapshot->ib1base_lpac);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
+		GEN7_CP_LPAC_IB2_BASE_HI, &snapshot->ib2base_lpac);
 
 	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &snapshot->ib1size_lpac);
 	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &snapshot->ib2size_lpac);
