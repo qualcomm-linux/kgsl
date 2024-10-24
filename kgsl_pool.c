@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -65,14 +65,15 @@ __kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 {
 	struct rb_node **node, *parent = NULL;
 	struct kgsl_pool_page_entry *new_page, *entry;
-	gfp_t gfp_mask = GFP_KERNEL & ~__GFP_DIRECT_RECLAIM;
-
-	new_page = pool->mempool ? mempool_alloc(pool->mempool, gfp_mask) :
-			kmem_cache_alloc(addr_page_cache, gfp_mask);
-	if (new_page == NULL)
-		return -ENOMEM;
 
 	spin_lock(&pool->list_lock);
+	new_page = pool->mempool ? mempool_alloc(pool->mempool, GFP_ATOMIC) :
+			kmem_cache_alloc(addr_page_cache, GFP_ATOMIC);
+	if (new_page == NULL) {
+		spin_unlock(&pool->list_lock);
+		return -ENOMEM;
+	}
+
 	node = &pool->pool_rbtree.rb_node;
 	new_page->physaddr = page_to_phys(p);
 	new_page->page = p;
