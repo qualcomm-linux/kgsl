@@ -700,8 +700,7 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 
 	/* Set the CL infinite timeout VRB override (if declared in gpulist) */
 	if (gen8_core->cl_no_ft_timeout_ms)
-		gmu_core_set_vrb_register(gmu->vrb->hostptr,
-				VRB_CL_NO_FT_TIMEOUT,
+		gmu_core_set_vrb_register(gmu->vrb, VRB_CL_NO_FT_TIMEOUT,
 				gen8_core->cl_no_ft_timeout_ms);
 
 	return 0;
