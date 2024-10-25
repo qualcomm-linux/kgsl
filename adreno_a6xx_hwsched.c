@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -415,11 +415,12 @@ static void hwsched_idle_timer(struct timer_list *t)
 static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
-		gmu->vrb = reserve_gmu_kernel_block(gmu, 0, GMU_VRB_SIZE,
+		gmu->vrb = gmu_core_reserve_kernel_block(device, 0, GMU_VRB_SIZE,
 				GMU_NONCACHED_KERNEL, 0);
 
 		if (IS_ERR(gmu->vrb))
@@ -433,7 +434,7 @@ static int a6xx_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 
 	/* GMU trace log */
 	if (IS_ERR_OR_NULL(gmu->trace.md)) {
-		gmu->trace.md = reserve_gmu_kernel_block(gmu, 0,
+		gmu->trace.md = gmu_core_reserve_kernel_block(device, 0,
 					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
 
 		if (IS_ERR(gmu->trace.md))

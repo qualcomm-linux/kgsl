@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iopoll.h>
@@ -291,10 +291,10 @@ static struct gmu_vma_node *find_va(struct gmu_vma_entry *vma, u32 addr, u32 siz
 }
 
 /* Return true if VMA supports dynamic allocations */
-static bool vma_is_dynamic(int vma_id)
+static bool vma_is_dynamic(struct kgsl_device *device, int vma_id)
 {
 	/* Dynamic allocations are done in the GMU_NONCACHED_KERNEL space */
-	return vma_id == GMU_NONCACHED_KERNEL;
+	return (vma_id == GMU_NONCACHED_KERNEL) && (!adreno_is_a6xx(ADRENO_DEVICE(device)));
 }
 
 static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
@@ -442,7 +442,7 @@ static int _map_gmu_static(struct kgsl_device *device, struct kgsl_memdesc *md,
 static int _map_gmu(struct kgsl_device *device, struct kgsl_memdesc *md,
 	u32 addr, u32 vma_id, int attrs, u32 align)
 {
-	return vma_is_dynamic(vma_id) ?
+	return vma_is_dynamic(device, vma_id) ?
 			_map_gmu_dynamic(device, md, addr, vma_id, attrs, align) :
 			_map_gmu_static(device, md, addr, vma_id, attrs, align);
 }
@@ -568,7 +568,7 @@ void gmu_core_free_block(struct kgsl_device *device, struct kgsl_memdesc *md)
 	struct gmu_vma_entry *vma;
 	struct gmu_vma_node *vma_node;
 
-	if ((vma_id < 0) || !vma_is_dynamic(vma_id))
+	if ((vma_id < 0) || !vma_is_dynamic(device, vma_id))
 		return;
 
 	vma = &gmu->vma[vma_id];

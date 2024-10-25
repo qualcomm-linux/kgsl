@@ -611,9 +611,10 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 {
 	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
 	struct a6xx_hfi *hfi = to_a6xx_hfi(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	if (IS_ERR_OR_NULL(hw_hfi->big_ib)) {
-		hw_hfi->big_ib = reserve_gmu_kernel_block(to_a6xx_gmu(adreno_dev),
+		hw_hfi->big_ib = gmu_core_reserve_kernel_block(device,
 				0,
 				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
@@ -623,8 +624,8 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LSR) &&
 			IS_ERR_OR_NULL(hw_hfi->big_ib_recurring)) {
-		hw_hfi->big_ib_recurring = reserve_gmu_kernel_block(
-				to_a6xx_gmu(adreno_dev), 0,
+		hw_hfi->big_ib_recurring = gmu_core_reserve_kernel_block(
+				device, 0,
 				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hw_hfi->big_ib_recurring))
@@ -632,7 +633,7 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	}
 
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = reserve_gmu_kernel_block(to_a6xx_gmu(adreno_dev),
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(device,
 				0, HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hfi->hfi_mem))
 			return PTR_ERR(hfi->hfi_mem);
@@ -643,38 +644,6 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 		hw_hfi->f2h_task = kthread_run(hfi_f2h_main, adreno_dev, "gmu_f2h");
 
 	return PTR_ERR_OR_ZERO(hw_hfi->f2h_task);
-}
-
-static int gmu_import_buffer(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_entry *entry)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct hfi_mem_alloc_desc *desc = &entry->desc;
-	int attrs = gmu_core_get_attrs(desc->flags);
-	struct gmu_vma_entry *vma = &device->gmu_core.vma[GMU_NONCACHED_KERNEL];
-	int ret;
-
-	if (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE)
-		vma = &device->gmu_core.vma[GMU_CACHE];
-
-	if ((vma->next_va + desc->size) > (vma->start + vma->size)) {
-		dev_err(GMU_PDEV_DEV(device),
-			"GMU mapping too big. available: %d required: %d\n",
-			vma->next_va - vma->start, desc->size);
-		return -ENOMEM;
-	}
-
-	ret = gmu_core_map_memdesc(device->gmu_core.domain,
-			entry->md, vma->next_va, attrs);
-	if (ret) {
-		dev_err(GMU_PDEV_DEV(device), "gmu map err: 0x%08x, %x\n",
-			vma->next_va, attrs);
-		return ret;
-	}
-
-	entry->md->gmuaddr = vma->next_va;
-	vma->next_va += desc->size;
-	return 0;
 }
 
 static struct hfi_mem_alloc_entry *lookup_mem_alloc_table(
@@ -702,7 +671,6 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	struct a6xx_hwsched_hfi *hfi = to_a6xx_hwsched_hfi(adreno_dev);
 	struct hfi_mem_alloc_entry *entry =
 		lookup_mem_alloc_table(adreno_dev, desc);
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	u64 flags = 0;
 	u32 priv = 0;
 	int ret;
@@ -741,12 +709,12 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 
 	if (!(desc->flags & HFI_MEMFLAG_GFX_ACC)) {
 		if (desc->mem_kind == HFI_MEMKIND_MMIO_IPC_CORE)
-			entry->md = reserve_gmu_kernel_block_fixed(gmu, 0, desc->size,
+			entry->md = gmu_core_reserve_kernel_block_fixed(device, 0, desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL, "qcom,ipc-core",
 					gmu_core_get_attrs(desc->flags), desc->align);
 		else
-			entry->md = reserve_gmu_kernel_block(gmu, 0, desc->size,
+			entry->md = gmu_core_reserve_kernel_block(device, 0, desc->size,
 					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
 					GMU_CACHE : GMU_NONCACHED_KERNEL, desc->align);
 
@@ -781,7 +749,7 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 	  * If gmu mapping fails, then we have to live with
 	  * leaking the gpu global buffer allocated above.
 	  */
-	ret = gmu_import_buffer(adreno_dev, entry);
+	ret = gmu_core_import_buffer(device, entry);
 	if (ret) {
 		dev_err(gmu_pdev_dev,
 			"gpuaddr: 0x%llx size: %lld bytes lost\n",
