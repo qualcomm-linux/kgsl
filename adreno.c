@@ -49,6 +49,8 @@ static struct device_node *
 
 static struct adreno_device device_3d0;
 static bool adreno_preemption_enable;
+static u32 kgsl_gpu_sku_override = U32_MAX;
+static u32 kgsl_gpu_speed_bin_override = U32_MAX;
 
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
@@ -781,18 +783,10 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct device_node *node, *child;
-	int feature_code, pcode;
 
 	node = of_find_node_by_name(parent, "qcom,gpu-pwrlevel-bins");
 	if (node == NULL)
 		return adreno_of_get_legacy_pwrlevels(adreno_dev, parent);
-
-	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
-	pcode = (feature_code >= SOCINFO_FC_Y0 && feature_code < SOCINFO_FC_INT_RESERVE) ?
-		max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) : SOCINFO_PCODE_UNKNOWN;
-
-	device->soc_code = FIELD_PREP(GENMASK(31, 16), pcode) |
-					FIELD_PREP(GENMASK(15, 0), feature_code);
 
 	for_each_child_of_node(node, child) {
 		bool match = false;
@@ -976,6 +970,31 @@ static int adreno_read_speed_bin(struct platform_device *pdev)
 	kfree(buf);
 
 	return val;
+}
+
+static void adreno_read_soc_code(struct kgsl_device *device)
+{
+	int feature_code, pcode;
+	bool internal_sku;
+
+	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
+	internal_sku = (feature_code >= SOCINFO_FC_Y0) && (feature_code < SOCINFO_FC_INT_RESERVE);
+
+	/* Pcode is significant only for internal SKUs */
+	pcode = internal_sku ? max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) :
+			SOCINFO_PCODE_UNKNOWN;
+
+	device->soc_code = FIELD_PREP(GENMASK(31, 16), pcode) |
+				FIELD_PREP(GENMASK(15, 0), feature_code);
+
+	/* Override soc_code and speed_bin for internal feature codes only */
+	if (internal_sku) {
+		if (kgsl_gpu_sku_override != U32_MAX)
+			device->soc_code = kgsl_gpu_sku_override;
+
+		if (kgsl_gpu_speed_bin_override != U32_MAX)
+			device->speed_bin = kgsl_gpu_speed_bin_override;
+	}
 }
 
 static int adreno_read_gpu_model_fuse(struct platform_device *pdev)
@@ -1246,6 +1265,8 @@ int adreno_device_probe(struct platform_device *pdev,
 		goto err;
 
 	device->speed_bin = status;
+
+	adreno_read_soc_code(device);
 
 	status = adreno_of_get_power(adreno_dev, pdev);
 	if (status)
@@ -3825,6 +3846,12 @@ static void __exit kgsl_3d_exit(void)
 
 module_param_named(preempt_enable, adreno_preemption_enable, bool, 0600);
 MODULE_PARM_DESC(preempt_enable, "Enable GPU HW Preemption");
+
+module_param_named(gpu_sku_override, kgsl_gpu_sku_override, uint, 0600);
+MODULE_PARM_DESC(gpu_sku_override, "Override SKU code identifier for GPU driver");
+
+module_param_named(gpu_speed_bin_override, kgsl_gpu_speed_bin_override, uint, 0600);
+MODULE_PARM_DESC(gpu_speed_bin_override, "Override GPU speed bin");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);
