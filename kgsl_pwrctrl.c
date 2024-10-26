@@ -1363,7 +1363,7 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int ret;
 
-	if (!pwr->cx_regulator && !pwr->gmu_cx_pd)
+	if (!pwr->cx_regulator && !pwr->cx_pd)
 		return 0;
 
 	ret = wait_for_completion_timeout(&pwr->cx_gdsc_gate, msecs_to_jiffies(5000));
@@ -1380,7 +1380,7 @@ int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 	if (pwr->cx_regulator)
 		ret = regulator_enable(pwr->cx_regulator);
 	else
-		ret = pm_runtime_resume_and_get(pwr->gmu_cx_pd);
+		ret = pm_runtime_resume_and_get(pwr->cx_pd);
 
 	if (ret)
 		dev_err(device->dev, "Failed to enable CX gdsc, error %d\n", ret);
@@ -1413,7 +1413,7 @@ void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	if (!pwr->cx_regulator && !pwr->gmu_cx_pd)
+	if (!pwr->cx_regulator && !pwr->cx_pd)
 		return;
 
 	kgsl_mmu_send_tlb_hint(&device->mmu, true);
@@ -1423,7 +1423,7 @@ void kgsl_pwrctrl_disable_cx_gdsc(struct kgsl_device *device)
 	if (pwr->cx_regulator)
 		regulator_disable(pwr->cx_regulator);
 	else
-		pm_runtime_put_sync(pwr->gmu_cx_pd);
+		pm_runtime_put_sync(pwr->cx_pd);
 }
 
 void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device)
@@ -1476,20 +1476,9 @@ static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platfor
 
 	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
 		/* Get virtual device handle for CX GDSC to control it */
-		struct device *cx_pd, *gmu_cx_pd;
+		struct device *cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 
-		gmu_cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gmu_cx");
-		if (IS_ERR_OR_NULL(gmu_cx_pd)) {
-			dev_err_probe(&pdev->dev, PTR_ERR(gmu_cx_pd),
-					"Failed to attach GMU cx power domain\n");
-			return IS_ERR(gmu_cx_pd) ? PTR_ERR(gmu_cx_pd) : -EINVAL;
-		}
-		pwr->gmu_cx_pd = gmu_cx_pd;
-
-		cx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "cx");
 		if (IS_ERR_OR_NULL(cx_pd)) {
-			dev_pm_domain_detach(gmu_cx_pd, false);
-			pwr->gmu_cx_pd = NULL;
 			dev_err_probe(&pdev->dev, PTR_ERR(cx_pd),
 					"Failed to attach cx power domain\n");
 			return IS_ERR(cx_pd) ? PTR_ERR(cx_pd) : -EINVAL;
@@ -1548,11 +1537,9 @@ int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device 
 		return ret;
 
 	ret = kgsl_pwrctrl_probe_gx_gdsc(device, pdev);
-	if (ret && pwr->gmu_cx_pd) {
+	if (ret && pwr->cx_pd) {
 		dev_pm_domain_detach(pwr->cx_pd, false);
-		dev_pm_domain_detach(pwr->gmu_cx_pd, false);
 		pwr->cx_pd = NULL;
-		pwr->gmu_cx_pd = NULL;
 	}
 
 	return ret;
@@ -2025,12 +2012,10 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 
 	pm_runtime_disable(&device->pdev->dev);
 
-	if (pwr->gmu_cx_pd) {
+	if (pwr->cx_pd) {
 		dev_pm_genpd_remove_notifier(pwr->cx_pd);
 		dev_pm_domain_detach(pwr->cx_pd, false);
-		dev_pm_domain_detach(pwr->gmu_cx_pd, false);
 		pwr->cx_pd = NULL;
-		pwr->gmu_cx_pd = NULL;
 	}
 
 	if (pwr->gx_pd) {

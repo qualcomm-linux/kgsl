@@ -600,7 +600,7 @@ void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* ADRENO_QUIRK_CX_GDSC quirk is not supported for genpd */
-	WARN_ON_ONCE(pwr->gmu_cx_pd && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC));
+	WARN_ON_ONCE(pwr->cx_pd && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC));
 
 	if (pwr->cx_regulator && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
 		regulator_set_mode(pwr->cx_regulator, REGULATOR_MODE_IDLE);

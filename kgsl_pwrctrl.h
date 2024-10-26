@@ -114,15 +114,8 @@ struct kgsl_pwrctrl {
 	struct regulator *cx_regulator;
 	/** @gx_regulator: Pointer to the GX domain regulator if applicable */
 	struct regulator *gx_regulator;
-	/**
-	 * @cx_pd: Power domain for registering CX GDSC notifier
-	 *
-	 * Only GMU device votes for GMU_CX_PD. Other client votes are consolidated
-	 * in the CX GenPD instance, so use this for registering the notifier.
-	 */
+	/** @cx_pd: Power domain for controlling CX GDSC */
 	struct device *cx_pd;
-	/** @gmu_cx_pd: Power domain for controlling GMU CX GDSC instance */
-	struct device *gmu_cx_pd;
 	/** @gx_pd: Power domain for controlling GX GDSC */
 	struct device *gx_pd;
 	/** @gx_regulator_parent: Pointer to the GX domain parent supply */
