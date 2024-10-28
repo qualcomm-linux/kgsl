@@ -870,3 +870,15 @@ int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, bool pwr_o
 
 	return ret;
 }
+
+bool gmu_core_capabilities_enabled(struct firmware_capabilities *caps, u32 field)
+{
+	if (!caps->length || !caps->data)
+		return false;
+
+	/* Capabilities payload data stored in 1 byte */
+	if (caps->data[field / BITS_PER_BYTE] & BIT(field % BITS_PER_BYTE))
+		return true;
+
+	return false;
+}

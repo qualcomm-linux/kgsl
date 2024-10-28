@@ -787,6 +787,10 @@ int gen8_gmu_version_info(struct adreno_device *adreno_dev)
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
+	if (gmu_core_capabilities_enabled(&device->gmu_core.common_caps,
+		FCC_VERSION_INFO))
+		goto done;
+
 	/* GMU version info is at a fixed offset in the DTCM */
 	gmu_core_regread(device, GEN8_GMU_CM3_DTCM_START + 0xff8,
 			&gmu->ver.core);
@@ -799,6 +803,7 @@ int gen8_gmu_version_info(struct adreno_device *adreno_dev)
 	gmu_core_regread(device, GEN8_GMU_CM3_DTCM_START + 0xffc,
 			&gmu->ver.hfi);
 
+done:
 	/* Check if gmu fw version on device is compatible with kgsl driver */
 	if (gmu->ver.core < gen8_core->gmu_fw_version) {
 		dev_err_once(GMU_PDEV_DEV(device),
@@ -914,14 +919,78 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 }
 
+static int gen8_gmu_process_caps(struct gen8_gmu_device *gmu,
+		struct gmu_core_device *gmu_core, struct gmu_block_header *blk, u32 offset)
+{
+	struct firmware_capabilities *caps;
+	const u8 *payload = (const u8 *)&gmu->fw_image->data[offset];
+
+	if (!blk->size)
+		return 0;
+
+	if (blk->type == GMU_BLOCK_ID_COMMON_CAPS)
+		caps = &gmu_core->common_caps;
+	else if (blk->type == GMU_BLOCK_ID_PLATFORM_CAPS)
+		caps = &gmu_core->platform_caps;
+	else
+		return 0;
+
+	if (caps->data)
+		return 0;
+
+	caps->length = blk->size;
+	caps->data = kmalloc_array(caps->length, sizeof(u8), GFP_KERNEL);
+	if (!caps->data)
+		return -ENOMEM;
+
+	memcpy(caps->data, payload, caps->length);
+
+	return 0;
+}
+
+static int gen8_gmu_process_zero_length_block(struct kgsl_device *device,
+		struct gen8_gmu_device *gmu, struct gmu_block_header *blk)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	int ret = 0;
+
+	switch (blk->type) {
+	case GMU_FIELD_PREALLOC:
+	case GMU_FIELD_PREALLOC_PERSISTENT:
+		ret = gmu_core_process_prealloc(device, blk);
+		break;
+	case GMU_FIELD_CORE_VERSION:
+		gmu->ver.core = blk->value;
+		break;
+	case GMU_FIELD_CORE_DEV_VERSION:
+		gmu->ver.core_dev = blk->value;
+		break;
+	case GMU_FIELD_PWR_VERSION:
+		gmu->ver.pwr = blk->value;
+		break;
+	case GMU_FIELD_PWR_DEV_VERSION:
+		gmu->ver.pwr_dev = blk->value;
+		break;
+	case GMU_FIELD_HFI_VERSION:
+		gmu->ver.hfi = blk->value;
+		break;
+	default:
+		dev_err(&gmu_core->pdev->dev, "Unknown FW block type:%d\n", blk->type);
+	}
+
+	return ret;
+}
+
 int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 {
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	struct gmu_block_header *blk;
-	int ret, offset = 0;
 	const char *gmufw_name = gen8_core->gmufw_name;
+	int ret = 0;
+	u32 offset = 0;
 
 	/*
 	 * If GMU fw already saved and verified, do nothing new.
@@ -957,22 +1026,29 @@ int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 			return -EINVAL;
 		}
 
-		/* Done with zero length blocks so return */
-		if (blk->size)
-			break;
-
 		offset += sizeof(*blk);
 
 		if (blk->type == GMU_BLK_TYPE_PREALLOC_REQ ||
 			blk->type == GMU_BLK_TYPE_PREALLOC_PERSIST_REQ) {
 			ret = gmu_core_process_prealloc(KGSL_DEVICE(adreno_dev), blk);
-
 			if (ret)
 				return ret;
 		}
+
+		/* process zero length blocks */
+		if (!blk->size) {
+			ret = gen8_gmu_process_zero_length_block(device, gmu, blk);
+			if (ret)
+				return ret;
+		} else {
+			ret = gen8_gmu_process_caps(gmu, &device->gmu_core, blk, offset);
+			if (ret)
+				return ret;
+			offset += blk->size;
+		}
 	}
 
-	return 0;
+	return ret;
 }
 
 int gen8_gmu_memory_init(struct adreno_device *adreno_dev)
@@ -1975,8 +2051,11 @@ void gen8_gmu_remove(struct kgsl_device *device)
 
 	adreno_dev->acd_enabled = false;
 
-	if (gmu->fw_image)
+	if (gmu->fw_image) {
 		release_firmware(gmu->fw_image);
+		kfree(device->gmu_core.common_caps.data);
+		kfree(device->gmu_core.platform_caps.data);
+	}
 
 	gmu_core_free_globals(device);
 
@@ -2002,6 +2081,9 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	int ret, i;
 
 	device->gmu_core.pdev = pdev;
+	memset(&device->gmu_core.common_caps, 0, sizeof(struct firmware_capabilities));
+	memset(&device->gmu_core.platform_caps, 0, sizeof(struct firmware_capabilities));
+	memset(&gmu->ver, 0, sizeof(gmu->ver));
 
 	dma_set_coherent_mask(&device->gmu_core.pdev->dev, DMA_BIT_MASK(64));
 	device->gmu_core.pdev->dev.dma_mask =

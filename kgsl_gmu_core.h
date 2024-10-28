@@ -36,6 +36,20 @@
 #error "CNOC levels cannot exceed GX levels"
 #endif
 
+enum gmu_common_capabilities {
+	FCC_VERSION_INFO = 0,
+};
+
+enum gmu_platform_capabilities {
+	FAC_TRACE_BUFFER = 0,
+	FAC_VRB_HW_FENCE_SHADOW_NUM_ENTRIES = 1,
+	FAC_VRB_CL_NO_FT_TIMEOUT = 2,
+	FAC_VRB_PREEMPT_COUNT = 3,
+	FAC_RBBM_INTERRUPTS_HANDLE_ALL = 4,
+	FAC_FORCE_RETIRE_COMMAND = 5,
+	FAC_SOFT_RESET = 6,
+};
+
 /*
  * These are the different ways the GMU can boot. GMU_WARM_BOOT is waking up
  * from slumber. GMU_COLD_BOOT is booting for the first time. GMU_RESET
@@ -162,6 +176,22 @@ struct gmu_block_header {
 #define GMU_BLK_TYPE_PWR_DEV_VER 5
 #define GMU_BLK_TYPE_HFI_VER 6
 #define GMU_BLK_TYPE_PREALLOC_PERSIST_REQ 7
+
+/* GMU Block IDs */
+#define GMU_BLOCK_ID_REGISTER        0
+#define GMU_BLOCK_ID_ALLOCATION      1
+#define GMU_BLOCK_ID_COMMON_CAPS     2
+#define GMU_BLOCK_ID_PLATFORM_CAPS   3
+
+/* GMU Field IDs */
+#define GMU_FIELD_DATA                 GMU_BLK_TYPE_DATA
+#define GMU_FIELD_PREALLOC             GMU_BLK_TYPE_PREALLOC_REQ
+#define GMU_FIELD_CORE_VERSION         GMU_BLK_TYPE_CORE_VER
+#define GMU_FIELD_CORE_DEV_VERSION     GMU_BLK_TYPE_CORE_DEV_VER
+#define GMU_FIELD_PWR_VERSION          GMU_BLK_TYPE_PWR_VER
+#define GMU_FIELD_PWR_DEV_VERSION      GMU_BLK_TYPE_PWR_DEV_VER
+#define GMU_FIELD_HFI_VERSION          GMU_BLK_TYPE_HFI_VER
+#define GMU_FIELD_PREALLOC_PERSISTENT  GMU_BLK_TYPE_PREALLOC_PERSIST_REQ
 
 /* For GMU Logs*/
 #define GMU_LOG_SIZE  SZ_64K
@@ -439,6 +469,11 @@ struct gmu_dev_ops {
 		enum gmu_fault_panic_policy gf_policy);
 };
 
+struct firmware_capabilities {
+	u32 length;
+	u8  *data;
+};
+
 /**
  * struct gmu_core_device - GMU Core device structure
  * @ptr: Pointer to GMU device structure
@@ -461,6 +496,10 @@ struct gmu_core_device {
 	u32 global_entries;
 	/** @vma: VMA entry for GMU */
 	struct gmu_vma_entry *vma;
+	/** @common_caps: GMU firmware common capabilities */
+	struct firmware_capabilities common_caps;
+	/** @platform_caps: GMU firmware platform capabilities */
+	struct firmware_capabilities platform_caps;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -730,4 +769,12 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
  */
 int gmu_core_soccp_vote(struct device *dev, unsigned long *flags, bool pwr_on);
 
+/**
+ * gmu_core_capabilities_enabled - Check specific capabilities are enabled or not
+ * @caps: Pointer to struct firmware_capabilities
+ * @field: Common/Platform capabilities bit field value
+
+ * Return: true if capabilities value is being set otherwise false
+ */
+bool gmu_core_capabilities_enabled(struct firmware_capabilities *caps, u32 field);
 #endif /* __KGSL_GMU_CORE_H */
