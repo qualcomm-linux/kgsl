@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/dma-fence-array.h>
 #include <soc/qcom/msm_performance.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_hfi.h"
@@ -434,17 +435,17 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	if (!obj)
 		return -ENOMEM;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (_abort_submission(adreno_dev)) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		kmem_cache_free(obj_cache, obj);
 		return -EBUSY;
 	}
 
 
 	if (kgsl_context_detached(context)) {
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		kmem_cache_free(obj_cache, obj);
 		return -ENOENT;
 	}
@@ -456,7 +457,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 		ret = adreno_active_count_get(adreno_dev);
 		if (ret) {
 			hwsched->inflight--;
-			mutex_unlock(&device->mutex);
+			rt_mutex_unlock(&device->mutex);
 			kmem_cache_free(obj_cache, obj);
 			return ret;
 		}
@@ -476,7 +477,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 
 		hwsched->inflight--;
 		kmem_cache_free(obj_cache, obj);
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 		return ret;
 	}
 
@@ -504,7 +505,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	list_add_tail(&obj->node, &hwsched->cmd_list);
 
 done:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }
@@ -737,10 +738,10 @@ static void adreno_hwsched_issuecmds(struct adreno_device *adreno_dev)
 		hwsched_issuecmds(adreno_dev);
 
 	if (hwsched->inflight > 0) {
-		mutex_lock(&device->mutex);
+		rt_mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 	}
 
 	mutex_unlock(&hwsched->mutex);
@@ -1199,7 +1200,7 @@ static void hwsched_power_down(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (test_and_clear_bit(ADRENO_HWSCHED_ACTIVE, &hwsched->flags))
 		complete_all(&hwsched->idle_gate);
@@ -1209,7 +1210,7 @@ static void hwsched_power_down(struct adreno_device *adreno_dev)
 		clear_bit(ADRENO_HWSCHED_POWER, &hwsched->flags);
 	}
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 static void adreno_hwsched_queue_context(struct adreno_device *adreno_dev,
@@ -1254,11 +1255,11 @@ static unsigned int _preempt_count_show(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 count;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	count = hwsched_ops->preempt_count(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return count;
 }
@@ -1897,7 +1898,7 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 	if (fault == 0)
 		return false;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
 		adreno_hwsched_reset_and_snapshot_legacy(adreno_dev, fault);
@@ -1906,7 +1907,7 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 
 	adreno_hwsched_trigger(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return true;
 }
@@ -1941,10 +1942,10 @@ static void adreno_hwsched_work(struct kthread_work *work)
 	if (hwsched->inflight == 0) {
 		hwsched_power_down(adreno_dev);
 	} else {
-		mutex_lock(&device->mutex);
+		rt_mutex_lock(&device->mutex);
 		kgsl_pwrscale_update(device);
 		kgsl_start_idle_timer(device);
-		mutex_unlock(&device->mutex);
+		rt_mutex_unlock(&device->mutex);
 	}
 
 	mutex_unlock(&hwsched->mutex);
@@ -2022,10 +2023,10 @@ static void hwsched_lsr_check(struct work_struct *work)
 		struct adreno_device, hwsched);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	kgsl_pwrscale_update_stats(device);
 	kgsl_pwrscale_update(device);
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	mod_timer(&hwsched->lsr_timer, jiffies + msecs_to_jiffies(10));
 }
@@ -2183,7 +2184,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 	/* Block any new submissions from being submitted */
 	adreno_get_gpu_halt(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	/*
 	 * Flush the worker to make sure all executing
@@ -2203,7 +2204,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 		ret = 0;
 	}
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	/*
 	 * This will allow the dispatcher to start submitting to
@@ -2227,7 +2228,7 @@ int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!rt_mutex_base_is_locked(&device->mutex.rtmutex)))
 		return -EDEADLK;
 
 	if (!kgsl_state_is_awake(device))

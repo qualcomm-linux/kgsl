@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -9,6 +9,7 @@
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <trace/events/gpu_mem.h>
+#include <linux/rtmutex.h>
 
 #include "kgsl.h"
 #include "kgsl_drawobj.h"
@@ -235,7 +236,7 @@ struct kgsl_device {
 	/** @skip_inline_submit: Track if user threads should make an inline submission or not */
 	bool skip_inline_submit;
 
-	struct mutex mutex;
+	struct rt_mutex mutex;
 	uint32_t state;
 	uint32_t requested_state;
 

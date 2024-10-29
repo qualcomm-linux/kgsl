@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -9,6 +9,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/slab.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_cp_parser.h"
@@ -1472,7 +1473,7 @@ static int a3xx_setproperty(struct kgsl_device_private *dev_priv,
 	if (copy_from_user(&enable, value, sizeof(enable)))
 		return -EFAULT;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 	if (enable) {
 		device->pwrctrl.ctrl_flags = 0;
 
@@ -1489,7 +1490,7 @@ static int a3xx_setproperty(struct kgsl_device_private *dev_priv,
 		a3xx_soft_fault_detect_stop(adreno_dev);
 		kgsl_pwrscale_disable(device, true);
 	}
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }

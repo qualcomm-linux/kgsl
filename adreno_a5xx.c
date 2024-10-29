@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022,2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -11,6 +11,7 @@
 #include <linux/of_device.h>
 #include <linux/qcom_scm.h>
 #include <linux/slab.h>
+#include <linux/rtmutex.h>
 
 #include "adreno.h"
 #include "adreno_a5xx.h"
@@ -1245,7 +1246,7 @@ static void a5xx_gpmu_reset(struct work_struct *work)
 		device->state != KGSL_STATE_ACTIVE)
 		return;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (device->state == KGSL_STATE_NAP)
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
@@ -1264,7 +1265,7 @@ static void a5xx_gpmu_reset(struct work_struct *work)
 	a5xx_gpmu_init(adreno_dev);
 
 out:
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 }
 
 static void _setup_throttling_counters(struct adreno_device *adreno_dev)
@@ -2123,7 +2124,7 @@ static void a5xx_irq_storm_worker(struct work_struct *work)
 	struct kgsl_device *device = &adreno_dev->dev;
 	unsigned int status;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	/* Wait for the storm to clear up */
 	do {
@@ -2138,7 +2139,7 @@ static void a5xx_irq_storm_worker(struct work_struct *work)
 	clear_bit(ADRENO_DEVICE_CACHE_FLUSH_TS_SUSPENDED, &adreno_dev->priv);
 
 	dev_warn(device->dev, "Re-enabled A5XX_INT_CP_CACHE_FLUSH_TS\n");
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	/* Reschedule just to make sure everything retires */
 	adreno_dispatcher_schedule(device);
@@ -2494,7 +2495,7 @@ static int a5xx_setproperty(struct kgsl_device_private *dev_priv,
 	if (copy_from_user(&enable, value, sizeof(enable)))
 		return -EFAULT;
 
-	mutex_lock(&device->mutex);
+	rt_mutex_lock(&device->mutex);
 
 	if (enable) {
 		device->pwrctrl.ctrl_flags = 0;
@@ -2505,7 +2506,7 @@ static int a5xx_setproperty(struct kgsl_device_private *dev_priv,
 		kgsl_pwrscale_disable(device, true);
 	}
 
-	mutex_unlock(&device->mutex);
+	rt_mutex_unlock(&device->mutex);
 
 	return 0;
 }
