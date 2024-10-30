@@ -144,13 +144,14 @@ const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
 	.mempool_index_registers_len = ARRAY_SIZE(gen8_0_0_cp_mempool_reg_list),
 };
 
-#define GEN8_SP_READ_SEL_VAL(_sliceid, _location, _pipe, _statetype, _usptp, _sptp) \
-				(FIELD_PREP(GENMASK(25, 21), _sliceid) | \
-				 FIELD_PREP(GENMASK(20, 18), _location) | \
-				 FIELD_PREP(GENMASK(17, 16), _pipe) | \
-				 FIELD_PREP(GENMASK(15, 8), _statetype) | \
-				 FIELD_PREP(GENMASK(7, 4), _usptp) | \
-				 FIELD_PREP(GENMASK(3, 0), _sptp))
+#define GEN8_SP_READ_SEL_VAL(_contextid, _sliceid, _location, _pipe, _statetype, _usptp, _sptp) \
+				((FIELD_PREP(GENMASK(30, 26), _contextid)) | \
+				 (FIELD_PREP(GENMASK(25, 21), _sliceid)) | \
+				 (FIELD_PREP(GENMASK(20, 18), _location)) | \
+				 (FIELD_PREP(GENMASK(17, 16), _pipe)) | \
+				 (FIELD_PREP(GENMASK(15, 8), _statetype)) | \
+				 (FIELD_PREP(GENMASK(7, 4), _usptp)) | \
+				 (FIELD_PREP(GENMASK(3, 0), _sptp)))
 
 #define GEN8_CP_APERTURE_REG_VAL(_sliceid, _pipe, _cluster, _context) \
 			(FIELD_PREP(GENMASK(23, 23), 1) | \
@@ -372,11 +373,11 @@ static size_t gen8_legacy_snapshot_shader(struct kgsl_device *device,
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
 	header->location = block->location;
-	header->ctxt_id = 1;
+	header->ctxt_id = info->context_id;
 	header->size = block->size;
 
-	read_sel = GEN8_SP_READ_SEL_VAL(info->slice_id, block->location, block->pipeid,
-				block->statetype, info->usptp, info->sp_id);
+	read_sel = GEN8_SP_READ_SEL_VAL(info->context_id, info->slice_id, block->location,
+				block->pipeid, block->statetype, info->usptp, info->sp_id);
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
 
@@ -691,36 +692,39 @@ static bool gen8_snapshot_shader(struct kgsl_device *device,
 	u32 offset = 0;
 	struct gen8_shader_block *shader_blocks = gen8_snapshot_block_list->shader_blocks;
 	size_t num_shader_blocks = gen8_snapshot_block_list->num_shader_blocks;
-	u32 i, sp, usptp, slice;
+	u32 i, sp, usptp, ctxt, slice;
 
-	if (CD_SCRIPT_CHECK(device)) {
-		for (i = 0; i < num_shader_blocks; i++) {
-			struct gen8_shader_block *block = &shader_blocks[i];
-			u32 slices = NUMBER_OF_SLICES(block->slice_region, ADRENO_DEVICE(device));
+	if (!CD_SCRIPT_CHECK(device))
+		goto crashdumper;
 
-			for (slice = 0; slice < slices; slice++) {
-				for (sp = 0; sp < block->num_sps; sp++) {
-					for (usptp = 0; usptp < block->num_usptps; usptp++) {
+	for (i = 0; i < num_shader_blocks; i++) {
+		struct gen8_shader_block *block = &shader_blocks[i];
+		u32 slices = NUMBER_OF_SLICES(block->slice_region, ADRENO_DEVICE(device));
+
+		for (slice = 0; slice < slices; slice++) {
+			for (sp = 0; sp < block->num_sps; sp++) {
+				for (usptp = 0; usptp < block->num_usptps; usptp++) {
+					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
 						info.block = block;
 						info.sp_id = sp;
 						info.usptp = usptp;
 						info.slice_id = slice;
 						info.offset = offset;
+						info.context_id = ctxt;
 						offset += block->size << 2;
 
 						/* Shader working/shadow memory */
 						kgsl_snapshot_add_section(device,
-							KGSL_SNAPSHOT_SECTION_SHADER_V3,
-							snapshot, gen8_legacy_snapshot_shader,
-							&info);
+							KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
+							gen8_legacy_snapshot_shader, &info);
 					}
 				}
 			}
 		}
-
-		return true;
 	}
+	return true;
 
+crashdumper:
 	for (i = 0; i < num_shader_blocks; i++) {
 		struct gen8_shader_block *block = &shader_blocks[i];
 		u32 slices = NUMBER_OF_SLICES(block->slice_region, ADRENO_DEVICE(device));
@@ -732,15 +736,19 @@ static bool gen8_snapshot_shader(struct kgsl_device *device,
 		for (slice = 0; slice < slices; slice++) {
 			for (sp = 0; sp < block->num_sps; sp++) {
 				for (usptp = 0; usptp < block->num_usptps; usptp++) {
-					/* Program the aperture */
-					ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL,
-						GEN8_SP_READ_SEL_VAL(slice, block->location,
-						block->pipeid, block->statetype, usptp, sp));
+					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
+						/* Program the aperture */
+						ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL,
+							GEN8_SP_READ_SEL_VAL(ctxt, slice,
+							block->location, block->pipeid,
+							block->statetype, usptp, sp));
 
-					/* Read all the data in one chunk */
-					ptr += CD_READ(ptr, GEN8_SP_AHB_READ_APERTURE, block->size,
-						gen8_crashdump_registers->gpuaddr + offset);
-					offset += block->size << 2;
+						/* Read all the data in one chunk */
+						ptr += CD_READ(ptr, GEN8_SP_AHB_READ_APERTURE,
+							block->size,
+							gen8_crashdump_registers->gpuaddr + offset);
+						offset += block->size << 2;
+					}
 				}
 			}
 		}
@@ -755,17 +763,20 @@ static bool gen8_snapshot_shader(struct kgsl_device *device,
 		for (slice = 0; slice < slices; slice++) {
 			for (sp = 0; sp < block->num_sps; sp++) {
 				for (usptp = 0; usptp < block->num_usptps; usptp++) {
-					info.block = block;
-					info.sp_id = sp;
-					info.usptp = usptp;
-					info.slice_id = slice;
-					info.offset = offset;
-					offset += block->size << 2;
+					for (ctxt = 0; ctxt < block->num_ctx; ctxt++) {
+						info.block = block;
+						info.sp_id = sp;
+						info.usptp = usptp;
+						info.slice_id = slice;
+						info.offset = offset;
+						info.context_id = ctxt;
+						offset += block->size << 2;
 
-					/* Shader working/shadow memory */
-					kgsl_snapshot_add_section(device,
-					KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
-					gen8_snapshot_shader_memory, &info);
+						/* Shader working/shadow memory */
+						kgsl_snapshot_add_section(device,
+						KGSL_SNAPSHOT_SECTION_SHADER_V3, snapshot,
+						gen8_snapshot_shader_memory, &info);
+					}
 				}
 			}
 		}
@@ -853,7 +864,7 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	header->usptp_id = info->usptp_id;
 	header->slice_id = info->slice_id;
 
-	read_sel = GEN8_SP_READ_SEL_VAL(info->slice_id, info->location_id,
+	read_sel = GEN8_SP_READ_SEL_VAL(0, info->slice_id, info->location_id,
 			info->pipe_id, info->statetype_id, info->usptp_id, info->sp_id);
 
 	kgsl_regwrite(device, GEN8_SP_READ_SEL, read_sel);
@@ -988,7 +999,7 @@ static bool gen8_snapshot_dbgahb_regs(struct kgsl_device *device,
 
 					/* Program the aperture */
 					ptr += CD_WRITE(ptr, GEN8_SP_READ_SEL, GEN8_SP_READ_SEL_VAL
-						(j, cluster->location_id, cluster->pipe_id,
+						(0, j, cluster->location_id, cluster->pipe_id,
 						cluster->statetype, usptp, sp));
 
 					for (; regs[0] != UINT_MAX; regs += 2) {
@@ -1831,6 +1842,7 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
+	u64 capturescript_regs_pages = (adreno_is_gen8_2_0(adreno_dev) ? 400 : 200);
 
 	ret = adreno_allocate_global(device, &gen8_capturescript,
 		50 * PAGE_SIZE, 0, KGSL_MEMFLAGS_GPUREADONLY,
@@ -1838,7 +1850,7 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev)
 
 	if (!ret)
 		ret = adreno_allocate_global(device, &gen8_crashdump_registers,
-			200 * PAGE_SIZE, 0, 0,
+			capturescript_regs_pages * PAGE_SIZE, 0, 0,
 			KGSL_MEMDESC_PRIVILEGED, "capturescript_regs");
 
 	if (ret)
