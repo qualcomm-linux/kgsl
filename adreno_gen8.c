@@ -1235,6 +1235,13 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			kgsl_regread(device, r[j], dest++);
 		}
 
+		if ((r == gen8_ifpc_pwrup_reglist) || (r == gen8_3_0_ifpc_pwrup_reglist)) {
+			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
+
+			lock->ifpc_list_len += cs_len;
+			dest += (cs_len * 2);
+		}
+
 		mutex_lock(&gen8_dev->nc_mutex);
 		for (j = 0; j < nc_overrides[j].offset; j++) {
 			unsigned long pipe = (unsigned long)nc_overrides[j].pipelines;

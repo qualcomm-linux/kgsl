@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_CORESIGHT_H_
@@ -149,6 +149,16 @@ void adreno_coresight_stop(struct adreno_device *adreno_dev);
  * Destroy any active coresight devices.
  */
 void adreno_coresight_remove(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_coresight_patch_pwrup_reglist - Patch power up register list with coresight registers
+ * @adreno_dev: An Adreno GPU device handle
+ * @dest: Pointer to power up register list buffer
+ *
+ * Patch IFPC power up register list with GX coresight registers.
+ * Return: Number of GX coresight registers added to power up list
+ */
+u32 adreno_coresight_patch_pwrup_reglist(struct adreno_device *adreno_dev, u32 *dest);
 #else
 static inline void adreno_coresight_add_device(struct kgsl_device *device,
 		const char *name,
@@ -160,5 +170,9 @@ static inline void adreno_coresight_add_device(struct kgsl_device *device,
 static inline void adreno_coresight_start(struct adreno_device *adreno_dev) { }
 static inline void adreno_coresight_stop(struct adreno_device *adreno_dev) { }
 static inline void adreno_coresight_remove(struct adreno_device *adreno_dev) { }
+static inline u32 adreno_coresight_patch_pwrup_reglist(struct adreno_device *adreno_dev)
+{
+	return 0;
+}
 #endif
 #endif

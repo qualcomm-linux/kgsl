@@ -469,6 +469,15 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 
 		lock->list_length += reglist[i].count * 2;
+
+		if ((r == a6xx_ifpc_pwrup_reglist) || (r == a650_ifpc_pwrup_reglist)) {
+			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
+
+			cs_len = cs_len * 2;
+			lock->list_length += cs_len;
+			list_offset += cs_len;
+			dest += cs_len;
+		}
 	}
 
 	if (adreno_is_a630(adreno_dev)) {
