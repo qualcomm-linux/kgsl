@@ -990,7 +990,7 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN7_GMU_AHB_FENCE_RANGE_0, BIT(31) |
 			FIELD_PREP(GENMASK(30, 18), 0x32) |
-			FIELD_PREP(GENMASK(17, 0), 0x8a0));
+			FIELD_PREP(GENMASK(17, 0), GEN7_CP_CONTEXT_SWITCH_CNTL));
 
 	/*
 	 * Make sure that CM3 state is at reset value. Snapshot is changing
