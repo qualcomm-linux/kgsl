@@ -14,7 +14,6 @@
 #include <linux/io.h>
 #include <linux/kobject.h>
 #include <linux/of_platform.h>
-#include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
@@ -1163,7 +1162,7 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 		return ret;
 	}
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
 	if (!ret) {
 		md->gmuaddr = addr;
 		return 0;
@@ -1196,7 +1195,7 @@ static int _map_gmu_static(struct gen7_gmu_device *gmu,
 	if (!addr)
 		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device),
 			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
@@ -1314,6 +1313,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	int vma_id = find_vma_block(gmu, md->gmuaddr, md->size);
 	struct gmu_vma_entry *vma;
 	struct gmu_vma_node *vma_node;
+	struct kgsl_device *device = KGSL_DEVICE(gen7_gmu_to_adreno(gmu));
 
 	if ((vma_id < 0) || !vma_is_dynamic(vma_id))
 		return;
@@ -1324,7 +1324,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
 	 * iommu driver considers remapping an already mapped iova as fatal.
 	 */
-	if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
+	if (md->size != iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size))
 		goto free;
 
 	spin_lock(&vma->lock);
@@ -2326,7 +2326,7 @@ static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
 		if (!md->gmuaddr)
 			continue;
 
-		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
+		iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size);
 
 		if (md->priv & KGSL_MEMDESC_SYSMEM)
 			kgsl_sharedmem_free(md);
@@ -2334,10 +2334,10 @@ static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
 		memset(md, 0, sizeof(*md));
 	}
 
-	if (gmu->domain) {
-		iommu_detach_device(gmu->domain, GMU_PDEV_DEV(device));
-		iommu_domain_free(gmu->domain);
-		gmu->domain = NULL;
+	if (device->gmu_core.domain) {
+		iommu_detach_device(device->gmu_core.domain, GMU_PDEV_DEV(device));
+		iommu_domain_free(device->gmu_core.domain);
+		device->gmu_core.domain = NULL;
 	}
 
 	gmu->global_entries = 0;
@@ -2526,62 +2526,6 @@ void gen7_gmu_remove(struct kgsl_device *device)
 		kobject_put(&gmu->stats_kobj);
 }
 
-static int gen7_gmu_iommu_fault_handler(struct iommu_domain *domain,
-		struct device *dev, unsigned long addr, int flags, void *token)
-{
-	char *fault_type = "unknown";
-
-	if (flags & IOMMU_FAULT_TRANSLATION)
-		fault_type = "translation";
-	else if (flags & IOMMU_FAULT_PERMISSION)
-		fault_type = "permission";
-	else if (flags & IOMMU_FAULT_EXTERNAL)
-		fault_type = "external";
-	else if (flags & IOMMU_FAULT_TRANSACTION_STALLED)
-		fault_type = "transaction stalled";
-
-	dev_err(dev, "GMU fault addr = %lX, context=kernel (%s %s fault)\n",
-			addr,
-			(flags & IOMMU_FAULT_WRITE) ? "write" : "read",
-			fault_type);
-
-	return 0;
-}
-
-static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen7_gmu_to_adreno(gmu));
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
-	int ret;
-
-	gmu->domain = iommu_domain_alloc(&platform_bus_type);
-	if (gmu->domain == NULL) {
-		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
-		return -ENODEV;
-	}
-
-	/*
-	 * Disable stall on fault for the GMU context bank.
-	 * This sets SCTLR.CFCFG = 0.
-	 * Also note that, the smmu driver sets SCTLR.HUPCF = 0 by default.
-	 */
-	qcom_iommu_set_fault_model(gmu->domain, QCOM_IOMMU_FAULT_MODEL_NO_STALL);
-
-	ret = iommu_attach_device(gmu->domain, gmu_pdev_dev);
-	if (!ret) {
-		iommu_set_fault_handler(gmu->domain,
-			gen7_gmu_iommu_fault_handler, gmu);
-		return 0;
-	}
-
-	dev_err(gmu_pdev_dev,
-		"Unable to attach GMU IOMMU domain: %d\n", ret);
-	iommu_domain_free(gmu->domain);
-	gmu->domain = NULL;
-
-	return ret;
-}
-
 /* Default IFPC timer (300usec) value */
 #define GEN7_GMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
 
@@ -2628,7 +2572,7 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		return ret;
 
 	/* Set up GMU IOMMU and shared memory with GMU */
-	ret = gen7_gmu_iommu_init(gmu);
+	ret = gmu_core_iommu_init(device);
 	if (ret)
 		goto error;
 
