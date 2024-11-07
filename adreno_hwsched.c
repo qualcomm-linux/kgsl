@@ -423,6 +423,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	struct kgsl_context *context = drawobj->context;
 	int ret;
 	struct cmd_list_obj *obj;
+	int is_current_rt = rt_task(current);
 
 	obj = kmem_cache_alloc(obj_cache, GFP_KERNEL);
 	if (!obj)
@@ -430,17 +431,19 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 
 	mutex_lock(&device->mutex);
 
+	/* Elevating thread’s priority to avoid context switch with holding device mutex */
+	if (!is_current_rt)
+		sched_set_fifo(current);
+
 	if (_abort_submission(adreno_dev)) {
-		mutex_unlock(&device->mutex);
-		kmem_cache_free(obj_cache, obj);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto done;
 	}
 
 
 	if (kgsl_context_detached(context)) {
-		mutex_unlock(&device->mutex);
-		kmem_cache_free(obj_cache, obj);
-		return -ENOENT;
+		ret = -ENOENT;
+		goto done;
 	}
 
 	hwsched->inflight++;
@@ -450,9 +453,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 		ret = adreno_active_count_get(adreno_dev);
 		if (ret) {
 			hwsched->inflight--;
-			mutex_unlock(&device->mutex);
-			kmem_cache_free(obj_cache, obj);
-			return ret;
+			goto done;
 		}
 		set_bit(ADRENO_HWSCHED_POWER, &hwsched->flags);
 	}
@@ -469,9 +470,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 		}
 
 		hwsched->inflight--;
-		kmem_cache_free(obj_cache, obj);
-		mutex_unlock(&device->mutex);
-		return ret;
+		goto done;
 	}
 
 	if ((hwsched->inflight == 1) &&
@@ -498,9 +497,13 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	list_add_tail(&obj->node, &hwsched->cmd_list);
 
 done:
+	if (!is_current_rt)
+		sched_set_normal(current, 0);
 	mutex_unlock(&device->mutex);
+	if (ret)
+		kmem_cache_free(obj_cache, obj);
 
-	return 0;
+	return ret;
 }
 
 /**
