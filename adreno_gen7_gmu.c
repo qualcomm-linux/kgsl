@@ -1006,7 +1006,7 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 	if (adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
 				FIELD_PREP(GENMASK(31, 29), 1));
-	else if (adreno_is_gen7_14_0(adreno_dev))
+	else if (adreno_is_gen7_14_0_family(adreno_dev))
 		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
 				FIELD_PREP(GENMASK(31, 29), 2));
 
