@@ -2289,11 +2289,11 @@ static void gen7_lpac_fault_header(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
 	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
 	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
-		       GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
+		       GEN7_CP_LPAC_IB1_BASE_HI, &lpac_ib1base);
 	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
-		       GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
+		       GEN7_CP_LPAC_IB2_BASE_HI, &lpac_ib2base);
 	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
 
 	pr_context(device, drawobj_lpac->context,
