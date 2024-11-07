@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 
 #include "adreno_gen8_gmu.h"
+#include "adreno_gen8_hwsched_hfi.h"
 #include "gen8_reg.h"
 
 #define GEN8_0_0_NUM_PHYSICAL_SLICES	3
@@ -173,6 +174,8 @@ struct adreno_gen8_core {
 	u32 noc_timeout_us;
 	/** @cl_no_ft_timeout_ms: Use this timeout for CL NO_FT instead of infinite */
 	u32 cl_no_ft_timeout_ms;
+	/** @therm_profile: GMU thermal mitigation profile */
+	const struct hfi_therm_profile_ctrl *therm_profile;
 };
 
 /**
