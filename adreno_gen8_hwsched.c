@@ -599,8 +599,10 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	gen8_hwsched_init_ucode_regs(adreno_dev);
 
 	ret = gen8_hwsched_boot_gpu(adreno_dev);
-	if (ret)
+	if (ret) {
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err;
+	}
 
 	/*
 	 * At this point it is safe to assume that we recovered. Setting

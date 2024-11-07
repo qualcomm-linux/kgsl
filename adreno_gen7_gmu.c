@@ -2840,6 +2840,7 @@ static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 	ret = gen7_rb_start(adreno_dev);
 	if (ret) {
 		gen7_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto oob_clear;
 	}
 
