@@ -792,10 +792,9 @@ int gen7_start(struct adreno_device *adreno_dev)
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 	u64 uche_trap_base = gen7_get_uche_trap_base();
 
-	/* Set up GBIF registers from the GPU core definition */
-	kgsl_regmap_multi_write(&device->regmap, gen7_core->gbif,
-		gen7_core->gbif_count);
-
+	/* Set up GX GBIF registers */
+	kgsl_regwrite(device, GEN7_RBBM_GBIF_CLIENT_QOS_CNTL,
+		      (adreno_is_gen7_3_0(adreno_dev)) ? 0x00000003 : 0x2120212);
 	kgsl_regwrite(device, GEN7_UCHE_GBIF_GX_CONFIG, 0x10240e0);
 
 	/* Make all blocks contribute to the GPU BUSY perf counter */
@@ -961,13 +960,6 @@ int gen7_start(struct adreno_device *adreno_dev)
 	/* Marking AQE Instruction cache fetches as privileged */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_AQE))
 		kgsl_regwrite(device, GEN7_CP_AQE_APRIV_CNTL, BIT(0));
-
-	if (adreno_is_gen7_9_x(adreno_dev))
-		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
-				FIELD_PREP(GENMASK(31, 29), 1));
-	else if (adreno_is_gen7_14_0(adreno_dev))
-		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
-				FIELD_PREP(GENMASK(31, 29), 2));
 
 	/*
 	 * CP Icache prefetch brings no benefit on few gen7 variants because of
