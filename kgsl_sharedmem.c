@@ -1871,9 +1871,9 @@ int kgsl_memdesc_init_fixed(struct kgsl_device *device,
 	if (!prop)
 		return -ENODEV;
 
-	if (len != (addr_cells + size_cells)) {
-		dev_err_ratelimited(device->dev, "of property %s has len %d expected %d\n",
-			resource, len, addr_cells + size_cells);
+	if (len != ((addr_cells + size_cells) * sizeof(__be32))) {
+		dev_err_ratelimited(device->dev, "of property %s has len %d expected %lu\n",
+			resource, len, (addr_cells + size_cells) * sizeof(__be32));
 		return -E2BIG;
 	}
 
