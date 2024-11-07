@@ -1342,8 +1342,6 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 		ret = gen7_send_hw_fence_hfi_wait_ack(adreno_dev, entry, 0);
 		if (ret)
 			break;
-
-		list_del_init(&entry->reset_node);
 	}
 
 	return ret;
