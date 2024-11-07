@@ -971,6 +971,7 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 	u32 val;
 
 	/* Clear any previously set cm3 fault */
@@ -998,6 +999,17 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 	 * straight in to NMI handler without executing __main code
 	 */
 	gmu_core_regwrite(device, GEN7_GMU_CM3_CFG, 0x4052);
+
+	/* Set up GBIF registers from the GPU core definition */
+	kgsl_regmap_multi_write(&device->regmap, gen7_core->gbif,
+		gen7_core->gbif_count);
+
+	if (adreno_is_gen7_9_x(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 1));
+	else if (adreno_is_gen7_14_0(adreno_dev))
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
+				FIELD_PREP(GENMASK(31, 29), 2));
 
 	/**
 	 * We may have asserted gbif halt as part of reset sequence which may
