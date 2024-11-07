@@ -1475,7 +1475,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	u32 mal, pipe_id, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0;
+	u32 mal, pipe_id, mode = 0, mode2 = 0, rgb565_predicator = 0, amsbc = 0, yuvnotcomptofc = 0;
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
 	/*
@@ -1564,6 +1564,10 @@ int gen8_start(struct adreno_device *adreno_dev)
 	of_property_read_u32(device->pdev->dev.of_node, "qcom,ubwc-mode", &mode);
 
 	switch (mode) {
+	case KGSL_UBWC_6_0:
+		yuvnotcomptofc = 0;
+		mode2 = 5;
+		break;
 	case KGSL_UBWC_5_0:
 		amsbc = 1;
 		rgb565_predicator = 1;
@@ -1602,6 +1606,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 			       PIPE_BR, 0, 0);
 	gen8_regwrite_aperture(device, GEN8_RB_CMP_NC_MODE_CNTL,
 			       FIELD_PREP(GENMASK(17, 15), mode2) |
+			       FIELD_PREP(GENMASK(6, 6), yuvnotcomptofc) |
 			       FIELD_PREP(GENMASK(4, 4), rgba8888_lossless) |
 			       FIELD_PREP(GENMASK(3, 3), fp16compoptdis) |
 			       FIELD_PREP(GENMASK(2, 2), rgb565_predicator) |
