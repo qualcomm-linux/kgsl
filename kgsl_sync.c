@@ -111,24 +111,31 @@ int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence
 	return ret;
 }
 
-bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count)
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count)
 {
 	void *ptr = kgsl_synx.mem_descriptor.vaddr;
 	struct synx_hw_fence_hfi_queue_header *hdr = (struct synx_hw_fence_hfi_queue_header *)
 		(ptr + sizeof(struct synx_hw_fence_hfi_queue_table_header));
 	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
 	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
-	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
-	u32 reserved_dwords = atomic_read(hw_fence_count) * payload_size_dwords;
+	u32 free_entries, write_idx = hdr->write_index, read_idx = hdr->read_index;
 
-	free_dwords = read_idx <= write_idx ?
+	free_entries = read_idx <= write_idx ?
 		queue_size_dwords - (write_idx - read_idx) :
 		read_idx - write_idx;
 
-	if (free_dwords - reserved_dwords <= payload_size_dwords)
+	free_entries /= payload_size_dwords;
+
+	/* Ensure free_entries does not become negative */
+	if (free_entries == 0)
 		return false;
 
-	return true;
+	free_entries -= 1;
+
+	if (free_entries > pending_hw_fence_count)
+		return true;
+
+	return false;
 }
 
 void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)
@@ -240,24 +247,31 @@ int kgsl_hw_fence_add_waiter(struct kgsl_device *device, struct dma_fence *fence
 	return ret;
 }
 
-bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, const atomic_t *hw_fence_count)
+bool kgsl_hw_fence_tx_slot_available(struct kgsl_device *device, u32 pending_hw_fence_count)
 {
 	void *ptr = kgsl_msm_hw_fence.mem_descriptor.virtual_addr;
 	struct msm_hw_fence_hfi_queue_header *hdr = (struct msm_hw_fence_hfi_queue_header *)
 		(ptr + sizeof(struct msm_hw_fence_hfi_queue_table_header));
 	u32 queue_size_dwords = hdr->queue_size / sizeof(u32);
 	u32 payload_size_dwords = hdr->pkt_size / sizeof(u32);
-	u32 free_dwords, write_idx = hdr->write_index, read_idx = hdr->read_index;
-	u32 reserved_dwords = atomic_read(hw_fence_count) * payload_size_dwords;
+	u32 free_entries, write_idx = hdr->write_index, read_idx = hdr->read_index;
 
-	free_dwords = read_idx <= write_idx ?
+	free_entries = read_idx <= write_idx ?
 		queue_size_dwords - (write_idx - read_idx) :
 		read_idx - write_idx;
 
-	if (free_dwords - reserved_dwords <= payload_size_dwords)
+	free_entries /= payload_size_dwords;
+
+	/* Ensure free_entries does not become negative */
+	if (free_entries == 0)
 		return false;
 
-	return true;
+	free_entries -= 1;
+
+	if (free_entries > pending_hw_fence_count)
+		return true;
+
+	return false;
 }
 
 void kgsl_hw_fence_destroy(struct kgsl_sync_fence *kfence)

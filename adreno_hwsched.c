@@ -1974,10 +1974,6 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	if (!kgsl_hw_fence_tx_slot_available(KGSL_DEVICE(adreno_dev),
-		&adreno_dev->hwsched.hw_fence_count))
-		return;
-
 	hwsched_ops->create_hw_fence(adreno_dev, kfence);
 }
 
@@ -2627,8 +2623,11 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct adreno_context *drawctxt = entry->drawctxt;
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
-	atomic_dec(&hwsched->hw_fence_count);
+	spin_lock(&hwf->lock);
+	hwf->pending_count--;
+	spin_unlock(&hwf->lock);
 	drawctxt->hw_fence_count--;
 
 	dma_fence_put(&entry->kfence->fence);

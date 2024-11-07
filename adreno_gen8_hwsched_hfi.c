@@ -3074,6 +3074,10 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct adreno_hw_fence_entry *entry;
 
+	if (!kgsl_hw_fence_tx_slot_available(KGSL_DEVICE(adreno_dev),
+		hwsched->hw_fence.pending_count))
+		return NULL;
+
 	if (!DRAWCTXT_SLOT_AVAILABLE(drawctxt->hw_fence_count))
 		return NULL;
 
@@ -3098,7 +3102,7 @@ static struct adreno_hw_fence_entry *allocate_hw_fence_entry(struct adreno_devic
 	dma_fence_get(&kfence->fence);
 
 	drawctxt->hw_fence_count++;
-	atomic_inc(&hwsched->hw_fence_count);
+	hwsched->hw_fence.pending_count++;
 
 	INIT_LIST_HEAD(&entry->node);
 	INIT_LIST_HEAD(&entry->reset_node);
@@ -3196,6 +3200,7 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	u32 retired = 0;
 	int ret = 0;
+	bool destroy = false;
 
 	spin_lock(&drawctxt->lock);
 	spin_lock(&hwf->lock);
@@ -3252,7 +3257,7 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 				"hw fence for ctx:%d ts:%d ret:%d may not be destroyed\n",
 				kfence->context_id, kfence->timestamp, ret);
 		kgsl_hw_fence_destroy(kfence);
-		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+		destroy = true;
 		goto done;
 	}
 
@@ -3260,6 +3265,8 @@ void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 
 done:
 	spin_unlock(&hwf->lock);
+	if (destroy)
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 	spin_unlock(&drawctxt->lock);
 }
 

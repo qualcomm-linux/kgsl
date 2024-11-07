@@ -49,6 +49,8 @@ struct adreno_hwsched_hw_fence {
 	struct rproc *soccp_rproc;
 	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
 	struct kgsl_memdesc md;
+	/** @pending_count: Number of hardware fences that haven't yet been sent to Tx Queue */
+	u32 pending_count;
 };
 
 /**
@@ -128,8 +130,6 @@ struct adreno_hwsched {
 	struct work_struct lsr_check_ws;
 	/** @hw_fence: Container for the hw fences instance */
 	struct kmem_cache *hw_fence_cache;
-	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
-	atomic_t hw_fence_count;
 	/**
 	 * @submission_seqnum: Sequence number for sending submissions to GMU context queues or
 	 * dispatch queues
