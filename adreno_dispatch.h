@@ -98,4 +98,13 @@ void adreno_dispatcher_stop(struct adreno_device *adreno_dev);
 void adreno_dispatcher_start_fault_timer(struct adreno_device *adreno_dev);
 void adreno_dispatcher_stop_fault_timer(struct kgsl_device *device);
 
+/**
+ * adreno_drain_and_idle - Drain any pending work and wait for
+ * dispatcher and hardware to become idle
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_drain_and_idle(struct kgsl_device *device);
+
 #endif /* __ADRENO_DISPATCHER_H */

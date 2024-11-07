@@ -2842,15 +2842,7 @@ static int gen8_power_off(struct adreno_device *adreno_dev)
 
 	WARN_ON(!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags));
 
-	adreno_suspend_context(device);
-
-	/*
-	 * adreno_suspend_context() unlocks the device mutex, which
-	 * could allow a concurrent thread to attempt SLUMBER sequence.
-	 * Hence, check the flags again before proceeding with SLUMBER.
-	 */
-	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-		return 0;
+	adreno_check_idle(device);
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
@@ -3018,18 +3010,7 @@ static int gen8_gmu_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/* wait for active count so device can be put in slumber */
-	ret = kgsl_active_count_wait(device, 0, HZ);
-	if (ret) {
-		dev_err(device->dev,
-			"Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_idle(device);
+	ret = adreno_drain_and_idle(device);
 	if (ret)
 		goto err;
 

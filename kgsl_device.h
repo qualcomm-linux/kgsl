@@ -90,7 +90,7 @@ struct kgsl_functable {
 	 * by the client device.  The driver will not check for a NULL
 	 * pointer before calling the hook.
 	 */
-	int (*suspend_context)(struct kgsl_device *device);
+	void (*check_idle)(struct kgsl_device *device);
 	int (*first_open)(struct kgsl_device *device);
 	int (*last_close)(struct kgsl_device *device);
 	int (*start)(struct kgsl_device *device, int priority);

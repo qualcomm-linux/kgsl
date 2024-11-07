@@ -1050,7 +1050,7 @@ long adreno_ioctl_helper(struct kgsl_device_private *dev_priv,
 		const struct kgsl_ioctl *cmds, int len);
 
 int adreno_spin_idle(struct adreno_device *device, unsigned int timeout);
-int adreno_idle(struct kgsl_device *device);
+int adreno_wait_idle(struct kgsl_device *device);
 
 int adreno_set_constraint(struct kgsl_device *device,
 				struct kgsl_context *context,
@@ -1929,15 +1929,13 @@ void adreno_get_bus_counters(struct adreno_device *adreno_dev);
 u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
- * adreno_suspend_context - Make sure device is idle
+ * adreno_check_idle - Make sure device is idle
  * @device: Pointer to the kgsl device
  *
- * This function processes the profiling results and checks if the
- * device is idle so that it can be turned off safely
- *
- * Return: 0 on success or negative error on failure
+ * This function processes the profiling results and log an error if
+ * device is not idle
  */
-int adreno_suspend_context(struct kgsl_device *device);
+void adreno_check_idle(struct kgsl_device *device);
 
 /*
  * adreno_profile_submit_time - Populate profiling buffer with timestamps
@@ -2078,6 +2076,17 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
  */
 void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
+
+
+/**
+ * adreno_drain - Halt new submissions and drain pending work by waiting for active count to become
+ * zero
+ * @device: A handle to kgsl device
+ * @wait_jiffies: jiffies to wait for active count to become zero
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_drain(struct kgsl_device *device, unsigned long wait_jiffies);
 
 /**
  * adreno_irq_free - Free an interrupt allocated for GPU

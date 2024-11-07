@@ -2227,7 +2227,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-int adreno_hwsched_idle(struct adreno_device *adreno_dev)
+static int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned long wait = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
@@ -2761,4 +2761,16 @@ done:
 	hfi_update_write_idx(&hdr->write_index, write_idx);
 
 	return 0;
+}
+
+int adreno_hwsched_drain_and_idle(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret = adreno_drain(device, msecs_to_jiffies(100));
+
+	/* Make sure the dispatcher and hardware are idle */
+	if (!ret)
+		ret = adreno_hwsched_idle(adreno_dev);
+
+	return ret;
 }

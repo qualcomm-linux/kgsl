@@ -162,12 +162,13 @@ void adreno_hwsched_parse_fault_cmdobj(struct adreno_device *adreno_dev,
 void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_idle - Wait for dispatcher and hardware to become idle
+ * adreno_hwsched_drain_and_idle - Drain pending work and wait for dispatcher and
+ * hardware to become idle
  * @adreno_dev: A handle to adreno device
  *
  * Return: 0 on success or negative error on failure
  */
-int adreno_hwsched_idle(struct adreno_device *adreno_dev);
+int adreno_hwsched_drain_and_idle(struct adreno_device *adreno_dev);
 
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj);

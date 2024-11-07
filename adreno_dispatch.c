@@ -2810,3 +2810,14 @@ int adreno_dispatcher_idle(struct adreno_device *adreno_dev)
 	adreno_scheduler_queue(adreno_dev);
 	return ret;
 }
+
+int adreno_drain_and_idle(struct kgsl_device *device)
+{
+	int ret = adreno_drain(device, HZ);
+
+	/* Make sure the dispatcher and hardware are idle */
+	if (!ret)
+		ret = adreno_wait_idle(device);
+
+	return ret;
+}
