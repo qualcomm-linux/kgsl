@@ -873,7 +873,6 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 		return;
 
 	a6xx_gmu_clock_set_rate(adreno_dev, req_freq);
-	return;
 }
 
 static int a6xx_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
