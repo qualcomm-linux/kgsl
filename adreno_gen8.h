@@ -73,6 +73,8 @@ struct gen8_device {
 	struct mutex nc_mutex;
 	/** @nc_overrides_enabled: Set through debugfs path when any override is enabled */
 	bool nc_overrides_enabled;
+	/** @slice_mask: The bitmask of active GPU slices */
+	u32 slice_mask;
 };
 
 /**
@@ -375,6 +377,14 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev);
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_get_gpu_slice_info - Get information about the active slices
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Get information about the active slices and save it in the gen8 device
+ */
+void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev);
+
+/**
  * gen8_rb_start - Gen8 specific ringbuffer setup
  * @adreno_dev: An Adreno GPU handle
  *
@@ -623,18 +633,17 @@ static inline void gen8_coresight_init(struct adreno_device *device) { }
 #endif
 
 /**
- * gen8_get_num_slices - Get the number of physical slices for Gen8 GPUs
+ * gen8_get_slice_mask - Get a bitmask representing the GPU slices that are active
  * @adreno_dev: Handle to the adreno device
  *
- * Return: Number of physical slices available on Gen8 GPUs
+ * Return: Bitmask where each bit set represents an active GPU slice
  */
-static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
+static inline u32 gen8_get_slice_mask(struct adreno_device *adreno_dev)
 {
-	if (adreno_is_gen8_3_0(adreno_dev))
-		return GEN8_3_0_NUM_PHYSICAL_SLICES;
-	else if (adreno_is_gen8_6_0(adreno_dev))
-		return GEN8_6_0_NUM_PHYSICAL_SLICES;
-	else
-		return GEN8_0_0_NUM_PHYSICAL_SLICES;
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+
+	return gen8_dev->slice_mask;
 }
+
 #endif

@@ -192,8 +192,9 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	const struct gen8_snapshot_block_list *gen8_snapshot_block_list =
 						gpucore->gen8_snapshot_block_list;
 	const u32 *regs_ptr = (const u32 *)gen8_snapshot_block_list->cx_misc_regs;
-	u32 i, slice, j;
+	u32 i, j;
 	struct gen8_reg_list_info info = {0};
+	u32 slice_mask = gen8_get_slice_mask(adreno_dev);
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
 		snapshot, gen8_gmu_snapshot_itcm, gmu);
@@ -234,8 +235,7 @@ static void gen8_gmu_device_snapshot(struct kgsl_device *device,
 	for (i = 0 ; i < gen8_snapshot_block_list->num_gmu_gx_regs; i++) {
 		struct gen8_reg_list *regs = &gen8_snapshot_block_list->gmu_gx_regs[i];
 
-		slice = NUMBER_OF_SLICES(regs->slice_region, adreno_dev);
-		for (j = 0 ; j < slice; j++) {
+		FOR_EACH_SLICE(j, regs->slice_region, slice_mask) {
 			info.regs = regs;
 			info.slice_id = SLICE_ID(regs->slice_region, j);
 			kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_MVC_V3, snapshot,

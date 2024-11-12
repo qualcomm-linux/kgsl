@@ -271,6 +271,12 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto gdsc_off;
 
+	ret = gen8_scm_gpu_init_cx_regs(adreno_dev);
+	if (ret)
+		goto clks_gdsc_off;
+
+	gen8_get_gpu_slice_info(adreno_dev);
+
 	/*
 	 * Enable AHB timeout detection to catch any register access taking longer
 	 * time before NOC timeout gets detected. Enable this logic before any
@@ -286,10 +292,6 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		goto clks_gdsc_off;
 
 	ret = gen8_gmu_itcm_shadow(adreno_dev);
-	if (ret)
-		goto clks_gdsc_off;
-
-	ret = gen8_scm_gpu_init_cx_regs(adreno_dev);
 	if (ret)
 		goto clks_gdsc_off;
 
