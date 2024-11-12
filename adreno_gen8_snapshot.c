@@ -278,7 +278,7 @@ size_t gen8_legacy_snapshot_registers(struct kgsl_device *device,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->regs->slice_region ? info->slice_id : UINT_MAX;
 
 	if (info->regs->sel)
 		kgsl_regwrite(device, info->regs->sel->host_reg, info->regs->sel->val);
@@ -329,7 +329,7 @@ static size_t gen8_snapshot_registers(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->regs->slice_region ? info->slice_id : UINT_MAX;
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
@@ -367,7 +367,7 @@ static size_t gen8_legacy_snapshot_shader(struct kgsl_device *device,
 	}
 
 	header->type = block->statetype;
-	header->slice_id = info->slice_id;
+	header->slice_id = block->slice_region ? info->slice_id : UINT_MAX;
 	header->sp_index = info->sp_id;
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
@@ -407,7 +407,7 @@ static size_t gen8_snapshot_shader_memory(struct kgsl_device *device,
 	}
 
 	header->type = block->statetype;
-	header->slice_id = info->slice_id;
+	header->slice_id = block->slice_region ? info->slice_id : UINT_MAX;
 	header->sp_index = info->sp_id;
 	header->usptp = info->usptp;
 	header->pipe_id = block->pipeid;
@@ -851,7 +851,7 @@ static size_t gen8_legacy_snapshot_cluster_dbgahb(struct kgsl_device *device,
 	header->location_id = info->location_id;
 	header->sp_id = info->sp_id;
 	header->usptp_id = info->usptp_id;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
 
 	read_sel = GEN8_SP_READ_SEL_VAL(info->slice_id, info->location_id,
 			info->pipe_id, info->statetype_id, info->usptp_id, info->sp_id);
@@ -903,7 +903,7 @@ static size_t gen8_snapshot_cluster_dbgahb(struct kgsl_device *device, u8 *buf,
 	header->location_id = info->location_id;
 	header->sp_id = info->sp_id;
 	header->usptp_id = info->usptp_id;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
@@ -1040,7 +1040,7 @@ static size_t gen8_legacy_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
 
 	/*
 	 * Set the AHB control for the Host to read from the
@@ -1095,7 +1095,7 @@ static size_t gen8_snapshot_mvc(struct kgsl_device *device, u8 *buf,
 	header->location_id = UINT_MAX;
 	header->sp_id = UINT_MAX;
 	header->usptp_id = UINT_MAX;
-	header->slice_id = info->slice_id;
+	header->slice_id = info->cluster->slice_region ? info->slice_id : UINT_MAX;
 
 	src = gen8_crashdump_registers->hostptr + info->offset;
 
