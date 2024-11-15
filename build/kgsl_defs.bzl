@@ -1,6 +1,6 @@
 load("//build/kernel/kleaf:kernel.bzl", "ddk_module")
 load("//build/bazel_common_rules/dist:dist.bzl", "copy_to_dist_dir")
-load("//msm-kernel:target_variants.bzl", "get_all_la_variants")
+load(":build/target_variants.bzl", "get_all_la_variants")
 
 msm_kgsl_includes = [
     "include/linux/msm_kgsl.h",
@@ -101,11 +101,16 @@ def external_deps(target, variant):
 
     # Add synx-kernel in the dependency list for targets that use it for hardware fences
     if target in [ "sun", "niobe", "seraph" ]:
-        deplist = deplist + [
-            "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
-            "//vendor/qcom/opensource/synx-kernel:synx_headers"
-            ]
-
+        deplist += select({
+            "//build/kernel/kleaf:socrepo_true": [
+                "//vendor/qcom/opensource/synx-kernel:{}_synx_modules".format(tv),
+                "//vendor/qcom/opensource/synx-kernel:synx_headers"
+                ],
+            "//build/kernel/kleaf:socrepo_false": [
+                "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
+                "//vendor/qcom/opensource/synx-kernel:synx_headers"
+                ]
+        })
     if target in [ "monaco", "parrot", "canoe" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
@@ -123,9 +128,52 @@ def external_deps(target, variant):
 def define_target_variant_module(target, variant):
     tv = "{}_{}".format(target, variant)
     rule_name = "{}_msm_kgsl".format(tv)
-    kernel_build = "//msm-kernel:{}".format(tv)
+    kernel_build = select({
+        "//build/kernel/kleaf:socrepo_true": "//soc-repo:{}_base_kernel".format(tv),
+        "//build/kernel/kleaf:socrepo_false": "//msm-kernel:{}".format(tv),
+    })
 
     ext_deps = external_deps(target, variant)
+    dep = []
+
+    if target == "sun":
+        dep += select({
+                "//build/kernel/kleaf:socrepo_true": [
+                   "//soc-repo:{}/drivers/soc/qcom/minidump".format(tv),
+                   "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
+                ],
+                "//build/kernel/kleaf:socrepo_false": [],
+        })
+
+    if target == "canoe":
+        dep += select({
+                "//build/kernel/kleaf:socrepo_true": [
+                  "//soc-repo:{}/drivers/soc/qcom/msm_performance".format(tv),
+                ],
+                "//build/kernel/kleaf:socrepo_false": [],
+        })
+
+    ddk_deps = select({
+                "//build/kernel/kleaf:socrepo_true": [
+                  "//soc-repo:all_headers",
+                  "//soc-repo:{}/drivers/clk/qcom/clk-qcom".format(tv),
+                  "//soc-repo:{}/drivers/firmware/qcom/qcom-scm".format(tv),
+                  "//soc-repo:{}/drivers/hwtracing/coresight/coresight".format(tv),
+                  "//soc-repo:{}/drivers/iommu/qcom_iommu_util".format(tv),
+                  "//soc-repo:{}/drivers/remoteproc/qcom_q6v5_pas".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/cmd-db".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/dcvs/qcom-dcvs".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/qcom_aoss".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
+                  "//soc-repo:{}/kernel/msm_sysstats".format(tv),
+                  "//vendor/qcom/opensource/securemsm-kernel:{}_smcinvoke_dlkm".format(tv),
+                ],
+                "//build/kernel/kleaf:socrepo_false": [ "//msm-kernel:all_headers" ],
+        })
 
     ddk_module(
         name = rule_name,
@@ -149,7 +197,7 @@ def define_target_variant_module(target, variant):
             "CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ": { False: [ "governor_msm_adreno_tz.c" ] },
             "CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON": { False: [ "governor_gpubw_mon.c" ] }
         },
-        deps = [ "//msm-kernel:all_headers" ] + ext_deps,
+        deps = ddk_deps + ext_deps + dep,
         includes = ["include", "."],
         kernel_build = kernel_build,
         visibility = ["//visibility:private"]
