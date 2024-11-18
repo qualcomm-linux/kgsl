@@ -947,7 +947,10 @@ static void adreno_read_soc_code(struct kgsl_device *device)
 	bool internal_sku;
 
 	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
-	internal_sku = (feature_code >= SOCINFO_FC_Y0) && (feature_code < SOCINFO_FC_INT_RESERVE);
+	internal_sku = (((feature_code >= SOCINFO_FC_W0) &&
+			(feature_code < SOCINFO_FC_SUBPART_RESERVE)) ||
+			((feature_code >= SOCINFO_FC_Y0) &&
+			(feature_code < SOCINFO_FC_INT_RESERVE)));
 
 	/* Pcode is significant only for internal SKUs */
 	pcode = internal_sku ? max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) :
