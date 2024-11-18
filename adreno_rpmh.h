@@ -94,11 +94,12 @@ void adreno_rpmh_free_bw_votes(struct rpmh_bw_votes *votes);
  * @levels_count: Number of performance levels
  * @perfmode_vote: Performance mode vote
  * @perfmode_lvl: Initial performance level for performance mode vote
+ * @gmu_ab: Indicate if GMU supports AB vote
  *
  * Return: Pointer to the rpmh_bw_votes structure on success, or an error pointer failure
  */
 struct rpmh_bw_votes *adreno_rpmh_build_bw_votes(struct bcm *bcms, int bcm_count,
-	u32 *levels, int levels_count, u32 perfmode_vote, u32 perfmode_lvl);
+	u32 *levels, int levels_count, u32 perfmode_vote, u32 perfmode_lvl, bool gmu_ab);
 
 /**
  * adreno_rpmh_to_cx_hlvl - Convert RPMh VLVL to CX HLVL level

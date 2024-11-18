@@ -164,7 +164,8 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 		perfmode_vote = BIT(3);
 
 	ddr = adreno_rpmh_build_bw_votes(adreno_ddr_bcms, ARRAY_SIZE(adreno_ddr_bcms),
-		pwr->ddr_table, pwr->ddr_table_count, perfmode_vote, perfmode_lvl);
+		pwr->ddr_table, pwr->ddr_table_count, perfmode_vote, perfmode_lvl,
+		adreno_dev->gmu_ab);
 	if (IS_ERR(ddr))
 		return PTR_ERR(ddr);
 
@@ -173,7 +174,8 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 
 	if (count > 0)
 		cnoc = adreno_rpmh_build_bw_votes(adreno_cnoc_bcms,
-			ARRAY_SIZE(adreno_cnoc_bcms), cnoc_table, count, 0, 0);
+			ARRAY_SIZE(adreno_cnoc_bcms), cnoc_table, count, 0, 0,
+			adreno_dev->gmu_ab);
 
 	kfree(cnoc_table);
 
