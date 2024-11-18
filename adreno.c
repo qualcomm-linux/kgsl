@@ -1275,8 +1275,8 @@ static int adreno_pm_notifier(struct notifier_block *nb, unsigned long event, vo
 		}
 	}
 
-	if (pwr->cx_pd) {
-		pd = container_of(pwr->cx_pd->pm_domain, struct generic_pm_domain, domain);
+	if (pwr->gmu_cx_pd) {
+		pd = container_of(pwr->gmu_cx_pd->pm_domain, struct generic_pm_domain, domain);
 
 		if (pd->prepared_count) {
 			dev_err_ratelimited(device->dev,
@@ -1514,7 +1514,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	 * notifications when system has come out of suspend completely, so that we can perform
 	 * fault recovery.
 	 */
-	if (device->pwrctrl.gx_pd || device->pwrctrl.cx_pd) {
+	if (device->pwrctrl.gx_pd || device->pwrctrl.gmu_cx_pd) {
 		adreno_dev->pm_nb.notifier_call = adreno_pm_notifier;
 		register_pm_notifier(&adreno_dev->pm_nb);
 	}
@@ -1802,8 +1802,8 @@ static bool gdscs_left_on(struct kgsl_device *device)
 	if (pwr->gx_regulator)
 		return regulator_is_enabled(pwr->gx_regulator);
 
-	if (pwr->cx_pd)
-		return kgsl_genpd_is_enabled(pwr->cx_pd);
+	if (pwr->gmu_cx_pd)
+		return kgsl_genpd_is_enabled(pwr->gmu_cx_pd);
 
 	if (pwr->gx_pd)
 		return kgsl_genpd_is_enabled(pwr->gx_pd);
