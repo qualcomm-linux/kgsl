@@ -319,11 +319,12 @@ void a6xx_gmu_irq_disable(struct adreno_device *adreno_dev);
 /**
  * a6xx_gmu_suspend - Hard reset the gpu and gmu
  * @adreno_dev: Pointer to the adreno device
+ * @force: Set to true to enforce a hard reset
  *
  * In case we hit a gmu fault, hard reset the gpu and gmu
  * to recover from the fault
  */
-void a6xx_gmu_suspend(struct adreno_device *adreno_dev);
+void a6xx_gmu_suspend(struct adreno_device *adreno_dev, bool force);
 
 /**
  * a6xx_gmu_oob_set - send gmu oob request

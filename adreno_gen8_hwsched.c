@@ -359,7 +359,7 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev);
+		gen8_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -442,7 +442,7 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev);
+		gen8_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -533,7 +533,7 @@ static int gen8_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 error:
 	gen8_gmu_irq_disable(adreno_dev);
 	gen8_hwsched_hfi_stop(adreno_dev);
-	gen8_gmu_suspend(adreno_dev);
+	gen8_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -1567,7 +1567,7 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	gen8_hwsched_hfi_stop(adreno_dev);
 
-	gen8_gmu_suspend(adreno_dev);
+	gen8_gmu_suspend(adreno_dev, true);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 

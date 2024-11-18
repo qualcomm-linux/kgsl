@@ -359,11 +359,12 @@ void gen8_gmu_irq_disable(struct adreno_device *adreno_dev);
 /**
  * gen8_gmu_suspend - Hard reset the gpu and gmu
  * @adreno_dev: Pointer to the adreno device
+ * @force: Set to true to enforce a hard reset
  *
  * In case we hit a gmu fault, hard reset the gpu and gmu
  * to recover from the fault
  */
-void gen8_gmu_suspend(struct adreno_device *adreno_dev);
+void gen8_gmu_suspend(struct adreno_device *adreno_dev, bool force);
 
 /**
  * gen8_gmu_oob_set - send gmu oob request
