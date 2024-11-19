@@ -19,6 +19,7 @@
 static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault)
 {
 	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	bool lock = !in_interrupt();
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
@@ -30,12 +31,12 @@ static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault
 	 * avoid taking this lock if we are recording a fault from an interrupt handler.
 	 */
 	if (lock)
-		spin_lock(&hfi->hw_fence.lock);
+		spin_lock(&hwf->lock);
 
-	clear_bit(GEN8_HWSCHED_HW_FENCE_SLEEP_BIT, &hfi->hw_fence.flags);
+	clear_bit(GEN8_HWSCHED_HW_FENCE_SLEEP_BIT, &hwf->flags);
 
 	/* Avoid creating new hardware fences until recovery is complete */
-	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hfi->hw_fence.flags);
+	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hwf->flags);
 
 	if (!lock) {
 		/*
@@ -43,10 +44,10 @@ static void _wakeup_hw_fence_waiters(struct adreno_device *adreno_dev, u32 fault
 		 */
 		smp_wmb();
 	} else {
-		spin_unlock(&hfi->hw_fence.lock);
+		spin_unlock(&hwf->lock);
 	}
 
-	wake_up_all(&hfi->hw_fence.unack_wq);
+	wake_up_all(&hwf->unack_wq);
 
 	del_timer_sync(&hfi->hw_fence_timer);
 }
@@ -206,16 +207,16 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
-	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
 		return;
 
-	if (hw_hfi->hw_fence.soccp_rproc)
+	if (hwf->soccp_rproc)
 		return;
 
-	hw_hfi->hw_fence.soccp_rproc = gmu_core_soccp_vote_init(gmu_pdev_dev);
-	if (!IS_ERR(hw_hfi->hw_fence.soccp_rproc))
+	hwf->soccp_rproc = gmu_core_soccp_vote_init(gmu_pdev_dev);
+	if (!IS_ERR(hwf->soccp_rproc))
 		return;
 
 	/* Disable hw fences */
@@ -226,19 +227,19 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct gen8_hwsched_hfi *hw_hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
 		return;
 
-	if (!gmu_core_soccp_vote(gmu_pdev_dev, &gmu->flags, hw_hfi->hw_fence.soccp_rproc,
+	if (!gmu_core_soccp_vote(gmu_pdev_dev, &gmu->flags, hwf->soccp_rproc,
 		pwr_on))
 		return;
 
 	/* Make sure no more hardware fences are created */
-	spin_lock(&hw_hfi->hw_fence.lock);
-	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hw_hfi->hw_fence.flags);
-	spin_unlock(&hw_hfi->hw_fence.lock);
+	spin_lock(&hwf->lock);
+	set_bit(GEN8_HWSCHED_HW_FENCE_ABORT_BIT, &hwf->flags);
+	spin_unlock(&hwf->lock);
 
 	/*
 	 * It is possible that some hardware fences were created while we were in slumber. Since
@@ -1025,8 +1026,8 @@ no_gx_power:
 
 static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 {
-	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	u32 unack_count;
 
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
@@ -1034,9 +1035,9 @@ static void check_hw_fence_unack_count(struct adreno_device *adreno_dev)
 
 	gen8_hwsched_process_msgq(adreno_dev);
 
-	spin_lock(&hfi->hw_fence.lock);
-	unack_count = hfi->hw_fence.unack_count;
-	spin_unlock(&hfi->hw_fence.lock);
+	spin_lock(&hwf->lock);
+	unack_count = hwf->unack_count;
+	spin_unlock(&hwf->lock);
 
 	if (!unack_count)
 		return;
@@ -1547,7 +1548,7 @@ static int handle_hw_fences_after_reset(struct adreno_device *adreno_dev)
 int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	int ret;
 
 	/*
@@ -1575,12 +1576,12 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	clear_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	spin_lock(&hfi->hw_fence.lock);
+	spin_lock(&hwf->lock);
 
 	/* Reset the unack count back to zero as we start afresh */
-	hfi->hw_fence.unack_count = 0;
+	hwf->unack_count = 0;
 
-	spin_unlock(&hfi->hw_fence.lock);
+	spin_unlock(&hwf->lock);
 
 	/*
 	 * When we reset, we want to coldboot incase any scratch corruption

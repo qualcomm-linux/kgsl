@@ -17,9 +17,43 @@ struct cmd_list_obj {
 	struct list_head node;
 };
 
+struct adreno_hwsched_hw_fence {
+	/** @lock: Spinlock for managing hardware fences */
+	spinlock_t lock;
+	/**
+	 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
+	 * by GMU
+	 */
+	u32 unack_count;
+	/**
+	 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
+	 * a desired threshold
+	 */
+	wait_queue_head_t unack_wq;
+	/**
+	 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
+	 * hardware fences drops to a desired threshold
+	 */
+	struct adreno_context *defer_drawctxt;
+	/**
+	 * @defer_ts: The timestamp of the hardware fence which got deferred
+	 */
+	u32 defer_ts;
+	/**
+	 * @flags: Flags to control the creation of new hardware fences
+	 */
+	unsigned long flags;
+	/** @seqnum: Sequence number for hardware fence packet header */
+	atomic_t seqnum;
+	/** @soccp_rproc: rproc handle for soccp */
+	struct rproc *soccp_rproc;
+	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
+	struct kgsl_memdesc md;
+};
+
 /**
- * struct adreno_hw_fence_entry - A structure to store hardware fence and the context
- */
+* struct adreno_hw_fence_entry - A structure to store hardware fence and the context
+*/
 struct adreno_hw_fence_entry {
 	/** @cmd: H2F_MSG_HW_FENCE_INFO packet for this hardware fence */
 	struct hfi_hw_fence_info cmd;
@@ -105,8 +139,8 @@ struct adreno_hwsched {
 	struct kgsl_memdesc global_ctxtq;
 	/** @global_ctxt_gmu_registered: Whether global context is registered with gmu */
 	bool global_ctxt_gmu_registered;
-	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
-	struct kgsl_memdesc hw_fence_md;
+	/** @hw_fence: Container for hw fence related structures */
+	struct adreno_hwsched_hw_fence hw_fence;
 };
 
 /*

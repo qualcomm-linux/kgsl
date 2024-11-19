@@ -59,35 +59,6 @@ struct gen7_hwsched_hfi {
 	struct kgsl_memdesc *perfctr_scratch;
 	/** @msg_mutex: Mutex for accessing the msgq */
 	struct mutex msgq_mutex;
-	struct {
-		/** @lock: Spinlock for managing hardware fences */
-		spinlock_t lock;
-		/**
-		 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
-		 * by GMU
-		 */
-		u32 unack_count;
-		/**
-		 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
-		 * a desired threshold
-		 */
-		wait_queue_head_t unack_wq;
-		/**
-		 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
-		 * hardware fences drops to a desired threshold
-		 */
-		struct adreno_context *defer_drawctxt;
-		/**
-		 * @defer_ts: The timestamp of the hardware fence which got deferred
-		 */
-		u32 defer_ts;
-		/**
-		 * @flags: Flags to control the creation of new hardware fences
-		 */
-		unsigned long flags;
-		/** @seqnum: Sequence number for hardware fence packet header */
-		atomic_t seqnum;
-	} hw_fence;
 	/**
 	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop
 	 * to a desired threshold in given amount of time
