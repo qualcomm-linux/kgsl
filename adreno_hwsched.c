@@ -2470,7 +2470,7 @@ u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_i
 	return 0;
 }
 
-void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+void adreno_hwsched_log_remove_pending_hw_fences(struct adreno_device *adreno_dev,
 	struct device *dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -2490,7 +2490,6 @@ void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_d
 			if (count < ARRAY_SIZE(entries))
 				memcpy(&entries[count], entry, sizeof(*entry));
 			count++;
-			kgsl_hw_fence_destroy(entry->kfence);
 			adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
 		}
 

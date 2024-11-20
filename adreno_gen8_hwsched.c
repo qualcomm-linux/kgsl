@@ -246,8 +246,7 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 	 * soccp power vote failed, these hardware fences may never be signaled. Hence, log them
 	 * for debug purposes.
 	 */
-	adreno_hwsched_log_destroy_pending_hw_fences(adreno_dev,
-			gmu_pdev_dev);
+	adreno_hwsched_log_remove_pending_hw_fences(adreno_dev, gmu_pdev_dev);
 	adreno_mark_for_coldboot(adreno_dev);
 
 	adreno_hwsched_deregister_hw_fence(adreno_dev);
