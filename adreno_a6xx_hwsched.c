@@ -383,6 +383,7 @@ static int a6xx_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_hwsched_cp_init(adreno_dev);
 	if (ret) {
 		a6xx_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err;
 	}
 
@@ -710,7 +711,6 @@ static void hwsched_idle_check(struct work_struct *work)
 
 	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
 		goto done;
 	}
 
@@ -760,7 +760,7 @@ static int a6xx_hwsched_first_open(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int a6xx_hwsched_active_count_get(struct adreno_device *adreno_dev)
+static int a6xx_hwsched_active_count_get(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
@@ -873,7 +873,6 @@ static void scale_gmu_frequency(struct adreno_device *adreno_dev, int buslevel)
 		return;
 
 	a6xx_gmu_clock_set_rate(adreno_dev, req_freq);
-	return;
 }
 
 static int a6xx_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
@@ -916,20 +915,7 @@ static int a6xx_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/**
-	 * Wait for the dispatcher to retire everything by waiting
-	 * for the active count to go to zero.
-	 */
-	ret = kgsl_active_count_wait(device, 0, msecs_to_jiffies(100));
-	if (ret) {
-		dev_err(device->dev, "Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_hwsched_idle(adreno_dev);
+	ret = adreno_hwsched_drain_and_idle(adreno_dev);
 	if (ret)
 		goto err;
 

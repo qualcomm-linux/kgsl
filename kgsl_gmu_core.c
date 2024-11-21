@@ -212,6 +212,59 @@ int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memde
 	return mapped == 0 ? -ENOMEM : 0;
 }
 
+static int gmu_core_iommu_fault_handler(struct iommu_domain *domain,
+		struct device *dev, unsigned long addr, int flags, void *token)
+{
+	char *fault_type = "unknown";
+
+	if (flags & IOMMU_FAULT_TRANSLATION)
+		fault_type = "translation";
+	else if (flags & IOMMU_FAULT_PERMISSION)
+		fault_type = "permission";
+	else if (flags & IOMMU_FAULT_EXTERNAL)
+		fault_type = "external";
+	else if (flags & IOMMU_FAULT_TRANSACTION_STALLED)
+		fault_type = "transaction stalled";
+
+	dev_err(dev, "GMU fault addr = %lX, context=kernel (%s %s fault)\n",
+			addr, (flags & IOMMU_FAULT_WRITE) ? "write" : "read", fault_type);
+
+	return 0;
+}
+
+int gmu_core_iommu_init(struct kgsl_device *device)
+{
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
+	int ret;
+
+	device->gmu_core.domain = iommu_domain_alloc(&platform_bus_type);
+	if (!device->gmu_core.domain) {
+		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
+		return -ENODEV;
+	}
+
+	/*
+	 * Disable stall on fault for the GMU context bank.
+	 * This sets SCTLR.CFCFG = 0.
+	 * Also note that, the smmu driver sets SCTLR.HUPCF = 0 by default.
+	 */
+	qcom_iommu_set_fault_model(device->gmu_core.domain,
+		QCOM_IOMMU_FAULT_MODEL_NO_STALL);
+
+	ret = iommu_attach_device(device->gmu_core.domain, gmu_pdev_dev);
+	if (!ret) {
+		iommu_set_fault_handler(device->gmu_core.domain,
+			gmu_core_iommu_fault_handler, device);
+		return 0;
+	}
+
+	dev_err(gmu_pdev_dev, "Unable to attach GMU IOMMU domain: %d\n", ret);
+	iommu_domain_free(device->gmu_core.domain);
+	device->gmu_core.domain = NULL;
+
+	return ret;
+}
+
 void gmu_core_dev_force_first_boot(struct kgsl_device *device)
 {
 	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);

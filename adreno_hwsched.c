@@ -423,6 +423,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	struct kgsl_context *context = drawobj->context;
 	int ret;
 	struct cmd_list_obj *obj;
+	int is_current_rt = rt_task(current);
 
 	obj = kmem_cache_alloc(obj_cache, GFP_KERNEL);
 	if (!obj)
@@ -430,17 +431,19 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 
 	mutex_lock(&device->mutex);
 
+	/* Elevating thread’s priority to avoid context switch with holding device mutex */
+	if (!is_current_rt)
+		sched_set_fifo(current);
+
 	if (_abort_submission(adreno_dev)) {
-		mutex_unlock(&device->mutex);
-		kmem_cache_free(obj_cache, obj);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto done;
 	}
 
 
 	if (kgsl_context_detached(context)) {
-		mutex_unlock(&device->mutex);
-		kmem_cache_free(obj_cache, obj);
-		return -ENOENT;
+		ret = -ENOENT;
+		goto done;
 	}
 
 	hwsched->inflight++;
@@ -450,9 +453,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 		ret = adreno_active_count_get(adreno_dev);
 		if (ret) {
 			hwsched->inflight--;
-			mutex_unlock(&device->mutex);
-			kmem_cache_free(obj_cache, obj);
-			return ret;
+			goto done;
 		}
 		set_bit(ADRENO_HWSCHED_POWER, &hwsched->flags);
 	}
@@ -469,9 +470,7 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 		}
 
 		hwsched->inflight--;
-		kmem_cache_free(obj_cache, obj);
-		mutex_unlock(&device->mutex);
-		return ret;
+		goto done;
 	}
 
 	if ((hwsched->inflight == 1) &&
@@ -498,9 +497,13 @@ static int hwsched_sendcmd(struct adreno_device *adreno_dev,
 	list_add_tail(&obj->node, &hwsched->cmd_list);
 
 done:
+	if (!is_current_rt)
+		sched_set_normal(current, 0);
 	mutex_unlock(&device->mutex);
+	if (ret)
+		kmem_cache_free(obj_cache, obj);
 
-	return 0;
+	return ret;
 }
 
 /**
@@ -1262,6 +1265,20 @@ static unsigned int _preempt_count_show(struct adreno_device *adreno_dev)
 	return count;
 }
 
+ssize_t _preempt_info_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(dev_get_drvdata(dev));
+	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
+
+	if (hwsched_ops->preempt_info)
+		return hwsched_ops->preempt_info(adreno_dev, buf);
+
+	return -EOPNOTSUPP;
+}
+
+static struct device_attribute adreno_attr_preempt_info =
+		__ATTR(preempt_info, 0444, _preempt_info_show, NULL);
+
 static int _ft_long_ib_detect_store(struct adreno_device *adreno_dev, bool val)
 {
 	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->long_ib_detect,
@@ -1280,6 +1297,7 @@ static ADRENO_SYSFS_BOOL(ft_long_ib_detect);
 static const struct attribute *_hwsched_attr_list[] = {
 	&adreno_attr_preemption.attr.attr,
 	&adreno_attr_preempt_count.attr.attr,
+	&adreno_attr_preempt_info.attr,
 	&adreno_attr_ft_long_ib_detect.attr.attr,
 	NULL,
 };
@@ -1677,9 +1695,6 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd_legacy *cmd = hwsched->ctxt_bad;
 
-	if (device->state != KGSL_STATE_ACTIVE)
-		return;
-
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
@@ -1759,9 +1774,6 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd *cmd = hwsched->ctxt_bad;
-
-	if (device->state != KGSL_STATE_ACTIVE)
-		return;
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
@@ -1890,11 +1902,19 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 
 	mutex_lock(&device->mutex);
 
+	if (device->state != KGSL_STATE_ACTIVE)
+		goto skip_snapshot;
+
+	/* Halt CP for page faults here. CP is halted from GMU when required, for other faults. */
+	if ((fault & ADRENO_IOMMU_PAGE_FAULT) && adreno_gx_is_on(adreno_dev))
+		adreno_writereg(adreno_dev, ADRENO_REG_CP_ME_CNTL, 0);
+
 	if (test_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &hwsched->flags))
 		adreno_hwsched_reset_and_snapshot_legacy(adreno_dev, fault);
 	else
 		adreno_hwsched_reset_and_snapshot(adreno_dev, fault);
 
+skip_snapshot:
 	adreno_scheduler_queue(adreno_dev);
 
 	mutex_unlock(&device->mutex);
@@ -2210,7 +2230,7 @@ static int hwsched_idle(struct adreno_device *adreno_dev)
 	return ret;
 }
 
-int adreno_hwsched_idle(struct adreno_device *adreno_dev)
+static int adreno_hwsched_idle(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	unsigned long wait = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
@@ -2387,6 +2407,66 @@ u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key)
 	for (i = 0; i < payload->dwords; i += 2) {
 		if (payload->data[i] == key)
 			return payload->data[i + 1];
+	}
+
+	return 0;
+}
+
+u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u32 rb_id, u32 key)
+{
+	struct hfi_context_bad_cmd_legacy *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return 0;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd_legacy, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		if (payload->type == PAYLOAD_RB) {
+			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
+
+			if (id == rb_id)
+				return adreno_hwsched_parse_payload(payload, key);
+		}
+
+		i += struct_size(payload, data, payload->dwords);
+	}
+
+	return 0;
+}
+
+u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_id, u32 key)
+{
+	struct hfi_context_bad_cmd *cmd = adreno_dev->hwsched.ctxt_bad;
+	u32 i = 0, payload_bytes;
+	void *start;
+
+	if (!cmd->hdr)
+		return 0;
+
+	payload_bytes = (MSG_HDR_GET_SIZE(cmd->hdr) << 2) -
+			offsetof(struct hfi_context_bad_cmd, payload);
+
+	start = &cmd->payload[0];
+
+	while (i < payload_bytes) {
+		struct payload_section *payload = start + i;
+
+		if (payload->type == PAYLOAD_RB) {
+			u32 id = adreno_hwsched_parse_payload(payload, KEY_RB_ID);
+
+			if (id == rb_id)
+				return adreno_hwsched_parse_payload(payload, key);
+		}
+
+		i += struct_size(payload, data, payload->dwords);
 	}
 
 	return 0;
@@ -2684,4 +2764,16 @@ done:
 	hfi_update_write_idx(&hdr->write_index, write_idx);
 
 	return 0;
+}
+
+int adreno_hwsched_drain_and_idle(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret = adreno_drain(device, msecs_to_jiffies(100));
+
+	/* Make sure the dispatcher and hardware are idle */
+	if (!ret)
+		ret = adreno_hwsched_idle(adreno_dev);
+
+	return ret;
 }

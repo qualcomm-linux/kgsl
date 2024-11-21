@@ -48,6 +48,10 @@ struct adreno_hwsched_ops {
 	 */
 	u32 (*preempt_count)(struct adreno_device *adreno_dev);
 	/**
+	 * @preempt_info - Target specific function to get preemption information
+	 */
+	ssize_t (*preempt_info)(struct adreno_device *adreno_dev, char *buf);
+	/**
 	 * @create_hw_fence - Target specific function to create a hardware fence
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
@@ -158,12 +162,13 @@ void adreno_hwsched_parse_fault_cmdobj(struct adreno_device *adreno_dev,
 void adreno_hwsched_unregister_contexts(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_idle - Wait for dispatcher and hardware to become idle
+ * adreno_hwsched_drain_and_idle - Drain pending work and wait for dispatcher and
+ * hardware to become idle
  * @adreno_dev: A handle to adreno device
  *
  * Return: 0 on success or negative error on failure
  */
-int adreno_hwsched_idle(struct adreno_device *adreno_dev);
+int adreno_hwsched_drain_and_idle(struct adreno_device *adreno_dev);
 
 void adreno_hwsched_retire_cmdobj(struct adreno_hwsched *hwsched,
 	struct kgsl_drawobj_cmd *cmdobj);
@@ -208,6 +213,27 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev);
  * Return: The value of the key or 0 if key is not found
  */
 u32 adreno_hwsched_parse_payload(struct payload_section *payload, u32 key);
+
+/**
+ * adreno_hwsched_get_payload_rb_key - Retrieve the payload based on ring buffer key
+ * @adreno_dev: Pointer to the adreno device
+ * @rb_id: Ring buffer ID to search for
+ * @key: Key to retrieve from the payload
+ *
+ * Return: The value of the key if found, otherwise 0.
+ */
+u32 adreno_hwsched_get_payload_rb_key(struct adreno_device *adreno_dev, u32 rb_id, u32 key);
+
+/**
+ * adreno_hwsched_get_payload_rb_key_legacy - Same as adreno_hwsched_get_payload_rb_key,
+ * but for legacy
+ * @adreno_dev: Pointer to the adreno device
+ * @rb_id: Ring buffer ID to search for
+ * @key: Key to retrieve from the payload
+ *
+ * Return: The value of the key if found, otherwise 0.
+ */
+u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u32 rb_id, u32 key);
 
 /**
  * adreno_hwsched_gpu_fault - Gets hwsched gpu fault info

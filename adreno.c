@@ -23,6 +23,9 @@
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
 #include <linux/suspend.h>
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+#include <linux/soc/qcom/socinfo.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_a5xx.h"
@@ -1646,7 +1649,7 @@ static void adreno_resume(struct adreno_device *adreno_dev)
 		 * the right place when we resume.
 		 */
 		if (device->state == KGSL_STATE_ACTIVE)
-			adreno_idle(device);
+			adreno_wait_idle(device);
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
 		dev_err(device->dev, "resume invoked without a suspend\n");
 	}
@@ -2825,14 +2828,14 @@ int adreno_spin_idle(struct adreno_device *adreno_dev, unsigned int timeout)
 }
 
 /**
- * adreno_idle() - wait for the GPU hardware to go idle
+ * adreno_wait_idle() - wait for the GPU hardware to go idle
  * @device: Pointer to the KGSL device structure for the GPU
  *
  * Wait up to ADRENO_IDLE_TIMEOUT milliseconds for the GPU hardware to go quiet.
  * Caller must hold the device mutex, and must not hold the dispatcher mutex.
  */
 
-int adreno_idle(struct kgsl_device *device)
+int adreno_wait_idle(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
@@ -2859,27 +2862,46 @@ int adreno_idle(struct kgsl_device *device)
 	return adreno_spin_idle(adreno_dev, ADRENO_IDLE_TIMEOUT);
 }
 
-static int adreno_drain_and_idle(struct kgsl_device *device)
+int adreno_drain(struct kgsl_device *device, unsigned long wait_jiffies)
 {
 	int ret;
 
+	/* Halt any new submissions */
 	reinit_completion(&device->halt_gate);
 
-	ret = kgsl_active_count_wait(device, 0, HZ);
+	/**
+	 * Wait for the dispatcher to retire everything by waiting
+	 * for the active count to go to zero.
+	 */
+	ret = kgsl_active_count_wait(device, 0, wait_jiffies);
 	if (ret)
-		return ret;
+		dev_err(device->dev, "Timed out waiting for the active count\n");
 
-	return adreno_idle(device);
+	return ret;
 }
 
 /* Caller must hold the device mutex. */
-int adreno_suspend_context(struct kgsl_device *device)
+void adreno_check_idle(struct kgsl_device *device)
 {
-	/* process any profiling results that are available */
-	adreno_profile_process_results(ADRENO_DEVICE(device));
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	/* Wait for the device to go idle */
-	return adreno_idle(device);
+	/* process any profiling results that are available */
+	adreno_profile_process_results(adreno_dev);
+
+	/*
+	 * Make sure the device mutex is held so the dispatcher can't send any
+	 * more commands to the hardware
+	 */
+	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+		return;
+
+	/* Make sure dispatcher is idle */
+	if (!completion_done(&adreno_dev->dispatcher.idle_gate))
+		dev_err_ratelimited(device->dev, "Dispatcher not idle before SLUMBER\n");
+
+	/* Make sure the device is idle */
+	if (!adreno_isidle(adreno_dev))
+		dev_err_ratelimited(device->dev, "Device not idle before SLUMBER\n");
 }
 
 bool adreno_gx_is_on(struct adreno_device *adreno_dev)
@@ -3668,7 +3690,7 @@ void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
-	.suspend_context = adreno_suspend_context,
+	.check_idle = adreno_check_idle,
 	.first_open = adreno_first_open,
 	.start = adreno_start,
 	.stop = adreno_stop,
@@ -3764,12 +3786,19 @@ static int adreno_probe(struct platform_device *pdev)
 			&adreno_ops, match);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void adreno_remove(struct platform_device *pdev)
+{
+	component_master_del(&pdev->dev, &adreno_ops);
+}
+#else
 static int adreno_remove(struct platform_device *pdev)
 {
 	component_master_del(&pdev->dev, &adreno_ops);
 
 	return 0;
 }
+#endif
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL_HIBERNATION)
 #if IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER)

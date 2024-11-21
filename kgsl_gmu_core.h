@@ -57,6 +57,7 @@ enum gmu_core_flags {
 	GMU_ENABLED,
 	GMU_RSCC_SLEEP_SEQ_DONE,
 	GMU_DISABLE_SLUMBER,
+	GMU_THERMAL_MITIGATION,
 };
 
 /*
@@ -186,6 +187,12 @@ enum gmu_vrb_idx {
 	VRB_CL_NO_FT_TIMEOUT = 4,
 	/* Contains the total number of GPU preemptions */
 	VRB_PREEMPT_COUNT_TOTAL = 5,
+	/* Contains the number of L0 GPU preemptions */
+	VRB_PREEMPT_COUNT_L0 = 6,
+	/* Contains the number of L1A GPU preemptions */
+	VRB_PREEMPT_COUNT_L1A = 7,
+	/* Contains the number of L1B GPU preemptions */
+	VRB_PREEMPT_COUNT_L1B = 8,
 };
 
 /* For GMU Trace */
@@ -447,6 +454,8 @@ struct gmu_core_device {
 	enum gmu_fault_panic_policy gf_panic;
 	/** @pdev: platform device for the gmu */
 	struct platform_device *pdev;
+	/** @domain: IOMMU domain for the gmu context */
+	struct iommu_domain *domain;
 };
 
 extern struct platform_driver a6xx_gmu_driver;
@@ -538,6 +547,15 @@ struct gmu_mem_type_desc {
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+
+/**
+ * gmu_core_iommu_init - Set up GMU IOMMU and shared memory with GMU
+ * @device: Pointer to KGSL device
+ *
+ * Return: 0 on success or error value on failure
+ */
+int gmu_core_iommu_init(struct kgsl_device *device);
+
 void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**

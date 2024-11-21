@@ -7,6 +7,7 @@
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
 #include <linux/sched/signal.h>
+#include <linux/vmalloc.h>
 
 #include "adreno.h"
 #include "adreno_hwsched.h"
@@ -696,7 +697,7 @@ static ssize_t profile_assignments_write(struct file *filep,
 	 * all it's work.  This helps to synchronize the work flow to the
 	 * GPU and avoid racey conditions.
 	 */
-	ret = adreno_idle(device);
+	ret = adreno_wait_idle(device);
 	if (ret) {
 		size = -ETIMEDOUT;
 		goto error_put;

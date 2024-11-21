@@ -39,6 +39,58 @@
  */
 #define GEN8_HWSCHED_HW_FENCE_ABORT_BIT 0x2
 
+#define MAX_THROTTLE_LVLS 3
+struct hfi_tsens_cfg {
+	/** @limit_u: deci-C value for upper trigger point */
+	u32 limit_u;
+	/** @limit_l: deci-C value for lower trigger point */
+	u32 limit_l;
+	/** @margin_u: deci-C value for upper trigger intercept margin */
+	u32 margin_u;
+	/** @margin_l: deci-C value for lower trigger intercept margin */
+	u32 margin_l;
+} __packed;
+
+struct hfi_tsens_throttle_param {
+	/** @throttle_hyst: Microsecond wait between each throttle level */
+	u32 throttle_hyst;
+	/** @num_throttle_cnt: Number of entries in throttle_levels */
+	u32 num_throttle_cnt;
+	/** @throttle_lvls: Percent of original clock to throttle per level */
+	u32 throttle_lvls[MAX_THROTTLE_LVLS];
+} __packed;
+
+struct hfi_therm_profile_ctrl {
+	/** @feature_en: Feature enable status */
+	u16 feature_en;
+	/** @feature_rev: Feature revision */
+	u16 feature_rev;
+	/** @tsens_en: tsens sensor enable status */
+	u32 tsens_en;
+	/** @tj_limit: deci-C value for tj limit */
+	u32 tj_limit;
+	/** @tskin_addr: unused */
+	u32 tskin_addr;
+	/** @tskin_limit: unused */
+	u32 tskin_limit;
+	/** @tsens_cfg_cnt: Count of tsens configuration structs */
+	u32 tsens_cfg_cnt;
+	/** @tsens_cfg: Struct of tsens configurations */
+	struct hfi_tsens_cfg tsens_cfg;
+	/** @throttle_cfg: Struct of throttle configurations */
+	struct hfi_tsens_throttle_param throttle_cfg;
+} __packed;
+
+/* H2F */
+struct hfi_thermaltable_cmd {
+	/** @hdr: HFI header message */
+	u32 hdr;
+	/** @version: Version identifier for the format used for domains */
+	u32 version;
+	/** @ctrl: Thermal profile control information */
+	struct hfi_therm_profile_ctrl ctrl;
+} __packed;
+
 struct gen8_hwsched_hfi {
 	struct hfi_mem_alloc_entry mem_alloc_table[32];
 	u32 mem_alloc_entries;

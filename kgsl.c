@@ -92,6 +92,22 @@ static void kgsl_mem_entry_detach_process(struct kgsl_mem_entry *entry);
 
 static const struct vm_operations_struct kgsl_gpumem_vm_ops;
 
+#if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
+static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
+		     unsigned long addr, unsigned long len,
+		     unsigned long pgoff, unsigned long flags)
+{
+	return mm->get_unmapped_area(file, addr, len, pgoff, flags);
+}
+#else
+static unsigned long kgsl_mm_get_unmapped_area(struct mm_struct *mm, struct file *file,
+		     unsigned long addr, unsigned long len,
+		     unsigned long pgoff, unsigned long flags)
+{
+	return mm_get_unmapped_area(mm, file, addr, len, pgoff, flags);
+}
+#endif
+
 /*
  * The memfree list contains the last N blocks of memory that have been freed.
  * On a GPU fault we walk the list to see if the faulting address had been
@@ -4763,8 +4779,7 @@ static unsigned long set_svm_area(struct file *file,
 	 * Do additoinal constraints checking on the address. Passing MAP_FIXED
 	 * ensures that the address we want gets checked
 	 */
-	ret = current->mm->get_unmapped_area(file, addr, len, 0,
-		flags & MAP_FIXED);
+	ret = kgsl_mm_get_unmapped_area(current->mm, file, addr, len, 0, flags & MAP_FIXED);
 
 	/* If it passes, attempt to set the region in the SVM */
 	if (!IS_ERR_VALUE(ret))
@@ -4864,7 +4879,7 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	}
 
 	if (!kgsl_memdesc_use_cpu_map(&entry->memdesc)) {
-		val = current->mm->get_unmapped_area(file, addr, len, 0, flags);
+		val = kgsl_mm_get_unmapped_area(current->mm, file, addr, len, 0, flags);
 		if (IS_ERR_VALUE(val))
 			dev_err_ratelimited(device->dev,
 					       "get_unmapped_area: pid %d addr %lx pgoff %lx len %ld failed error %d\n",
@@ -5087,7 +5102,7 @@ static struct kobj_type kgsl_gpu_sysfs_ktype = {
 
 static int _register_device(struct kgsl_device *device)
 {
-	static u64 dma_mask = DMA_BIT_MASK(64);
+	static u64 dma_mask = (u64)DMA_BIT_MASK(64);
 	static struct device_dma_parameters dma_parms;
 	int minor, ret;
 	dev_t dev;

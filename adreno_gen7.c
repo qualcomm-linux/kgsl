@@ -532,6 +532,14 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 		gmu_core_regwrite(device, gen7_core->ao_hwcg[i].offset,
 			on ? gen7_core->ao_hwcg[i].val : 0);
 
+	if (!adreno_is_gen7_9_x(adreno_dev))
+		kgsl_regrmw(device, GEN7_UCHE_GBIF_GX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), on ? 2 : 0));
+
+	if (!on)
+		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(18, 16),
+				FIELD_PREP(GENMASK(18, 16), 0));
+
 	if (!gen7_core->hwcg) {
 		kgsl_regwrite(device, GEN7_RBBM_CLOCK_CNTL_GLOBAL, 1);
 		kgsl_regwrite(device, GEN7_RBBM_CGC_GLOBAL_LOAD_CMD, on ? 1 : 0);
@@ -626,6 +634,13 @@ static void gen7_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		for (j = 0; j < reglist[i].count; j++) {
 			*dest++ = r[j];
 			kgsl_regread(device, r[j], dest++);
+		}
+
+		if ((r == gen7_ifpc_pwrup_reglist) || (r == gen7_0_0_ifpc_pwrup_reglist)) {
+			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
+
+			lock->ifpc_list_len += cs_len;
+			dest += (cs_len * 2);
 		}
 	}
 
@@ -2274,11 +2289,11 @@ static void gen7_lpac_fault_header(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN7_RBBM_STATUS, &status);
 	kgsl_regread(device, GEN7_CP_LPAC_RB_RPTR, &lpac_rptr);
 	kgsl_regread(device, GEN7_CP_LPAC_RB_WPTR, &lpac_wptr);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE_HI,
-		       GEN7_CP_LPAC_IB1_BASE, &lpac_ib1base);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
+		       GEN7_CP_LPAC_IB1_BASE_HI, &lpac_ib1base);
 	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &lpac_ib1sz);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE_HI,
-		       GEN7_CP_LPAC_IB2_BASE, &lpac_ib2base);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
+		       GEN7_CP_LPAC_IB2_BASE_HI, &lpac_ib2base);
 	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &lpac_ib2sz);
 
 	pr_context(device, drawobj_lpac->context,

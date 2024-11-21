@@ -192,6 +192,10 @@ struct kgsl_pwrctrl {
 	bool rt_bus_hint_active;
 	/** @wake_on_touch: If true our last wakeup was due to a touch event */
 	bool wake_on_touch;
+	/** @cooling_worker: kthread worker for handling thermal mitigation event */
+	struct kthread_worker *cooling_worker;
+	/** @cooling_work: ws to update pwrlevel as per the thermal mitigation request */
+	struct kthread_work cooling_work;
 };
 
 int kgsl_pwrctrl_init(struct kgsl_device *device);

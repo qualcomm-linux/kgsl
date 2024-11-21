@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/component.h>
@@ -698,19 +698,31 @@ static int kgsl_mmu_dev_probe(struct platform_device *pdev)
 	return component_add(&pdev->dev, &kgsl_mmu_component_ops);
 }
 
-static int kgsl_mmu_dev_remove(struct platform_device *pdev)
+static void _kgsl_mmu_dev_remove(struct platform_device *pdev)
 {
 	if (of_device_is_compatible(pdev->dev.of_node,
 				"qcom,smmu-kgsl-cb")) {
 		component_del(&pdev->dev, &kgsl_mmu_cb_component_ops);
-		return 0;
+		return;
 	}
 
 	component_del(&pdev->dev, &kgsl_mmu_component_ops);
 
 	of_platform_depopulate(&pdev->dev);
+}
+
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void kgsl_mmu_dev_remove(struct platform_device *pdev)
+{
+	_kgsl_mmu_dev_remove(pdev);
+}
+#else
+static int kgsl_mmu_dev_remove(struct platform_device *pdev)
+{
+	_kgsl_mmu_dev_remove(pdev);
 	return 0;
 }
+#endif
 
 static const struct of_device_id mmu_match_table[] = {
 	{ .compatible = "qcom,kgsl-smmu-v2" },

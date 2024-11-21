@@ -37,8 +37,6 @@
 
 /* RBBM registers */
 #define GEN8_RBBM_GBIF_CLIENT_QOS_CNTL           0x008
-#define GEN8_RBBM_GBIF_HALT                      0x00a
-#define GEN8_RBBM_GBIF_HALT_ACK                  0x00b
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL          0x010
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL2         0x011
 #define GEN8_RBBM_STATUS                         0x012
@@ -58,6 +56,8 @@
 #define GEN8_RBBM_SW_FUSE_INT_STATUS             0x071
 #define GEN8_RBBM_SW_FUSE_INT_MASK               0x072
 #define GEN8_RBBM_SW_RESET_CMD                   0x073
+#define GEN8_RBBM_POWER_UP_RESET_SW_OVERRIDE     0x07d
+#define GEN8_RBBM_POWER_UP_RESET_SW_BV_OVERRIDE  0x07e
 #define GEN8_RBBM_CLOCK_CNTL_GLOBAL              0x09a
 #define GEN8_RBBM_CGC_GLOBAL_LOAD_CMD            0x09b
 #define GEN8_RBBM_CGC_P2S_TRIG_CMD               0x09c
@@ -1271,10 +1271,12 @@
 #define GEN8_GBIF_QSB_SIDE3               0x3c06
 #define GEN8_GBIF_HALT                    0x3c45
 #define GEN8_GBIF_HALT_ACK                0x3c46
+#define GEN8_GBIF_REINIT_ENABLE           0x3c49
+#define GEN8_GBIF_REINIT_DONE             0x3c4a
 
 #define GEN8_GBIF_CLIENT_HALT_MASK        BIT(0)
 #define GEN8_GBIF_ARB_HALT_MASK           BIT(1)
-#define GEN8_GBIF_GX_HALT_MASK            BIT(0)
+#define GEN8_GBIF_REINIT_GX_IDLE_MASK     BIT(0)
 
 #define GEN8_GBIF_PERF_PWR_CNT_EN                0x3cc0
 #define GEN8_GBIF_PERF_PWR_CNT_CLR               0x3cc1
@@ -1351,6 +1353,7 @@
 #define GEN8_CX_DBGC_PERF_ATB_CFG                       0x18438
 #define GEN8_CX_DBGC_ECO_CNTL                           0x1843b
 #define GEN8_CX_DBGC_AHB_DBG_CNTL                       0x1843c
+#define GEN8_CX_DBGC_CFG_DBGBUS_MISC_MODE               0x18444
 #define GEN8_CX_DBGC_TCM_DBG_ADDR                       0x18580
 #define GEN8_CX_DBGC_TCM_DBG_DATA                       0x18581
 

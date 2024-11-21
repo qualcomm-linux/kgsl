@@ -373,12 +373,11 @@ static void a6xx_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	 * Note: The below programming will need modification in case
 	 * of change in the register reset value in future.
 	 */
-	if (!on)
-		kgsl_regrmw(device, A6XX_UCHE_GBIF_GX_CONFIG, GENMASK(18, 16),
-				FIELD_PREP(GENMASK(18, 16), 0));
+	kgsl_regrmw(device, A6XX_UCHE_GBIF_GX_CONFIG, GENMASK(18, 16),
+			FIELD_PREP(GENMASK(18, 16), on ? 2 : 0));
 
 	/* Recommended to always disable GBIF_CX_CONFIG for gen6_3_26_0 */
-	if (adreno_is_gen6_3_26_0(adreno_dev))
+	if (!on || adreno_is_gen6_3_26_0(adreno_dev))
 		kgsl_regrmw(device, A6XX_GBIF_CX_CONFIG, GENMASK(18, 16),
 				FIELD_PREP(GENMASK(18, 16), 0));
 
@@ -470,6 +469,15 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 
 		lock->list_length += reglist[i].count * 2;
+
+		if ((r == a6xx_ifpc_pwrup_reglist) || (r == a650_ifpc_pwrup_reglist)) {
+			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
+
+			cs_len = cs_len * 2;
+			lock->list_length += cs_len;
+			list_offset += cs_len;
+			dest += cs_len;
+		}
 	}
 
 	if (adreno_is_a630(adreno_dev)) {

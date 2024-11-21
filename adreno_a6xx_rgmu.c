@@ -718,6 +718,7 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_rb_start(adreno_dev);
 	if (ret) {
 		a6xx_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err_oob_clear;
 	}
 
@@ -805,7 +806,6 @@ static void rgmu_idle_check(struct work_struct *work)
 
 	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
 		goto done;
 	}
 
@@ -1007,15 +1007,7 @@ static int a6xx_power_off(struct adreno_device *adreno_dev)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	int ret;
 
-	adreno_suspend_context(device);
-
-	/*
-	 * adreno_suspend_context() unlocks the device mutex, which
-	 * could allow a concurrent thread to attempt SLUMBER sequence.
-	 * Hence, check the flags before proceeding with SLUMBER.
-	 */
-	if (!test_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags))
-		return 0;
+	adreno_check_idle(device);
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
@@ -1128,18 +1120,7 @@ static int a6xx_rgmu_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/* wait for active count so device can be put in slumber */
-	ret = kgsl_active_count_wait(device, 0, HZ);
-	if (ret) {
-		dev_err(device->dev,
-			"Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_idle(device);
+	ret = adreno_drain_and_idle(device);
 	if (ret)
 		goto err;
 
@@ -1372,11 +1353,18 @@ static int a6xx_rgmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &a6xx_rgmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void a6xx_rgmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &a6xx_rgmu_component_ops);
+}
+#else
 static int a6xx_rgmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &a6xx_rgmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id a6xx_rgmu_match_table[] = {
 	{ .compatible = "qcom,gpu-rgmu" },

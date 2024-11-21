@@ -14,11 +14,11 @@
 #include <linux/io.h>
 #include <linux/kobject.h>
 #include <linux/of_platform.h>
-#include <linux/qcom-iommu-util.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
 #include <linux/mailbox/qmp.h>
+#include <linux/vmalloc.h>
 #include <soc/qcom/cmd-db.h>
 
 #include "adreno.h"
@@ -990,7 +990,7 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 
 	gmu_core_regwrite(device, GEN7_GMU_AHB_FENCE_RANGE_0, BIT(31) |
 			FIELD_PREP(GENMASK(30, 18), 0x32) |
-			FIELD_PREP(GENMASK(17, 0), 0x8a0));
+			FIELD_PREP(GENMASK(17, 0), GEN7_CP_CONTEXT_SWITCH_CNTL));
 
 	/*
 	 * Make sure that CM3 state is at reset value. Snapshot is changing
@@ -1162,7 +1162,7 @@ static int _map_gmu_dynamic(struct gen7_gmu_device *gmu,
 		return ret;
 	}
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
 	if (!ret) {
 		md->gmuaddr = addr;
 		return 0;
@@ -1195,7 +1195,7 @@ static int _map_gmu_static(struct gen7_gmu_device *gmu,
 	if (!addr)
 		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
 
-	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
 	if (ret) {
 		dev_err(GMU_PDEV_DEV(device),
 			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
@@ -1313,6 +1313,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	int vma_id = find_vma_block(gmu, md->gmuaddr, md->size);
 	struct gmu_vma_entry *vma;
 	struct gmu_vma_node *vma_node;
+	struct kgsl_device *device = KGSL_DEVICE(gen7_gmu_to_adreno(gmu));
 
 	if ((vma_id < 0) || !vma_is_dynamic(vma_id))
 		return;
@@ -1323,7 +1324,7 @@ void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md)
 	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
 	 * iommu driver considers remapping an already mapped iova as fatal.
 	 */
-	if (md->size != iommu_unmap(gmu->domain, md->gmuaddr, md->size))
+	if (md->size != iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size))
 		goto free;
 
 	spin_lock(&vma->lock);
@@ -2325,7 +2326,7 @@ static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
 		if (!md->gmuaddr)
 			continue;
 
-		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
+		iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size);
 
 		if (md->priv & KGSL_MEMDESC_SYSMEM)
 			kgsl_sharedmem_free(md);
@@ -2333,10 +2334,10 @@ static void gen7_free_gmu_globals(struct gen7_gmu_device *gmu)
 		memset(md, 0, sizeof(*md));
 	}
 
-	if (gmu->domain) {
-		iommu_detach_device(gmu->domain, GMU_PDEV_DEV(device));
-		iommu_domain_free(gmu->domain);
-		gmu->domain = NULL;
+	if (device->gmu_core.domain) {
+		iommu_detach_device(device->gmu_core.domain, GMU_PDEV_DEV(device));
+		iommu_domain_free(device->gmu_core.domain);
+		device->gmu_core.domain = NULL;
 	}
 
 	gmu->global_entries = 0;
@@ -2525,62 +2526,6 @@ void gen7_gmu_remove(struct kgsl_device *device)
 		kobject_put(&gmu->stats_kobj);
 }
 
-static int gen7_gmu_iommu_fault_handler(struct iommu_domain *domain,
-		struct device *dev, unsigned long addr, int flags, void *token)
-{
-	char *fault_type = "unknown";
-
-	if (flags & IOMMU_FAULT_TRANSLATION)
-		fault_type = "translation";
-	else if (flags & IOMMU_FAULT_PERMISSION)
-		fault_type = "permission";
-	else if (flags & IOMMU_FAULT_EXTERNAL)
-		fault_type = "external";
-	else if (flags & IOMMU_FAULT_TRANSACTION_STALLED)
-		fault_type = "transaction stalled";
-
-	dev_err(dev, "GMU fault addr = %lX, context=kernel (%s %s fault)\n",
-			addr,
-			(flags & IOMMU_FAULT_WRITE) ? "write" : "read",
-			fault_type);
-
-	return 0;
-}
-
-static int gen7_gmu_iommu_init(struct gen7_gmu_device *gmu)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen7_gmu_to_adreno(gmu));
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
-	int ret;
-
-	gmu->domain = iommu_domain_alloc(&platform_bus_type);
-	if (gmu->domain == NULL) {
-		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
-		return -ENODEV;
-	}
-
-	/*
-	 * Disable stall on fault for the GMU context bank.
-	 * This sets SCTLR.CFCFG = 0.
-	 * Also note that, the smmu driver sets SCTLR.HUPCF = 0 by default.
-	 */
-	qcom_iommu_set_fault_model(gmu->domain, QCOM_IOMMU_FAULT_MODEL_NO_STALL);
-
-	ret = iommu_attach_device(gmu->domain, gmu_pdev_dev);
-	if (!ret) {
-		iommu_set_fault_handler(gmu->domain,
-			gen7_gmu_iommu_fault_handler, gmu);
-		return 0;
-	}
-
-	dev_err(gmu_pdev_dev,
-		"Unable to attach GMU IOMMU domain: %d\n", ret);
-	iommu_domain_free(gmu->domain);
-	gmu->domain = NULL;
-
-	return ret;
-}
-
 /* Default IFPC timer (300usec) value */
 #define GEN7_GMU_LONG_IFPC_HYST	FIELD_PREP(GENMASK(15, 0), 0x1680)
 
@@ -2627,7 +2572,7 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		return ret;
 
 	/* Set up GMU IOMMU and shared memory with GMU */
-	ret = gen7_gmu_iommu_init(gmu);
+	ret = gmu_core_iommu_init(device);
 	if (ret)
 		goto error;
 
@@ -2839,6 +2784,7 @@ static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 	ret = gen7_rb_start(adreno_dev);
 	if (ret) {
 		gen7_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto oob_clear;
 	}
 
@@ -3028,15 +2974,7 @@ static int gen7_power_off(struct adreno_device *adreno_dev)
 
 	WARN_ON(!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags));
 
-	adreno_suspend_context(device);
-
-	/*
-	 * adreno_suspend_context() unlocks the device mutex, which
-	 * could allow a concurrent thread to attempt SLUMBER sequence.
-	 * Hence, check the flags again before proceeding with SLUMBER.
-	 */
-	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
-		return 0;
+	adreno_check_idle(device);
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
@@ -3106,7 +3044,6 @@ static void gmu_idle_check(struct work_struct *work)
 
 	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
 		goto done;
 	}
 
@@ -3205,18 +3142,7 @@ static int gen7_gmu_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/* wait for active count so device can be put in slumber */
-	ret = kgsl_active_count_wait(device, 0, HZ);
-	if (ret) {
-		dev_err(device->dev,
-			"Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_idle(device);
+	ret = adreno_drain_and_idle(device);
 	if (ret)
 		goto err;
 
@@ -3454,11 +3380,18 @@ static int gen7_gmu_probe_dev(struct platform_device *pdev)
 	return component_add(&pdev->dev, &gen7_gmu_component_ops);
 }
 
+#if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
+static void gen7_gmu_remove_dev(struct platform_device *pdev)
+{
+	component_del(&pdev->dev, &gen7_gmu_component_ops);
+}
+#else
 static int gen7_gmu_remove_dev(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &gen7_gmu_component_ops);
 	return 0;
 }
+#endif
 
 static const struct of_device_id gen7_gmu_match_table[] = {
 	{ .compatible = "qcom,gen7-gmu" },

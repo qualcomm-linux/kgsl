@@ -599,8 +599,10 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	gen8_hwsched_init_ucode_regs(adreno_dev);
 
 	ret = gen8_hwsched_boot_gpu(adreno_dev);
-	if (ret)
+	if (ret) {
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err;
+	}
 
 	/*
 	 * At this point it is safe to assume that we recovered. Setting
@@ -664,6 +666,7 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
@@ -697,12 +700,21 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 		gmu_core_trace_header_init(&gmu->trace);
 	}
 
+	/* Set the CL infinite timeout VRB override (if declared in gpulist) */
+	if (gen8_core->cl_no_ft_timeout_ms)
+		gmu_core_set_vrb_register(gmu->vrb->hostptr,
+				VRB_CL_NO_FT_TIMEOUT,
+				gen8_core->cl_no_ft_timeout_ms);
+
 	return 0;
 }
 
 static int gen8_hwsched_gmu_init(struct adreno_device *adreno_dev)
 {
 	int ret;
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_THERMAL_MITIGATION))
+		set_bit(GMU_THERMAL_MITIGATION, &KGSL_DEVICE(adreno_dev)->gmu_core.flags);
 
 	ret = gen8_gmu_parse_fw(adreno_dev);
 	if (ret)
@@ -1049,7 +1061,6 @@ static void hwsched_idle_check(struct work_struct *work)
 
 	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
 		goto done;
 	}
 
@@ -1101,7 +1112,7 @@ static int gen8_hwsched_first_open(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
+static int gen8_hwsched_active_count_get(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1265,20 +1276,7 @@ static int gen8_hwsched_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/**
-	 * Wait for the dispatcher to retire everything by waiting
-	 * for the active count to go to zero.
-	 */
-	ret = kgsl_active_count_wait(device, 0, msecs_to_jiffies(100));
-	if (ret) {
-		dev_err(device->dev, "Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_hwsched_idle(adreno_dev);
+	ret = adreno_hwsched_drain_and_idle(adreno_dev);
 	if (ret)
 		goto err;
 
@@ -1604,6 +1602,32 @@ done:
 	return ret;
 }
 
+ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *buf)
+{
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	u32 preempt_count_l0, preempt_count_l1a, preempt_count_l1b;
+	u32 count = 0, max_size = PAGE_SIZE;
+	int ret;
+
+	ret = gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L0, &preempt_count_l0);
+	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1A, &preempt_count_l1a);
+	ret |= gmu_core_get_vrb_register(gmu->vrb, VRB_PREEMPT_COUNT_L1B, &preempt_count_l1b);
+
+	if (ret)
+		return ret;
+
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s %-8s\n", "Level:", "Count");
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L0:", preempt_count_l0);
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L1A:", preempt_count_l1a);
+	count += scnprintf(buf + count, max_size - count,
+			"%-8s 0x%-8x\n", "L1B:", preempt_count_l1b);
+
+	return count;
+}
+
 const struct adreno_power_ops gen8_hwsched_power_ops = {
 	.first_open = gen8_hwsched_first_open,
 	.last_close = gen8_hwsched_power_off,
@@ -1618,6 +1642,7 @@ const struct adreno_power_ops gen8_hwsched_power_ops = {
 const struct adreno_hwsched_ops gen8_hwsched_ops = {
 	.submit_drawobj = gen8_hwsched_submit_drawobj,
 	.preempt_count = gen8_hwsched_preempt_count_get,
+	.preempt_info = gen8_hwsched_preempt_info_get,
 	.create_hw_fence = gen8_hwsched_create_hw_fence,
 	.get_rb_hostptr = gen8_hwsched_get_rb_hostptr,
 };

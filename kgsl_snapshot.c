@@ -8,6 +8,7 @@
 #include <linux/panic_notifier.h>
 #include <linux/slab.h>
 #include <linux/utsname.h>
+#include <linux/vmalloc.h>
 
 #include "adreno_cp_parser.h"
 #include "kgsl_device.h"

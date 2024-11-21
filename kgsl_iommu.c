@@ -1441,6 +1441,17 @@ int kgsl_set_smmu_aperture(struct kgsl_device *device,
 	return ret;
 }
 
+static void kgsl_iommu_enable_ptwalk(struct kgsl_iommu_context *context)
+{
+	u32 tcr = KGSL_IOMMU_GET_CTX_REG(context, KGSL_IOMMU_CTX_TCR_LPAE);
+
+	tcr &= ~(KGSL_IOMMU_TCR_LPAE_EPD0 | KGSL_IOMMU_TCR_LPAE_EPD1);
+	KGSL_IOMMU_SET_CTX_REG(context, KGSL_IOMMU_CTX_TCR_LPAE, tcr);
+
+	/* Make sure all of the preceding writes have posted */
+	wmb();
+}
+
 int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
@@ -1814,6 +1825,17 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 		_iommu_context_set_prr(mmu, &iommu->lpac_context);
 		kgsl_iommu_configure_gpu_sctlr(mmu, mmu->pfpolicy, &iommu->lpac_context);
 	}
+
+	/*
+	 * If CP is halted while executing SMMU_TABLE_UPDATE packet, there is a chance of
+	 * recovery failure. The problematic window is right after the page table walk
+	 * disable and before it is enabled in SMMU_TABLE_UPDATE packet.
+	 * So, enable page table walk in user and lpac contexts during boot. It is not needed
+	 * for secure context, as per process page table is not enabled for secure context.
+	 */
+	kgsl_iommu_enable_ptwalk(&iommu->user_context);
+	if (iommu->lpac_context.domain)
+		kgsl_iommu_enable_ptwalk(&iommu->lpac_context);
 
 	kgsl_iommu_disable_clk(mmu);
 	return 0;
@@ -2681,12 +2703,12 @@ static void kgsl_iommu_check_config(struct kgsl_mmu *mmu,
 
 int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 {
-	u32 val[2];
 	int ret, i;
 	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
 	struct kgsl_mmu *mmu = &device->mmu;
 	struct device_node *node = pdev->dev.of_node;
 	struct kgsl_global_memdesc *md;
+	struct resource *res;
 
 	/* Create a kmem cache for the pagetable address objects */
 	if (!addr_entry_cache) {
@@ -2697,15 +2719,16 @@ int kgsl_iommu_bind(struct kgsl_device *device, struct platform_device *pdev)
 		}
 	}
 
-	ret = of_property_read_u32_array(node, "reg", val, 2);
-	if (ret) {
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		ret = -ENODEV;
 		dev_err(&device->pdev->dev,
 			"%pOF: Unable to read KGSL IOMMU register range\n",
 			node);
 		goto err;
 	}
 
-	iommu->regbase = devm_ioremap(&device->pdev->dev, val[0], val[1]);
+	iommu->regbase = devm_ioremap(&device->pdev->dev, res->start, resource_size(res));
 	if (!iommu->regbase) {
 		dev_err(&device->pdev->dev, "Couldn't map IOMMU registers\n");
 		ret = -ENOMEM;

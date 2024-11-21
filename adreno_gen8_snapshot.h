@@ -42,7 +42,7 @@ enum location_id {
 
 #define NUMBER_OF_SLICES(region, adreno_dev) \
 	((region == SLICE) ? gen8_get_num_slices(adreno_dev) : 1)
-#define SLICE_ID(region, j) ((region == SLICE) ? j : UINT_MAX)
+#define SLICE_ID(region, j) ((region == SLICE) ? j : 0)
 
 #define GEN8_DEBUGBUS_BLOCK_SIZE 0x100
 
@@ -210,6 +210,8 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_UCHE_WRAPPER_GC_US_I_0     = 80,
 	DEBUGBUS_UCHE_GC_US_I_0             = 81,
 	DEBUGBUS_UCHE_GC_US_I_1             = 82,
+	DEBUGBUS_UCHE_GC_US_I_0_1           = 83,
+	DEBUGBUS_UCHE_GC_US_I_1_1           = 84,
 	DEBUGBUS_CP_GC_S_0_I_0              = 128,
 	DEBUGBUS_PC_BR_S_0_I_0              = 129,
 	DEBUGBUS_PC_BV_S_0_I_0              = 130,
@@ -342,6 +344,10 @@ enum gen8_debugbus_ids {
 };
 
 static const u32 gen8_debugbus_blocks[] = {
+	DEBUGBUS_GBIF_CX_GC_US_I_0,
+	DEBUGBUS_GMU_CX_GC_US_I_0,
+	DEBUGBUS_CX_GC_US_I_0,
+	DEBUGBUS_GBIF_GX_GC_US_I_0,
 	DEBUGBUS_GMU_GX_GC_US_I_0,
 	DEBUGBUS_DBGC_GC_US_I_0,
 	DEBUGBUS_RBBM_GC_US_I_0,
@@ -517,6 +523,16 @@ enum gen8_statetype_ids {
 	TP0_TMO_DATA                   = 9,
 	TP0_SMO_DATA                   = 10,
 	TP0_MIPMAP_BASE_DATA           = 11,
+	TP_3D_CVS_REG                  = 12,
+	TP_3D_CPS_REG                  = 13,
+	SP_3D_CVS_REG                  = 16,
+	SP_3D_CPS_REG                  = 17,
+	SP_LB_DATA_RAM                 = 22,
+	SP_INST_DATA_RAM               = 23,
+	SP_STH                         = 24,
+	SP_EVQ                         = 25,
+	SP_CONSMNG                     = 26,
+	HLSQ_INST_DATA_RAM             = 30,
 	SP_INST_DATA_3                 = 31,
 	SP_NCTX_REG                    = 32,
 	SP_CTX0_3D_CVS_REG             = 33,

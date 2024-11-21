@@ -68,8 +68,6 @@ struct a6xx_gmu_device {
 	unsigned long flags;
 	/** @rscc_virt: Pointer where RSCC block is mapped */
 	void __iomem *rscc_virt;
-	/** @domain: IOMMU domain for the kernel context */
-	struct iommu_domain *domain;
 	/** @rdpm_cx_virt: Pointer where the RDPM CX block is mapped */
 	void __iomem *rdpm_cx_virt;
 	/** @rdpm_mx_virt: Pointer where the RDPM MX block is mapped */

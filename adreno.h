@@ -140,6 +140,8 @@
 #define ADRENO_GMU_WARMBOOT BIT(19)
 /* The GPU supports CLX */
 #define ADRENO_CLX BIT(20)
+/* Enable GMU support for GMU based thermal mitigation */
+#define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -251,8 +253,10 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
 	ADRENO_REV_GEN8_0_0 = ADRENO_GPUREV_VALUE(8, 0, 0),
 	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
+	ADRENO_REV_GEN8_2_0 = ADRENO_GPUREV_VALUE(8, 2, 0),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
+	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -1049,7 +1053,7 @@ long adreno_ioctl_helper(struct kgsl_device_private *dev_priv,
 		const struct kgsl_ioctl *cmds, int len);
 
 int adreno_spin_idle(struct adreno_device *device, unsigned int timeout);
-int adreno_idle(struct kgsl_device *device);
+int adreno_wait_idle(struct kgsl_device *device);
 
 int adreno_set_constraint(struct kgsl_device *device,
 				struct kgsl_context *context,
@@ -1282,8 +1286,10 @@ ADRENO_TARGET(gen7_14_0, ADRENO_REV_GEN7_14_0)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
 ADRENO_TARGET(gen8_0_0, ADRENO_REV_GEN8_0_0)
 ADRENO_TARGET(gen8_0_1, ADRENO_REV_GEN8_0_1)
+ADRENO_TARGET(gen8_2_0, ADRENO_REV_GEN8_2_0)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
+ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1306,7 +1312,7 @@ static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen8_0_0(adreno_dev) || adreno_is_gen8_0_1(adreno_dev) ||
-		adreno_is_gen8_4_0(adreno_dev);
+		adreno_is_gen8_4_0(adreno_dev) || adreno_is_gen8_6_0(adreno_dev);
 }
 
 /* Gen7 targets which does not support concurrent binning */
@@ -1927,15 +1933,13 @@ void adreno_get_bus_counters(struct adreno_device *adreno_dev);
 u32 adreno_gmu_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
 
 /**
- * adreno_suspend_context - Make sure device is idle
+ * adreno_check_idle - Make sure device is idle
  * @device: Pointer to the kgsl device
  *
- * This function processes the profiling results and checks if the
- * device is idle so that it can be turned off safely
- *
- * Return: 0 on success or negative error on failure
+ * This function processes the profiling results and log an error if
+ * device is not idle
  */
-int adreno_suspend_context(struct kgsl_device *device);
+void adreno_check_idle(struct kgsl_device *device);
 
 /*
  * adreno_profile_submit_time - Populate profiling buffer with timestamps
@@ -2076,6 +2080,17 @@ static inline void adreno_llcc_slice_deactivate(struct adreno_device *adreno_dev
  */
 void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj, struct kgsl_drawobj *drawobj_lpac, int fault);
+
+
+/**
+ * adreno_drain - Halt new submissions and drain pending work by waiting for active count to become
+ * zero
+ * @device: A handle to kgsl device
+ * @wait_jiffies: jiffies to wait for active count to become zero
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int adreno_drain(struct kgsl_device *device, unsigned long wait_jiffies);
 
 /**
  * adreno_irq_free - Free an interrupt allocated for GPU

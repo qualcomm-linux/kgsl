@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/amba/bus.h>
@@ -63,6 +63,7 @@ static struct adreno_coresight_register gen7_coresight_regs[] = {
 	{ GEN7_DBGC_PERF_ATB_DRAIN_CMD },
 	{ GEN7_DBGC_ECO_CNTL },
 	{ GEN7_DBGC_AHB_DBG_CNTL },
+	{ GEN7_DBGC_CFG_DBGBUS_MISC_MODE },
 };
 
 static struct adreno_coresight_register gen7_coresight_regs_cx[] = {
@@ -118,6 +119,7 @@ static struct adreno_coresight_register gen7_coresight_regs_cx[] = {
 	{ GEN7_CX_DBGC_PERF_ATB_DRAIN_CMD },
 	{ GEN7_CX_DBGC_ECO_CNTL },
 	{ GEN7_CX_DBGC_AHB_DBG_CNTL },
+	{ GEN7_CX_DBGC_CFG_DBGBUS_MISC_MODE },
 };
 
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_a, &gen7_coresight_regs[0]);
@@ -174,6 +176,7 @@ static ADRENO_CORESIGHT_ATTR(perf_atb_trig_intf_sel_1,
 static ADRENO_CORESIGHT_ATTR(perf_atb_drain_cmd, &gen7_coresight_regs[49]);
 static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen7_coresight_regs[50]);
 static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen7_coresight_regs[51]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen7_coresight_regs[52]);
 
 /*CX debug registers*/
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_a,
@@ -280,6 +283,8 @@ static ADRENO_CORESIGHT_ATTR(cx_eco_cntl,
 				&gen7_coresight_regs_cx[50]);
 static ADRENO_CORESIGHT_ATTR(cx_ahb_dbg_cntl,
 				&gen7_coresight_regs_cx[51]);
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_misc_mode,
+				&gen7_coresight_regs_cx[52]);
 
 static struct attribute *gen7_coresight_attrs[] = {
 	&coresight_attr_cfg_dbgbus_sel_a.attr.attr,
@@ -334,6 +339,7 @@ static struct attribute *gen7_coresight_attrs[] = {
 	&coresight_attr_perf_atb_drain_cmd.attr.attr,
 	&coresight_attr_eco_cntl.attr.attr,
 	&coresight_attr_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 
@@ -391,6 +397,7 @@ static struct attribute *gen7_coresight_attrs_cx[] = {
 	&coresight_attr_cx_perf_atb_drain_cmd.attr.attr,
 	&coresight_attr_cx_eco_cntl.attr.attr,
 	&coresight_attr_cx_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cx_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 

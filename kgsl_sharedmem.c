@@ -12,6 +12,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/sched/signal.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 
 #include "kgsl_device.h"
 #include "kgsl_pool.h"
@@ -1859,17 +1860,31 @@ int kgsl_memdesc_init_fixed(struct kgsl_device *device,
 		struct platform_device *pdev, const char *resource,
 		struct kgsl_memdesc *memdesc)
 {
-	u32 entry[2];
+	const __be32 *prop;
+	phys_addr_t physaddr;
+	u64 size;
+	int len;
+	int addr_cells = of_n_addr_cells(pdev->dev.of_node);
+	int size_cells = of_n_size_cells(pdev->dev.of_node);
 
-	if (of_property_read_u32_array(pdev->dev.of_node,
-		resource, entry, 2))
+	prop = of_get_property(pdev->dev.of_node, resource, &len);
+	if (!prop)
 		return -ENODEV;
 
-	kgsl_memdesc_init(device, memdesc, 0);
-	memdesc->physaddr = entry[0];
-	memdesc->size = entry[1];
+	if (len != ((addr_cells + size_cells) * sizeof(__be32))) {
+		dev_err_ratelimited(device->dev, "of property %s has len %d expected %lu\n",
+			resource, len, (addr_cells + size_cells) * sizeof(__be32));
+		return -E2BIG;
+	}
 
-	return kgsl_memdesc_sg_dma(memdesc, entry[0], entry[1]);
+	physaddr = of_read_number(prop, addr_cells);
+	size = of_read_number(prop + addr_cells, size_cells);
+
+	kgsl_memdesc_init(device, memdesc, 0);
+	memdesc->physaddr = physaddr;
+	memdesc->size = size;
+
+	return kgsl_memdesc_sg_dma(memdesc, physaddr, size);
 }
 
 struct kgsl_memdesc *kgsl_allocate_global_fixed(struct kgsl_device *device,

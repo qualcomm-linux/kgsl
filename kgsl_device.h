@@ -90,7 +90,7 @@ struct kgsl_functable {
 	 * by the client device.  The driver will not check for a NULL
 	 * pointer before calling the hook.
 	 */
-	int (*suspend_context)(struct kgsl_device *device);
+	void (*check_idle)(struct kgsl_device *device);
 	int (*first_open)(struct kgsl_device *device);
 	int (*last_close)(struct kgsl_device *device);
 	int (*start)(struct kgsl_device *device, int priority);
@@ -569,8 +569,10 @@ struct kgsl_device_private {
  * struct kgsl_snapshot - details for a specific snapshot instance
  * @ib1base: Active IB1 base address at the time of fault
  * @ib2base: Active IB2 base address at the time of fault
+ * @ib3base: Active IB3 base address at the time of fault
  * @ib1size: Number of DWORDS pending in IB1 at the time of fault
  * @ib2size: Number of DWORDS pending in IB2 at the time of fault
+ * @ib3size: Number of DWORDS pending in IB3 at the time of fault
  * @ib1dumped: Active IB1 dump status to sansphot binary
  * @ib2dumped: Active IB2 dump status to sansphot binary
  * @start: Pointer to the start of the static snapshot region
@@ -590,10 +592,12 @@ struct kgsl_device_private {
  * @recovered: True if GPU was recovered after previous snapshot
  */
 struct kgsl_snapshot {
-	uint64_t ib1base;
-	uint64_t ib2base;
-	unsigned int ib1size;
-	unsigned int ib2size;
+	u64 ib1base;
+	u64 ib2base;
+	u64 ib3base;
+	u32 ib1size;
+	u32 ib2size;
+	u32 ib3size;
 	bool ib1dumped;
 	bool ib2dumped;
 	u64 ib1base_lpac;

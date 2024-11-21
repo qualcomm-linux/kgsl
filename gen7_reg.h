@@ -108,6 +108,9 @@
 #define GEN7_CP_IB2_BASE                 0x92b
 #define GEN7_CP_IB2_BASE_HI              0x92c
 #define GEN7_CP_IB2_REM_SIZE             0x92d
+#define GEN7_CP_IB3_BASE                 0xa67
+#define GEN7_CP_IB3_BASE_HI              0xa68
+#define GEN7_CP_IB3_REM_SIZE             0xa69
 #define GEN7_CP_ALWAYS_ON_COUNTER_LO     0x980
 #define GEN7_CP_ALWAYS_ON_COUNTER_HI     0x981
 #define GEN7_CP_ALWAYS_ON_CONTEXT_LO     0x982
@@ -745,6 +748,7 @@
 #define GEN7_DBGC_PERF_ATB_DRAIN_CMD                0x64a
 #define GEN7_DBGC_ECO_CNTL                          0x650
 #define GEN7_DBGC_AHB_DBG_CNTL                      0x651
+#define GEN7_DBGC_CFG_DBGBUS_MISC_MODE              0x658
 #define GEN7_DBGC_TRACE_BUFFER_STATUS               0x699
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_ADDR          0x69b
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_DATA          0x69c
@@ -1101,6 +1105,7 @@
 #define GEN7_CX_DBGC_PERF_ATB_DRAIN_CMD                 0x1844a
 #define GEN7_CX_DBGC_ECO_CNTL                           0x18450
 #define GEN7_CX_DBGC_AHB_DBG_CNTL                       0x18451
+#define GEN7_CX_DBGC_CFG_DBGBUS_MISC_MODE               0x18458
 #define GEN7_CX_DBGC_TCM_DBG_ADDR                       0x18580
 #define GEN7_CX_DBGC_TCM_DBG_DATA                       0x18581
 
