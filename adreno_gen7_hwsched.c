@@ -1293,10 +1293,11 @@ static void process_context_hw_fences_after_reset(struct adreno_device *adreno_d
 		}
 
 		/*
-		 * Force retire the fences if the corresponding submission is retired by GPU
-		 * or if the context has gone bad
+		 * Force retire the fences if the ts is retired and context is not
+		 * registered with GMU, or if the context is gone bad.
 		 */
-		if (retired || kgsl_context_is_bad(&drawctxt->base))
+		if ((retired && !drawctxt->base.gmu_registered) ||
+			kgsl_context_is_bad(&drawctxt->base))
 			entry->cmd.flags |= HW_FENCE_FLAG_SKIP_MEMSTORE;
 
 		list_add_tail(&entry->reset_node, reset_list);
