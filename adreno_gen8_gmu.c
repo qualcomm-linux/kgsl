@@ -784,7 +784,7 @@ int gen8_gmu_wait_for_idle(struct adreno_device *adreno_dev)
 int gen8_gmu_version_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
 	if (gmu_core_capabilities_enabled(&device->gmu_core.common_caps,
@@ -949,9 +949,9 @@ static int gen8_gmu_process_caps(struct gen8_gmu_device *gmu,
 }
 
 static int gen8_gmu_process_zero_length_block(struct kgsl_device *device,
-		struct gen8_gmu_device *gmu, struct gmu_block_header *blk)
+		struct gmu_block_header *blk)
 {
-	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct gmu_core_device *gmu = &device->gmu_core;
 	int ret = 0;
 
 	switch (blk->type) {
@@ -975,7 +975,7 @@ static int gen8_gmu_process_zero_length_block(struct kgsl_device *device,
 		gmu->ver.hfi = blk->value;
 		break;
 	default:
-		dev_err(&gmu_core->pdev->dev, "Unknown FW block type:%d\n", blk->type);
+		dev_err(GMU_PDEV_DEV(device), "Unknown FW block type:%d\n", blk->type);
 	}
 
 	return ret;
@@ -1037,7 +1037,7 @@ int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 
 		/* process zero length blocks */
 		if (!blk->size) {
-			ret = gen8_gmu_process_zero_length_block(device, gmu, blk);
+			ret = gen8_gmu_process_zero_length_block(device, blk);
 			if (ret)
 				return ret;
 		} else {
@@ -2076,18 +2076,18 @@ int gen8_gmu_probe(struct kgsl_device *device,
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	int ret, i;
 
-	device->gmu_core.pdev = pdev;
-	memset(&device->gmu_core.common_caps, 0, sizeof(struct firmware_capabilities));
-	memset(&device->gmu_core.platform_caps, 0, sizeof(struct firmware_capabilities));
-	memset(&gmu->ver, 0, sizeof(gmu->ver));
+	gmu_core->pdev = pdev;
+	memset(&gmu_core->common_caps, 0, sizeof(struct firmware_capabilities));
+	memset(&gmu_core->platform_caps, 0, sizeof(struct firmware_capabilities));
+	memset(&gmu_core->ver, 0, sizeof(gmu_core->ver));
 
-	dma_set_coherent_mask(&device->gmu_core.pdev->dev, DMA_BIT_MASK(64));
-	device->gmu_core.pdev->dev.dma_mask =
-			&device->gmu_core.pdev->dev.coherent_dma_mask;
+	dma_set_coherent_mask(&gmu_core->pdev->dev, DMA_BIT_MASK(64));
+	gmu_core->pdev->dev.dma_mask = &gmu_core->pdev->dev.coherent_dma_mask;
 	set_dma_ops(GMU_PDEV_DEV(device), NULL);
 
 	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
@@ -2118,7 +2118,7 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	if (ret)
 		goto error;
 
-	device->gmu_core.vma = gen8_gmu_vma;
+	gmu_core->vma = gen8_gmu_vma;
 	for (i = 0; i < ARRAY_SIZE(gen8_gmu_vma); i++) {
 		struct gmu_vma_entry *vma = &gen8_gmu_vma[i];
 
@@ -2147,10 +2147,10 @@ int gen8_gmu_probe(struct kgsl_device *device,
 
 	gen8_gmu_acd_probe(device, gmu, pdev->dev.of_node);
 
-	set_bit(GMU_ENABLED, &device->gmu_core.flags);
+	set_bit(GMU_ENABLED, &gmu_core->flags);
 
-	device->gmu_core.dev_ops = &gen8_gmudev;
-	device->gmu_core.gf_panic = GMU_FAULT_PANIC_NONE;
+	gmu_core->dev_ops = &gen8_gmudev;
+	gmu_core->gf_panic = GMU_FAULT_PANIC_NONE;
 
 	/* Set default GMU attributes */
 	gmu->log_stream_enable = false;

@@ -145,71 +145,6 @@ static void gen7_receive_ack_async(struct adreno_device *adreno_dev, void *rcvd)
 			MSG_HDR_GET_SEQNUM(waiters[i]));
 }
 
-static void _retire_inflight_hw_fences(struct adreno_device *adreno_dev,
-	struct kgsl_context *context)
-{
-	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
-	struct adreno_hw_fence_entry *entry, *tmp;
-
-	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
-		return;
-
-	spin_lock(&drawctxt->lock);
-
-	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
-		struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
-
-		/*
-		 * Since this list is sorted by timestamp, abort on the first fence that hasn't
-		 * yet been sent to TxQueue
-		 */
-		if (timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)
-			break;
-
-		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
-	}
-	spin_unlock(&drawctxt->lock);
-}
-
-static void log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
-{
-	struct hfi_ts_retire_cmd *cmd = (struct hfi_ts_retire_cmd *)rcvd;
-	struct kgsl_context *context;
-	struct retire_info info = {0};
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	context = kgsl_context_get(device, cmd->ctxt_id);
-	if (context == NULL)
-		return;
-
-	info.timestamp = cmd->ts;
-	info.rb_id = adreno_get_level(context);
-	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
-	info.submitted_to_rb = cmd->submitted_to_rb;
-	info.sop = cmd->sop;
-	info.eop = cmd->eop;
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 4)
-		info.active = cmd->eop - cmd->sop;
-	else
-		info.active = cmd->active;
-	info.retired_on_gmu = cmd->retired_on_gmu;
-
-	/* protected GPU work must not be reported */
-	if  (!(context->flags & KGSL_CONTEXT_SECURE))
-		kgsl_work_period_update(device, context->proc_priv->period,
-					     info.active);
-
-	trace_adreno_cmdbatch_retired(context, &info, 0, 0, 0);
-
-	log_kgsl_cmdbatch_retired_event(context->id, cmd->ts,
-		context->priority, 0, cmd->sop, cmd->eop);
-
-	_retire_inflight_hw_fences(adreno_dev, context);
-
-	kgsl_context_put(context);
-}
-
 /* Look up a particular key's value for a given type of payload */
 static u32 gen7_hwsched_lookup_key_value_legacy(struct adreno_device *adreno_dev,
 	u32 type, u32 key)
@@ -724,9 +659,9 @@ static u32 peek_next_header(struct adreno_device *adreno_dev, struct gen7_gmu_de
 
 static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2) {
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2) {
 		log_gpu_fault_legacy(adreno_dev);
 		goto done;
 	}
@@ -1216,7 +1151,7 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			process_ctx_bad(adreno_dev);
 			break;
 		case F2H_MSG_TS_RETIRE:
-			log_profiling_info(adreno_dev, rcvd);
+			adreno_hwsched_log_profiling_info(adreno_dev, rcvd);
 			adreno_scheduler_queue(adreno_dev);
 			break;
 		case F2H_MSG_SYNCOBJ_QUERY:
@@ -1990,9 +1925,9 @@ done:
 
 static void _context_queue_hw_fence_enable(struct adreno_device *adreno_dev)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) >= 3) {
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) >= 3) {
 		if (gen7_hfi_send_get_value(adreno_dev, HFI_VALUE_CONTEXT_QUEUE, 0) == 1) {
 			set_bit(ADRENO_HWSCHED_CONTEXT_QUEUE, &adreno_dev->hwsched.flags);
 			adreno_hwsched_register_hw_fence(adreno_dev);

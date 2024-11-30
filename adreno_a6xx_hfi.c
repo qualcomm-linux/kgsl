@@ -78,7 +78,7 @@ int a6xx_hfi_queue_read(struct a6xx_gmu_device *gmu, uint32_t queue_idx,
 		result = -ENODATA;
 	}
 
-	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2)
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) >= 2)
 		read = ALIGN(read, SZ_4) % hdr->queue_size;
 
 	/* For acks, trace the packet for which this ack was sent */
@@ -101,6 +101,7 @@ int a6xx_hfi_queue_write(struct adreno_device *adreno_dev, uint32_t queue_idx,
 		uint32_t *msg, u32 size_bytes)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct hfi_queue_table *tbl = gmu->hfi.hfi_mem->hostptr;
 	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
 	uint32_t *queue;
@@ -130,7 +131,7 @@ int a6xx_hfi_queue_write(struct adreno_device *adreno_dev, uint32_t queue_idx,
 	}
 
 	/* Cookify any non used data at the end of the write buffer */
-	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) >= 2) {
 		for (; i < align_size; i++) {
 			queue[write_idx] = 0xFAFAFAFA;
 			write_idx = (write_idx + 1) % hdr->queue_size;
@@ -527,7 +528,7 @@ int a6xx_hfi_process_queue(struct a6xx_gmu_device *gmu,
 
 	while (a6xx_hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) > 0) {
 		/* Special case if we're v1 */
-		if (GMU_VER_MAJOR(gmu->ver.hfi) < 2) {
+		if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) < 2) {
 			a6xx_hfi_v1_receiver(gmu, rcvd, ret_cmd);
 			continue;
 		}
@@ -562,14 +563,14 @@ int a6xx_hfi_process_queue(struct a6xx_gmu_device *gmu,
 
 static int a6xx_hfi_verify_fw_version(struct adreno_device *adreno_dev)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_a6xx_core *a6xx_core = to_a6xx_core(adreno_dev);
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
 	int result;
 	unsigned int ver, major, minor;
 
 	/* GMU version is already known, so don't waste time finding again */
-	if (gmu->ver.core != 0)
+	if (device->gmu_core.ver.core != 0)
 		return 0;
 
 	major = a6xx_core->gmu_major;
@@ -595,7 +596,7 @@ static int a6xx_hfi_verify_fw_version(struct adreno_device *adreno_dev)
 				GMU_VER_MINOR(ver), minor);
 
 	/* Save the gmu version information */
-	gmu->ver.core = ver;
+	device->gmu_core.ver.core = ver;
 
 	return 0;
 }
@@ -697,7 +698,7 @@ int a6xx_hfi_start(struct adreno_device *adreno_dev)
 	if (result)
 		goto err;
 
-	if (GMU_VER_MAJOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) < 2)
 		result = a6xx_hfi_send_dcvstbl_v1(adreno_dev);
 	else
 		result = a6xx_hfi_send_generic_req(adreno_dev,
@@ -715,7 +716,7 @@ int a6xx_hfi_start(struct adreno_device *adreno_dev)
 	 * we are sending no more HFIs until the next boot otherwise
 	 * send H2F_MSG_CORE_FW_START and features for A640 devices
 	 */
-	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) >= 2) {
 		result = a6xx_hfi_send_acd_feature_ctrl(adreno_dev);
 		if (result)
 			goto err;

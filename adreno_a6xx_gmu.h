@@ -13,7 +13,6 @@
 
 /**
  * struct a6xx_gmu_device - GMU device structure
- * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
  * @dump_mem: pointer to GMU debug dump memory
@@ -25,13 +24,6 @@
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct a6xx_gmu_device {
-	struct {
-		u32 core;
-		u32 core_dev;
-		u32 pwr;
-		u32 pwr_dev;
-		u32 hfi;
-	} ver;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;

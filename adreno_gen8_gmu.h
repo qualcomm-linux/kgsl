@@ -32,13 +32,6 @@ struct gen8_dcvs_table {
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct gen8_gmu_device {
-	struct {
-		u32 core;
-		u32 core_dev;
-		u32 pwr;
-		u32 pwr_dev;
-		u32 hfi;
-	} ver;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;

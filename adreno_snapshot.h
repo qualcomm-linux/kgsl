@@ -150,16 +150,14 @@ void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
 			struct kgsl_snapshot *snapshot);
 
 /**
- * adreno_snapshot_gmu_version - To dump gmu version info to snapshot buffer
+ * adreno_snapshot_gmu_versions - To dump gmu versions info to snapshot buffer
  * @device: Pointer to the kgsl device
- * @buf: Destination snapshot buffer
- * @remain: Remaining size of the snapshot buffer
- * @priv: Opaque handle
+ * @snapshot: Pointer to the snapshot structure
  *
- * Return: Number of bytes written to snapshot buffer
+ * Dump gmu versions info to the snapshot buffer.
  */
-size_t adreno_snapshot_gmu_version(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv);
+void adreno_snapshot_gmu_versions(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot);
 
 /**
  * kgsl_snapshot_gmu_mem - Snapshot a GMU memory descriptor

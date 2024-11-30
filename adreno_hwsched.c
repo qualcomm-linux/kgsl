@@ -2778,3 +2778,67 @@ int adreno_hwsched_drain_and_idle(struct adreno_device *adreno_dev)
 
 	return ret;
 }
+
+static void _retire_inflight_hw_fences(struct adreno_device *adreno_dev,
+	struct kgsl_context *context)
+{
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	struct adreno_hw_fence_entry *entry, *tmp;
+
+	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
+		return;
+
+	spin_lock(&drawctxt->lock);
+
+	list_for_each_entry_safe(entry, tmp, &drawctxt->hw_fence_inflight_list, node) {
+		struct gmu_context_queue_header *hdr = drawctxt->gmu_context_queue.hostptr;
+
+		/*
+		 * Since this list is sorted by timestamp, abort on the first fence that hasn't
+		 * yet been sent to TxQueue
+		 */
+		if (timestamp_cmp((u32)entry->cmd.ts, hdr->out_fence_ts) > 0)
+			break;
+
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+	}
+	spin_unlock(&drawctxt->lock);
+}
+
+void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
+{
+	struct hfi_ts_retire_cmd *cmd = (struct hfi_ts_retire_cmd *)rcvd;
+	struct kgsl_context *context;
+	struct retire_info info = {0};
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	context = kgsl_context_get(device, cmd->ctxt_id);
+	if (context == NULL)
+		return;
+
+	info.timestamp = cmd->ts;
+	info.rb_id = adreno_get_level(context);
+	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
+	info.submitted_to_rb = cmd->submitted_to_rb;
+	info.sop = cmd->sop;
+	info.eop = cmd->eop;
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 4)
+		info.active = cmd->eop - cmd->sop;
+	else
+		info.active = cmd->active;
+	info.retired_on_gmu = cmd->retired_on_gmu;
+
+	/* protected GPU work must not be reported */
+	if  (!(context->flags & KGSL_CONTEXT_SECURE))
+		kgsl_work_period_update(device, context->proc_priv->period,
+					     info.active);
+
+	trace_adreno_cmdbatch_retired(context, &info, 0, 0, 0);
+
+	log_kgsl_cmdbatch_retired_event(context->id, cmd->ts,
+		context->priority, 0, cmd->sop, cmd->eop);
+
+	_retire_inflight_hw_fences(adreno_dev, context);
+
+	kgsl_context_put(context);
+}

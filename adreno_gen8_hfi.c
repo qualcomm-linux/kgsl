@@ -388,10 +388,10 @@ int gen8_hfi_send_core_fw_start(struct adreno_device *adreno_dev)
 int gen8_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 		struct pending_cmd *ret_cmd, u32 size_bytes)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int rc;
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) <= 4)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) <= 4)
 		return gen8_hfi_send_generic_req(adreno_dev, cmd, size_bytes);
 
 	rc = gen8_hfi_send_cmd_wait_inline(adreno_dev, cmd, size_bytes, ret_cmd);
@@ -682,11 +682,12 @@ int gen8_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev)
 	 */
 	static u32 cmd_buf[200];
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_dcvs_table *tbl = &gmu->dcvs_table;
 	int ret = 0;
 
 	/* Starting with GMU HFI Version 2.6.1, use H2F_MSG_TABLE */
-	if (gmu->ver.hfi >= HFI_VERSION(2, 6, 1)) {
+	if (device->gmu_core.ver.hfi >= HFI_VERSION(2, 6, 1)) {
 		struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
 		u32 dword_off;
 

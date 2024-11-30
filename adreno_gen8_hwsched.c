@@ -292,11 +292,11 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	icc_set_bw(pwr->icc_path, 0, kBps_to_icc(pwr->ddr_table[level]));
 
 	/* This is the minimum GMU FW HFI version required to enable hw fences */
-	if (GMU_VER_MINOR(gmu->ver.hfi) >= 7)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) >= 7)
 		adreno_hwsched_register_hw_fence(adreno_dev);
 
 	/* From this GMU FW all RBBM interrupts are handled at GMU */
-	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
+	if (device->gmu_core.ver.core >= GMU_VERSION(5, 01, 06))
 		adreno_irq_free(adreno_dev);
 
 	gen8_hwsched_soccp_vote(adreno_dev, true);

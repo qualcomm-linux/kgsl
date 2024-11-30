@@ -134,42 +134,6 @@ static void a6xx_receive_ack_async(struct adreno_device *adreno_dev, void *rcvd)
 			MSG_HDR_GET_SEQNUM(waiters[i]));
 }
 
-static void log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
-{
-	struct hfi_ts_retire_cmd *cmd = (struct hfi_ts_retire_cmd *)rcvd;
-	struct kgsl_context *context;
-	struct retire_info info = {0};
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	context = kgsl_context_get(device, cmd->ctxt_id);
-	if (context == NULL)
-		return;
-
-	info.timestamp = cmd->ts;
-	info.rb_id = adreno_get_level(context);
-	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
-	info.submitted_to_rb = cmd->submitted_to_rb;
-	info.sop = cmd->sop;
-	info.eop = cmd->eop;
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 4)
-		info.active = cmd->eop - cmd->sop;
-	else
-		info.active = cmd->active;
-	info.retired_on_gmu = cmd->retired_on_gmu;
-
-	/* protected GPU work must not be reported */
-	if  (!(context->flags & KGSL_CONTEXT_SECURE))
-		kgsl_work_period_update(device, context->proc_priv->period, info.active);
-
-	trace_adreno_cmdbatch_retired(context, &info, 0, 0, 0);
-
-	log_kgsl_cmdbatch_retired_event(context->id, cmd->ts, context->priority,
-		0, cmd->sop, cmd->eop);
-
-	kgsl_context_put(context);
-}
-
 /* Look up a particular key's value for a given type of payload */
 static u32 a6xx_hwsched_lookup_key_value_legacy(struct adreno_device *adreno_dev,
 	u32 type, u32 key)
@@ -366,9 +330,9 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 
 static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		log_gpu_fault_legacy(adreno_dev);
 	else
 		log_gpu_fault(adreno_dev);
@@ -430,7 +394,7 @@ static void a6xx_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			a6xx_receive_ack_async(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_TS_RETIRE) {
 			adreno_scheduler_queue(adreno_dev);
-			log_profiling_info(adreno_dev, rcvd);
+			adreno_hwsched_log_profiling_info(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_RELEASE) {
 			struct hfi_gmu_cntr_release_cmd *cmd =
 				(struct hfi_gmu_cntr_release_cmd *) rcvd;
@@ -1633,6 +1597,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	uint32_t *msg, u32 size_bytes, struct kgsl_drawobj_cmd *cmdobj,
 	struct adreno_submit_time *time)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct hfi_queue_table *tbl = gmu->hfi.hfi_mem->hostptr;
 	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
@@ -1662,7 +1627,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	}
 
 	/* Cookify any non used data at the end of the write buffer */
-	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) >= 2) {
 		for (; i < align_size; i++) {
 			queue[write] = 0xFAFAFAFA;
 			write = (write + 1) % hdr->queue_size;
