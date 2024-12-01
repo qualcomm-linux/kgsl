@@ -525,4 +525,28 @@ void gen7_coresight_init(struct adreno_device *device);
 static inline void gen7_coresight_init(struct adreno_device *device) { }
 #endif
 
+/**
+ * gen7_periph_regread64 - Read 64 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords_lo: Lower 32 bit address to read
+ * @offsetwords_hi: Higher 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 64 bit value for peripheral registers
+ */
+void gen7_periph_regread64(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe);
+
+/**
+ * gen7_periph_regread - Read 32 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords: 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 32 bit value for peripheral registers
+ */
+void gen7_periph_regread(struct kgsl_device *device, u32 offsetwords,
+	u32 *value, u32 pipe);
 #endif

@@ -1691,23 +1691,32 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	kgsl_regread64(device, GEN7_CP_IB1_BASE, GEN7_CP_IB1_BASE_HI, &snapshot->ib1base);
+	gen7_periph_regread64(device, GEN7_CP_PERIPH_IB1_BASE_LO(adreno_dev),
+		GEN7_CP_PERIPH_IB1_BASE_HI(adreno_dev), &snapshot->ib1base, PIPE_BR);
 
-	kgsl_regread64(device, GEN7_CP_IB2_BASE, GEN7_CP_IB2_BASE_HI, &snapshot->ib2base);
+	gen7_periph_regread64(device, GEN7_CP_PERIPH_IB2_BASE_LO(adreno_dev),
+		GEN7_CP_PERIPH_IB2_BASE_HI(adreno_dev), &snapshot->ib2base, PIPE_BR);
 
-	kgsl_regread64(device, GEN7_CP_IB3_BASE, GEN7_CP_IB3_BASE_HI, &snapshot->ib3base);
+	gen7_periph_regread64(device, GEN7_CP_PERIPH_IB3_BASE_LO(adreno_dev),
+		GEN7_CP_PERIPH_IB3_BASE_HI(adreno_dev), &snapshot->ib3base, PIPE_BR);
 
-	kgsl_regread(device, GEN7_CP_IB1_REM_SIZE, &snapshot->ib1size);
-	kgsl_regread(device, GEN7_CP_IB2_REM_SIZE, &snapshot->ib2size);
-	kgsl_regread(device, GEN7_CP_IB3_REM_SIZE, &snapshot->ib3size);
+	gen7_periph_regread(device, GEN7_CP_PERIPH_IB1_SIZE(adreno_dev),
+			&snapshot->ib1size, PIPE_BR);
+	gen7_periph_regread(device, GEN7_CP_PERIPH_IB2_SIZE(adreno_dev),
+			&snapshot->ib2size, PIPE_BR);
+	gen7_periph_regread(device, GEN7_CP_PERIPH_IB3_SIZE(adreno_dev),
+			&snapshot->ib3size, PIPE_BR);
 
-	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
-		GEN7_CP_LPAC_IB1_BASE_HI, &snapshot->ib1base_lpac);
-	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
-		GEN7_CP_LPAC_IB2_BASE_HI, &snapshot->ib2base_lpac);
+	gen7_periph_regread64(device, GEN7_CP_PERIPH_IB1_BASE_LO(adreno_dev),
+		GEN7_CP_PERIPH_IB1_BASE_HI(adreno_dev), &snapshot->ib1base_lpac, PIPE_LPAC);
 
-	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &snapshot->ib1size_lpac);
-	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &snapshot->ib2size_lpac);
+	gen7_periph_regread64(device, GEN7_CP_PERIPH_IB2_BASE_LO(adreno_dev),
+		GEN7_CP_PERIPH_IB2_BASE_HI(adreno_dev), &snapshot->ib2base_lpac, PIPE_LPAC);
+
+	gen7_periph_regread(device, GEN7_CP_PERIPH_IB1_SIZE(adreno_dev),
+			&snapshot->ib1size_lpac, PIPE_LPAC);
+	gen7_periph_regread(device, GEN7_CP_PERIPH_IB2_SIZE(adreno_dev),
+			&snapshot->ib2size_lpac, PIPE_LPAC);
 
 	/* Assert the isStatic bit before triggering snapshot */
 	kgsl_regwrite(device, GEN7_RBBM_SNAPSHOT_STATUS, 0x1);

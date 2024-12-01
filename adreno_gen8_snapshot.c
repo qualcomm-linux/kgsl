@@ -1724,33 +1724,33 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-		GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+		GEN8_CP_PERIPH_IB1_BASE_HI, &snapshot->ib1base, PIPE_BR);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+		GEN8_CP_PERIPH_IB2_BASE_HI, &snapshot->ib2base, PIPE_BR);
 
-	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
-		GEN8_CP_IB3_BASE_HI_PIPE, &snapshot->ib3base, PIPE_BR, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
+		GEN8_CP_PERIPH_IB3_BASE_HI, &snapshot->ib3base, PIPE_BR);
 
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
-			&snapshot->ib1size, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
-			&snapshot->ib2size, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE,
-		&snapshot->ib3size, PIPE_BR, 0, 0);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_SIZE,
+			&snapshot->ib1size, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_SIZE,
+			&snapshot->ib2size, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_SIZE,
+			&snapshot->ib3size, PIPE_BR);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
-		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-			GEN8_CP_IB1_BASE_HI_PIPE, &snapshot->ib1base_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+			GEN8_CP_PERIPH_IB1_BASE_HI, &snapshot->ib1base_lpac, PIPE_LPAC);
 
-		gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-			GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+			GEN8_CP_PERIPH_IB2_BASE_HI, &snapshot->ib2base_lpac, PIPE_LPAC);
 
-		gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
-			&snapshot->ib1size_lpac, PIPE_LPAC, 0, 0);
-		gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
-			&snapshot->ib2size_lpac, PIPE_LPAC, 0, 0);
+		gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_SIZE,
+			&snapshot->ib1size_lpac, PIPE_LPAC);
+		gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_SIZE,
+			&snapshot->ib2size_lpac, PIPE_LPAC);
 	}
 
 	/* Clear aperture register */
