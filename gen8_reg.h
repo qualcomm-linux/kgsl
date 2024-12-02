@@ -1149,6 +1149,8 @@
 #define GEN8_SP_HLSQ_DBG_ECO_CNTL                0xae6c
 #define GEN8_SP_READ_SEL                         0xae6d
 #define GEN8_SP_DBG_CNTL                         0xae71
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL_1              0xae73
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL_2              0xae74
 
 #define GEN8_SP_PERFCTR_HLSQ_SEL_0          0xae60
 #define GEN8_SP_PERFCTR_HLSQ_SEL_1          0xae61
