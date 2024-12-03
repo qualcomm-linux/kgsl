@@ -212,6 +212,397 @@ int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memde
 	return mapped == 0 ? -ENOMEM : 0;
 }
 
+struct kgsl_memdesc *gmu_core_find_memdesc(struct kgsl_device *device, u32 addr, u32 size)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int i;
+
+	for (i = 0; i < gmu->global_entries; i++) {
+		struct kgsl_memdesc *md = &gmu->gmu_globals[i];
+
+		if ((addr >= md->gmuaddr) &&
+				(((addr + size) <= (md->gmuaddr + md->size))))
+			return md;
+	}
+
+	return NULL;
+}
+
+int gmu_core_find_vma_block(struct kgsl_device *device, u32 addr, u32 size)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int i;
+
+	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+		struct gmu_vma_entry *vma = &gmu->vma[i];
+
+		if ((addr >= vma->start) &&
+			((addr + size) <= (vma->start + vma->size)))
+			return i;
+	}
+
+	return -ENOENT;
+}
+
+void gmu_core_free_globals(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int i;
+
+	for (i = 0; i < gmu->global_entries && i < ARRAY_SIZE(gmu->gmu_globals); i++) {
+		struct kgsl_memdesc *md = &gmu->gmu_globals[i];
+
+		if (!md->gmuaddr)
+			continue;
+
+		iommu_unmap(gmu->domain, md->gmuaddr, md->size);
+
+		if (md->priv & KGSL_MEMDESC_SYSMEM)
+			kgsl_sharedmem_free(md);
+
+		memset(md, 0, sizeof(*md));
+	}
+
+	if (gmu->domain) {
+		iommu_detach_device(gmu->domain, GMU_PDEV_DEV(device));
+		iommu_domain_free(gmu->domain);
+		gmu->domain = NULL;
+	}
+
+	gmu->global_entries = 0;
+}
+
+static struct gmu_vma_node *find_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
+{
+	struct rb_node *node = vma->vma_root.rb_node;
+
+	while (node != NULL) {
+		struct gmu_vma_node *data = rb_entry(node, struct gmu_vma_node, node);
+
+		if (addr + size <= data->va)
+			node = node->rb_left;
+		else if (addr >= data->va + data->size)
+			node = node->rb_right;
+		else
+			return data;
+	}
+	return NULL;
+}
+
+/* Return true if VMA supports dynamic allocations */
+static bool vma_is_dynamic(int vma_id)
+{
+	/* Dynamic allocations are done in the GMU_NONCACHED_KERNEL space */
+	return vma_id == GMU_NONCACHED_KERNEL;
+}
+
+static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
+{
+	struct rb_node **node, *parent = NULL;
+	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_NOWAIT);
+
+	if (new == NULL)
+		return -ENOMEM;
+
+	new->va = addr;
+	new->size = size;
+
+	node = &vma->vma_root.rb_node;
+	while (*node != NULL) {
+		struct gmu_vma_node *this;
+
+		parent = *node;
+		this = rb_entry(parent, struct gmu_vma_node, node);
+
+		if (addr + size <= this->va)
+			node = &parent->rb_left;
+		else if (addr >= this->va + this->size)
+			node = &parent->rb_right;
+		else {
+			kfree(new);
+			return -EEXIST;
+		}
+	}
+
+	/* Add new node and rebalance tree */
+	rb_link_node(&new->node, parent, node);
+	rb_insert_color(&new->node, &vma->vma_root);
+
+	return 0;
+}
+
+static u32 find_unmapped_va(struct gmu_vma_entry *vma, u32 size, u32 va_align)
+{
+	struct rb_node *node = rb_first(&vma->vma_root);
+	u32 cur = vma->start;
+	bool found = false;
+
+	cur = ALIGN(cur, va_align);
+
+	while (node) {
+		struct gmu_vma_node *data = rb_entry(node, struct gmu_vma_node, node);
+
+		if (cur + size <= data->va) {
+			found = true;
+			break;
+		}
+
+		cur = ALIGN(data->va + data->size, va_align);
+		node = rb_next(node);
+	}
+
+	/* Do we have space after the last node? */
+	if (!found && (cur + size <= vma->start + vma->size))
+		found = true;
+	return found ? cur : 0;
+}
+
+static int _map_gmu_dynamic(struct kgsl_device *device, struct kgsl_memdesc *md,
+	u32 addr, u32 vma_id, int attrs, u32 align)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
+	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
+	struct gmu_vma_node *vma_node = NULL;
+	int ret;
+	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
+
+	spin_lock(&vma->lock);
+	if (!addr) {
+		/*
+		 * We will end up with a hole (GMU VA range not backed by physical mapping) if
+		 * the aligned size is greater than the size of the physical mapping
+		 */
+		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
+		if (addr == 0) {
+			spin_unlock(&vma->lock);
+			dev_err(gmu_pdev_dev,
+				"Insufficient VA space size: %x\n", size);
+			return -ENOMEM;
+		}
+	}
+
+	ret = insert_va(vma, addr, size);
+	spin_unlock(&vma->lock);
+	if (ret < 0) {
+		dev_err(gmu_pdev_dev,
+			"Could not insert va: %x size %x\n", addr, size);
+		return ret;
+	}
+
+	ret = gmu_core_map_memdesc(gmu->domain, md, addr, attrs);
+	if (!ret) {
+		md->gmuaddr = addr;
+		return 0;
+	}
+
+	/* Failed to map to GMU */
+	dev_err(gmu_pdev_dev,
+		"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
+		addr, md->size, ret);
+
+	spin_lock(&vma->lock);
+	vma_node = find_va(vma, md->gmuaddr, size);
+	if (vma_node)
+		rb_erase(&vma_node->node, &vma->vma_root);
+	spin_unlock(&vma->lock);
+	kfree(vma_node);
+
+	return ret;
+}
+
+static int _map_gmu_static(struct kgsl_device *device, struct kgsl_memdesc *md,
+	u32 addr, u32 vma_id, int attrs, u32 align)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
+	int ret;
+	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
+
+	if (!addr)
+		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
+
+	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
+	if (ret) {
+		dev_err(GMU_PDEV_DEV(device),
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
+			addr, md->size, ret);
+		return ret;
+	}
+	md->gmuaddr = addr;
+	/*
+	 * We will end up with a hole (GMU VA range not backed by physical mapping) if the aligned
+	 * size is greater than the size of the physical mapping
+	 */
+	vma->next_va = md->gmuaddr + size;
+	return 0;
+}
+
+static int _map_gmu(struct kgsl_device *device, struct kgsl_memdesc *md,
+	u32 addr, u32 vma_id, int attrs, u32 align)
+{
+	return vma_is_dynamic(vma_id) ?
+			_map_gmu_dynamic(device, md, addr, vma_id, attrs, align) :
+			_map_gmu_static(device, md, addr, vma_id, attrs, align);
+}
+
+int gmu_core_get_attrs(u32 flags)
+{
+	int attrs = IOMMU_READ;
+
+	if (flags & HFI_MEMFLAG_GMU_PRIV)
+		attrs |= IOMMU_PRIV;
+
+	if (flags & HFI_MEMFLAG_GMU_WRITEABLE)
+		attrs |= IOMMU_WRITE;
+
+	return attrs;
+}
+
+int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry)
+{
+	struct hfi_mem_alloc_desc *desc = &entry->desc;
+	u32 vma_id = (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
+
+	return _map_gmu(device, entry->md, 0, vma_id, gmu_core_get_attrs(desc->flags), desc->align);
+}
+
+struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
+	u32 addr, u32 size, u32 vma_id, u32 align)
+{
+	int ret;
+	struct kgsl_memdesc *md;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int attrs = IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV;
+
+	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
+		return ERR_PTR(-ENOMEM);
+
+	md = &gmu->gmu_globals[gmu->global_entries];
+
+	ret = kgsl_allocate_kernel(device, md, size, 0, KGSL_MEMDESC_SYSMEM);
+	if (ret) {
+		memset(md, 0x0, sizeof(*md));
+		return ERR_PTR(-ENOMEM);
+	}
+
+	ret = _map_gmu(device, md, addr, vma_id, attrs, align);
+	if (ret) {
+		kgsl_sharedmem_free(md);
+		memset(md, 0x0, sizeof(*md));
+		return ERR_PTR(ret);
+	}
+
+	gmu->global_entries++;
+
+	return md;
+}
+
+struct kgsl_memdesc *gmu_core_reserve_kernel_block_fixed(struct kgsl_device *device,
+	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align)
+{
+	int ret;
+	struct kgsl_memdesc *md;
+	struct gmu_core_device *gmu = &device->gmu_core;
+
+	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
+		return ERR_PTR(-ENOMEM);
+
+	md = &gmu->gmu_globals[gmu->global_entries];
+
+	ret = kgsl_memdesc_init_fixed(device, GMU_PDEV(device), resource, md);
+	if (ret)
+		return ERR_PTR(ret);
+
+	ret = _map_gmu(device, md, addr, vma_id, attrs, align);
+
+	sg_free_table(md->sgt);
+	kfree(md->sgt);
+	md->sgt = NULL;
+
+	if (!ret) {
+		gmu->global_entries++;
+	} else {
+		dev_err(GMU_PDEV_DEV(device),
+			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
+			addr, md->size, ret);
+		memset(md, 0x0, sizeof(*md));
+		md = ERR_PTR(ret);
+	}
+	return md;
+}
+
+int gmu_core_alloc_kernel_block(struct kgsl_device *device,
+	struct kgsl_memdesc *md, u32 size, u32 vma_id, int attrs)
+{
+	int ret;
+
+	ret = kgsl_allocate_kernel(device, md, size, 0, KGSL_MEMDESC_SYSMEM);
+	if (ret)
+		return ret;
+
+	ret = _map_gmu(device, md, 0, vma_id, attrs, 0);
+	if (ret)
+		kgsl_sharedmem_free(md);
+
+	return ret;
+}
+
+void gmu_core_free_block(struct kgsl_device *device, struct kgsl_memdesc *md)
+{
+	struct gmu_core_device *gmu = &device->gmu_core;
+	int vma_id = gmu_core_find_vma_block(device, md->gmuaddr, md->size);
+	struct gmu_vma_entry *vma;
+	struct gmu_vma_node *vma_node;
+
+	if ((vma_id < 0) || !vma_is_dynamic(vma_id))
+		return;
+
+	vma = &gmu->vma[vma_id];
+
+	/*
+	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
+	 * iommu driver considers remapping an already mapped iova as fatal.
+	 */
+	if (md->size != iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size))
+		goto free;
+
+	spin_lock(&vma->lock);
+	vma_node = find_va(vma, md->gmuaddr, md->size);
+	if (vma_node)
+		rb_erase(&vma_node->node, &vma->vma_root);
+	spin_unlock(&vma->lock);
+	kfree(vma_node);
+free:
+	kgsl_sharedmem_free(md);
+}
+
+int gmu_core_process_prealloc(struct kgsl_device *device, struct gmu_block_header *blk)
+{
+	struct kgsl_memdesc *md;
+	int id = gmu_core_find_vma_block(device, blk->addr, blk->value);
+
+	if (id < 0) {
+		dev_err(GMU_PDEV_DEV(device),
+			"Invalid prealloc block addr: 0x%x value:%d\n",
+			blk->addr, blk->value);
+		return id;
+	}
+
+	/* Nothing to do for TCM blocks or user uncached */
+	if (id == GMU_ITCM || id == GMU_DTCM || id == GMU_NONCACHED_USER)
+		return 0;
+
+	/* Check if the block is already allocated */
+	md = gmu_core_find_memdesc(device, blk->addr, blk->value);
+	if (md != NULL)
+		return 0;
+
+	md = gmu_core_reserve_kernel_block(device, blk->addr, blk->value, id, 0);
+
+	return PTR_ERR_OR_ZERO(md);
+}
+
 static int gmu_core_iommu_fault_handler(struct iommu_domain *domain,
 		struct device *dev, unsigned long addr, int flags, void *token)
 {

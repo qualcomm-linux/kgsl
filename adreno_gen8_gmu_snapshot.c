@@ -15,20 +15,20 @@
 static size_t gen8_gmu_snapshot_dtcm(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct kgsl_snapshot_gmu_mem *mem_hdr =
 		(struct kgsl_snapshot_gmu_mem *)buf;
-	struct gen8_gmu_device *gmu = (struct gen8_gmu_device *)priv;
 	u32 *data = (u32 *)(buf + sizeof(*mem_hdr));
 	u32 i;
 
-	if (remain < gmu->vma[GMU_DTCM].size + sizeof(*mem_hdr)) {
+	if (remain < gmu_core->vma[GMU_DTCM].size + sizeof(*mem_hdr)) {
 		SNAPSHOT_ERR_NOMEM(device, "GMU DTCM Memory");
 		return 0;
 	}
 
 	mem_hdr->type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 	mem_hdr->hostaddr = 0;
-	mem_hdr->gmuaddr = gmu->vma[GMU_DTCM].start;
+	mem_hdr->gmuaddr = gmu_core->vma[GMU_DTCM].start;
 	mem_hdr->gpuaddr = 0;
 
 	/*
@@ -40,15 +40,16 @@ static size_t gen8_gmu_snapshot_dtcm(struct kgsl_device *device,
 	 */
 	kgsl_regwrite(device, GEN8_CX_DBGC_TCM_DBG_ADDR, BIT(20) | BIT(31));
 
-	for (i = 0; i < (gmu->vma[GMU_DTCM].size >> 2); i++)
+	for (i = 0; i < (gmu_core->vma[GMU_DTCM].size >> 2); i++)
 		kgsl_regread(device, GEN8_CX_DBGC_TCM_DBG_DATA, data++);
 
-	return gmu->vma[GMU_DTCM].size + sizeof(*mem_hdr);
+	return gmu_core->vma[GMU_DTCM].size + sizeof(*mem_hdr);
 }
 
 static size_t gen8_gmu_snapshot_itcm(struct kgsl_device *device,
 	u8 *buf, size_t remain, void *priv)
 {
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct kgsl_snapshot_gmu_mem *mem_hdr =
 			(struct kgsl_snapshot_gmu_mem *)buf;
 	void *dest = buf + sizeof(*mem_hdr);
@@ -60,19 +61,19 @@ static size_t gen8_gmu_snapshot_itcm(struct kgsl_device *device,
 		return 0;
 	}
 
-	if (remain < gmu->vma[GMU_ITCM].size + sizeof(*mem_hdr)) {
+	if (remain < gmu_core->vma[GMU_ITCM].size + sizeof(*mem_hdr)) {
 		SNAPSHOT_ERR_NOMEM(device, "GMU ITCM Memory");
 		return 0;
 	}
 
 	mem_hdr->type = SNAPSHOT_GMU_MEM_BIN_BLOCK;
 	mem_hdr->hostaddr = 0;
-	mem_hdr->gmuaddr = gmu->vma[GMU_ITCM].start;
+	mem_hdr->gmuaddr = gmu_core->vma[GMU_ITCM].start;
 	mem_hdr->gpuaddr = 0;
 
-	memcpy(dest, gmu->itcm_shadow, gmu->vma[GMU_ITCM].size);
+	memcpy(dest, gmu->itcm_shadow, gmu_core->vma[GMU_ITCM].size);
 
-	return gmu->vma[GMU_ITCM].size + sizeof(*mem_hdr);
+	return gmu_core->vma[GMU_ITCM].size + sizeof(*mem_hdr);
 }
 
 static void gen8_gmu_snapshot_memories(struct kgsl_device *device,
@@ -82,9 +83,9 @@ static void gen8_gmu_snapshot_memories(struct kgsl_device *device,
 	struct kgsl_memdesc *md;
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(gmu->gmu_globals); i++) {
+	for (i = 0; i < ARRAY_SIZE(device->gmu_core.gmu_globals); i++) {
 
-		md = &gmu->gmu_globals[i];
+		md = &device->gmu_core.gmu_globals[i];
 		if (!md->size)
 			continue;
 

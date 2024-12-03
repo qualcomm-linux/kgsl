@@ -548,6 +548,7 @@ static void hwsched_idle_timer(struct timer_list *t)
 
 static int gen7_gmu_warmboot_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret = 0;
 
@@ -555,7 +556,7 @@ static int gen7_gmu_warmboot_init(struct adreno_device *adreno_dev)
 		return ret;
 
 	if (IS_ERR_OR_NULL(gmu->gmu_init_scratch)) {
-		gmu->gmu_init_scratch = gen7_reserve_gmu_kernel_block(gmu, 0,
+		gmu->gmu_init_scratch = gmu_core_reserve_kernel_block(device, 0,
 				SZ_4K, GMU_CACHE, 0);
 		ret = PTR_ERR_OR_ZERO(gmu->gmu_init_scratch);
 		if (ret)
@@ -563,7 +564,7 @@ static int gen7_gmu_warmboot_init(struct adreno_device *adreno_dev)
 	}
 
 	if (IS_ERR_OR_NULL(gmu->gpu_boot_scratch)) {
-		gmu->gpu_boot_scratch = gen7_reserve_gmu_kernel_block(gmu, 0,
+		gmu->gpu_boot_scratch = gmu_core_reserve_kernel_block(device, 0,
 				SZ_4K, GMU_CACHE, 0);
 		ret = PTR_ERR_OR_ZERO(gmu->gpu_boot_scratch);
 	}
@@ -573,12 +574,13 @@ static int gen7_gmu_warmboot_init(struct adreno_device *adreno_dev)
 
 static int gen7_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret;
 
 	/* GMU Virtual register bank */
 	if (IS_ERR_OR_NULL(gmu->vrb)) {
-		gmu->vrb = gen7_reserve_gmu_kernel_block(gmu, 0, GMU_VRB_SIZE,
+		gmu->vrb = gmu_core_reserve_kernel_block(device, 0, GMU_VRB_SIZE,
 						GMU_NONCACHED_KERNEL, 0);
 
 		if (IS_ERR(gmu->vrb))
@@ -592,7 +594,7 @@ static int gen7_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 
 	/* GMU trace log */
 	if (IS_ERR_OR_NULL(gmu->trace.md)) {
-		gmu->trace.md = gen7_reserve_gmu_kernel_block(gmu, 0,
+		gmu->trace.md = gmu_core_reserve_kernel_block(device, 0,
 					GMU_TRACE_SIZE, GMU_NONCACHED_KERNEL, 0);
 
 		if (IS_ERR(gmu->trace.md))

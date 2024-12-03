@@ -220,12 +220,13 @@ static void init_queues(struct adreno_device *adreno_dev)
 
 int gen8_hfi_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hfi *hfi = &gmu->hfi;
 
 	/* Allocates & maps memory for HFI */
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = gen8_reserve_gmu_kernel_block(gmu, 0,
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(device, 0,
 				HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (!IS_ERR(hfi->hfi_mem))
 			init_queues(adreno_dev);

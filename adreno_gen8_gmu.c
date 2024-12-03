@@ -390,37 +390,6 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static struct kgsl_memdesc *find_gmu_memdesc(struct gen8_gmu_device *gmu,
-	u32 addr, u32 size)
-{
-	int i;
-
-	for (i = 0; i < gmu->global_entries; i++) {
-		struct kgsl_memdesc *md = &gmu->gmu_globals[i];
-
-		if ((addr >= md->gmuaddr) &&
-				(((addr + size) <= (md->gmuaddr + md->size))))
-			return md;
-	}
-
-	return NULL;
-}
-
-static int find_vma_block(struct gen8_gmu_device *gmu, u32 addr, u32 size)
-{
-	int i;
-
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
-		struct gmu_vma_entry *vma = &gmu->vma[i];
-
-		if ((addr >= vma->start) &&
-			((addr + size) <= (vma->start + vma->size)))
-			return i;
-	}
-
-	return -ENOENT;
-}
-
 static void load_tcm(struct adreno_device *adreno_dev, const u8 *src,
 	u32 tcm_start, u32 base, const struct gmu_block_header *blk)
 {
@@ -433,6 +402,7 @@ static void load_tcm(struct adreno_device *adreno_dev, const u8 *src,
 
 int gen8_gmu_load_fw(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
 	const u8 *fw = (const u8 *)gmu->fw_image->data;
@@ -448,7 +418,7 @@ int gen8_gmu_load_fw(struct adreno_device *adreno_dev)
 		if (blk->size == 0)
 			continue;
 
-		id = find_vma_block(gmu, blk->addr, blk->size);
+		id = gmu_core_find_vma_block(device, blk->addr, blk->size);
 
 		if (id < 0) {
 			dev_err(gmu_pdev_dev,
@@ -460,14 +430,14 @@ int gen8_gmu_load_fw(struct adreno_device *adreno_dev)
 		if (id == GMU_ITCM) {
 			load_tcm(adreno_dev, fw,
 				GEN8_GMU_CM3_ITCM_START,
-				gmu->vma[GMU_ITCM].start, blk);
+				device->gmu_core.vma[GMU_ITCM].start, blk);
 		} else if (id == GMU_DTCM) {
 			load_tcm(adreno_dev, fw,
 				GEN8_GMU_CM3_DTCM_START,
-				gmu->vma[GMU_DTCM].start, blk);
+				device->gmu_core.vma[GMU_DTCM].start, blk);
 		} else {
 			struct kgsl_memdesc *md =
-				find_gmu_memdesc(gmu, blk->addr, blk->size);
+				gmu_core_find_memdesc(device, blk->addr, blk->size);
 
 			if (!md) {
 				dev_err(gmu_pdev_dev,
@@ -841,19 +811,20 @@ int gen8_gmu_version_info(struct adreno_device *adreno_dev)
 
 int gen8_gmu_itcm_shadow(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	u32 i, *dest;
 
 	if (gmu->itcm_shadow)
 		return 0;
 
-	gmu->itcm_shadow = vzalloc(gmu->vma[GMU_ITCM].size);
+	gmu->itcm_shadow = vzalloc(device->gmu_core.vma[GMU_ITCM].size);
 	if (!gmu->itcm_shadow)
 		return -ENOMEM;
 
 	dest = (u32 *)gmu->itcm_shadow;
 
-	for (i = 0; i < (gmu->vma[GMU_ITCM].size >> 2); i++)
+	for (i = 0; i < (device->gmu_core.vma[GMU_ITCM].size >> 2); i++)
 		gmu_core_regread(KGSL_DEVICE(adreno_dev),
 			GEN8_GMU_CM3_ITCM_START + i, dest++);
 
@@ -943,329 +914,6 @@ void gen8_gmu_register_config(struct adreno_device *adreno_dev)
 
 }
 
-static struct gmu_vma_node *find_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
-{
-	struct rb_node *node = vma->vma_root.rb_node;
-
-	while (node != NULL) {
-		struct gmu_vma_node *data = rb_entry(node, struct gmu_vma_node, node);
-
-		if (addr + size <= data->va)
-			node = node->rb_left;
-		else if (addr >= data->va + data->size)
-			node = node->rb_right;
-		else
-			return data;
-	}
-	return NULL;
-}
-
-/* Return true if VMA supports dynamic allocations */
-static bool vma_is_dynamic(int vma_id)
-{
-	/* Dynamic allocations are done in the GMU_NONCACHED_KERNEL space */
-	return vma_id == GMU_NONCACHED_KERNEL;
-}
-
-static int insert_va(struct gmu_vma_entry *vma, u32 addr, u32 size)
-{
-	struct rb_node **node, *parent = NULL;
-	struct gmu_vma_node *new = kzalloc(sizeof(*new), GFP_NOWAIT);
-
-	if (new == NULL)
-		return -ENOMEM;
-
-	new->va = addr;
-	new->size = size;
-
-	node = &vma->vma_root.rb_node;
-	while (*node != NULL) {
-		struct gmu_vma_node *this;
-
-		parent = *node;
-		this = rb_entry(parent, struct gmu_vma_node, node);
-
-		if (addr + size <= this->va)
-			node = &parent->rb_left;
-		else if (addr >= this->va + this->size)
-			node = &parent->rb_right;
-		else {
-			kfree(new);
-			return -EEXIST;
-		}
-	}
-
-	/* Add new node and rebalance tree */
-	rb_link_node(&new->node, parent, node);
-	rb_insert_color(&new->node, &vma->vma_root);
-
-	return 0;
-}
-
-static u32 find_unmapped_va(struct gmu_vma_entry *vma, u32 size, u32 va_align)
-{
-	struct rb_node *node = rb_first(&vma->vma_root);
-	u32 cur = vma->start;
-	bool found = false;
-
-	cur = ALIGN(cur, va_align);
-
-	while (node) {
-		struct gmu_vma_node *data = rb_entry(node, struct gmu_vma_node, node);
-
-		if (cur + size <= data->va) {
-			found = true;
-			break;
-		}
-
-		cur = ALIGN(data->va + data->size, va_align);
-		node = rb_next(node);
-	}
-
-	/* Do we have space after the last node? */
-	if (!found && (cur + size <= vma->start + vma->size))
-		found = true;
-	return found ? cur : 0;
-}
-
-static int _map_gmu_dynamic(struct gen8_gmu_device *gmu,
-	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 align)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
-	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
-	struct gmu_vma_node *vma_node = NULL;
-	int ret;
-	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
-
-	spin_lock(&vma->lock);
-	if (!addr) {
-		/*
-		 * We will end up with a hole (GMU VA range not backed by physical mapping) if
-		 * the aligned size is greater than the size of the physical mapping
-		 */
-		addr = find_unmapped_va(vma, size, hfi_get_gmu_va_alignment(align));
-		if (addr == 0) {
-			spin_unlock(&vma->lock);
-			dev_err(gmu_pdev_dev,
-				"Insufficient VA space size: %x\n", size);
-			return -ENOMEM;
-		}
-	}
-
-	ret = insert_va(vma, addr, size);
-	spin_unlock(&vma->lock);
-	if (ret < 0) {
-		dev_err(gmu_pdev_dev,
-			"Could not insert va: %x size %x\n", addr, size);
-		return ret;
-	}
-
-	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
-	if (!ret) {
-		md->gmuaddr = addr;
-		return 0;
-	}
-
-	/* Failed to map to GMU */
-	dev_err(gmu_pdev_dev,
-		"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
-		addr, md->size, ret);
-
-	spin_lock(&vma->lock);
-	vma_node = find_va(vma, md->gmuaddr, size);
-	if (vma_node)
-		rb_erase(&vma_node->node, &vma->vma_root);
-	spin_unlock(&vma->lock);
-	kfree(vma_node);
-
-	return ret;
-}
-
-static int _map_gmu_static(struct gen8_gmu_device *gmu,
-	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 align)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-	struct gmu_vma_entry *vma = &gmu->vma[vma_id];
-	int ret;
-	u32 size = ALIGN(md->size, hfi_get_gmu_sz_alignment(align));
-
-	if (!addr)
-		addr = ALIGN(vma->next_va, hfi_get_gmu_va_alignment(align));
-
-	ret = gmu_core_map_memdesc(device->gmu_core.domain, md, addr, attrs);
-	if (ret) {
-		dev_err(GMU_PDEV_DEV(device),
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
-			addr, md->size, ret);
-		return ret;
-	}
-	md->gmuaddr = addr;
-	/*
-	 * We will end up with a hole (GMU VA range not backed by physical mapping) if the aligned
-	 * size is greater than the size of the physical mapping
-	 */
-	vma->next_va = md->gmuaddr + size;
-	return 0;
-}
-
-static int _map_gmu(struct gen8_gmu_device *gmu,
-	struct kgsl_memdesc *md,
-	u32 addr, u32 vma_id, int attrs, u32 align)
-{
-	return vma_is_dynamic(vma_id) ?
-			_map_gmu_dynamic(gmu, md, addr, vma_id, attrs, align) :
-			_map_gmu_static(gmu, md, addr, vma_id, attrs, align);
-}
-
-int gen8_gmu_import_buffer(struct gen8_gmu_device *gmu, u32 vma_id,
-				struct kgsl_memdesc *md, u32 attrs, u32 align)
-{
-	return _map_gmu(gmu, md, 0, vma_id, attrs, align);
-}
-
-struct kgsl_memdesc *gen8_reserve_gmu_kernel_block(struct gen8_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, u32 align)
-{
-	int ret;
-	struct kgsl_memdesc *md;
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-	int attrs = IOMMU_READ | IOMMU_WRITE | IOMMU_PRIV;
-
-	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
-		return ERR_PTR(-ENOMEM);
-
-	md = &gmu->gmu_globals[gmu->global_entries];
-
-	ret = kgsl_allocate_kernel(device, md, size, 0, KGSL_MEMDESC_SYSMEM);
-	if (ret) {
-		memset(md, 0x0, sizeof(*md));
-		return ERR_PTR(-ENOMEM);
-	}
-
-	ret = _map_gmu(gmu, md, addr, vma_id, attrs, align);
-	if (ret) {
-		kgsl_sharedmem_free(md);
-		memset(md, 0x0, sizeof(*md));
-		return ERR_PTR(ret);
-	}
-
-	gmu->global_entries++;
-
-	return md;
-}
-
-struct kgsl_memdesc *gen8_reserve_gmu_kernel_block_fixed(struct gen8_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align)
-{
-	int ret;
-	struct kgsl_memdesc *md;
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-
-	if (gmu->global_entries == ARRAY_SIZE(gmu->gmu_globals))
-		return ERR_PTR(-ENOMEM);
-
-	md = &gmu->gmu_globals[gmu->global_entries];
-
-	ret = kgsl_memdesc_init_fixed(device, GMU_PDEV(device), resource, md);
-	if (ret)
-		return ERR_PTR(ret);
-
-	ret = _map_gmu(gmu, md, addr, vma_id, attrs, align);
-
-	sg_free_table(md->sgt);
-	kfree(md->sgt);
-	md->sgt = NULL;
-
-	if (!ret)
-		gmu->global_entries++;
-	else {
-		dev_err(GMU_PDEV_DEV(device),
-			"Unable to map GMU kernel block: addr:0x%08x size:0x%llx :%d\n",
-			addr, md->size, ret);
-		memset(md, 0x0, sizeof(*md));
-		md = ERR_PTR(ret);
-	}
-	return md;
-}
-
-int gen8_alloc_gmu_kernel_block(struct gen8_gmu_device *gmu,
-	struct kgsl_memdesc *md, u32 size, u32 vma_id, int attrs)
-{
-	int ret;
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-
-	ret = kgsl_allocate_kernel(device, md, size, 0, KGSL_MEMDESC_SYSMEM);
-	if (ret)
-		return ret;
-
-	ret = _map_gmu(gmu, md, 0, vma_id, attrs, 0);
-	if (ret)
-		kgsl_sharedmem_free(md);
-
-	return ret;
-}
-
-void gen8_free_gmu_block(struct gen8_gmu_device *gmu, struct kgsl_memdesc *md)
-{
-	int vma_id = find_vma_block(gmu, md->gmuaddr, md->size);
-	struct gmu_vma_entry *vma;
-	struct gmu_vma_node *vma_node;
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-
-	if ((vma_id < 0) || !vma_is_dynamic(vma_id))
-		return;
-
-	vma = &gmu->vma[vma_id];
-
-	/*
-	 * Do not remove the vma node if we failed to unmap the entire buffer. This is because the
-	 * iommu driver considers remapping an already mapped iova as fatal.
-	 */
-	if (md->size !=
-			iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size))
-		goto free;
-
-	spin_lock(&vma->lock);
-	vma_node = find_va(vma, md->gmuaddr, md->size);
-	if (vma_node)
-		rb_erase(&vma_node->node, &vma->vma_root);
-	spin_unlock(&vma->lock);
-	kfree(vma_node);
-free:
-	kgsl_sharedmem_free(md);
-}
-
-static int gen8_gmu_process_prealloc(struct gen8_gmu_device *gmu,
-	struct gmu_block_header *blk)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-	struct kgsl_memdesc *md;
-	int id = find_vma_block(gmu, blk->addr, blk->value);
-
-	if (id < 0) {
-		dev_err(GMU_PDEV_DEV(device),
-			"Invalid prealloc block addr: 0x%x value:%d\n",
-			blk->addr, blk->value);
-		return id;
-	}
-
-	/* Nothing to do for TCM blocks or user uncached */
-	if (id == GMU_ITCM || id == GMU_DTCM || id == GMU_NONCACHED_USER)
-		return 0;
-
-	/* Check if the block is already allocated */
-	md = find_gmu_memdesc(gmu, blk->addr, blk->value);
-	if (md != NULL)
-		return 0;
-
-	md = gen8_reserve_gmu_kernel_block(gmu, blk->addr, blk->value, id, 0);
-
-	return PTR_ERR_OR_ZERO(md);
-}
-
 int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -1317,7 +965,7 @@ int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 
 		if (blk->type == GMU_BLK_TYPE_PREALLOC_REQ ||
 			blk->type == GMU_BLK_TYPE_PREALLOC_PERSIST_REQ) {
-			ret = gen8_gmu_process_prealloc(gmu, blk);
+			ret = gmu_core_process_prealloc(KGSL_DEVICE(adreno_dev), blk);
 
 			if (ret)
 				return ret;
@@ -1330,10 +978,11 @@ int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 int gen8_gmu_memory_init(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
 
 	/* GMU master log */
 	if (IS_ERR_OR_NULL(gmu->gmu_log))
-		gmu->gmu_log = gen8_reserve_gmu_kernel_block(gmu, 0,
+		gmu->gmu_log = gmu_core_reserve_kernel_block(device, 0,
 				GMU_LOG_SIZE, GMU_NONCACHED_KERNEL, 0);
 
 	return PTR_ERR_OR_ZERO(gmu->gmu_log);
@@ -2160,34 +1809,6 @@ static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 	return ret;
 }
 
-static void gen8_free_gmu_globals(struct gen8_gmu_device *gmu)
-{
-	struct kgsl_device *device = KGSL_DEVICE(gen8_gmu_to_adreno(gmu));
-	int i;
-
-	for (i = 0; i < gmu->global_entries && i < ARRAY_SIZE(gmu->gmu_globals); i++) {
-		struct kgsl_memdesc *md = &gmu->gmu_globals[i];
-
-		if (!md->gmuaddr)
-			continue;
-
-		iommu_unmap(device->gmu_core.domain, md->gmuaddr, md->size);
-
-		if (md->priv & KGSL_MEMDESC_SYSMEM)
-			kgsl_sharedmem_free(md);
-
-		memset(md, 0, sizeof(*md));
-	}
-
-	if (device->gmu_core.domain) {
-		iommu_detach_device(device->gmu_core.domain, GMU_PDEV_DEV(device));
-		iommu_domain_free(device->gmu_core.domain);
-		device->gmu_core.domain = NULL;
-	}
-
-	gmu->global_entries = 0;
-}
-
 static int gen8_gmu_qmp_aoss_init(struct adreno_device *adreno_dev,
 		struct gen8_gmu_device *gmu)
 {
@@ -2355,7 +1976,7 @@ void gen8_gmu_remove(struct kgsl_device *device)
 	if (gmu->fw_image)
 		release_firmware(gmu->fw_image);
 
-	gen8_free_gmu_globals(gmu);
+	gmu_core_free_globals(device);
 
 	vfree(gmu->itcm_shadow);
 	kobject_put(&gmu->log_kobj);
@@ -2412,7 +2033,7 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	if (ret)
 		goto error;
 
-	gmu->vma = gen8_gmu_vma;
+	device->gmu_core.vma = gen8_gmu_vma;
 	for (i = 0; i < ARRAY_SIZE(gen8_gmu_vma); i++) {
 		struct gmu_vma_entry *vma = &gen8_gmu_vma[i];
 
