@@ -28,6 +28,11 @@ static struct synx_hw_fence_descriptor {
 	struct synx_queue_desc mem_descriptor;
 } kgsl_synx;
 
+int kgsl_hw_fence_soccp_vote(bool pwr_on)
+{
+	return synx_enable_resources(SYNX_CLIENT_HW_FENCE_GFX_CTX0, SYNX_RESOURCE_SOCCP, pwr_on);
+}
+
 int kgsl_hw_fence_init(struct kgsl_device *device)
 {
 	struct synx_initialization_params params;
@@ -182,6 +187,11 @@ static struct msm_hw_fence_descriptor {
 	/** @descriptor: Memory descriptor for hardware fences */
 	struct msm_hw_fence_mem_addr mem_descriptor;
 } kgsl_msm_hw_fence;
+
+int kgsl_hw_fence_soccp_vote(bool pwr_on)
+{
+	return -EINVAL;
+}
 
 int kgsl_hw_fence_init(struct kgsl_device *device)
 {

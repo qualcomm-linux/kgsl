@@ -13,6 +13,7 @@
 #include "adreno_trace.h"
 #include "kgsl_device.h"
 #include "kgsl_gmu_core.h"
+#include "kgsl_sync.h"
 #include "kgsl_trace.h"
 
 static const struct of_device_id gmu_match_table[] = {
@@ -851,37 +852,14 @@ void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace)
 	trace->reset_hdr = false;
 }
 
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
-struct rproc *gmu_core_soccp_vote_init(struct device *dev)
-{
-	u32 soccp_handle;
-	struct rproc *soccp_rproc;
-
-	if (of_property_read_u32(dev->of_node, "qcom,soccp-controller", &soccp_handle))
-		return NULL;
-
-	soccp_rproc = rproc_get_by_phandle(soccp_handle);
-	if (!IS_ERR_OR_NULL(soccp_rproc))
-		return soccp_rproc;
-
-	dev_err(dev, "Failed to get rproc for phandle:%u ret:%ld Disabling hw fences\n",
-		soccp_handle, soccp_rproc ? PTR_ERR(soccp_rproc) : -ENOENT);
-
-	return soccp_rproc ? soccp_rproc : ERR_PTR(-ENOENT);
-}
-
-int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, struct rproc *soccp_rproc,
-	bool pwr_on)
+int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, bool pwr_on)
 {
 	int ret;
-
-	if (!soccp_rproc)
-		return 0;
 
 	if (!(test_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags) ^ pwr_on))
 		return 0;
 
-	ret = rproc_set_state(soccp_rproc, pwr_on);
+	ret = kgsl_hw_fence_soccp_vote(pwr_on);
 	if (!ret) {
 		change_bit(GMU_PRIV_SOCCP_VOTE_ON, gmu_flags);
 		return 0;
@@ -892,18 +870,3 @@ int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, struct rpr
 
 	return ret;
 }
-
-#else
-
-struct rproc *gmu_core_soccp_vote_init(struct device *dev)
-{
-	return ERR_PTR(-ENOENT);
-}
-
-int gmu_core_soccp_vote(struct device *dev, unsigned long *gmu_flags, struct rproc *soccp_rproc,
-	bool pwr_on)
-{
-	return -EINVAL;
-}
-
-#endif

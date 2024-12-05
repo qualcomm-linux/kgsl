@@ -135,6 +135,8 @@ bool kgsl_is_hw_fence(struct dma_fence *fence);
 
 void kgsl_get_fence_name(struct dma_fence *f, char *name, u32 max_size);
 
+int kgsl_hw_fence_soccp_vote(bool pwr_on);
+
 #else
 static inline int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
@@ -221,6 +223,11 @@ void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 		u32 timestamp)
 {
 
+}
+
+int kgsl_hw_fence_soccp_vote(bool pwr_on)
+{
+	return -EINVAL;
 }
 
 int kgsl_hw_fence_init(struct kgsl_device *device)

@@ -8,9 +8,6 @@
 
 #include <linux/mailbox_client.h>
 #include <linux/rbtree.h>
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
-#include <linux/remoteproc/qcom_rproc.h>
-#endif
 
 #include "kgsl_sharedmem.h"
 
@@ -724,23 +721,13 @@ void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace);
 void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
 
 /**
- * gmu_core_soccp_vote_init - Initialize soccp rproc handle
- * @dev: Pointer to gmu pdev device
- *
- * Return: Error pointer on failure and NULL or valid rproc handle on success
- */
-struct rproc *gmu_core_soccp_vote_init(struct device *dev);
-
-/**
  * gmu_core_soccp_vote - vote for soccp power
  * @dev: Pointer to gmu pdev device
  * @flags: Pointer to gmu flags
- * @soccp_rproc: Pointer to soccp rproc
  * @pwr_on: Boolean to indicate vote on or off
 
  * Return: Negative error on failure and zero on success.
  */
-int gmu_core_soccp_vote(struct device *dev, unsigned long *flags,
-	struct rproc *soccp_rproc, bool pwr_on);
+int gmu_core_soccp_vote(struct device *dev, unsigned long *flags, bool pwr_on);
 
 #endif /* __KGSL_GMU_CORE_H */
