@@ -344,10 +344,6 @@ enum gen8_debugbus_ids {
 };
 
 static const u32 gen8_debugbus_blocks[] = {
-	DEBUGBUS_GBIF_CX_GC_US_I_0,
-	DEBUGBUS_GMU_CX_GC_US_I_0,
-	DEBUGBUS_CX_GC_US_I_0,
-	DEBUGBUS_GBIF_GX_GC_US_I_0,
 	DEBUGBUS_GMU_GX_GC_US_I_0,
 	DEBUGBUS_DBGC_GC_US_I_0,
 	DEBUGBUS_RBBM_GC_US_I_0,
