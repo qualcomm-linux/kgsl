@@ -40,7 +40,14 @@ enum location_id {
 #define UNSLICE                 0
 #define SLICE                   1
 
+/* Use SLICE_ID to access the region (0 for unsliced) */
 #define SLICE_ID(region, j) ((region == SLICE) ? j : 0)
+
+/*
+ * Use HEADER_SLICE_ID to specify the slice in the section header (UINT_MAX for unsliced).
+ * This allows snapshot parsers to differentiate between slice ID 0 and unsliced regions.
+ */
+#define HEADER_SLICE_ID(region, j) ((region == SLICE) ? j : UINT_MAX)
 
 #define SLICE_ACTIVE(_slice, _slice_mask) \
 	(!!(BIT(_slice) & (_slice_mask)))
