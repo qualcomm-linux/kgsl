@@ -167,9 +167,6 @@ struct a6xx_cp_smmu_info {
 /* Size of the CP_INIT pm4 stream in dwords */
 #define A6XX_CP_INIT_DWORDS 11
 
-/* Size of the perf counter enable pm4 stream in dwords */
-#define A6XX_PERF_COUNTER_ENABLE_DWORDS 3
-
 #define A6XX_INT_MASK \
 	((1 << A6XX_INT_CP_AHB_ERROR) |			\
 	 (1 << A6XX_INT_ATB_ASYNCFIFO_OVERFLOW) |	\
@@ -207,21 +204,6 @@ to_a6xx_core(struct adreno_device *adreno_dev)
 	const struct adreno_gpu_core *core = adreno_dev->gpucore;
 
 	return container_of(core, struct adreno_a6xx_core, base);
-}
-
-/**
- * a6xx_is_smmu_stalled() - Check whether smmu is stalled or not
- * @device: Pointer to KGSL device
- *
- * Return - True if smmu is stalled or false otherwise
- */
-static inline bool a6xx_is_smmu_stalled(struct kgsl_device *device)
-{
-	u32 val;
-
-	kgsl_regread(device, A6XX_RBBM_STATUS3, &val);
-
-	return val & BIT(24);
 }
 
 /* Preemption functions */

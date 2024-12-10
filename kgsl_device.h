@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -302,6 +302,8 @@ struct kgsl_device {
 	rwlock_t event_groups_lock;
 	/** @speed_bin: Speed bin for the GPU device if applicable */
 	u32 speed_bin;
+	/** @soc_code: Identifier containing product and feature code */
+	u32 soc_code;
 	/** @gmu_fault: Set when a gmu or rgmu fault is encountered */
 	bool gmu_fault;
 	/** @regmap: GPU register map */
@@ -336,6 +338,12 @@ struct kgsl_device {
 	unsigned long idle_jiffies;
 	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
 	bool dump_all_ibs;
+	/** @freq_limiter_irq_clear: reset controller to clear freq limiter irq */
+	struct reset_control *freq_limiter_irq_clear;
+	/** @freq_limiter_intr_num: The interrupt number for freq limiter */
+	int freq_limiter_intr_num;
+	/** @cx_host_irq_num: Interrupt number for cx_host_irq */
+	int cx_host_irq_num;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -959,7 +967,7 @@ struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
  * the number of strings in the binary
  */
 #define SNAPSHOT_ERR_NOMEM(_d, _s) \
-	dev_err((_d)->dev, \
+	dev_err_ratelimited((_d)->dev, \
 	"snapshot: not enough snapshot memory for section %s\n", (_s))
 
 /**
@@ -978,6 +986,24 @@ size_t kgsl_snapshot_dump_registers(struct kgsl_device *device, u8 *buf,
 void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot, unsigned int index,
 	unsigned int data, unsigned int start, unsigned int count);
+
+/**
+ * kgsl_snapshot_indexed_registers_v2 - Add a set of indexed registers to the
+ * snapshot
+ * @device: Pointer to the KGSL device being snapshotted
+ * @snapshot: Snapshot instance
+ * @index: Offset for the index register
+ * @data: Offset for the data register
+ * @start: Index to start reading
+ * @count: Number of entries to read
+ * @pipe_id: Pipe ID to be dumped
+ * @slice_id: Slice ID to be dumped
+ *
+ * Dump the values from an indexed register group into the snapshot
+ */
+void kgsl_snapshot_indexed_registers_v2(struct kgsl_device *device,
+	struct kgsl_snapshot *snapshot, u32 index, u32 data,
+	u32 start, u32 count, u32 pipe_id, u32 slice_id);
 
 int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	struct kgsl_process_private *process, uint64_t gpuaddr,

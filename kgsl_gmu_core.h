@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -21,6 +21,7 @@
 #define MAX_BW_CMDS		8
 #define INVALID_DCVS_IDX	0xFF
 #define INVALID_AB_VALUE	0xFFFF
+#define MAX_AB_VALUE		(0xFFFF - 1)
 #define INVALID_BW_VOTE		(INVALID_DCVS_IDX | \
 					(FIELD_PREP(GENMASK(31, 16), INVALID_AB_VALUE)))
 #if MAX_CNOC_LEVELS > MAX_GX_LEVELS
@@ -382,6 +383,7 @@ struct gmu_dev_ops {
 	u64 (*bcl_sid_get)(struct kgsl_device *device, u32 sid_id);
 	void (*force_first_boot)(struct kgsl_device *device);
 	void (*send_nmi)(struct kgsl_device *device, bool force);
+	void (*send_tlb_hint)(struct kgsl_device *device, bool val);
 };
 
 /**
@@ -398,9 +400,8 @@ struct gmu_core_device {
 
 extern struct platform_driver a6xx_gmu_driver;
 extern struct platform_driver a6xx_rgmu_driver;
-extern struct platform_driver a6xx_hwsched_driver;
 extern struct platform_driver gen7_gmu_driver;
-extern struct platform_driver gen7_hwsched_driver;
+extern struct platform_driver gen8_gmu_driver;
 
 /* GMU core functions */
 
@@ -484,6 +485,14 @@ struct gmu_mem_type_desc {
  */
 int gmu_core_map_memdesc(struct iommu_domain *domain, struct kgsl_memdesc *memdesc,
 		u64 gmuaddr, int attrs);
+
+/**
+ * gmu_core_send_tlb_hint - Send tlb hint for GMU IOMMU domain
+ * @device: Pointer to KGSL device
+ * @val: tlb hint to be true/false
+ */
+void gmu_core_send_tlb_hint(struct kgsl_device *device, bool val);
+
 void gmu_core_dev_force_first_boot(struct kgsl_device *device);
 
 /**

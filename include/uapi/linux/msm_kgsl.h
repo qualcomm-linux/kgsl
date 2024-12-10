@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -247,6 +247,7 @@ enum kgsl_user_mem_type {
 #define KGSL_UBWC_2_0	2
 #define KGSL_UBWC_3_0	3
 #define KGSL_UBWC_4_0	4
+#define KGSL_UBWC_5_0	5
 
 /*
  * Reset status values for context
@@ -1392,7 +1393,7 @@ struct kgsl_gpu_event_timestamp {
 };
 
 /**
- * struct kgsl_gpu_event_fence - Specifies a fence ID to to free a GPU object on
+ * struct kgsl_gpu_event_fence - Specifies a fence ID to free a GPU object on
  * @fd: File descriptor for the fence
  */
 struct kgsl_gpu_event_fence {

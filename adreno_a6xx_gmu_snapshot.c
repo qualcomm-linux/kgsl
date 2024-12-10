@@ -457,7 +457,7 @@ void a6xx_gmu_device_snapshot(struct kgsl_device *device,
 			ARRAY_SIZE(a6xx_gmu_gx_registers) / 2);
 
 	/* A stalled SMMU can lead to NoC timeouts when host accesses DTCM */
-	if (a6xx_is_smmu_stalled(device)) {
+	if (adreno_smmu_is_stalled(adreno_dev)) {
 		dev_err(&gmu->pdev->dev,
 			"Not dumping dtcm because SMMU is stalled\n");
 		return;
