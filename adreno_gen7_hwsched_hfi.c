@@ -1148,8 +1148,10 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 		else
 			type = MSG_HDR_GET_ID(next_hdr);
 
-		if (type != F2H_MSG_CONTEXT_BAD)
-			gen7_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd));
+		if (type != F2H_MSG_CONTEXT_BAD) {
+			if (gen7_hfi_queue_read(gmu, HFI_MSG_ID, rcvd, sizeof(rcvd)) < 0)
+				break;
+		}
 
 		switch (type) {
 		case HFI_MSG_ACK:
@@ -1164,8 +1166,10 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 				gen7_receive_ack_async(adreno_dev, rcvd);
 			break;
 		case F2H_MSG_CONTEXT_BAD:
-			gen7_hfi_queue_read(gmu, HFI_MSG_ID, (u32 *)adreno_dev->hwsched.ctxt_bad,
-						HFI_MAX_MSG_SIZE);
+			if (gen7_hfi_queue_read(gmu, HFI_MSG_ID,
+						(u32 *)adreno_dev->hwsched.ctxt_bad,
+						HFI_MAX_MSG_SIZE) < 0)
+				break;
 			process_ctx_bad(adreno_dev);
 			break;
 		case F2H_MSG_TS_RETIRE:
