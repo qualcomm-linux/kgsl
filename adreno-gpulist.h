@@ -3294,7 +3294,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.preempt_level = 1,
 	.ctxt_record_size = (13536 * SZ_1K),
 	.noc_timeout_us = 3410, /* 3.41 msec */
-	.cl_no_ft_timeout_ms = 6500,
+	.cl_no_ft_timeout_ms = 10000,
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;
