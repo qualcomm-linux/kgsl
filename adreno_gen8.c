@@ -1046,7 +1046,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	u32 hbb_lo = 1, hbb_hi = 0, hbb = 1;
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 	u64 uche_trap_base = gen8_get_uche_trap_base();
-	u32 rgba8888_lossless = 0;
+	u32 rgba8888_lossless = 0, fp16compoptdis = 0;
 
 	/* Reset aperture fields to go through first aperture write check */
 	gen8_dev->aperture = UINT_MAX;
@@ -1121,6 +1121,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	case KGSL_UBWC_4_0:
 		amsbc = 1;
 		rgb565_predicator = 1;
+		fp16compoptdis = 1;
 		rgba8888_lossless = 1;
 		mode2 = 2;
 		break;
@@ -1151,6 +1152,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	gen8_regwrite_aperture(device, GEN8_RB_CMP_NC_MODE_CNTL,
 			       FIELD_PREP(GENMASK(17, 15), mode2) |
 			       FIELD_PREP(GENMASK(4, 4), rgba8888_lossless) |
+			       FIELD_PREP(GENMASK(3, 3), fp16compoptdis) |
 			       FIELD_PREP(GENMASK(2, 2), rgb565_predicator) |
 			       FIELD_PREP(GENMASK(1, 1), amsbc) |
 			       FIELD_PREP(GENMASK(0, 0), mal),
