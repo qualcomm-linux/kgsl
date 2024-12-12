@@ -919,6 +919,10 @@ static int adreno_ib_find_objs(struct kgsl_device *device,
 		else
 			break;
 
+		/* Check if rem is less than pktsize before decrementing */
+		if (rem < pktsize)
+			break;
+
 		if (((pkt_is_type0(src[i]) || pkt_is_type3(src[i])) && !pktsize)
 			|| ((pktsize + 1) > rem))
 			break;
