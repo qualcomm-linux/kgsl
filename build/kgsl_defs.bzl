@@ -100,13 +100,13 @@ def external_deps(target, variant):
             ]
 
     # Add synx-kernel in the dependency list for targets that use it for hardware fences
-    if target in [ "sun", "niobe", "seraph" ]:
+    if target in [ "sun", "niobe", "seraph", "canoe" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
             "//vendor/qcom/opensource/synx-kernel:synx_headers"
             ]
 
-    if target in [ "monaco", "parrot", "canoe" ]:
+    if target in [ "monaco", "parrot" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
             ]
