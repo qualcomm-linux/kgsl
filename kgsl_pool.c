@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -469,6 +469,9 @@ static bool kgsl_pool_available(unsigned int page_size)
 u32 kgsl_get_page_size(size_t size, unsigned int align)
 {
 	u32 pool;
+
+	if (!size)
+		return 0;
 
 	for (pool = rounddown_pow_of_two(size); pool > PAGE_SIZE; pool >>= 1)
 		if ((align >= ilog2(pool)) && (size >= pool) &&
