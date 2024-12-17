@@ -228,6 +228,88 @@ static int __secure_tz_update_entry3(int level, s64 total_time, s64 busy_time,
 	return ret;
 }
 
+#if IS_ENABLED(CONFIG_QCOM_TZMEM)
+#include <linux/firmware/qcom/qcom_tzmem.h>
+
+static int tz_init(struct device *dev, struct devfreq_msm_adreno_tz_data *priv,
+			unsigned int *tz_pwrlevels, u32 size_pwrlevels,
+			unsigned int *version, u32 size_version)
+{
+	int ret;
+	phys_addr_t paddr;
+	struct qcom_tzmem_pool_config pool_config;
+	static struct qcom_tzmem_pool *tzmem_pool;
+
+	if (!qcom_scm_dcvs_core_available())
+		return -EINVAL;
+
+	memset(&pool_config, 0, sizeof(pool_config));
+	pool_config.initial_size = PAGE_ALIGN(size_pwrlevels);
+	pool_config.policy = QCOM_TZMEM_POLICY_STATIC;
+	pool_config.max_size = PAGE_ALIGN(size_pwrlevels);
+
+	tzmem_pool = qcom_tzmem_pool_new(&pool_config);
+	if (IS_ERR(tzmem_pool)) {
+		pr_err(TAG "tz: Failed to create qcom_tzmem_pool %d\n", PTR_ERR(tzmem_pool));
+		return PTR_ERR(tzmem_pool);
+	}
+
+	void *tzmem = qcom_tzmem_alloc(tzmem_pool,
+				PAGE_ALIGN(size_pwrlevels), GFP_KERNEL);
+	if (!tzmem) {
+		ret = -ENOMEM;
+		goto free_tzmem;
+	}
+
+	paddr = qcom_tzmem_to_phys(tzmem);
+
+	memcpy(tzmem, tz_pwrlevels, size_pwrlevels);
+	/* Ensure memcpy completes execution */
+	mb();
+
+	ret = qcom_scm_dcvs_init_v2(paddr, size_pwrlevels, version);
+
+	if (ret)
+		goto free_tzmem;
+
+	priv->is_64 = true;
+
+	 /*
+	  * Initialize context aware feature, if enabled. If context
+	  * aware initialization fails, just print an error message
+	  * and return success as normal DCVS will still work.
+	  */
+	if (!priv->ctxt_aware_enable)
+		goto free_tzmem;
+
+	if (!qcom_scm_dcvs_ca_available()) {
+		pr_warn(TAG "tz: context aware DCVS not supported\n");
+		priv->ctxt_aware_enable = false;
+		goto free_tzmem;
+	}
+
+	((unsigned int*)tzmem)[0] = priv->bin.ctxt_aware_target_pwrlevel;
+	((unsigned int*)tzmem)[1] = priv->bin.ctxt_aware_busy_penalty;
+	/* Ensure writes are completed */
+	mb();
+
+	ret = qcom_scm_dcvs_init_ca_v2(paddr, 2 * sizeof(unsigned int));
+
+	if (ret) {
+		pr_err(TAG "tz: context aware DCVS init failed %d\n", ret);
+		priv->ctxt_aware_enable = false;
+		ret = 0;
+	}
+
+free_tzmem:
+	if (tzmem)
+		qcom_tzmem_free(tzmem);
+	qcom_tzmem_pool_free(tzmem_pool);
+
+	return ret;
+}
+
+#else
 static int tz_init_ca(struct device *dev,
 	struct devfreq_msm_adreno_tz_data *priv)
 {
@@ -335,6 +417,7 @@ static int tz_init(struct device *dev, struct devfreq_msm_adreno_tz_data *priv,
 
 	return ret;
 }
+#endif
 
 static inline int devfreq_get_freq_level(struct devfreq *devfreq,
 	unsigned long freq)
