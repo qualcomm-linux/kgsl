@@ -11,8 +11,9 @@
 #include "adreno_gen7_3_0_snapshot.h"
 #include "adreno_gen7_6_0_snapshot.h"
 #include "adreno_gen7_9_0_snapshot.h"
-#include "adreno_gen7_14_0_snapshot.h"
 #include "adreno_gen7_11_0_snapshot.h"
+#include "adreno_gen7_14_0_snapshot.h"
+#include "adreno_gen7_17_0_snapshot.h"
 
 static struct kgsl_memdesc *gen7_capturescript;
 static struct kgsl_memdesc *gen7_crashdump_registers;
@@ -203,6 +204,32 @@ const struct gen7_snapshot_block_list gen7_11_0_snapshot_block_list = {
 	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
 	.index_registers = gen7_11_0_cp_indexed_reg_list,
 	.index_registers_len = ARRAY_SIZE(gen7_11_0_cp_indexed_reg_list),
+};
+
+const struct gen7_snapshot_block_list gen7_17_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen7_9_0_pre_crashdumper_gpu_registers,
+	.debugbus_blocks = gen7_14_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen7_14_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen7_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen7_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen7_cx_dbgc_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen7_cx_dbgc_debugbus_blocks),
+	.external_core_regs = gen7_17_0_external_core_regs,
+	.num_external_core_regs = ARRAY_SIZE(gen7_17_0_external_core_regs),
+	.gmu_regs = gen7_14_0_gmu_registers,
+	.gmu_gx_regs = gen7_14_0_gmu_gx_registers,
+	.rscc_regs = gen7_17_0_rscc_registers,
+	.reg_list = gen7_14_0_reg_list,
+	.cx_misc_regs = gen7_14_0_cx_misc_registers,
+	.shader_blocks = gen7_14_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen7_14_0_shader_blocks),
+	.clusters = gen7_14_0_clusters,
+	.num_clusters = ARRAY_SIZE(gen7_14_0_clusters),
+	.sptp_clusters = gen7_14_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen7_14_0_sptp_clusters),
+	.post_crashdumper_regs = gen7_14_0_post_crashdumper_registers,
+	.index_registers = gen7_14_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_14_0_cp_indexed_reg_list),
 };
 
 #define GEN7_SP_READ_SEL_VAL(_location, _pipe, _statetype, _usptp, _sptp) \
