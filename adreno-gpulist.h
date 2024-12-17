@@ -2619,6 +2619,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_11_0 = {
 	.fast_bus_hint = true,
 };
 
+extern const struct gen7_snapshot_block_list gen7_17_0_snapshot_block_list;
+
 static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_17_0,
@@ -2644,7 +2646,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen7_0_0_protected_regs,
 	.highest_bank_bit = 15,
-	.gen7_snapshot_block_list = &gen7_14_0_snapshot_block_list,
+	.gen7_snapshot_block_list = &gen7_17_0_snapshot_block_list,
 	.ctxt_record_size = 1536 * 1024
 };
 
