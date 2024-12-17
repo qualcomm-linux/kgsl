@@ -2821,7 +2821,6 @@ static const struct gen8_nonctxt_regs gen8_0_0_nonctxt_regs[] = {
 	{ GEN8_UCHE_CCHE_MODE_CNTL, 0x00001000, BIT(PIPE_NONE) },
 	/* Limit gmem number of ways for GMEM requests in each set */
 	{ GEN8_UCHE_CCHE_CACHE_WAYS, 0x00000800, BIT(PIPE_NONE)},
-	{ GEN8_UCHE_CACHE_WAYS, 0x00080000, BIT(PIPE_NONE) },
 	/* Disable write slow pointer in data phase queue */
 	{ GEN8_UCHE_HW_DBG_CNTL, BIT(8), BIT(PIPE_NONE) },
 	/* Configure UCHE to CCU switchthreshold timeout cycles */
@@ -3207,7 +3206,6 @@ static const struct gen8_nonctxt_regs gen8_4_0_nonctxt_regs[] = {
 	{ GEN8_UCHE_CCHE_MODE_CNTL, 0x00001000, BIT(PIPE_NONE) },
 	/* Limit gmem number of ways for GMEM requests in each set */
 	{ GEN8_UCHE_CCHE_CACHE_WAYS, 0x00000800, BIT(PIPE_NONE)},
-	{ GEN8_UCHE_CACHE_WAYS, 0x00080000, BIT(PIPE_NONE) },
 	/* Disable write slow pointer in data phase queue */
 	{ GEN8_UCHE_HW_DBG_CNTL, BIT(8), BIT(PIPE_NONE) },
 	/* Configure UCHE to CCU switchthreshold timeout cycles */
@@ -3311,7 +3309,6 @@ static const struct gen8_nonctxt_regs gen8_3_0_nonctxt_regs[] = {
 	{ GEN8_UCHE_CCHE_CACHE_WAYS, 0x00000800, BIT(PIPE_NONE) },
 	/* Disable write slow pointer in data phase queue */
 	{ GEN8_UCHE_HW_DBG_CNTL, BIT(8), BIT(PIPE_NONE) },
-	{ GEN8_UCHE_CACHE_WAYS, 0x00080000, BIT(PIPE_NONE) },
 	{ GEN8_UCHE_VARB_IDLE_TIMEOUT, 0x00000020, BIT(PIPE_NONE) },
 	{ GEN8_VFD_DBG_ECO_CNTL, 0x00008000, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VFD_CB_BV_THRESHOLD, 0x00500050, BIT(PIPE_BV) | BIT(PIPE_BR) },
