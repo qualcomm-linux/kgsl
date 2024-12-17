@@ -109,6 +109,8 @@ struct gen8_gmu_device {
 	struct gen8_dcvs_table dcvs_table;
 	/** @cur_freq: Tracks scaled frequency for GMU */
 	u32 cur_freq;
+	/** @dcvs_cmdbuf: Pointer to the table to pass DCVS data to GMU */
+	u32 *dcvs_cmdbuf;
 };
 
 /* Helper function to get to gen8 gmu device from adreno device */

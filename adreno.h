@@ -142,6 +142,9 @@
 #define ADRENO_CLX BIT(20)
 /* Enable GMU support for GMU based thermal mitigation */
 #define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
+/* GMU Based DCVS */
+#define ADRENO_GMU_BASED_DCVS BIT(22)
+
 
 /*
  * Adreno GPU quirks - control bits for various workarounds

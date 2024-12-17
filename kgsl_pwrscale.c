@@ -645,6 +645,11 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	struct msm_adreno_extended_profile *gpu_profile;
 	int i, ret;
 
+	/* Set default bus control to true on all targets */
+	pwr->bus_control = true;
+	/* KGSL is performing powerscale */
+	device->host_based_dcvs = true;
+
 	gpu_profile = &pwrscale->gpu_profile;
 	gpu_profile->private_data = &adreno_tz_data;
 
