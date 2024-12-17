@@ -947,7 +947,10 @@ static void adreno_read_soc_code(struct kgsl_device *device)
 	bool internal_sku;
 
 	feature_code = max_t(int, socinfo_get_feature_code(), SOCINFO_FC_UNKNOWN);
-	internal_sku = (feature_code >= SOCINFO_FC_Y0) && (feature_code < SOCINFO_FC_INT_RESERVE);
+	internal_sku = (((feature_code >= SOCINFO_FC_W0) &&
+			(feature_code < SOCINFO_FC_SUBPART_RESERVE)) ||
+			((feature_code >= SOCINFO_FC_Y0) &&
+			(feature_code < SOCINFO_FC_INT_RESERVE)));
 
 	/* Pcode is significant only for internal SKUs */
 	pcode = internal_sku ? max_t(int, socinfo_get_pcode(), SOCINFO_PCODE_UNKNOWN) :
@@ -1201,6 +1204,7 @@ static void adreno_setup_device(struct adreno_device *adreno_dev)
 	mutex_init(&adreno_dev->dev.mutex);
 	mutex_init(&adreno_dev->dev.file_mutex);
 	mutex_init(&adreno_dev->fault_recovery_mutex);
+	mutex_init(&adreno_dev->dcvs_tuning_mutex);
 	INIT_LIST_HEAD(&adreno_dev->dev.globals);
 
 	/* Set the fault tolerance policy to replay, skip, throttle */
@@ -1274,8 +1278,8 @@ static int adreno_pm_notifier(struct notifier_block *nb, unsigned long event, vo
 		}
 	}
 
-	if (pwr->cx_pd) {
-		pd = container_of(pwr->cx_pd->pm_domain, struct generic_pm_domain, domain);
+	if (pwr->gmu_cx_pd) {
+		pd = container_of(pwr->gmu_cx_pd->pm_domain, struct generic_pm_domain, domain);
 
 		if (pd->prepared_count) {
 			dev_err_ratelimited(device->dev,
@@ -1513,7 +1517,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	 * notifications when system has come out of suspend completely, so that we can perform
 	 * fault recovery.
 	 */
-	if (device->pwrctrl.gx_pd || device->pwrctrl.cx_pd) {
+	if (device->pwrctrl.gx_pd || device->pwrctrl.gmu_cx_pd) {
 		adreno_dev->pm_nb.notifier_call = adreno_pm_notifier;
 		register_pm_notifier(&adreno_dev->pm_nb);
 	}
@@ -1801,8 +1805,8 @@ static bool gdscs_left_on(struct kgsl_device *device)
 	if (pwr->gx_regulator)
 		return regulator_is_enabled(pwr->gx_regulator);
 
-	if (pwr->cx_pd)
-		return kgsl_genpd_is_enabled(pwr->cx_pd);
+	if (pwr->gmu_cx_pd)
+		return kgsl_genpd_is_enabled(pwr->gmu_cx_pd);
 
 	if (pwr->gx_pd)
 		return kgsl_genpd_is_enabled(pwr->gx_pd);
@@ -2222,14 +2226,14 @@ int adreno_reset(struct kgsl_device *device, int fault)
 	int i;
 
 	if (gpudev->reset)
-		return gpudev->reset(adreno_dev);
+		return adreno_gpudev_reset(adreno_dev);
 
 	/*
 	 * Try soft reset first Do not do soft reset for a IOMMU fault (because
 	 * the IOMMU hardware needs a reset too)
 	 */
 
-	if (!(fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!(fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		ret = adreno_soft_reset(device);
 
 	if (ret) {
@@ -3412,7 +3416,7 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	fault = adreno_gpu_fault(adreno_dev);
 
-	return ((fault & ADRENO_IOMMU_PAGE_FAULT) &&
+	return ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) &&
 		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;
 }
 

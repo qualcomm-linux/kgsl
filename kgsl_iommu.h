@@ -113,6 +113,7 @@
 
 /* FSR fields */
 #define KGSL_IOMMU_FSR_SS_SHIFT		30
+#define KGSL_IOMMU_FSR_TRANSLATION_FORMAT_MASK  GENMASK(10, 9)
 
 /* ASID field in TTBR register */
 #define KGSL_IOMMU_ASID_START_BIT	48

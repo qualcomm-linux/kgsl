@@ -359,7 +359,7 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev);
+		gen8_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -442,7 +442,7 @@ err:
 	gen8_hwsched_soccp_vote(adreno_dev, false);
 
 	if (device->gmu_fault) {
-		gen8_gmu_suspend(adreno_dev);
+		gen8_gmu_suspend(adreno_dev, false);
 
 		return ret;
 	}
@@ -533,7 +533,7 @@ static int gen8_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 error:
 	gen8_gmu_irq_disable(adreno_dev);
 	gen8_hwsched_hfi_stop(adreno_dev);
-	gen8_gmu_suspend(adreno_dev);
+	gen8_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -702,8 +702,7 @@ static int gen8_hwsched_gmu_memory_init(struct adreno_device *adreno_dev)
 
 	/* Set the CL infinite timeout VRB override (if declared in gpulist) */
 	if (gen8_core->cl_no_ft_timeout_ms)
-		gmu_core_set_vrb_register(gmu->vrb->hostptr,
-				VRB_CL_NO_FT_TIMEOUT,
+		gmu_core_set_vrb_register(gmu->vrb, VRB_CL_NO_FT_TIMEOUT,
 				gen8_core->cl_no_ft_timeout_ms);
 
 	return 0;
@@ -1568,7 +1567,7 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 
 	gen8_hwsched_hfi_stop(adreno_dev);
 
-	gen8_gmu_suspend(adreno_dev);
+	gen8_gmu_suspend(adreno_dev, true);
 
 	adreno_hwsched_unregister_contexts(adreno_dev);
 

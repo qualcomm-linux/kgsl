@@ -104,6 +104,7 @@ struct kgsl_mmu;
 struct kgsl_mmu_ops {
 	void (*mmu_close)(struct kgsl_mmu *mmu);
 	int (*mmu_start)(struct kgsl_mmu *mmu);
+	bool (*mmu_ctx_terminated_on_fault)(struct kgsl_mmu *mmu);
 	uint64_t (*mmu_get_current_ttbr0)(struct kgsl_mmu *mmu, struct kgsl_context *context);
 	void (*mmu_pagefault_resume)(struct kgsl_mmu *mmu, bool terminate);
 	void (*mmu_clear_fsr)(struct kgsl_mmu *mmu);
@@ -290,6 +291,14 @@ static inline void kgsl_mmu_put_gpuaddr(struct kgsl_pagetable *pagetable,
 {
 	if (PT_OP_VALID(pagetable, put_gpuaddr))
 		pagetable->pt_ops->put_gpuaddr(memdesc);
+}
+
+static inline bool kgsl_mmu_ctx_terminated_on_fault(struct kgsl_mmu *mmu)
+{
+	if (MMU_OP_VALID(mmu, mmu_ctx_terminated_on_fault))
+		return mmu->mmu_ops->mmu_ctx_terminated_on_fault(mmu);
+
+	return false;
 }
 
 static inline u64 kgsl_mmu_get_current_ttbr0(struct kgsl_mmu *mmu, struct kgsl_context *context)

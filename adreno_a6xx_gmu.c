@@ -600,7 +600,7 @@ void a6xx_gmu_disable_gdsc(struct adreno_device *adreno_dev)
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	/* ADRENO_QUIRK_CX_GDSC quirk is not supported for genpd */
-	WARN_ON_ONCE(pwr->cx_pd && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC));
+	WARN_ON_ONCE(pwr->gmu_cx_pd && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC));
 
 	if (pwr->cx_regulator && ADRENO_QUIRK(adreno_dev, ADRENO_QUIRK_CX_GDSC))
 		regulator_set_mode(pwr->cx_regulator, REGULATOR_MODE_IDLE);
@@ -2008,10 +2008,13 @@ out:
 	return ret;
 }
 
-void a6xx_gmu_suspend(struct adreno_device *adreno_dev)
+void a6xx_gmu_suspend(struct adreno_device *adreno_dev, bool force)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (!force && test_bit(ADRENO_DEVICE_RESET_RECOVERY, &adreno_dev->priv))
+		return;
 
 	a6xx_gmu_pwrctrl_suspend(adreno_dev);
 
@@ -2511,7 +2514,7 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev);
+		a6xx_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
 
@@ -2593,7 +2596,7 @@ err:
 	a6xx_gmu_irq_disable(adreno_dev);
 
 	if (device->gmu_fault) {
-		a6xx_gmu_suspend(adreno_dev);
+		a6xx_gmu_suspend(adreno_dev, false);
 		return ret;
 	}
 
@@ -3059,7 +3062,7 @@ static int a6xx_gmu_power_off(struct adreno_device *adreno_dev)
 error:
 	a6xx_gmu_irq_disable(adreno_dev);
 	a6xx_hfi_stop(adreno_dev);
-	a6xx_gmu_suspend(adreno_dev);
+	a6xx_gmu_suspend(adreno_dev, false);
 
 	return ret;
 }
@@ -3661,7 +3664,7 @@ int a6xx_gmu_reset(struct adreno_device *adreno_dev)
 	a6xx_hfi_stop(adreno_dev);
 
 	/* Hard reset the gmu and gpu */
-	a6xx_gmu_suspend(adreno_dev);
+	a6xx_gmu_suspend(adreno_dev, true);
 
 	a6xx_reset_preempt_records(adreno_dev);
 
