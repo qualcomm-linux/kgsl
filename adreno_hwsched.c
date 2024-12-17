@@ -1311,10 +1311,10 @@ void adreno_hwsched_deregister_hw_fence(struct adreno_device *adreno_dev)
 
 	kgsl_hw_fence_close(KGSL_DEVICE(adreno_dev));
 
-	if (hwsched->hw_fence_md.sgt)
-		sg_free_table(hwsched->hw_fence_md.sgt);
+	if (hwsched->hw_fence.md.sgt)
+		sg_free_table(hwsched->hw_fence.md.sgt);
 
-	memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
+	memset(&hwsched->hw_fence.md, 0x0, sizeof(hwsched->hw_fence.md));
 
 	kmem_cache_destroy(hwsched->hw_fence_cache);
 
@@ -1974,10 +1974,6 @@ static void adreno_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	if (kgsl_context_is_bad(context))
 		return;
 
-	if (!kgsl_hw_fence_tx_slot_available(KGSL_DEVICE(adreno_dev),
-		&adreno_dev->hwsched.hw_fence_count))
-		return;
-
 	hwsched_ops->create_hw_fence(adreno_dev, kfence);
 }
 
@@ -2017,6 +2013,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 	int i;
 
 	memset(hwsched, 0, sizeof(*hwsched));
@@ -2057,6 +2054,9 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 		INIT_WORK(&hwsched->lsr_check_ws, hwsched_lsr_check);
 		timer_setup(&hwsched->lsr_timer, hwsched_lsr_timer, 0);
 	}
+
+	init_waitqueue_head(&hwf->unack_wq);
+	spin_lock_init(&hwf->lock);
 
 	return 0;
 }
@@ -2286,16 +2286,16 @@ void adreno_hwsched_register_hw_fence(struct adreno_device *adreno_dev)
 	 * We need to set up the memory descriptor with the physical address of the Tx/Rx Queues so
 	 * that these buffers can be imported in to GMU VA space
 	 */
-	kgsl_memdesc_init(device, &hwsched->hw_fence_md, 0);
-	kgsl_hw_fence_populate_md(device, &hwsched->hw_fence_md);
+	kgsl_memdesc_init(device, &hwsched->hw_fence.md, 0);
+	kgsl_hw_fence_populate_md(device, &hwsched->hw_fence.md);
 
-	ret = kgsl_memdesc_sg_dma(&hwsched->hw_fence_md, hwsched->hw_fence_md.physaddr,
-		hwsched->hw_fence_md.size);
+	ret = kgsl_memdesc_sg_dma(&hwsched->hw_fence.md, hwsched->hw_fence.md.physaddr,
+		hwsched->hw_fence.md.size);
 	if (ret) {
 		dev_err(device->dev, "Failed to setup HW fences memdesc: %d\n",
 			ret);
 		kgsl_hw_fence_close(device);
-		memset(&hwsched->hw_fence_md, 0x0, sizeof(hwsched->hw_fence_md));
+		memset(&hwsched->hw_fence.md, 0x0, sizeof(hwsched->hw_fence.md));
 		return;
 	}
 
@@ -2623,8 +2623,11 @@ void adreno_hwsched_remove_hw_fence_entry(struct adreno_device *adreno_dev,
 {
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct adreno_context *drawctxt = entry->drawctxt;
+	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
 
-	atomic_dec(&hwsched->hw_fence_count);
+	spin_lock(&hwf->lock);
+	hwf->pending_count--;
+	spin_unlock(&hwf->lock);
 	drawctxt->hw_fence_count--;
 
 	dma_fence_put(&entry->kfence->fence);
