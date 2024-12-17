@@ -965,3 +965,13 @@ bool gmu_core_capabilities_enabled(struct firmware_capabilities *caps, u32 field
 
 	return false;
 }
+
+void gmu_core_mark_for_coldboot(struct kgsl_device *device)
+{
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+
+	if (!gmu_core->warmboot_enabled)
+		return;
+
+	set_bit(GMU_FORCE_COLDBOOT, &gmu_core->flags);
+}

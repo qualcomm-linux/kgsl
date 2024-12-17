@@ -570,8 +570,10 @@ DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level
 static int _warmboot_show(void *data, u64 *val)
 {
 	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
 
-	*val = (u64)adreno_dev->warmboot_enabled;
+	*val = (u64)gmu->warmboot_enabled;
 	return 0;
 }
 
@@ -583,11 +585,13 @@ static int _warmboot_show(void *data, u64 *val)
 static int _warmboot_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 
-	if (adreno_dev->warmboot_enabled == val)
+	if (gmu_core->warmboot_enabled == val)
 		return 0;
 
-	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->warmboot_enabled, val);
+	return adreno_power_cycle_bool(adreno_dev, &gmu_core->warmboot_enabled, val);
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(warmboot_fops, _warmboot_show, _warmboot_store, "%llu\n");

@@ -3408,14 +3408,6 @@ static void adreno_drawctxt_sched(struct kgsl_device *device,
 		ADRENO_CONTEXT(context));
 }
 
-void adreno_mark_for_coldboot(struct adreno_device *adreno_dev)
-{
-	if (!adreno_dev->warmboot_enabled)
-		return;
-
-	set_bit(ADRENO_DEVICE_FORCE_COLDBOOT, &adreno_dev->priv);
-}
-
 bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -3451,7 +3443,7 @@ int adreno_power_cycle(struct adreno_device *adreno_dev,
 
 	if (!ret) {
 		callback(adreno_dev, priv);
-		adreno_mark_for_coldboot(adreno_dev);
+		gmu_core_mark_for_coldboot(device);
 		ops->pm_resume(adreno_dev);
 	}
 
