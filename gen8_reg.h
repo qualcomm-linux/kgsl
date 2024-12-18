@@ -959,6 +959,7 @@
 #define GEN8_GRAS_PERFCTR_LRZ_SEL_3         0x8733
 
 /* RB registers */
+#define GEN8_RB_RBP_CNTL                    0x8e01
 #define GEN8_RB_DBG_ECO_CNTL                0x8e04
 #define GEN8_RB_CCU_DBG_ECO_CNTL            0x8e06
 #define GEN8_RB_CCU_CNTL                    0x8e07
