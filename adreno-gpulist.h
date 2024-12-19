@@ -2633,7 +2633,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 		.snapshot_size = SZ_4M,
 	},
 	.sqefw_name = "gen70e00_sqe.fw",
-	.gmufw_name = "gmu_gen70e00.bin",
+	.gmufw_name = "gen71700_gmu.bin",
 	.zap_name = "gen70e00_zap.mbn",
 	.hwcg = gen7_0_0_hwcg_regs,
 	.hwcg_count = ARRAY_SIZE(gen7_0_0_hwcg_regs),
