@@ -114,8 +114,8 @@ const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
 };
 
 const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
-	.pre_crashdumper_regs = gen8_6_0_ahb_registers,
-	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_6_0_ahb_registers),
+	.pre_crashdumper_regs = gen8_0_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_0_0_ahb_registers),
 	.debugbus_blocks = gen8_6_0_debugbus_blocks,
 	.debugbus_blocks_len = ARRAY_SIZE(gen8_6_0_debugbus_blocks),
 	.gbif_debugbus_blocks = gen8_gbif_debugbus_blocks,
@@ -130,7 +130,7 @@ const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
 	.rscc_regs = gen8_0_0_rscc_rsc_registers,
 	.reg_list = gen8_6_0_reg_list,
 	.cx_misc_regs = gen8_0_0_cx_misc_registers,
-	.shader_blocks = gen8_0_0_shader_blocks,
+	.shader_blocks = gen8_6_0_shader_blocks,
 	.num_shader_blocks = ARRAY_SIZE(gen8_0_0_shader_blocks),
 	.cp_clusters = gen8_0_0_cp_clusters,
 	.num_cp_clusters = ARRAY_SIZE(gen8_0_0_cp_clusters),
