@@ -670,4 +670,13 @@ static inline u32 gen8_get_slice_mask(struct adreno_device *adreno_dev)
 	return gen8_dev->slice_mask;
 }
 
+/**
+ * gen8_hwcg_set - Set gpu hardware clock gating
+ * @adreno_dev: Handle to the adreno device
+ * @on: Boolean flag for clock gating setting
+ *
+ * Enables/disables the gpu hardware clock gating
+ */
+void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on);
+
 #endif

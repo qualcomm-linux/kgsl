@@ -1199,7 +1199,7 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 
 #define RBBM_CLOCK_CNTL_ON 0x8aa8aa82
 
-static void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
+void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
@@ -1762,7 +1762,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 	 * Enable hardware clock gating here to prevent any register access
 	 * issue due to internal clock gating.
 	 */
-	gen8_hwcg_set(adreno_dev, true);
+	if (!adreno_is_gen8_2_0(adreno_dev))
+		gen8_hwcg_set(adreno_dev, true);
 
 	/*
 	 * All registers must be written before this point so that we don't
@@ -2047,7 +2048,11 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 		}
 	}
 
-	return gen8_post_start(adreno_dev);
+	ret = gen8_post_start(adreno_dev);
+	if (!ret && adreno_is_gen8_2_0(adreno_dev))
+		gen8_hwcg_set(adreno_dev, true);
+
+	return ret;
 }
 
 /*
