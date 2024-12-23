@@ -1409,12 +1409,12 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/*
 	 * Force no write allocate for A5x, A6x and all gen7 targets
-	 * except gen_7_9_x and gen_7_14_0. gen_7_9_x and gen_7_14_0
+	 * except gen_7_9_x and gen_7_14_0_family. gen_7_9_x and gen_7_14_0_family
 	 * use write allocate.
 	 */
 	if (adreno_is_a5xx(adreno_dev) || adreno_is_a6xx(adreno_dev) ||
 		(adreno_is_gen7(adreno_dev) && !adreno_is_gen7_9_x(adreno_dev) &&
-		!adreno_is_gen7_14_0(adreno_dev)))
+		!adreno_is_gen7_14_0_family(adreno_dev)))
 		kgsl_mmu_set_feature(device, KGSL_MMU_FORCE_LLCC_NWA);
 
 	 /* Bind the components before doing the KGSL platform probe. */
