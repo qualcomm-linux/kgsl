@@ -204,25 +204,6 @@ static void _get_hw_fence_entries(struct adreno_device *adreno_dev)
 	gmu_core_set_vrb_register(gmu->vrb, VRB_HW_FENCE_SHADOW_NUM_ENTRIES, shadow_num_entries);
 }
 
-static void gen8_hwsched_soccp_vote_init(struct adreno_device *adreno_dev)
-{
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
-	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
-
-	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
-		return;
-
-	if (hwf->soccp_rproc)
-		return;
-
-	hwf->soccp_rproc = gmu_core_soccp_vote_init(gmu_pdev_dev);
-	if (!IS_ERR(hwf->soccp_rproc))
-		return;
-
-	/* Disable hw fences */
-	clear_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags);
-}
-
 void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 {
 	struct device *gmu_pdev_dev = GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev));
@@ -232,8 +213,7 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 	if (!test_bit(ADRENO_HWSCHED_HW_FENCE, &adreno_dev->hwsched.flags))
 		return;
 
-	if (!gmu_core_soccp_vote(gmu_pdev_dev, &gmu->flags, hwf->soccp_rproc,
-		pwr_on))
+	if (!gmu_core_soccp_vote(gmu_pdev_dev, &gmu->flags, pwr_on))
 		return;
 
 	/* Make sure no more hardware fences are created */
@@ -318,8 +298,6 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	/* From this GMU FW all RBBM interrupts are handled at GMU */
 	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
 		adreno_irq_free(adreno_dev);
-
-	gen8_hwsched_soccp_vote_init(adreno_dev);
 
 	gen8_hwsched_soccp_vote(adreno_dev, true);
 
