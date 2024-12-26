@@ -24,7 +24,6 @@ struct gen8_dcvs_table {
  * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
- * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
  * @clks: GPU subsystem clocks required for GMU functionality
@@ -41,7 +40,6 @@ struct gen8_gmu_device {
 	} ver;
 	int irq;
 	const struct firmware *fw_image;
-	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
 	/** @vrb: GMU virtual register bank memory */
 	struct kgsl_memdesc *vrb;

@@ -23,7 +23,6 @@ struct gen7_dcvs_table {
  * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
- * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
  * @clks: GPU subsystem clocks required for GMU functionality
@@ -41,7 +40,6 @@ struct gen7_gmu_device {
 	} ver;
 	int irq;
 	const struct firmware *fw_image;
-	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
 	/** @gmu_init_scratch: Memory to store the initial HFI messages */
 	struct kgsl_memdesc *gmu_init_scratch;
