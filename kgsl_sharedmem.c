@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -256,19 +256,19 @@ imported_mem_show(struct kgsl_process_private *priv,
 
 		m = &entry->memdesc;
 		if (kgsl_memdesc_usermem_type(m) == KGSL_MEM_ENTRY_ION) {
+			u64 size = m->size;
+			int total_egl_count;
+
 			kgsl_get_egl_counts(entry, &egl_surface_count,
 					&egl_image_count);
+			total_egl_count = egl_surface_count + egl_image_count;
 
-			if ((kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_EGL_SURFACE) ||
-				(kgsl_memdesc_get_memtype(m) == KGSL_MEMTYPE_SURFACE))
-				imported_mem += m->size;
-			else if (egl_surface_count == 0) {
-				uint64_t size = m->size;
-
-				do_div(size, (egl_image_count ?
-							egl_image_count : 1));
-				imported_mem += size;
-			}
+			/*
+			 * Divide the total buffer size uniformly across all the
+			 * processes that imported the buffer.
+			 */
+			do_div(size, (total_egl_count ? total_egl_count : 1));
+			imported_mem += size;
 		}
 
 		kgsl_mem_entry_put(entry);
