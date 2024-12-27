@@ -463,9 +463,21 @@ int gmu_core_get_attrs(u32 flags)
 int gmu_core_import_buffer(struct kgsl_device *device, struct hfi_mem_alloc_entry *entry)
 {
 	struct hfi_mem_alloc_desc *desc = &entry->desc;
+	u32 attrs = gmu_core_get_attrs(desc->flags);
 	u32 vma_id = (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ? GMU_CACHE : GMU_NONCACHED_KERNEL;
 
-	return _map_gmu(device, entry->md, 0, vma_id, gmu_core_get_attrs(desc->flags), desc->align);
+	/*
+	 * GMU Tx/Rx queues are mapped as I/O-coherent on both SOCCP and CPU,
+	 * mark the buffer I/O-coherent on GMU side as well to prevent stale
+	 * data and immediate updates in DDR.
+	 */
+	if (desc->mem_kind == HFI_MEMKIND_HW_FENCE &&
+		kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT)) {
+		entry->md->flags |= KGSL_MEMFLAGS_IOCOHERENT;
+		attrs |= IOMMU_CACHE;
+	}
+
+	return _map_gmu(device, entry->md, 0, vma_id, attrs, desc->align);
 }
 
 struct kgsl_memdesc *gmu_core_reserve_kernel_block(struct kgsl_device *device,
