@@ -54,6 +54,8 @@ struct kgsl_sync_fence {
 	unsigned int timestamp;
 	/** @hw_fence_index: Index of hw fence in hw fence table */
 	u64 hw_fence_index;
+	/** @hw_fence_list: Global list of hw fences */
+	struct list_head hw_fence_list;
 };
 
 /**

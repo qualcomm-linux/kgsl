@@ -279,12 +279,12 @@ u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u
 u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_log_destroy_pending_fences - Log and destroy any pending hardware fences if soccp
+ * adreno_hwsched_log_remove_pending_fences - Log and remove any pending hardware fences if soccp
  * vote failed
  * @adreno_dev: pointer to the adreno device
  * @dev: Pointer to the gmu pdev device
  */
-void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+void adreno_hwsched_log_remove_pending_hw_fences(struct adreno_device *adreno_dev,
 	struct device *dev);
 
 /**

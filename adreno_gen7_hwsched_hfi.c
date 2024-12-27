@@ -1123,16 +1123,29 @@ unlock:
 	mutex_unlock(&adreno_dev->hwsched.mutex);
 }
 
-static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 received_hdr)
+static int _check_hw_fence_ack_failure(struct kgsl_device *device, u32 *result)
+{
+	if (!result[2])
+		return 0;
+
+	dev_err(GMU_PDEV_DEV(device),
+		"HFI ACK failure: Req=0x%8.8X, Result=0x%8.8X\n",
+		result[1], result[2]);
+
+	return -EINVAL;
+}
+
+static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 *rcvd)
 {
 	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
 	struct adreno_context *drawctxt = NULL;
 	struct adreno_hwsched_hw_fence *hwf = &adreno_dev->hwsched.hw_fence;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	spin_lock(&hwf->lock);
 
 	/* If this ack is being waited on, we don't need to touch the unack count */
-	if (hw_fence_ack.sent_hdr && CMP_HFI_ACK_HDR(hw_fence_ack.sent_hdr, received_hdr)) {
+	if (hw_fence_ack.sent_hdr && CMP_HFI_ACK_HDR(hw_fence_ack.sent_hdr, rcvd[1])) {
 		spin_unlock(&hwf->lock);
 		complete(&hw_fence_ack.complete);
 		return;
@@ -1142,10 +1155,15 @@ static void process_hw_fence_ack(struct adreno_device *adreno_dev, u32 received_
 
 	/* The unack count should never be greater than MAX_HW_FENCE_UNACK_COUNT */
 	if (hwf->unack_count > MAX_HW_FENCE_UNACK_COUNT)
-		dev_err(GMU_PDEV_DEV(KGSL_DEVICE(adreno_dev)),
+		dev_err(GMU_PDEV_DEV(device),
 			"unexpected hardware fence unack count:%d\n",
 			hwf->unack_count);
 
+	if (_check_hw_fence_ack_failure(device, rcvd)) {
+		spin_unlock(&hwf->lock);
+		gen7_hwsched_fault(adreno_dev, GMU_FAULT_HW_FENCE);
+		return;
+	}
 
 	if (!test_bit(GEN7_HWSCHED_HW_FENCE_MAX_BIT, &hwf->flags) ||
 		(hwf->unack_count != MIN_HW_FENCE_UNACK_COUNT)) {
@@ -1206,7 +1224,7 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			 * (except when we send H2F_MSG_HW_FENCE_INFO packets)
 			 */
 			if (MSG_HDR_GET_ID(rcvd[1]) == H2F_MSG_HW_FENCE_INFO)
-				process_hw_fence_ack(adreno_dev, rcvd[1]);
+				process_hw_fence_ack(adreno_dev, rcvd);
 			else
 				gen7_receive_ack_async(adreno_dev, rcvd);
 			break;
@@ -3128,11 +3146,20 @@ int gen7_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
 
 	spin_unlock(&hwf->lock);
 
-	if (!ret)
-		ret = adreno_hwsched_wait_ack_completion(adreno_dev,
-				GMU_PDEV_DEV(device), &hw_fence_ack,
-				gen7_hwsched_process_msgq);
+	if (ret)
+		goto done;
 
+	ret = adreno_hwsched_wait_ack_completion(adreno_dev,
+			GMU_PDEV_DEV(device), &hw_fence_ack,
+			gen7_hwsched_process_msgq);
+	if (ret)
+		goto done;
+
+	ret = _check_hw_fence_ack_failure(device, hw_fence_ack.results);
+	if (ret)
+		gmu_core_fault_snapshot(device, GMU_FAULT_HW_FENCE);
+
+done:
 	memset(&hw_fence_ack, 0x0, sizeof(hw_fence_ack));
 	return ret;
 }
@@ -3991,6 +4018,11 @@ int gen7_hwsched_disable_hw_fence_throttle(struct adreno_device *adreno_dev)
 		goto done;
 
 	ret = process_hw_fence_deferred_ctxt(adreno_dev, drawctxt, ts);
+	if (ret) {
+		/* the deferred drawctxt will be handled post fault recovery */
+		gen7_hwsched_fault(adreno_dev, GMU_FAULT_HW_FENCE);
+		return ret;
+	}
 
 	kgsl_context_put(&drawctxt->base);
 	adreno_active_count_put(adreno_dev);
