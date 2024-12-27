@@ -519,6 +519,15 @@ void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
  */
 int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
+/**
+ * gen7_host_aperture_set - Program CP aperture register
+ * @adreno_dev: Handle to the adreno device
+ * @pipe_id: Pipe for which the register is to be set
+ *
+ * This function programs CP aperture register.
+ */
+void gen7_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id);
+
 #ifdef CONFIG_QCOM_KGSL_CORESIGHT
 void gen7_coresight_init(struct adreno_device *device);
 #else
