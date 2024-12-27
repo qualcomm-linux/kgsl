@@ -101,16 +101,11 @@ def external_deps(target, variant):
 
     # Add synx-kernel in the dependency list for targets that use it for hardware fences
     if target in [ "sun", "niobe", "seraph" ]:
-        deplist += select({
-            "//build/kernel/kleaf:socrepo_true": [
-                "//vendor/qcom/opensource/synx-kernel:{}_synx_modules".format(tv),
-                "//vendor/qcom/opensource/synx-kernel:synx_headers"
-                ],
-            "//build/kernel/kleaf:socrepo_false": [
-                "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
-                "//vendor/qcom/opensource/synx-kernel:synx_headers"
-                ]
-        })
+        deplist = deplist + [
+            "//vendor/qcom/opensource/synx-kernel:{}_modules".format(tv),
+            "//vendor/qcom/opensource/synx-kernel:synx_headers"
+            ]
+
     if target in [ "monaco", "parrot", "canoe" ]:
         deplist = deplist + [
             "//vendor/qcom/opensource/mm-drivers/hw_fence:hw_fence_headers"
