@@ -875,7 +875,9 @@ int gen8_init(struct adreno_device *adreno_dev)
 	mutex_init(&gen8_dev->nc_mutex);
 
 	/* Debugfs node for noncontext registers override */
-	debugfs_create_file("nc_override", 0644, device->d_debugfs, device, &nc_override_fops);
+	if (!debugfs_lookup("nc_override", device->d_debugfs))
+		debugfs_create_file("nc_override", 0644,
+			device->d_debugfs, device, &nc_override_fops);
 
 	return adreno_allocate_global(device, &adreno_dev->pwrup_reglist,
 		PAGE_SIZE, 0, 0, KGSL_MEMDESC_PRIVILEGED,
