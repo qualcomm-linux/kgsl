@@ -2630,7 +2630,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 			ADRENO_IFPC,
 		.gpudev = &adreno_gen7_gmu_gpudev.base,
 		.perfcounters = &adreno_gen7_no_cb_perfcounters,
-		.uche_gmem_alignment = SZ_16M,
+		.uche_gmem_alignment = 0,
 		.gmem_size = SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_4M,
