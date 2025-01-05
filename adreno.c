@@ -2226,7 +2226,7 @@ int adreno_reset(struct kgsl_device *device, int fault)
 	 * the IOMMU hardware needs a reset too)
 	 */
 
-	if (!(fault & ADRENO_IOMMU_PAGE_FAULT))
+	if (!(fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
 		ret = adreno_soft_reset(device);
 
 	if (ret) {
@@ -3390,7 +3390,7 @@ bool adreno_smmu_is_stalled(struct adreno_device *adreno_dev)
 
 	fault = adreno_gpu_fault(adreno_dev);
 
-	return ((fault & ADRENO_IOMMU_PAGE_FAULT) &&
+	return ((fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT) &&
 		test_bit(KGSL_FT_PAGEFAULT_GPUHALT_ENABLE, &mmu->pfpolicy)) ? true : false;
 }
 

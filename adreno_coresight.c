@@ -57,19 +57,15 @@ ssize_t adreno_coresight_store_register(struct device *dev,
 		return ret;
 
 	mutex_lock(&device->mutex);
-
 	/* Ignore writes while coresight is off */
-	if (!adreno_csdev->enabled)
-		goto out;
-
-	cattr->reg->value = val;
-	if (!adreno_active_count_get(adreno_dev)) {
-		kgsl_regwrite(device, cattr->reg->offset, cattr->reg->value);
-		adreno_active_count_put(adreno_dev);
+	if (!adreno_csdev->enabled) {
+		mutex_unlock(&device->mutex);
+		return size;
 	}
-
-out:
+	adreno_dev->patch_reglist = false;
 	mutex_unlock(&device->mutex);
+
+	adreno_power_cycle_u32(adreno_dev, &cattr->reg->value, val);
 	return size;
 }
 
@@ -140,6 +136,23 @@ static void _adreno_coresight_set(struct adreno_device *adreno_dev,
 	for (i = 0; i < coresight->count; i++)
 		kgsl_regwrite(device, coresight->registers[i].offset,
 			coresight->registers[i].value);
+}
+
+u32 adreno_coresight_patch_pwrup_reglist(struct adreno_device *adreno_dev, u32 *dest)
+{
+	struct adreno_coresight_device *adreno_csdev = &adreno_dev->gx_coresight;
+	const struct adreno_coresight *coresight = adreno_csdev->coresight;
+	int i;
+
+	if (IS_ERR_OR_NULL(adreno_csdev->dev) || !adreno_csdev->enabled)
+		return 0;
+
+	for (i = 0; i < coresight->count; i++) {
+		*dest++ = coresight->registers[i].offset;
+		*dest++ = coresight->registers[i].value;
+	}
+
+	return coresight->count;
 }
 
 /* Generic function to enable coresight debug bus on adreno devices */
