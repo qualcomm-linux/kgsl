@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iommu.h>
@@ -2150,8 +2150,14 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct gen8_hfi *hfi = to_gen8_hfi(adreno_dev);
 	u32 thermal_pwrlevel = max_t(u32, pwr->thermal_pwrlevel, pwr->pmqos_max_pwrlevel);
 	int ret = 0;
+	bool reset = false;
+
+	/* Disable recording of these messages */
+	if (test_and_clear_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask))
+		reset = true;
 
 	if (thermal_pwrlevel != 0) {
 		ret = gen8_hwsched_hfi_set_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
@@ -2161,6 +2167,9 @@ static int gen8_hwsched_set_gmu_based_dcvs_votes(struct adreno_device *adreno_de
 				"Failed to set default thermal level %u, ret: %d\n",
 				thermal_pwrlevel, ret);
 	}
+
+	if (reset)
+		set_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
 
 	return ret;
 }
@@ -2217,7 +2226,6 @@ static void warmboot_init_message_record_bitmask(struct adreno_device *adreno_de
 	clear_bit(H2F_MSG_WARMBOOT_CMD, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_START, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_GET_VALUE, hfi->wb_set_record_bitmask);
-	clear_bit(H2F_MSG_SET_VALUE, hfi->wb_set_record_bitmask);
 	clear_bit(H2F_MSG_GX_BW_PERF_VOTE, hfi->wb_set_record_bitmask);
 }
 
