@@ -23,6 +23,9 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 #include <soc/qcom/boot_stats.h>
 #define KGSL_BOOT_MARKER(str)          place_marker("M - DRIVER " str)
+#elif (IS_ENABLED(CONFIG_BOOTMARKER_PROXY))
+#include <linux/bootmarker_kernel.h>
+#define KGSL_BOOT_MARKER(str)          bootmarker_place_marker("M - DRIVER " str)
 #else
 #define KGSL_BOOT_MARKER(str)          pr_info("boot_kpi: M - DRIVER " str)
 #endif
