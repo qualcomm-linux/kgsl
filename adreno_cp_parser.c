@@ -442,6 +442,10 @@ static int adreno_ib_find_objs(struct kgsl_device *device,
 		else
 			break;
 
+		/* Check if rem is less than pktsize before decrementing */
+		if (rem < pktsize)
+			break;
+
 		if (pkt_is_type7(src[i])) {
 			if (adreno_cmd_is_ib(adreno_dev, src[i])) {
 				u64 size = src[i + 3];
