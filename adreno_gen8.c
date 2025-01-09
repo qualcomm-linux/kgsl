@@ -1025,6 +1025,31 @@ void gen8_regread_aperture(struct kgsl_device *device,
 	*value = kgsl_regmap_read(&device->regmap, offsetwords);
 }
 
+void gen8_periph_regread(struct kgsl_device *device, u32 offsetwords,
+	u32 *value, u32 pipe)
+{
+	gen8_host_aperture_set(ADRENO_DEVICE(device), pipe, 0, 0);
+
+	kgsl_regwrite(device, GEN8_CP_SQE_UCODE_DBG_ADDR_PIPE, offsetwords);
+	/*
+	 * An explicit barrier is needed so that reads do not happen before
+	 * the register write.
+	 */
+	mb();
+	kgsl_regread(device, GEN8_CP_SQE_UCODE_DBG_DATA_PIPE, value);
+}
+
+void gen8_periph_regread64(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe)
+{
+	u32 val_lo = 0, val_hi = 0;
+
+	gen8_periph_regread(device, offsetwords_lo, &val_lo, pipe);
+	gen8_periph_regread(device, offsetwords_hi, &val_hi, pipe);
+
+	*value = (((u64)val_hi << 32) | val_lo);
+}
+
 static inline void gen8_regwrite_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 value, u32 pipe, u32 slice_id, u32 use_slice_id)
 {
@@ -3063,15 +3088,15 @@ static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN8_RBBM_LPAC_STATUS, &status);
 	kgsl_regread(device, GEN8_CP_RB_RPTR_LPAC, &rptr);
 	kgsl_regread(device, GEN8_CP_RB_WPTR_LPAC, &wptr);
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base, PIPE_LPAC, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz, PIPE_LPAC, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base, PIPE_LPAC, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz, PIPE_LPAC, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
-			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base, PIPE_LPAC, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz, PIPE_LPAC, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+			GEN8_CP_PERIPH_IB1_BASE_HI, &ib1base, PIPE_LPAC);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_OFFSET, &ib1sz, PIPE_LPAC);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+			GEN8_CP_PERIPH_IB2_BASE_HI, &ib2base, PIPE_LPAC);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_OFFSET, &ib2sz, PIPE_LPAC);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
+			GEN8_CP_PERIPH_IB3_BASE_HI, &ib3base, PIPE_LPAC);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_OFFSET, &ib3sz, PIPE_LPAC);
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	pr_context(device, drawobj->context,
@@ -3123,24 +3148,24 @@ static void gen8_fault_header(struct adreno_device *adreno_dev,
 	kgsl_regread(device, GEN8_CP_RB_RPTR_BR, &rptr);
 	kgsl_regread(device, GEN8_CP_RB_WPTR_GC, &wptr);
 	kgsl_regread(device, GEN8_CP_RB_RPTR_BV, &rptr_bv);
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz, PIPE_BR, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz, PIPE_BR, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
-			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base, PIPE_BR, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz, PIPE_BR, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
-			GEN8_CP_IB1_BASE_HI_PIPE, &ib1base_bv, PIPE_BV, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE, &ib1sz_bv, PIPE_BV, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
-			GEN8_CP_IB2_BASE_HI_PIPE, &ib2base_bv, PIPE_BV, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE, &ib2sz_bv, PIPE_BV, 0, 0);
-	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
-			GEN8_CP_IB3_BASE_HI_PIPE, &ib3base_bv, PIPE_BV, 0, 0);
-	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE, &ib3sz_bv, PIPE_BV, 0, 0);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+			GEN8_CP_PERIPH_IB1_BASE_HI, &ib1base, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_OFFSET, &ib1sz, PIPE_BR);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+			GEN8_CP_PERIPH_IB2_BASE_HI, &ib2base, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_OFFSET, &ib2sz, PIPE_BR);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
+			GEN8_CP_PERIPH_IB3_BASE_HI, &ib3base, PIPE_BR);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_OFFSET, &ib3sz, PIPE_BR);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB1_BASE_LO,
+			GEN8_CP_PERIPH_IB1_BASE_HI, &ib1base_bv, PIPE_BV);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB1_OFFSET, &ib1sz_bv, PIPE_BV);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB2_BASE_LO,
+			GEN8_CP_PERIPH_IB2_BASE_HI, &ib2base_bv, PIPE_BV);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB2_OFFSET, &ib2sz_bv, PIPE_BV);
+	gen8_periph_regread64(device, GEN8_CP_PERIPH_IB3_BASE_LO,
+			GEN8_CP_PERIPH_IB3_BASE_HI, &ib3base_bv, PIPE_BV);
+	gen8_periph_regread(device, GEN8_CP_PERIPH_IB3_OFFSET, &ib3sz_bv, PIPE_BV);
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
 	dev_err(device->dev,

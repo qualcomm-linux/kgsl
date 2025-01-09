@@ -885,6 +885,20 @@
 #define GEN8_CP_SLICE_MEM_POOL_DBG_DATA_PIPE                   0xb01
 #define GEN8_CP_SLICE_CHICKEN_DBG_PIPE                         0xb93
 
+/* CP Peripheral registers */
+#define GEN8_CP_PERIPH_IB1_BASE_LO   0x7005
+#define GEN8_CP_PERIPH_IB1_BASE_HI   0x7006
+#define GEN8_CP_PERIPH_IB1_SIZE      0x7007
+#define GEN8_CP_PERIPH_IB1_OFFSET    0x7008
+#define GEN8_CP_PERIPH_IB2_BASE_LO   0x7009
+#define GEN8_CP_PERIPH_IB2_BASE_HI   0x700a
+#define GEN8_CP_PERIPH_IB2_SIZE      0x700b
+#define GEN8_CP_PERIPH_IB2_OFFSET    0x700c
+#define GEN8_CP_PERIPH_IB3_BASE_LO   0x700d
+#define GEN8_CP_PERIPH_IB3_BASE_HI   0x700e
+#define GEN8_CP_PERIPH_IB3_SIZE      0x700f
+#define GEN8_CP_PERIPH_IB3_OFFSET    0x7010
+
 /* UCHE registers */
 #define GEN8_UCHE_MODE_CNTL                 0xe01
 #define GEN8_UCHE_CACHE_WAYS                0xe04
