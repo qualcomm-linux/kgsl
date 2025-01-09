@@ -79,7 +79,6 @@ static void gen7_hwsched_snapshot_preemption_records(struct kgsl_device *device,
 void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
 	bool skip_memkind_rb = false;
@@ -96,7 +95,7 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	 * payloads are not present, fall back to dumping ringbuffers
 	 * based on MEMKIND_RB
 	 */
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		parse_payload = adreno_hwsched_parse_payload_rb_legacy(adreno_dev, snapshot);
 	else
 		parse_payload = adreno_hwsched_parse_payload_rb(adreno_dev, snapshot);
@@ -220,7 +219,7 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		goto clks_gdsc_off;
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		set_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &adreno_dev->hwsched.flags);
 
 	gen7_gmu_irq_enable(adreno_dev);
@@ -229,7 +228,7 @@ static int gen7_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	level = pwr->pwrlevels[pwr->default_pwrlevel].bus_min;
 
 	/* From this GMU FW all RBBM interrupts are handled at GMU */
-	if (gmu->ver.core >= GMU_VERSION(5, 01, 06))
+	if (device->gmu_core.ver.core >= GMU_VERSION(5, 01, 06))
 		adreno_irq_free(adreno_dev);
 
 	/* GMU supports force retire command from this GMU FW */

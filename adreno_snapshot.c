@@ -1338,7 +1338,7 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 	return (count * 4);
 }
 
-size_t adreno_snapshot_gmu_version(struct kgsl_device *device,
+static size_t snapshot_gmu_version(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
 	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
@@ -1356,6 +1356,29 @@ size_t adreno_snapshot_gmu_version(struct kgsl_device *device,
 	*data = ver->value;
 
 	return DEBUG_SECTION_SZ(1);
+}
+
+void adreno_snapshot_gmu_versions(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot)
+{
+	int i;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_snapshot_gmu_version gmu_vers[] = {
+		{ .type = SNAPSHOT_DEBUG_GMU_CORE_VERSION,
+			.value = gmu->ver.core, },
+		{ .type = SNAPSHOT_DEBUG_GMU_CORE_DEV_VERSION,
+			.value = gmu->ver.core_dev, },
+		{ .type = SNAPSHOT_DEBUG_GMU_PWR_VERSION,
+			.value = gmu->ver.pwr, },
+		{ .type = SNAPSHOT_DEBUG_GMU_PWR_DEV_VERSION,
+			.value = gmu->ver.pwr_dev, },
+		{ .type = SNAPSHOT_DEBUG_GMU_HFI_VERSION,
+			.value = gmu->ver.hfi, },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(gmu_vers); i++)
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+				snapshot, snapshot_gmu_version, &gmu_vers[i]);
 }
 
 size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,

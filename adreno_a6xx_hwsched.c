@@ -34,7 +34,6 @@ static void a6xx_hwsched_snapshot_preemption_records(struct kgsl_device *device,
 void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
 	u32 i;
@@ -51,7 +50,7 @@ void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	 * payloads are not present, fall back to dumping ringbuffers
 	 * based on MEMKIND_RB
 	 */
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		parse_payload = adreno_hwsched_parse_payload_rb_legacy(adreno_dev, snapshot);
 	else
 		parse_payload = adreno_hwsched_parse_payload_rb(adreno_dev, snapshot);
@@ -138,7 +137,7 @@ static int a6xx_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 
 	a6xx_gmu_version_info(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		set_bit(ADRENO_HWSCHED_CTX_BAD_LEGACY, &adreno_dev->hwsched.flags);
 
 	a6xx_gmu_irq_enable(adreno_dev);

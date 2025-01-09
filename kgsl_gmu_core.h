@@ -521,6 +521,14 @@ struct gmu_core_device {
 	struct firmware_capabilities common_caps;
 	/** @platform_caps: GMU firmware platform capabilities */
 	struct firmware_capabilities platform_caps;
+	/* @ver: GMU Version information */
+	struct {
+		u32 core;
+		u32 core_dev;
+		u32 pwr;
+		u32 pwr_dev;
+		u32 hfi;
+	} ver;
 };
 
 extern struct platform_driver a6xx_gmu_driver;

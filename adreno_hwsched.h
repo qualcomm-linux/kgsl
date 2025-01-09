@@ -360,4 +360,12 @@ int adreno_gmu_context_queue_write(struct adreno_device *adreno_dev,
  */
 void adreno_hwsched_add_profile_events(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time);
+
+/**
+ * adreno_hwsched_log_profiling_info - Log profiling information for a retired
+ * command batch
+ * @adreno_dev: Pointer to the adreno device structure
+ * @rcvd: Pointer to the received HFI timestamp retire command
+ */
+void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd);
 #endif

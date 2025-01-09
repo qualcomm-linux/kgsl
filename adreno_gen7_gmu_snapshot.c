@@ -121,31 +121,6 @@ static void gen7_gmu_snapshot_memories(struct kgsl_device *device,
 	}
 }
 
-static void gen7_gmu_snapshot_versions(struct kgsl_device *device,
-		struct gen7_gmu_device *gmu,
-		struct kgsl_snapshot *snapshot)
-{
-	int i;
-
-	struct kgsl_snapshot_gmu_version gmu_vers[] = {
-		{ .type = SNAPSHOT_DEBUG_GMU_CORE_VERSION,
-			.value = gmu->ver.core, },
-		{ .type = SNAPSHOT_DEBUG_GMU_CORE_DEV_VERSION,
-			.value = gmu->ver.core_dev, },
-		{ .type = SNAPSHOT_DEBUG_GMU_PWR_VERSION,
-			.value = gmu->ver.pwr, },
-		{ .type = SNAPSHOT_DEBUG_GMU_PWR_DEV_VERSION,
-			.value = gmu->ver.pwr_dev, },
-		{ .type = SNAPSHOT_DEBUG_GMU_HFI_VERSION,
-			.value = gmu->ver.hfi, },
-	};
-
-	for (i = 0; i < ARRAY_SIZE(gmu_vers); i++)
-		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-				snapshot, adreno_snapshot_gmu_version,
-				&gmu_vers[i]);
-}
-
 #define RSCC_OFFSET_DWORDS 0x14000
 
 static size_t gen7_snapshot_rscc_registers(struct kgsl_device *device, u8 *buf,
@@ -205,7 +180,7 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
 		snapshot, gen7_gmu_snapshot_itcm, gmu);
 
-	gen7_gmu_snapshot_versions(device, gmu, snapshot);
+	adreno_snapshot_gmu_versions(device, snapshot);
 
 	gen7_gmu_snapshot_memories(device, gmu, snapshot);
 
