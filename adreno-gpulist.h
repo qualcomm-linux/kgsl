@@ -2981,7 +2981,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_0 = {
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (13536 * SZ_1K),
 	.preempt_level = 1,
-	.cl_no_ft_timeout_ms = 8000,
+	.cl_no_ft_timeout_ms = 6500,
 	.therm_profile = &therm_profile_8_0_0,
 };
 
@@ -3023,7 +3023,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (13536 * SZ_1K),
 	.preempt_level = 1,
-	.cl_no_ft_timeout_ms = 8000,
+	.cl_no_ft_timeout_ms = 6500,
 	.therm_profile = &therm_profile_8_0_0,
 };
 
@@ -3184,7 +3184,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.bcl_data = 1,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
-	.cl_no_ft_timeout_ms = 8000,
+	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (19708 * SZ_1K),
 };
 
@@ -3294,7 +3294,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_4_0 = {
 	.preempt_level = 1,
 	.ctxt_record_size = (13536 * SZ_1K),
 	.noc_timeout_us = 3410, /* 3.41 msec */
-	.cl_no_ft_timeout_ms = 8000,
+	.cl_no_ft_timeout_ms = 6500,
 };
 
 extern const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list;
