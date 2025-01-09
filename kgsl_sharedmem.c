@@ -830,7 +830,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 	 * cache operations at allocation time
 	 */
 	if (!(flags & KGSL_MEMFLAGS_IOCOHERENT))
-		memdesc->dev = &device->pdev->dev;
+		memdesc->dev = &kgsl_driver.virtdev;
 
 	align = max_t(unsigned int,
 		kgsl_memdesc_get_align(memdesc), ilog2(PAGE_SIZE));
