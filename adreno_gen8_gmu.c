@@ -1883,7 +1883,7 @@ static int gen8_gmu_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab, 0);
 	return ret;
 }
 
@@ -2063,6 +2063,7 @@ void gen8_gmu_remove(struct kgsl_device *device)
 	kobject_put(&gmu->log_kobj);
 	kobject_put(&gmu->stats_kobj);
 	kfree(gmu->dcvs_cmdbuf);
+	kfree(gmu->gmu_scaling_cmdbuf);
 }
 
 /* Default IFPC timer (300usec) value */

@@ -2918,19 +2918,10 @@ static void gen8_read_bus_stats(struct kgsl_device *device,
 	stats->ram_wait = starved_ram;
 }
 
-static void gen8_power_stats(struct adreno_device *adreno_dev,
-		struct kgsl_power_stats *stats)
+static void gen8_power_feature_stats(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_busy_data *busy = &adreno_dev->busy_data;
-	u64 gpu_busy;
-
-	/* Set the GPU busy counter for frequency scaling */
-	gpu_busy = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_0,
-		&busy->gpu_busy);
-
-	stats->busy_time = gpu_busy * 10;
-	do_div(stats->busy_time, 192);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
 		u32 ifpc = counter_delta(device,
@@ -2941,9 +2932,6 @@ static void gen8_power_stats(struct adreno_device *adreno_dev,
 		if (ifpc > 0)
 			trace_adreno_ifpc_count(adreno_dev->ifpc_count);
 	}
-
-	if (device->pwrctrl.bus_control)
-		gen8_read_bus_stats(device, stats, busy);
 
 	if (adreno_dev->bcl_enabled) {
 		u32 a, b, c, bcl_throttle;
@@ -2968,6 +2956,27 @@ static void gen8_power_stats(struct adreno_device *adreno_dev,
 		 */
 		adreno_dev->bcl_throttle_time_us += ((bcl_throttle * 10) / 192);
 	}
+}
+
+static void gen8_power_stats(struct adreno_device *adreno_dev,
+		struct kgsl_power_stats *stats)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_busy_data *busy = &adreno_dev->busy_data;
+	u64 gpu_busy;
+
+	/* Set the GPU busy counter for frequency scaling */
+	gpu_busy = counter_delta(device, GEN8_GMUCX_POWER_COUNTER_XOCLK_L_0,
+		&busy->gpu_busy);
+
+	stats->busy_time = gpu_busy * 10;
+	do_div(stats->busy_time, 192);
+
+	if (device->pwrctrl.bus_control)
+		gen8_read_bus_stats(device, stats, busy);
+
+	/* Read stats that are not associated with DCVS */
+	gen8_power_feature_stats(adreno_dev);
 }
 
 static void gen8_set_isdb_breakpoint_registers(struct adreno_device *adreno_dev)
@@ -3173,6 +3182,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.get_uche_trap_base = gen8_get_uche_trap_base,
 		.fault_header = gen8_fault_header,
 		.lpac_fault_header = gen8_lpac_fault_header,
+		.power_feature_stats = gen8_power_feature_stats,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,

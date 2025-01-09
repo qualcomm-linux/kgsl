@@ -2141,19 +2141,10 @@ static void gen7_read_bus_stats(struct kgsl_device *device,
 	stats->ram_wait = starved_ram;
 }
 
-static void gen7_power_stats(struct adreno_device *adreno_dev,
-		struct kgsl_power_stats *stats)
+static void gen7_power_feature_stats(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_busy_data *busy = &adreno_dev->busy_data;
-	u64 gpu_busy;
-
-	/* Set the GPU busy counter for frequency scaling */
-	gpu_busy = counter_delta(device, GEN7_GMU_CX_GMU_POWER_COUNTER_XOCLK_0_L,
-		&busy->gpu_busy);
-
-	stats->busy_time = gpu_busy * 10;
-	do_div(stats->busy_time, 192);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_IFPC)) {
 		u32 ifpc = counter_delta(device,
@@ -2164,9 +2155,6 @@ static void gen7_power_stats(struct adreno_device *adreno_dev,
 		if (ifpc > 0)
 			trace_adreno_ifpc_count(adreno_dev->ifpc_count);
 	}
-
-	if (device->pwrctrl.bus_control)
-		gen7_read_bus_stats(device, stats, busy);
 
 	if (adreno_dev->bcl_enabled) {
 		u32 a, b, c;
@@ -2193,6 +2181,27 @@ static void gen7_power_stats(struct adreno_device *adreno_dev,
 			adreno_dev->bcl_throttle_time_us += ((bcl_throttle * 10) / 192);
 		}
 	}
+}
+
+static void gen7_power_stats(struct adreno_device *adreno_dev,
+		struct kgsl_power_stats *stats)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct adreno_busy_data *busy = &adreno_dev->busy_data;
+	u64 gpu_busy;
+
+	/* Set the GPU busy counter for frequency scaling */
+	gpu_busy = counter_delta(device, GEN7_GMU_CX_GMU_POWER_COUNTER_XOCLK_0_L,
+			&busy->gpu_busy);
+
+	stats->busy_time = gpu_busy * 10;
+	do_div(stats->busy_time, 192);
+
+	if (device->pwrctrl.bus_control)
+		gen7_read_bus_stats(device, stats, busy);
+
+	/* Read stats that are not associated with DCVS */
+	gen7_power_feature_stats(adreno_dev);
 }
 
 static void gen7_set_isdb_breakpoint_registers(struct adreno_device *adreno_dev)
@@ -2321,6 +2330,7 @@ const struct gen7_gpudev adreno_gen7_9_0_hwsched_gpudev = {
 		.lpac_store = gen7_9_0_lpac_store,
 		.get_uche_trap_base = gen7_get_uche_trap_base,
 		.lpac_fault_header = gen7_lpac_fault_header,
+		.power_feature_stats = gen7_power_feature_stats,
 	},
 	.hfi_probe = gen7_hwsched_hfi_probe,
 	.hfi_remove = gen7_hwsched_hfi_remove,

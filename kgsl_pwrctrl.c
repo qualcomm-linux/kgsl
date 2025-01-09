@@ -247,9 +247,10 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	trace_kgsl_pwrlevel(device,
 			pwr->active_pwrlevel, pwrlevel->gpu_freq,
 			pwr->previous_pwrlevel,
-			pwr->pwrlevels[old_level].gpu_freq);
+			pwr->pwrlevels[old_level].gpu_freq,
+			0);
 
-	trace_gpu_frequency(pwrlevel->gpu_freq/1000, 0);
+	trace_gpu_frequency(pwrlevel->gpu_freq/1000, 0, 0);
 
 	/*  Update the bus after GPU clock decreases. */
 	if (new_level > old_level)
@@ -1188,7 +1189,7 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
  * Track the amount of time the gpu is on vs the total system time.
  * Regularly update the percentage of busy time displayed by sysfs.
  */
-void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy)
+void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy, u64 ticks)
 {
 	struct kgsl_clk_stats *stats = &device->pwrctrl.clk_stats;
 
@@ -1204,7 +1205,7 @@ void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy)
 	stats->total = 0;
 	stats->busy = 0;
 
-	trace_kgsl_gpubusy(device, stats->busy_old, stats->total_old);
+	trace_kgsl_gpubusy(device, stats->busy_old, stats->total_old, ticks);
 }
 
 static void kgsl_pwrctrl_clk(struct kgsl_device *device, bool state,
@@ -1782,7 +1783,7 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	u32 max_freq = val * 1000;
 	int level;
 
-	if (!device->pwrscale.devfreq_enabled)
+	if (device->host_based_dcvs && !device->pwrscale.devfreq_enabled)
 		return NOTIFY_DONE;
 
 	for (level = pwr->num_pwrlevels - 1; level >= 0; level--) {
@@ -1803,9 +1804,13 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 
 	mutex_lock(&device->mutex);
 
+	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
+		goto done;
+
 	/* Update the current level using the new limit */
 	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
 
+done:
 	mutex_unlock(&device->mutex);
 	return NOTIFY_OK;
 }
@@ -1817,10 +1822,14 @@ static void kgsl_set_thermal_constraint(struct kthread_work *work)
 
 	mutex_lock(&device->mutex);
 
+	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
+		goto done;
+
 	/* Update the current level using the new limit */
 	if (device->state == KGSL_STATE_ACTIVE)
 		kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
 
+done:
 	mutex_unlock(&device->mutex);
 }
 
@@ -2282,7 +2291,7 @@ static int _wake(struct kgsl_device *device)
 		kgsl_pwrscale_wake(device);
 		kgsl_pwrctrl_irq(device, true);
 		trace_gpu_frequency(
-			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq/1000, 0);
+			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq/1000, 0, 0);
 
 		kgsl_bus_update(device, KGSL_BUS_VOTE_ON);
 
@@ -2372,7 +2381,7 @@ _slumber(struct kgsl_device *device)
 		device->ftbl->stop(device);
 		kgsl_pwrctrl_disable(device);
 		kgsl_pwrscale_sleep(device);
-		trace_gpu_frequency(0, 0);
+		trace_gpu_frequency(0, 0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	case KGSL_STATE_SUSPEND:
@@ -2382,7 +2391,7 @@ _slumber(struct kgsl_device *device)
 		break;
 	case KGSL_STATE_AWARE:
 		kgsl_pwrctrl_disable(device);
-		trace_gpu_frequency(0, 0);
+		trace_gpu_frequency(0, 0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	default:

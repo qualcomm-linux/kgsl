@@ -238,7 +238,7 @@ kgsl_pwrctrl_active_freq(struct kgsl_pwrctrl *pwr)
  */
 int kgsl_active_count_wait(struct kgsl_device *device, int count,
 	unsigned long wait_jiffies);
-void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy);
+void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy, u64 ticks);
 
 /**
  * kgsl_pwrctrl_set_constraint() - Validate and change enforced constraint

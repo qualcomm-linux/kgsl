@@ -469,6 +469,9 @@ struct adreno_power_ops {
 	/** @gpu_bus_set: Target specific function to set gpu bandwidth */
 	int (*gpu_bus_set)(struct adreno_device *adreno_dev, int bus_level,
 		u32 ab);
+	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
+	void (*gmu_based_dcvs_pwr_ops)(struct adreno_device *adreno_dev, u32 arg,
+			enum gpu_pwrlevel_op op);
 };
 
 /**
@@ -1011,6 +1014,10 @@ struct adreno_gpudev {
 	 * @lpac_fault_header: Print LPAC fault header
 	 */
 	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @power_feature_stats: Sample feature related perfcounter stats
+	 */
+	void (*power_feature_stats)(struct adreno_device *adreno_dev);
 };
 
 /**

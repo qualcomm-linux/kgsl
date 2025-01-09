@@ -1779,6 +1779,9 @@ poll:
 	case F2H_MSG_GMU_CNTR_REGISTER:
 		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
 		break;
+	case F2H_MSG_PROCESS_TRACE:
+		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+		break;
 	default:
 		if (MSG_HDR_GET_TYPE(rcvd[0]) == HFI_MSG_ACK) {
 			rc = gen7_receive_ack_cmd(gmu, rcvd, &pending_ack);

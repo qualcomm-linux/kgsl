@@ -538,6 +538,9 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 		case F2H_MSG_DEBUG: /* No Reply */
 			adreno_gen8_receive_debug_req(gmu, rcvd);
 			break;
+		case F2H_MSG_PROCESS_TRACE:
+			gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+			break;
 		default: /* No Reply */
 			dev_err(GMU_PDEV_DEV(device),
 				"HFI request %d not supported\n",

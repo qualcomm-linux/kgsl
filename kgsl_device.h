@@ -76,6 +76,10 @@ enum kgsl_event_results {
 #define KGSL_CONTEXT_ID(_context) \
 	((_context != NULL) ? (_context)->id : KGSL_MEMSTORE_GLOBAL)
 
+enum gpu_pwrlevel_op {
+	GPU_PWRLEVEL_OP_THERMAL,
+};
+
 struct kgsl_device;
 struct platform_device;
 struct kgsl_device_private;
@@ -170,6 +174,9 @@ struct kgsl_functable {
 	void (*set_isdb_breakpoint_registers)(struct kgsl_device *device);
 	/** @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
+	int (*gmu_based_dcvs_pwr_ops)(struct kgsl_device *device, u32 arg,
+		enum gpu_pwrlevel_op op);
 };
 
 struct kgsl_ioctl {

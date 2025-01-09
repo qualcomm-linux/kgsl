@@ -848,8 +848,6 @@ static int gen8_hwsched_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	adreno_get_bus_counters(adreno_dev);
-
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 						 ADRENO_COOP_RESET);
 
@@ -1248,7 +1246,7 @@ static int gen8_hwsched_bus_set(struct adreno_device *adreno_dev, int buslevel,
 		pwr->cur_ab = ab;
 	}
 
-	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab);
+	trace_kgsl_buslevel(device, pwr->active_pwrlevel, pwr->cur_buslevel, pwr->cur_ab, 0);
 	return ret;
 }
 
@@ -1614,6 +1612,41 @@ ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *bu
 	return count;
 }
 
+static void gen8_hwsched_set_thermal_index(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	u32 thermal_pwrlevel = max_t(u32, pwr->thermal_pwrlevel, pwr->pmqos_max_pwrlevel);
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		int ret;
+
+		/* If GMU is up, send the constraint to GMU */
+		ret = gen8_hwsched_hfi_set_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
+				(pwr->num_pwrlevels - thermal_pwrlevel));
+		if (ret)
+			dev_err(GMU_PDEV_DEV(device), "Failed to set thermal level %u, ret: %d\n",
+								thermal_pwrlevel, ret);
+	} else if (pwr->active_pwrlevel < thermal_pwrlevel) {
+		/*
+		 * Max constraint can be updated through PM QOS and such requests can be made
+		 * when GPU is in slumber. Update the active_pwrlevel to reflect these
+		 * changes.
+		 */
+		pwr->active_pwrlevel = thermal_pwrlevel;
+	}
+}
+
+static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev, u32 arg,
+		enum gpu_pwrlevel_op op)
+{
+	switch (op) {
+	case GPU_PWRLEVEL_OP_THERMAL:
+		gen8_hwsched_set_thermal_index(adreno_dev);
+		break;
+	}
+}
+
 const struct adreno_power_ops gen8_hwsched_power_ops = {
 	.first_open = gen8_hwsched_first_open,
 	.last_close = gen8_hwsched_power_off,
@@ -1623,6 +1656,7 @@ const struct adreno_power_ops gen8_hwsched_power_ops = {
 	.pm_resume = gen8_hwsched_pm_resume,
 	.gpu_clock_set = gen8_hwsched_clock_set,
 	.gpu_bus_set = gen8_hwsched_bus_set,
+	.gmu_based_dcvs_pwr_ops = gen8_hwsched_gmu_based_dcvs_pwr_ops,
 };
 
 const struct adreno_hwsched_ops gen8_hwsched_ops = {

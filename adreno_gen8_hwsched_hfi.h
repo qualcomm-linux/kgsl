@@ -271,6 +271,19 @@ void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,
 u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop);
 
 /**
+ * gen8_hwsched_hfi_set_value - Send SET_VALUE packet to GMU to set the value of a property
+ * @adreno_dev: Pointer to adreno device
+ * @type: Type of the property to set
+ * @subtype: Sub type of the property to set
+ * @data: Value to be set to the property
+ *
+ * This functions sends SET_VALUE HFI packet to set value of a property
+ *
+ * Return: On success, return 0. On failure, return error code
+ */
+int gen8_hwsched_hfi_set_value(struct adreno_device *adreno_dev, u32 type, u32 subtype, u32 data);
+
+/**
  * gen8_send_hw_fence_hfi_wait_ack - Send hardware fence info to GMU
  * @adreno_dev: Pointer to adreno device
  * @entry: Pointer to the adreno hardware fence entry
