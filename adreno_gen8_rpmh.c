@@ -211,10 +211,13 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 	/* If the target supports dedicated MxC rail, read the same */
 	if (cmd_db_read_addr("gmxc.lvl")) {
 		ret = adreno_rpmh_arc_cmds(&gmxc_arc, "gmxc.lvl");
-		if (ret)
-			return ret;
-		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
+		/* Dummy gMxC resource, treat as if no dedicated MxC */
+		if (ret == -ENODATA)
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
+		else
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
 	} else {
+		/* No gMxC resource entry, treat as if no dedicated MxC */
 		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
 	}
 
