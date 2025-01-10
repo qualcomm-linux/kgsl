@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define ANY_ID (~0)
@@ -3316,7 +3316,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	.highest_bank_bit = 16,
 	.gmu_hub_clk_freq = 200000000,
 	.gen8_snapshot_block_list = &gen8_6_0_snapshot_block_list,
-	.noc_timeout_us = 3410, /* 3.41 msec */
+	.noc_timeout_us = 6800, /* 6.8 msec */
 	.ctxt_record_size = (3372 * SZ_1K),
 };
 
