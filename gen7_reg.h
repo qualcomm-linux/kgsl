@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN7_REG_H
@@ -766,6 +766,7 @@
 #define GEN7_DBGC_TRACE_BUFFER_STATUS               0x699
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_ADDR          0x69b
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_DATA          0x69c
+#define GEN7_DBGC_SMMU_FAULT_BLOCK_HALT_CFG         0x69e
 
 /* VSC registers */
 #define GEN7_VSC_PERFCTR_VSC_SEL_0          0xcd8

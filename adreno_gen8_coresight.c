@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/amba/bus.h>
@@ -56,6 +56,7 @@ static struct adreno_coresight_register gen8_coresight_regs[] = {
 	{ GEN8_DBGC_ECO_CNTL },
 	{ GEN8_DBGC_AHB_DBG_CNTL },
 	{ GEN8_DBGC_CFG_DBGBUS_MISC_MODE },
+	{ GEN8_DBGC_SMMU_FAULT_BLOCK_HALT_CFG },
 };
 
 static struct adreno_coresight_register gen8_coresight_regs_cx[] = {
