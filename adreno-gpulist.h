@@ -3320,6 +3320,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (3372 * SZ_1K),
 	.preempt_level = 1,
+	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
