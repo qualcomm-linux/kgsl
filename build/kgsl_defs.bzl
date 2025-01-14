@@ -129,24 +129,6 @@ def define_target_variant_module(target, variant):
     })
 
     ext_deps = external_deps(target, variant)
-    dep = []
-
-    if target == "sun":
-        dep += select({
-                "//build/kernel/kleaf:socrepo_true": [
-                   "//soc-repo:{}/drivers/soc/qcom/minidump".format(tv),
-                   "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
-                ],
-                "//build/kernel/kleaf:socrepo_false": [],
-        })
-
-    if target == "canoe":
-        dep += select({
-                "//build/kernel/kleaf:socrepo_true": [
-                  "//soc-repo:{}/drivers/soc/qcom/msm_performance".format(tv),
-                ],
-                "//build/kernel/kleaf:socrepo_false": [],
-        })
 
     ddk_deps = select({
                 "//build/kernel/kleaf:socrepo_true": [
@@ -161,7 +143,10 @@ def define_target_variant_module(target, variant):
                   "//soc-repo:{}/drivers/soc/qcom/llcc-qcom".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/mdt_loader".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/mem_buf/mem_buf_dev".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/minidump".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/msm_performance".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/qcom_aoss".format(tv),
+                  "//soc-repo:{}/drivers/soc/qcom/qcom_va_minidump".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/secure_buffer".format(tv),
                   "//soc-repo:{}/drivers/soc/qcom/socinfo".format(tv),
                   "//soc-repo:{}/kernel/msm_sysstats".format(tv),
@@ -192,7 +177,7 @@ def define_target_variant_module(target, variant):
             "CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ": { False: [ "governor_msm_adreno_tz.c" ] },
             "CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON": { False: [ "governor_gpubw_mon.c" ] }
         },
-        deps = ddk_deps + ext_deps + dep,
+        deps = ddk_deps + ext_deps,
         includes = ["include", "."],
         kernel_build = kernel_build,
         visibility = ["//visibility:private"]
