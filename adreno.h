@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -78,6 +78,39 @@
 
 /* ADRENO_GPUREV - Return the GPU ID for the given adreno_device */
 #define ADRENO_GPUREV(_a) ((_a)->gpucore->gpurev)
+
+/*
+ * Disable local interrupts and CPU preemption to avoid interruptions
+ * while holding the CP semaphore; otherwise, it could stall the CP.
+ * Make sure to call ADRENO_RELEASE_CP_SEMAPHORE after calling the
+ * below macro to reenable CPU interrupts.
+ */
+#define ADRENO_ACQUIRE_CP_SEMAPHORE(_adreno_dev, _flags) \
+	({ \
+		bool ret = true; \
+		if ((_adreno_dev)->gpucore->gpudev->acquire_cp_semaphore) { \
+			local_irq_save(_flags); \
+			preempt_disable(); \
+			ret = (_adreno_dev)->gpucore->gpudev->acquire_cp_semaphore(_adreno_dev); \
+			if (!ret) { \
+				preempt_enable(); \
+				local_irq_restore(_flags); \
+				dev_err_ratelimited(KGSL_DEVICE(_adreno_dev)->dev, "Timed out waiting to acquire CP semaphore: status=0x%08x\n", ret);\
+			} \
+		} \
+		ret; \
+	})
+
+#define ADRENO_RELEASE_CP_SEMAPHORE(_adreno_dev, _flags) \
+	({ \
+		do { \
+			if ((_adreno_dev)->gpucore->gpudev->release_cp_semaphore) { \
+				(_adreno_dev)->gpucore->gpudev->release_cp_semaphore(_adreno_dev); \
+				preempt_enable(); \
+				local_irq_restore(_flags); \
+			} \
+		} while (0);\
+	})
 
 /*
  * ADRENO_FEATURE - return true if the specified feature is supported by the GPU
@@ -1011,6 +1044,14 @@ struct adreno_gpudev {
 	 * @power_feature_stats: Sample feature related perfcounter stats
 	 */
 	void (*power_feature_stats)(struct adreno_device *adreno_dev);
+	/**
+	 * @acquire_cp_semaphore: Return true if CP semaphore is acquired, otherwise false
+	 */
+	bool (*acquire_cp_semaphore)(struct adreno_device *adreno_dev);
+	/**
+	 * @release_cp_semaphore: Release CP semaphore
+	 */
+	void (*release_cp_semaphore)(struct adreno_device *adreno_dev);
 };
 
 /**
