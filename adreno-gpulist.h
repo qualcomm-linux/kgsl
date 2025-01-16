@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #define ANY_ID (~0)
@@ -2564,7 +2564,7 @@ static const struct adreno_a6xx_core adreno_gpu_core_a623 = {
 	.veto_fal10 = true,
 	.protected_regs = a620_protected_regs,
 	.disable_tseskip = true,
-	.highest_bank_bit = 13,
+	.highest_bank_bit = 16,
 	.pdc_in_aop = true,
 	.ctxt_record_size = 2496 * 1024,
 };
