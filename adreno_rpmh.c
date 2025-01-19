@@ -163,7 +163,8 @@ void adreno_rpmh_free_bw_votes(struct rpmh_bw_votes *votes)
 }
 
 struct rpmh_bw_votes *adreno_rpmh_build_bw_votes(struct bcm *bcms, int bcm_count,
-		u32 *levels, int levels_count, u32 perfmode_vote, u32 perfmode_lvl)
+		u32 *levels, int levels_count, u32 perfmode_vote, u32 perfmode_lvl,
+		bool gmu_ab)
 {
 	struct rpmh_bw_votes *votes;
 	int i;
@@ -213,8 +214,9 @@ struct rpmh_bw_votes *adreno_rpmh_build_bw_votes(struct bcm *bcms, int bcm_count
 			return ERR_PTR(-ENOMEM);
 		}
 
-		tcs_cmd_data(bcms, bcm_count, levels[i], levels[i], votes->cmds[i],
-				(i >= perfmode_lvl) ? perfmode_vote : 0x0);
+		tcs_cmd_data(bcms, bcm_count, gmu_ab ? levels[i] : 0x0,
+			levels[i], votes->cmds[i],
+			(i >= perfmode_lvl) ? perfmode_vote : 0x0);
 	}
 
 	return votes;
