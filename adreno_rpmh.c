@@ -14,6 +14,7 @@
 int adreno_rpmh_arc_cmds(struct rpmh_arc_vals *arc, const char *res_id)
 {
 	size_t len = 0;
+	bool dummy_res = true;
 
 	arc->val = cmd_db_read_aux_data(res_id, &len);
 
@@ -25,9 +26,16 @@ int adreno_rpmh_arc_cmds(struct rpmh_arc_vals *arc, const char *res_id)
 	 * zero padding.
 	 */
 	for (arc->num = 1; arc->num < (len >> 1); arc->num++) {
+		if (arc->val[arc->num] != 0)
+			dummy_res = false;
+
 		if (arc->val[arc->num - 1] != 0 && arc->val[arc->num] == 0)
 			break;
 	}
+
+	/* Dummy resource entry in cmd_db with all zeros */
+	if (dummy_res)
+		return -ENODATA;
 
 	return 0;
 }
