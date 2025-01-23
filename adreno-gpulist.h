@@ -2633,7 +2633,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 		.uche_gmem_alignment = SZ_16M,
 		.gmem_size = SZ_1M,
 		.bus_width = 32,
-		.snapshot_size = SZ_4M,
+		.snapshot_size = SZ_2M,
 	},
 	.sqefw_name = "gen70e00_sqe.fw",
 	.gmufw_name = "gen71700_gmu.bin",
