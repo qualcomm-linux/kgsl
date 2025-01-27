@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -1027,13 +1027,6 @@ int gen8_gmu_parse_fw(struct adreno_device *adreno_dev)
 		}
 
 		offset += sizeof(*blk);
-
-		if (blk->type == GMU_BLK_TYPE_PREALLOC_REQ ||
-			blk->type == GMU_BLK_TYPE_PREALLOC_PERSIST_REQ) {
-			ret = gmu_core_process_prealloc(KGSL_DEVICE(adreno_dev), blk);
-			if (ret)
-				return ret;
-		}
 
 		/* process zero length blocks */
 		if (!blk->size) {
