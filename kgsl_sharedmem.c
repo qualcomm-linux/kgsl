@@ -1633,13 +1633,12 @@ static int kgsl_system_alloc_pages(struct kgsl_memdesc *memdesc, struct page ***
 	struct page **local;
 	int i, npages = memdesc->size >> PAGE_SHIFT;
 
-	local = kvcalloc(npages, sizeof(*pages), GFP_KERNEL | __GFP_NORETRY);
+	local = kvcalloc(npages, sizeof(*pages), GFP_KERNEL);
 	if (!local)
 		return -ENOMEM;
 
 	for (i = 0; i < npages; i++) {
-		gfp_t gfp = __GFP_ZERO | __GFP_HIGHMEM |
-			GFP_KERNEL | __GFP_NORETRY;
+		gfp_t gfp = __GFP_ZERO | __GFP_HIGHMEM | GFP_KERNEL;
 
 		if (!fatal_signal_pending(current))
 			local[i] = alloc_pages(gfp, get_order(PAGE_SIZE));

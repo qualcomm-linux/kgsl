@@ -63,7 +63,7 @@ static int setup_dependency_domain_tbl(u32 *votes,
 		struct rpmh_arc_vals *dep_rail, struct rpmh_arc_vals *cx_rail,
 		u16 *vlvl, u32 *cx_vlvl, u32 num_entries)
 {
-	u32 cx_vote, mx_vote;
+	u32 cx_vote;
 	int i, j;
 
 	for (i = 1; i < num_entries; i++) {
@@ -90,25 +90,16 @@ static int setup_dependency_domain_tbl(u32 *votes,
 		}
 
 		/*
-		 * Set Mx dependency domain votes for Gx level. Look for indexes
+		 * Set MX dependency domain votes for GX level. Look for indexes
 		 * whose vlvl value is greater than or equal to the vlvl value
 		 * of the corresponding index of dependency rail
 		 */
 		for (j = 0; j < dep_rail->num; j++) {
-			if (dep_rail->val[j] >= vlvl[i]) {
-				mx_vote = j;
-				found_match = true;
+			if (dep_rail->val[j] >= vlvl[i] || j+1 == dep_rail->num)
 				break;
-			}
 		}
 
-		/* If we did not find a matching VLVL level then abort */
-		if (!found_match) {
-			pr_err("kgsl: Unsupported mx corner: %u\n", vlvl[i]);
-			return -EINVAL;
-		}
-
-		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, mx_vote);
+		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, j);
 	}
 
 	return 0;
@@ -241,7 +232,9 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	int ret;
 
 	ddr = adreno_rpmh_build_bw_votes(adreno_ddr_bcms, ARRAY_SIZE(adreno_ddr_bcms),
-		pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl);
+		pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl,
+		adreno_dev->gmu_ab);
+
 	if (IS_ERR(ddr))
 		return PTR_ERR(ddr);
 
@@ -250,7 +243,8 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 
 	if (count > 0)
 		cnoc = adreno_rpmh_build_bw_votes(adreno_cnoc_bcms,
-			ARRAY_SIZE(adreno_cnoc_bcms), cnoc_table, count, 0, 0);
+			ARRAY_SIZE(adreno_cnoc_bcms), cnoc_table, count, 0, 0,
+			adreno_dev->gmu_ab);
 
 	kfree(cnoc_table);
 

@@ -82,8 +82,8 @@ const struct gen8_snapshot_block_list gen8_3_0_snapshot_block_list = {
 };
 
 const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
-	.pre_crashdumper_regs = gen8_6_0_ahb_registers,
-	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_6_0_ahb_registers),
+	.pre_crashdumper_regs = gen8_0_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_0_0_ahb_registers),
 	.debugbus_blocks = gen8_6_0_debugbus_blocks,
 	.debugbus_blocks_len = ARRAY_SIZE(gen8_6_0_debugbus_blocks),
 	.gbif_debugbus_blocks = gen8_gbif_debugbus_blocks,
@@ -98,7 +98,7 @@ const struct gen8_snapshot_block_list gen8_6_0_snapshot_block_list = {
 	.rscc_regs = gen8_0_0_rscc_rsc_registers,
 	.reg_list = gen8_6_0_reg_list,
 	.cx_misc_regs = gen8_0_0_cx_misc_registers,
-	.shader_blocks = gen8_0_0_shader_blocks,
+	.shader_blocks = gen8_6_0_shader_blocks,
 	.num_shader_blocks = ARRAY_SIZE(gen8_0_0_shader_blocks),
 	.cp_clusters = gen8_0_0_cp_clusters,
 	.num_cp_clusters = ARRAY_SIZE(gen8_0_0_cp_clusters),
@@ -1692,10 +1692,15 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
 		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base, PIPE_BR, 0, 0);
 
+	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
+		GEN8_CP_IB3_BASE_HI_PIPE, &snapshot->ib3base, PIPE_BR, 0, 0);
+
 	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
 			&snapshot->ib1size, PIPE_BR, 0, 0);
 	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size, PIPE_BR, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE,
+		&snapshot->ib3size, PIPE_BR, 0, 0);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
 		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
