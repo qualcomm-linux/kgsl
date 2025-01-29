@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iommu.h>
@@ -1923,20 +1923,19 @@ void a6xx_hwsched_context_detach(struct adreno_context *drawctxt)
 	ret = send_context_unregister_hfi(adreno_dev, context,
 		drawctxt->internal_timestamp);
 
-	if (!ret) {
-		kgsl_sharedmem_writel(device->memstore,
-			KGSL_MEMSTORE_OFFSET(context->id, soptimestamp),
-			drawctxt->timestamp);
+	if (ret)
+		goto out;
 
-		kgsl_sharedmem_writel(device->memstore,
-			KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp),
-			drawctxt->timestamp);
+	kgsl_sharedmem_writel(device->memstore,
+		KGSL_MEMSTORE_OFFSET(context->id, soptimestamp), drawctxt->timestamp);
 
-		adreno_profile_process_results(adreno_dev);
-	}
+	kgsl_sharedmem_writel(device->memstore,
+		KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp), drawctxt->timestamp);
 
+	adreno_profile_process_results(adreno_dev);
 	context->gmu_registered = false;
 
+out:
 	mutex_unlock(&device->mutex);
 }
 
