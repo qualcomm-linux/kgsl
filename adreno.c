@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -3503,16 +3503,25 @@ static int adreno_gpu_clock_set(struct kgsl_device *device, u32 pwrlevel)
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct kgsl_pwrlevel *pl = &pwr->pwrlevels[pwrlevel];
+	u32 prev_pwrlevel = pwr->previous_pwrlevel;
 	int ret;
 
-	if (ops->gpu_clock_set)
-		return ops->gpu_clock_set(adreno_dev, pwrlevel);
+	if (ops->gpu_clock_set) {
+		ret = ops->gpu_clock_set(adreno_dev, pwrlevel);
+	} else {
+		ret = clk_set_rate(pwr->grp_clks[0], pl->gpu_freq);
+		if (ret)
+			dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+	}
 
-	ret = clk_set_rate(pwr->grp_clks[0], pl->gpu_freq);
 	if (ret)
-		dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+		return ret;
 
-	return ret;
+	trace_kgsl_pwrlevel(device, pwrlevel, pl->gpu_freq,
+		prev_pwrlevel, pwr->pwrlevels[prev_pwrlevel].gpu_freq, 0);
+
+	trace_gpu_frequency(pl->gpu_freq/1000, 0, 0);
+	return 0;
 }
 
 static int adreno_interconnect_bus_set(struct adreno_device *adreno_dev,
