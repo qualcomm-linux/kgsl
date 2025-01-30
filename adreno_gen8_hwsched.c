@@ -1612,6 +1612,36 @@ ssize_t gen8_hwsched_preempt_info_get(struct adreno_device *adreno_dev, char *bu
 	return count;
 }
 
+void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev,
+		u32 context_id)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_context *context = kgsl_context_get(device, context_id);
+	struct hfi_context_rule_cmd cmd = {0};
+	int ret;
+
+	if ((!context) || (!context->gmu_registered) || (device->state != KGSL_STATE_ACTIVE))
+		goto done;
+
+	ret = CMD_MSG_HDR(cmd, H2F_MSG_CONTEXT_RULE);
+
+	if (ret)
+		goto done;
+
+	cmd.ctxt_id = context->id;
+	cmd.type = context->pwr_constraint.type;
+	cmd.sub_type = context->pwr_constraint.sub_type;
+
+	ret = gen8_hfi_send_cmd_async(adreno_dev, &cmd, sizeof(cmd));
+
+	if (ret)
+		dev_err_ratelimited(GMU_PDEV_DEV(device),
+			"Failed to set perf hint type %d, sub type %d for context %d, ret: %d\n",
+			cmd.type, cmd.sub_type, cmd.ctxt_id, ret);
+done:
+	kgsl_context_put(context);
+}
+
 static void gen8_hwsched_set_thermal_index(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1619,14 +1649,9 @@ static void gen8_hwsched_set_thermal_index(struct adreno_device *adreno_dev)
 	u32 thermal_pwrlevel = max_t(u32, pwr->thermal_pwrlevel, pwr->pmqos_max_pwrlevel);
 
 	if (device->state == KGSL_STATE_ACTIVE) {
-		int ret;
-
 		/* If GMU is up, send the constraint to GMU */
-		ret = gen8_hwsched_hfi_set_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX, 0,
-				(pwr->num_pwrlevels - thermal_pwrlevel));
-		if (ret)
-			dev_err(GMU_PDEV_DEV(device), "Failed to set thermal level %u, ret: %d\n",
-								thermal_pwrlevel, ret);
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_MAX_GPU_THERMAL_INDEX,
+				0, (pwr->num_pwrlevels - thermal_pwrlevel), false);
 	} else if (pwr->active_pwrlevel < thermal_pwrlevel) {
 		/*
 		 * Max constraint can be updated through PM QOS and such requests can be made
@@ -1637,12 +1662,69 @@ static void gen8_hwsched_set_thermal_index(struct adreno_device *adreno_dev)
 	}
 }
 
+static void gen8_hwsched_set_gpuclk(struct adreno_device *adreno_dev, u32 value)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/* If GMU is up, send the HFI */
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_GPUCLK, 0,
+				(pwr->num_pwrlevels - value), false);
+	} else {
+		/* If GPU is in slumber, update the active power level for bookkeeping */
+		pwr->previous_pwrlevel = pwr->active_pwrlevel;
+		pwr->active_pwrlevel = value;
+	}
+}
+
+static void gen8_hwsched_set_minpwrlevel(struct adreno_device *adreno_dev, u32 value)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/* If GMU is up, send the HFI */
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_MIN_GPU_PERF_INDEX, 0,
+				(pwr->num_pwrlevels - value), false);
+	}
+}
+
+static void gen8_hwsched_set_maxpwrlevel(struct adreno_device *adreno_dev, u32 value)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (device->state == KGSL_STATE_ACTIVE) {
+		/* If GMU is up, send the HFI */
+		gen8_hwsched_set_gmu_based_dcvs_value(adreno_dev, HFI_VALUE_MAX_GPU_PERF_INDEX, 0,
+				(pwr->num_pwrlevels - value), false);
+	}
+}
+
 static void gen8_hwsched_gmu_based_dcvs_pwr_ops(struct adreno_device *adreno_dev, u32 arg,
 		enum gpu_pwrlevel_op op)
 {
 	switch (op) {
 	case GPU_PWRLEVEL_OP_THERMAL:
 		gen8_hwsched_set_thermal_index(adreno_dev);
+		break;
+	case GPU_PWRLEVEL_OP_MIN_PWRLEVEL:
+		gen8_hwsched_set_minpwrlevel(adreno_dev, arg);
+		break;
+	case GPU_PWRLEVEL_OP_MAX_PWRLEVEL:
+		gen8_hwsched_set_maxpwrlevel(adreno_dev, arg);
+		break;
+	case GPU_PWRLEVEL_OP_GPUCLK:
+		gen8_hwsched_set_gpuclk(adreno_dev, arg);
+		break;
+	case GPU_PWRLEVEL_OP_PERF_HINT: {
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+		mutex_lock(&device->mutex);
+		gen8_hwsched_set_pwrconstraint(adreno_dev, arg);
+		mutex_unlock(&device->mutex);
+		}
 		break;
 	}
 }

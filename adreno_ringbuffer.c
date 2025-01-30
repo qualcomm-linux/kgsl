@@ -179,7 +179,8 @@ void adreno_drawobj_set_constraint(struct kgsl_device *device,
 	 * Check if the context has a constraint and constraint flags are
 	 * set.
 	 */
-	if (context->pwr_constraint.type &&
+	if (device->host_based_dcvs &&
+		context->pwr_constraint.type &&
 		((context->flags & KGSL_CONTEXT_PWR_CONSTRAINT) ||
 			(drawobj->flags & KGSL_CONTEXT_PWR_CONSTRAINT)))
 		kgsl_pwrctrl_set_constraint(device, &context->pwr_constraint,
@@ -225,7 +226,7 @@ void adreno_drawobj_set_constraint(struct kgsl_device *device,
 				DCVS_SLOW_PATH);
 			if (!ret) {
 				trace_kgsl_constraint(device,
-					KGSL_CONSTRAINT_L3_PWRLEVEL, new_l3, 1);
+					KGSL_CONSTRAINT_L3_PWRLEVEL, new_l3, 1, 0);
 				device->cur_l3_pwrlevel = new_l3;
 			} else {
 				dev_err_ratelimited(device->dev,

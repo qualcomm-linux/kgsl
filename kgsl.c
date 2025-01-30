@@ -875,7 +875,7 @@ kgsl_context_destroy(struct kref *kref)
 			trace_kgsl_constraint(device,
 				device->pwrctrl.constraint.type,
 				device->pwrctrl.active_pwrlevel,
-				0);
+				0, 0);
 			device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 		}
 

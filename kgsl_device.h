@@ -78,6 +78,10 @@ enum kgsl_event_results {
 
 enum gpu_pwrlevel_op {
 	GPU_PWRLEVEL_OP_THERMAL,
+	GPU_PWRLEVEL_OP_MIN_PWRLEVEL,
+	GPU_PWRLEVEL_OP_MAX_PWRLEVEL,
+	GPU_PWRLEVEL_OP_GPUCLK,
+	GPU_PWRLEVEL_OP_PERF_HINT,
 };
 
 struct kgsl_device;

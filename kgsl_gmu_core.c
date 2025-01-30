@@ -821,6 +821,13 @@ static void stream_trace_data(struct kgsl_device *device, struct gmu_trace_packe
 		_gmu_trace_dcvs_pwrstats(device, pkt);
 		break;
 		}
+	case GMU_TRACE_PWR_CONSTRAINT: {
+		struct trace_pwr_constraint *data =
+			(struct trace_pwr_constraint *)pkt->payload;
+
+		trace_kgsl_constraint(device, data->type, data->value, data->status, pkt->ticks);
+		break;
+		}
 	default: {
 		char str[64];
 

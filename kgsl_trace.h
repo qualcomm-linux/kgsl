@@ -926,15 +926,16 @@ TRACE_EVENT(kgsl_user_pwrlevel_constraint,
 TRACE_EVENT(kgsl_constraint,
 
 	TP_PROTO(struct kgsl_device *device, unsigned int type,
-		unsigned int value, unsigned int on),
+		unsigned int value, unsigned int on, u64 ticks),
 
-	TP_ARGS(device, type, value, on),
+	TP_ARGS(device, type, value, on, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
 		__field(unsigned int, type)
 		__field(unsigned int, value)
 		__field(unsigned int, on)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
@@ -942,14 +943,16 @@ TRACE_EVENT(kgsl_constraint,
 		__entry->type = type;
 		__entry->value = value;
 		__entry->on = on;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s constraint_type=%s constraint_value=%u status=%s",
+		"d_name=%s constraint_type=%s constraint_value=%u status=%s ticks=%llu",
 		__get_str(device_name),
 		show_constraint(__entry->type),
 		__entry->value,
-		__entry->on ? "ON" : "OFF"
+		__entry->on ? "ON" : "OFF",
+		__entry->ticks
 	)
 );
 
