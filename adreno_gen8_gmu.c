@@ -70,7 +70,7 @@ static ssize_t log_stream_enable_store(struct kobject *kobj,
 		return ret;
 
 	gmu->log_stream_enable = val;
-	adreno_mark_for_coldboot(gen8_gmu_to_adreno(gmu));
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(gen8_gmu_to_adreno(gmu)));
 	return count;
 }
 
@@ -93,7 +93,7 @@ static ssize_t log_group_mask_store(struct kobject *kobj,
 		return ret;
 
 	gmu->log_group_mask = val;
-	adreno_mark_for_coldboot(gen8_gmu_to_adreno(gmu));
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(gen8_gmu_to_adreno(gmu)));
 	return count;
 }
 
@@ -134,7 +134,7 @@ static ssize_t stats_enable_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_enable = val;
-	adreno_mark_for_coldboot(gen8_gmu_to_adreno(gmu));
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(gen8_gmu_to_adreno(gmu)));
 	return count;
 }
 
@@ -157,7 +157,7 @@ static ssize_t stats_mask_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_mask = val;
-	adreno_mark_for_coldboot(gen8_gmu_to_adreno(gmu));
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(gen8_gmu_to_adreno(gmu)));
 	return count;
 }
 
@@ -180,7 +180,7 @@ static ssize_t stats_interval_store(struct kobject *kobj,
 		return ret;
 
 	gmu->stats_interval = val;
-	adreno_mark_for_coldboot(gen8_gmu_to_adreno(gmu));
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(gen8_gmu_to_adreno(gmu)));
 	return count;
 }
 

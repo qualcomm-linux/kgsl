@@ -650,8 +650,6 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
-	/** @warmboot_enabled: True if warmboot is enabled */
-	bool warmboot_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -824,11 +822,6 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_DMS = 14,
 	/** @ADRENO_DEVICE_GMU_AB: Set if AB vote via GMU is enabled */
 	ADRENO_DEVICE_GMU_AB = 15,
-	/*
-	 * @ADRENO_DEVICE_FORCE_COLDBOOT: Set if a feature is toggled
-	 * via sysfs/debugfs or when we are doing fault recovery
-	 */
-	ADRENO_DEVICE_FORCE_COLDBOOT = 16,
 	/** @ADRENO_DEVICE_CX_TIMER_INITIALIZED: Set if the CX timer is initialized */
 	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 	/** @ADRENO_DEVICE_RESET_RECOVERY: Set if the ADRENO device under goes reset recovery */
@@ -2058,13 +2051,6 @@ const char *adreno_get_gpu_model(struct kgsl_device *device);
 int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		struct kgsl_context *context, struct kgsl_drawobj *drawobj[],
 		uint32_t count);
-
-/**
- * adreno_mark_for_coldboot - Set a flag to coldboot gpu in the slumber exit
- * @adreno_dev: Adreno device handle
- *
- */
-void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
 
 /**
  * adreno_smmu_is_stalled() - Check whether smmu is stalled or not

@@ -227,7 +227,7 @@ void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on)
 	 * for debug purposes.
 	 */
 	adreno_hwsched_log_remove_pending_hw_fences(adreno_dev, gmu_pdev_dev);
-	adreno_mark_for_coldboot(adreno_dev);
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 
 	adreno_hwsched_deregister_hw_fence(adreno_dev);
 }
@@ -604,7 +604,7 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 	 * in the subseqent slumber exit. Once that is done we need to mark this bool
 	 * as false so that in the next run we can do warmboot
 	 */
-	clear_bit(ADRENO_DEVICE_FORCE_COLDBOOT, &adreno_dev->priv);
+	clear_bit(GMU_FORCE_COLDBOOT, &device->gmu_core.flags);
 err:
 	gen8_gmu_oob_clear(device, oob_gpu);
 
@@ -1571,7 +1571,7 @@ int gen8_hwsched_reset_replay(struct adreno_device *adreno_dev)
 	 * When we reset, we want to coldboot incase any scratch corruption
 	 * has occurred before we faulted.
 	 */
-	adreno_mark_for_coldboot(adreno_dev);
+	gmu_core_mark_for_coldboot(KGSL_DEVICE(adreno_dev));
 
 	ret = gen8_hwsched_boot(adreno_dev);
 	if (ret)
