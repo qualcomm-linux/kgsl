@@ -134,6 +134,10 @@ static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -161,6 +165,10 @@ static const u32 gen8_2_0_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_LPAC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -182,6 +190,10 @@ static const u32 gen8_3_0_pwrup_reglist[] = {
 	GEN8_UCHE_CCHE_CACHE_WAYS,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_LO,
 	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
 	GEN8_UCHE_HW_DBG_CNTL,
 	GEN8_UCHE_WRITE_THRU_BASE_LO,
 	GEN8_UCHE_WRITE_THRU_BASE_HI,
@@ -1586,13 +1598,17 @@ int gen8_start(struct adreno_device *adreno_dev)
 	}
 
 	/*
-	 * Set UCHE_WRITE_THRU_BASE to the UCHE_TRAP_BASE effectively
-	 * disabling L2 bypass
+	 * Set UCHE_WRITE_THRU_BASE and UCHE_CCHE_WRITE_THRU_BASE to the UCHE_TRAP_BASE
+	 * and UCHE_CCHE_TRAP_BASE respectively, effectively disabling L2 bypass
 	 */
 	kgsl_regwrite(device, GEN8_UCHE_TRAP_BASE_LO, lower_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_TRAP_BASE_HI, upper_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
 	kgsl_regwrite(device, GEN8_UCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_TRAP_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_TRAP_BASE_HI, upper_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO, lower_32_bits(uche_trap_base));
+	kgsl_regwrite(device, GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI, upper_32_bits(uche_trap_base));
 
 	/*
 	 * CP takes care of the restore during IFPC exit. We need to restore at slumber
