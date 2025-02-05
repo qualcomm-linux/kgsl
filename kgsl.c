@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <uapi/linux/sched/types.h>
@@ -5126,6 +5126,15 @@ static int _register_device(struct kgsl_device *device)
 
 	device->dev->dma_mask = &dma_mask;
 	device->dev->dma_parms = &dma_parms;
+
+	/*
+	 * Mark KGSL device as dma coherent when io-coherency
+	 * is enabled to skip cache operations for imported dma
+	 * buffers.
+	 */
+	if (kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT) &&
+		IS_ENABLED(CONFIG_QCOM_KGSL_IOCOHERENCY_DEFAULT))
+		device->dev->dma_coherent = true;
 
 	dma_set_max_seg_size(device->dev, (u32)DMA_BIT_MASK(32));
 
