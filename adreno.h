@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -767,6 +767,14 @@ struct adreno_device {
 	struct kthread_work scheduler_work;
 	/** @scheduler_fault: Atomic to trigger scheduler based fault recovery */
 	atomic_t scheduler_fault;
+	/** @dcvs_tuning_mutex: Mutex taken during dcvs tuning */
+	struct mutex dcvs_tuning_mutex;
+	/** @dcvs_tuning_mingap_lvl: Current DCVS tuning level for mingap */
+	u32 dcvs_tuning_mingap_lvl;
+	/** @dcvs_tuning_penalty_lvl: Current DCVS tuning level for penalty */
+	u32 dcvs_tuning_penalty_lvl;
+	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
+	u32 dcvs_tuning_numbusy_lvl;
 };
 
 /* Time to wait for suspend recovery gate to complete */
