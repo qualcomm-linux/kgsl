@@ -170,7 +170,7 @@ static inline void adreno_coresight_add_device(struct kgsl_device *device,
 static inline void adreno_coresight_start(struct adreno_device *adreno_dev) { }
 static inline void adreno_coresight_stop(struct adreno_device *adreno_dev) { }
 static inline void adreno_coresight_remove(struct adreno_device *adreno_dev) { }
-static inline u32 adreno_coresight_patch_pwrup_reglist(struct adreno_device *adreno_dev)
+static inline u32 adreno_coresight_patch_pwrup_reglist(struct adreno_device *adreno_dev, u32 *dest)
 {
 	return 0;
 }
