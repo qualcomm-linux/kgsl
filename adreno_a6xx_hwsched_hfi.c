@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iommu.h>
@@ -1361,7 +1361,7 @@ int a6xx_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 
 	/* Wait till the register is programmed with the countable */
 	ret = kgsl_regmap_read_poll_timeout(&device->regmap, reg->select, val,
-				val == countable, 100, ADRENO_IDLE_TIMEOUT);
+				val == countable, 100, ADRENO_IDLE_TIMEOUT * USEC_PER_MSEC);
 	if (!ret) {
 		reg->value = 0;
 		return ret;
