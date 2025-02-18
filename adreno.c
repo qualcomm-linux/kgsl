@@ -3721,6 +3721,15 @@ void adreno_gpufault_stats(struct adreno_device *adreno_dev,
 	}
 }
 
+static void adreno_set_thermal_index(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
+
+	if (ops->set_thermal_index)
+		ops->set_thermal_index(adreno_dev);
+}
+
 static const struct kgsl_functable adreno_functable = {
 	/* Mandatory functions */
 	.check_idle = adreno_check_idle,
@@ -3763,6 +3772,7 @@ static const struct kgsl_functable adreno_functable = {
 	.set_isdb_breakpoint_registers = adreno_set_isdb_breakpoint_registers,
 	.create_hw_fence = adreno_create_hw_fence,
 	.gmu_based_dcvs_pwr_ops = adreno_gmu_based_dcvs_pwr_ops,
+	.set_thermal_index = adreno_set_thermal_index,
 };
 
 static const struct component_master_ops adreno_ops = {

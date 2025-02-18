@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_HFI_H_
@@ -203,6 +203,19 @@ u32 gen7_hwsched_preempt_count_get(struct adreno_device *adreno_dev);
  * Return: 0 on success and negative error on failure.
  */
 int gen7_hwsched_lpac_cp_init(struct adreno_device *adreno_dev);
+
+/**
+ * gen7_hwsched_hfi_set_value - Send SET_VALUE packet to GMU to set the value of a property
+ * @adreno_dev: Pointer to adreno device
+ * @type: Type of the property to set
+ * @subtype: Sub type of the property to set
+ * @data: Value to be set to the property
+ *
+ * This functions sends SET_VALUE HFI packet to set value of a property
+ *
+ * Return: On success, return 0. On failure, return error code
+ */
+int gen7_hwsched_hfi_set_value(struct adreno_device *adreno_dev, u32 type, u32 subtype, u32 data);
 
 /**
  * gen7_hfi_send_lpac_feature_ctrl - Send the lpac feature hfi packet
