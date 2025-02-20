@@ -3470,7 +3470,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
-	.gmufw_name = "gen80000_gmu.bin",
+	.gmufw_name = "gen80600_gmu.bin",
 	.zap_name = "gen80000_zap.mbn",
 	.ao_hwcg = gen8_ao_hwcg_regs,
 	.ao_hwcg_count = ARRAY_SIZE(gen8_ao_hwcg_regs),
