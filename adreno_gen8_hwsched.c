@@ -1038,6 +1038,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	struct kgsl_device *device = container_of(work,
 					struct kgsl_device, idle_check_ws);
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 
 	mutex_lock(&device->mutex);
 
@@ -1060,7 +1061,7 @@ static void hwsched_idle_check(struct work_struct *work)
 	device->skip_inline_submit = true;
 	spin_unlock(&device->submit_lock);
 
-	if (!gen8_hw_isidle(adreno_dev)) {
+	if (!gpudev->hw_isidle(adreno_dev)) {
 		dev_err(device->dev, "GPU isn't idle before SLUMBER\n");
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	}
