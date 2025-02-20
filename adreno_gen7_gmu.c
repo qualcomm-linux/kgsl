@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/power/qcom-rpmpd.h>
@@ -2179,9 +2179,7 @@ int gen7_gmu_probe(struct kgsl_device *device,
 
 	device->gmu_core.pdev = pdev;
 
-	dma_set_coherent_mask(&device->gmu_core.pdev->dev, DMA_BIT_MASK(64));
-	device->gmu_core.pdev->dev.dma_mask =
-			&device->gmu_core.pdev->dev.coherent_dma_mask;
+	dma_coerce_mask_and_coherent(&device->gmu_core.pdev->dev, DMA_BIT_MASK(64));
 	set_dma_ops(GMU_PDEV_DEV(device), NULL);
 
 	res = platform_get_resource_byname(device->pdev, IORESOURCE_MEM,
