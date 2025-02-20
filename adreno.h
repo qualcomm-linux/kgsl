@@ -12,7 +12,6 @@
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
-#include "adreno_hfi.h"
 #include "adreno_hwsched.h"
 #include "adreno_perfcounter.h"
 #include "adreno_profile.h"

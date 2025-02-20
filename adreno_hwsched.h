@@ -7,6 +7,7 @@
 #ifndef _ADRENO_HWSCHED_H_
 #define _ADRENO_HWSCHED_H_
 
+#include "adreno_hfi.h"
 #include "kgsl_sync.h"
 
 /* This structure represents inflight command object */
