@@ -50,7 +50,7 @@ struct kgsl_log_header {
 	u32 event;
 	/** @size: Size of the event data in bytes */
 	u32 size;
-};
+} __packed;
 
 /* Add a marker to skip the rest of the eventlog and start over fresh */
 static void add_skip_header(u32 offset)
@@ -124,7 +124,7 @@ void log_kgsl_fire_event(u32 id, u32 ts, u32 type, u32 age)
 		u32 ts;
 		u32 type;
 		u32 age;
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_FIRE_EVENT, sizeof(*entry));
 	if (!entry)
@@ -143,7 +143,7 @@ void log_kgsl_cmdbatch_submitted_event(u32 id, u32 ts, u32 prio, u64 flags)
 		u32 ts;
 		u32 prio;
 		u64 flags;
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_CMDBATCH_SUBMITTED_EVENT, sizeof(*entry));
 	if (!entry)
@@ -165,7 +165,7 @@ void log_kgsl_cmdbatch_retired_event(u32 id, u32 ts, u32 prio, u64 flags,
 		u64 flags;
 		u64 start;
 		u64 retire;
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_CMDBATCH_RETIRED_EVENT, sizeof(*entry));
 	if (!entry)
@@ -184,7 +184,7 @@ void log_kgsl_syncpoint_fence_event(u32 id, char *fence_name)
 	struct {
 		u32 id;
 		char name[LOG_FENCE_NAME_LEN];
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_SYNCPOINT_FENCE_EVENT, sizeof(*entry));
 	if (!entry)
@@ -200,7 +200,7 @@ void log_kgsl_syncpoint_fence_expire_event(u32 id, char *fence_name)
 	struct {
 		u32 id;
 		char name[LOG_FENCE_NAME_LEN];
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_SYNCPOINT_FENCE_EXPIRE_EVENT, sizeof(*entry));
 	if (!entry)
@@ -216,7 +216,7 @@ void log_kgsl_timeline_fence_alloc_event(u32 id, u64 seqno)
 	struct {
 		u32 id;
 		u64 seqno;
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_TIMELINE_FENCE_ALLOC_EVENT, sizeof(*entry));
 	if (!entry)
@@ -231,7 +231,7 @@ void log_kgsl_timeline_fence_release_event(u32 id, u64 seqno)
 	struct {
 		u32 id;
 		u64 seqno;
-	} *entry;
+	} __packed *entry;
 
 	entry = kgsl_eventlog_alloc(LOG_TIMELINE_FENCE_RELEASE_EVENT, sizeof(*entry));
 	if (!entry)
