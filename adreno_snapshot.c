@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/utsname.h>
@@ -1018,7 +1018,8 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 
 static void adreno_static_ib_dump(struct kgsl_device *device,
 				struct kgsl_process_private *process, u64 ib1base,
-				u32 ib1size, u64 ib2base, u32 ib2size)
+				u32 ib1size, u64 ib2base, u32 ib2size,
+				u64 ib3base, u32 ib3size)
 {
 	if (process == NULL)
 		return;
@@ -1059,16 +1060,17 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 	}
 
 	/*
-	 * Add the last parsed IB2 to the list. The IB2 should be found as we
-	 * parse the objects below, but we try to add it to the list first, so
-	 * it too can be parsed.  Don't print an error message in this case - if
-	 * the IB2 is found during parsing, the list will be updated with the
-	 * correct size.
+	 * Add the last parsed IB2 and IB3 to the list. These should be found as we
+	 * parse the objects below, but we try to add them to the list first, so
+	 * they too can be parsed. Don't print an error message in this case - if
+	 * the IB2 and IB3 are found during parsing, the list will be updated with
+	 * the correct size.
 	 */
-
 	if (ib2base && (-ENOENT == find_object(ib2base, process)))
 		kgsl_snapshot_push_object(device, process, ib2base, ib2size);
 
+	if (ib3base && (-ENOENT == find_object(ib3base, process)))
+		kgsl_snapshot_push_object(device, process, ib3base, ib3size);
 }
 
 /**
@@ -1234,11 +1236,12 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 			snapshot, snapshot_capture_mem_list, snapshot->process_lpac);
 
 	adreno_static_ib_dump(device, snapshot->process,
-		snapshot->ib1base, snapshot->ib1size, snapshot->ib2base, snapshot->ib2size);
+		snapshot->ib1base, snapshot->ib1size, snapshot->ib2base, snapshot->ib2size,
+		snapshot->ib3base, snapshot->ib3size);
 
 	adreno_static_ib_dump(device, snapshot->process_lpac,
 		snapshot->ib1base_lpac, snapshot->ib1size_lpac,
-		snapshot->ib2base_lpac, snapshot->ib2size_lpac);
+		snapshot->ib2base_lpac, snapshot->ib2size_lpac, 0, 0);
 	/*
 	 * Go through the list of found objects and dump each one.  As the IBs
 	 * are parsed, more objects might be found, and objbufptr will increase
