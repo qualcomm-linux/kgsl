@@ -1,15 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_A6XX_HWSCHED_HFI_H_
 #define _ADRENO_A6XX_HWSCHED_HFI_H_
 
 struct a6xx_hwsched_hfi {
-	struct hfi_mem_alloc_entry mem_alloc_table[32];
-	u32 mem_alloc_entries;
 	/** @irq_mask: Store the hfi interrupt mask */
 	u32 irq_mask;
 	/** @msglock: To protect the list of un-ACKed hfi packets */
@@ -148,15 +146,4 @@ struct a6xx_hwsched_hfi *to_a6xx_hwsched_hfi(struct adreno_device *adreno_dev);
  * Return: Preemption count
  */
 u32 a6xx_hwsched_preempt_count_get(struct adreno_device *adreno_dev);
-
-/**
- * a6xx_hwsched_get_rb_hostptr - Get rinbuffer host pointer
- * @adreno_dev: pointer to the adreno device
- * @gpuaddr: ringbuffer gpu address
- * @size: size of the ringbuffer
- *
- * Return: Host pointer of the gpu ringbuffer
- */
-void *a6xx_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size);
 #endif

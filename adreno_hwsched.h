@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -93,10 +93,6 @@ struct adreno_hwsched_ops {
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
 		struct kgsl_sync_fence *kfence);
-	/**
-	 * @get_rb_hostptr - Target specific function to get ringbuffer host pointer
-	 */
-	void *(*get_rb_hostptr)(struct adreno_device *adreno_dev, u64 gpuaddr, u32 size);
 };
 
 enum gpu_reset_type {
@@ -109,7 +105,11 @@ enum gpu_reset_type {
  * struct adreno_hwsched - Container for the hardware scheduler
  */
 struct adreno_hwsched {
-	 /** @mutex: Mutex needed to run dispatcher function */
+	/** @mem_alloc_table: Array of HFI memory allocation entries */
+	struct hfi_mem_alloc_entry mem_alloc_table[32];
+	/** @mem_alloc_entries: Number of entries in the memory allocation table */
+	u32 mem_alloc_entries;
+	/** @mutex: Mutex needed to run dispatcher function */
 	struct mutex mutex;
 	/** @flags: Container for the dispatcher internal flags */
 	unsigned long flags;
@@ -167,6 +167,20 @@ enum adreno_hwsched_flags {
 	ADRENO_HWSCHED_FORCE_RETIRE_GMU,
 	ADRENO_HWSCHED_GPU_SOFT_RESET,
 };
+
+/**
+ * adreno_hwsched_process_mem_alloc - Process memory allocation for hwsched
+ * @adreno_dev: Pointer to the adreno device
+ * @mad: Pointer to the HFI memory allocation descriptor
+ *
+ * This function processes the memory allocation request for the hwsched.
+ * It retrieves or allocates the necessary memory based on the provided
+ * descriptor and updates the descriptor with the allocated memory addresses.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int adreno_hwsched_process_mem_alloc(struct adreno_device *adreno_dev,
+	struct hfi_mem_alloc_desc *mad);
 
 /**
  * adreno_hwsched_start() - activate the hwsched dispatcher
@@ -388,4 +402,29 @@ void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rc
  */
 bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj);
+
+/**
+ * adreno_hwsched_get_rb_hostptr - Get the host pointer for a given GPU address
+ * @adreno_dev: Pointer to the adreno device
+ * @gpuaddr: GPU address to look up
+ * @size: Size of the memory region
+ *
+ * This function retrieves the host pointer corresponding to a given GPU address.
+ * It searches through the memory allocation table to find the matching memory
+ * descriptor and calculates the host pointer offset.
+ *
+ * Return: Host pointer if found, or NULL if the GPU address is not found in the
+ * memory allocation table.
+ */
+void *adreno_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size);
+
+/**
+ * adreno_hwsched_reset_hfi_mem - Reset HFI memory records
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * This function resets the HFI memory records. It iterates through the memory
+ * allocation table and resets the entries that have HFI_MEMFLAG_HOST_INIT set.
+ */
+void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev);
 #endif

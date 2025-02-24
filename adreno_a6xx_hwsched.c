@@ -35,7 +35,7 @@ void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	u32 i;
 	bool skip_memkind_rb = false;
 	bool parse_payload;
@@ -58,8 +58,8 @@ void a6xx_hwsched_snapshot(struct adreno_device *adreno_dev,
 	if (parse_payload)
 		skip_memkind_rb = true;
 
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
+	for (i = 0; i < hwsched->mem_alloc_entries; i++) {
+		struct hfi_mem_alloc_entry *entry = &hwsched->mem_alloc_table[i];
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_RB && !skip_memkind_rb)
 			kgsl_snapshot_add_section(device,
@@ -1039,7 +1039,6 @@ const struct adreno_power_ops a6xx_hwsched_power_ops = {
 const struct adreno_hwsched_ops a6xx_hwsched_ops = {
 	.submit_drawobj = a6xx_hwsched_submit_drawobj,
 	.preempt_count = a6xx_hwsched_preempt_count_get,
-	.get_rb_hostptr = a6xx_hwsched_get_rb_hostptr,
 };
 
 int a6xx_hwsched_probe(struct platform_device *pdev,
@@ -1081,6 +1080,7 @@ int a6xx_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	struct a6xx_hwsched_device *a6xx_hwsched = container_of(a6xx_dev,
 					struct a6xx_hwsched_device, a6xx_dev);
 	struct a6xx_hwsched_hfi *hw_hfi = &a6xx_hwsched->hwsched_hfi;
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	int ret, i;
 
 	ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev, KGSL_HWSCHED_DEVICE,
@@ -1134,8 +1134,8 @@ int a6xx_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	}
 
 	/* Dump HFI hwsched global mem alloc entries */
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
+	for (i = 0; i < hwsched->mem_alloc_entries; i++) {
+		struct hfi_mem_alloc_entry *entry = &hwsched->mem_alloc_table[i];
 		char hfi_minidump_str[MAX_VA_MINIDUMP_STR_LEN] = {0};
 		u32 rb_id = 0;
 

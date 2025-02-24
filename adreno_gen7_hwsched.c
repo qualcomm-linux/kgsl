@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -80,7 +80,7 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	bool skip_memkind_rb = false;
 	u32 i;
 	bool parse_payload;
@@ -103,8 +103,8 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
 	if (parse_payload)
 		skip_memkind_rb = true;
 
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
+	for (i = 0; i < hwsched->mem_alloc_entries; i++) {
+		struct hfi_mem_alloc_entry *entry = &hwsched->mem_alloc_table[i];
 
 		if (entry->desc.mem_kind == HFI_MEMKIND_RB && !skip_memkind_rb)
 			kgsl_snapshot_add_section(device,
@@ -1545,7 +1545,6 @@ const struct adreno_hwsched_ops gen7_hwsched_ops = {
 	.submit_drawobj = gen7_hwsched_submit_drawobj,
 	.preempt_count = gen7_hwsched_preempt_count_get,
 	.create_hw_fence = gen7_hwsched_create_hw_fence,
-	.get_rb_hostptr = gen7_hwsched_get_rb_hostptr,
 };
 
 int gen7_hwsched_probe(struct platform_device *pdev,
@@ -1605,6 +1604,7 @@ int gen7_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	struct gen7_hwsched_device *gen7_hwsched = container_of(gen7_dev,
 					struct gen7_hwsched_device, gen7_dev);
 	struct gen7_hwsched_hfi *hw_hfi = &gen7_hwsched->hwsched_hfi;
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	int ret, i;
 
 	ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev, KGSL_HWSCHED_DEVICE,
@@ -1649,8 +1649,8 @@ int gen7_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 	}
 
 	/* Dump HFI hwsched global mem alloc entries */
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
+	for (i = 0; i < hwsched->mem_alloc_entries; i++) {
+		struct hfi_mem_alloc_entry *entry = &hwsched->mem_alloc_table[i];
 		char hfi_minidump_str[MAX_VA_MINIDUMP_STR_LEN] = {0};
 		u32 rb_id = 0;
 

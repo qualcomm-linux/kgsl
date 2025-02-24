@@ -1436,167 +1436,6 @@ int gen7_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	return PTR_ERR_OR_ZERO(hw_hfi->f2h_task);
 }
 
-static struct hfi_mem_alloc_entry *lookup_mem_alloc_table(
-	struct adreno_device *adreno_dev, struct hfi_mem_alloc_desc *desc)
-{
-	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
-	int i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
-
-		if ((entry->desc.mem_kind == desc->mem_kind) &&
-			(entry->desc.gmu_mem_handle == desc->gmu_mem_handle))
-			return entry;
-	}
-
-	return NULL;
-}
-
-static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
-	struct adreno_device *adreno_dev, struct hfi_mem_alloc_desc *desc)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
-	struct gen7_hwsched_hfi *hfi = to_gen7_hwsched_hfi(adreno_dev);
-	struct hfi_mem_alloc_entry *entry =
-		lookup_mem_alloc_table(adreno_dev, desc);
-	u64 flags = 0;
-	u32 priv = 0;
-	int ret;
-	const char *memkind_string = desc->mem_kind < HFI_MEMKIND_MAX ?
-			hfi_memkind_strings[desc->mem_kind] : "UNKNOWN";
-
-	if (entry)
-		return entry;
-
-	if (desc->mem_kind >= HFI_MEMKIND_MAX) {
-		dev_err(gmu_pdev_dev, "Invalid mem kind: %d\n",
-			desc->mem_kind);
-		return ERR_PTR(-EINVAL);
-	}
-
-	if (hfi->mem_alloc_entries == ARRAY_SIZE(hfi->mem_alloc_table)) {
-		dev_err(gmu_pdev_dev,
-			"Reached max mem alloc entries\n");
-		return ERR_PTR(-ENOMEM);
-	}
-
-	entry = &hfi->mem_alloc_table[hfi->mem_alloc_entries];
-
-	memcpy(&entry->desc, desc, sizeof(*desc));
-
-	entry->desc.host_mem_handle = desc->gmu_mem_handle;
-
-	if (desc->flags & HFI_MEMFLAG_GFX_PRIV)
-		priv |= KGSL_MEMDESC_PRIVILEGED;
-
-	if (!(desc->flags & HFI_MEMFLAG_GFX_WRITEABLE))
-		flags |= KGSL_MEMFLAGS_GPUREADONLY;
-
-	if (desc->flags & HFI_MEMFLAG_GFX_SECURE)
-		flags |= KGSL_MEMFLAGS_SECURE;
-
-	if (!(desc->flags & HFI_MEMFLAG_GFX_ACC) &&
-		(desc->mem_kind != HFI_MEMKIND_HW_FENCE)) {
-		if (desc->mem_kind == HFI_MEMKIND_MMIO_IPC_CORE)
-			entry->md = gmu_core_reserve_kernel_block_fixed(device, 0,
-					desc->size,
-					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
-					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					"qcom,ipc-core", gmu_core_get_attrs(desc->flags),
-					desc->align);
-		else
-			entry->md = gmu_core_reserve_kernel_block(device, 0,
-					desc->size,
-					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
-					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					desc->align);
-
-		if (IS_ERR(entry->md)) {
-			int ret = PTR_ERR(entry->md);
-
-			memset(entry, 0, sizeof(*entry));
-			return ERR_PTR(ret);
-		}
-		entry->desc.size = entry->md->size;
-		entry->desc.gmu_addr = entry->md->gmuaddr;
-
-		goto done;
-	}
-
-	/*
-	 * Use pre-allocated memory descriptors to map the HFI_MEMKIND_HW_FENCE and
-	 * HFI_MEMKIND_MEMSTORE
-	 */
-	switch (desc->mem_kind) {
-	case HFI_MEMKIND_HW_FENCE:
-		entry->md = &adreno_dev->hwsched.hw_fence.md;
-		break;
-	case HFI_MEMKIND_MEMSTORE:
-		entry->md = device->memstore;
-		break;
-	default:
-		entry->md = kgsl_allocate_global(device, desc->size, 0, flags,
-			priv, memkind_string);
-		break;
-	}
-	if (IS_ERR(entry->md)) {
-		int ret = PTR_ERR(entry->md);
-
-		memset(entry, 0, sizeof(*entry));
-		return ERR_PTR(ret);
-	}
-
-	entry->desc.size = entry->md->size;
-	entry->desc.gpu_addr = entry->md->gpuaddr;
-
-	if (!(desc->flags & HFI_MEMFLAG_GMU_ACC))
-		goto done;
-
-	 /*
-	  * If gmu mapping fails, then we have to live with
-	  * leaking the gpu global buffer allocated above.
-	  */
-	ret = gmu_core_import_buffer(device, entry);
-	if (ret) {
-		dev_err(gmu_pdev_dev,
-			"gpuaddr: 0x%llx size: %lld bytes lost\n",
-			entry->md->gpuaddr, entry->md->size);
-		memset(entry, 0, sizeof(*entry));
-		return ERR_PTR(ret);
-	}
-
-	entry->desc.gmu_addr = entry->md->gmuaddr;
-done:
-	hfi->mem_alloc_entries++;
-
-	return entry;
-}
-
-static int process_mem_alloc(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_desc *mad)
-{
-	struct hfi_mem_alloc_entry *entry;
-
-	entry = get_mem_alloc_entry(adreno_dev, mad);
-	if (IS_ERR(entry))
-		return PTR_ERR(entry);
-
-	if (entry->md) {
-		mad->gpu_addr = entry->md->gpuaddr;
-		mad->gmu_addr = entry->md->gmuaddr;
-	}
-
-	/*
-	 * GMU uses the host_mem_handle to check if this memalloc was
-	 * successful
-	 */
-	mad->host_mem_handle = mad->gmu_mem_handle;
-
-	return 0;
-}
-
 static int mem_alloc_reply(struct adreno_device *adreno_dev, void *rcvd)
 {
 	struct hfi_mem_alloc_desc desc = {0};
@@ -1607,7 +1446,7 @@ static int mem_alloc_reply(struct adreno_device *adreno_dev, void *rcvd)
 
 	hfi_get_mem_alloc_desc(rcvd, &desc);
 
-	ret = process_mem_alloc(adreno_dev, &desc);
+	ret = adreno_hwsched_process_mem_alloc(adreno_dev, &desc);
 	if (ret)
 		return ret;
 
@@ -1755,22 +1594,6 @@ done:
 	return rc;
 }
 
-static void reset_hfi_mem_records(struct adreno_device *adreno_dev)
-{
-	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
-	struct kgsl_memdesc *md = NULL;
-	u32 i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_desc *desc = &hw_hfi->mem_alloc_table[i].desc;
-
-		if (desc->flags & HFI_MEMFLAG_HOST_INIT) {
-			md = hw_hfi->mem_alloc_table[i].md;
-			memset(md->hostptr, 0x0, md->size);
-		}
-	}
-}
-
 static void reset_hfi_queues(struct adreno_device *adreno_dev)
 {
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
@@ -1813,7 +1636,7 @@ void gen7_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	 * Reset the hfi host access memory records, As GMU expects hfi memory
 	 * records to be clear in bootup.
 	 */
-	reset_hfi_mem_records(adreno_dev);
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
 static void gen7_hwsched_enable_async_hfi(struct adreno_device *adreno_dev)
@@ -3985,23 +3808,4 @@ done:
 	_disable_hw_fence_throttle(adreno_dev, true);
 
 	return ret;
-}
-
-void *gen7_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size)
-{
-	struct gen7_hwsched_hfi *hw_hfi = to_gen7_hwsched_hfi(adreno_dev);
-	u64 offset;
-	u32 i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct kgsl_memdesc *md = hw_hfi->mem_alloc_table[i].md;
-
-		if (kgsl_gpuaddr_in_memdesc(md, gpuaddr, size)) {
-			offset = gpuaddr - md->gpuaddr;
-			return md->hostptr + offset;
-		}
-	}
-
-	return NULL;
 }

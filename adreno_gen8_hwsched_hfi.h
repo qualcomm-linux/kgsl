@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_HFI_H_
@@ -92,8 +92,6 @@ struct hfi_thermaltable_cmd {
 } __packed;
 
 struct gen8_hwsched_hfi {
-	struct hfi_mem_alloc_entry mem_alloc_table[32];
-	u32 mem_alloc_entries;
 	/** @irq_mask: Store the hfi interrupt mask */
 	u32 irq_mask;
 	/** @msglock: To protect the list of un-ACKed hfi packets */
@@ -371,17 +369,6 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev);
  * Return: Zero on success or negative error on failure
  */
 int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev);
-
-/**
- * gen8_hwsched_get_rb_hostptr - Get rinbuffer host pointer
- * @adreno_dev: pointer to the adreno device
- * @gpuaddr: ringbuffer gpu address
- * @size: size of the ringbuffer
- *
- * Return: Host pointer of the gpu ringbuffer
- */
-void *gen8_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size);
 
 /**
  * gen8_hwsched_set_gmu_based_dcvs_value - Set value for GMU based DCVS
