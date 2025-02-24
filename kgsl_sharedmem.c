@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
@@ -1914,53 +1914,11 @@ struct kgsl_memdesc *kgsl_allocate_global_fixed(struct kgsl_device *device,
 	return &gmd->memdesc;
 }
 
-static struct kgsl_memdesc *
-kgsl_allocate_secure_global(struct kgsl_device *device,
-		u64 size, u64 flags, u32 priv, const char *name)
-{
-	struct kgsl_global_memdesc *md;
-	int ret;
-
-	md = kzalloc(sizeof(*md), GFP_KERNEL);
-	if (!md)
-		return ERR_PTR(-ENOMEM);
-
-	/* Make sure that we get global memory from system memory */
-	priv |= KGSL_MEMDESC_GLOBAL | KGSL_MEMDESC_SYSMEM;
-
-	ret = kgsl_allocate_secure(device, &md->memdesc, size, flags, priv);
-	if (ret) {
-		kfree(md);
-		return ERR_PTR(ret);
-	}
-
-	md->name = name;
-
-	/*
-	 * No lock here, because this function is only called during probe/init
-	 * while the caller is holding the mutex
-	 */
-	list_add_tail(&md->node, &device->globals);
-
-	/*
-	 * No offset needed, we'll get an address inside of the pagetable
-	 * normally
-	 */
-	kgsl_mmu_map_global(device, &md->memdesc, 0);
-	kgsl_trace_gpu_mem_total(device, md->memdesc.size);
-
-	return &md->memdesc;
-}
-
 struct kgsl_memdesc *kgsl_allocate_global(struct kgsl_device *device,
 		u64 size, u32 padding, u64 flags, u32 priv, const char *name)
 {
 	int ret;
 	struct kgsl_global_memdesc *md;
-
-	if (flags & KGSL_MEMFLAGS_SECURE)
-		return kgsl_allocate_secure_global(device, size, flags, priv,
-			name);
 
 	md = kzalloc(sizeof(*md), GFP_KERNEL);
 	if (!md)
@@ -1972,7 +1930,11 @@ struct kgsl_memdesc *kgsl_allocate_global(struct kgsl_device *device,
 	 */
 	priv |= KGSL_MEMDESC_GLOBAL | KGSL_MEMDESC_SYSMEM;
 
-	ret = kgsl_allocate_kernel(device, &md->memdesc, size, flags, priv);
+	if (flags & KGSL_MEMFLAGS_SECURE)
+		ret = kgsl_allocate_secure(device, &md->memdesc, size, flags, priv);
+	else
+		ret = kgsl_allocate_kernel(device, &md->memdesc, size, flags, priv);
+
 	if (ret) {
 		kfree(md);
 		return ERR_PTR(ret);
