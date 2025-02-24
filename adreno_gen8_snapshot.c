@@ -1698,10 +1698,15 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 	gen8_regread64_aperture(device, GEN8_CP_IB2_BASE_LO_PIPE,
 		GEN8_CP_IB2_BASE_HI_PIPE, &snapshot->ib2base, PIPE_BR, 0, 0);
 
+	gen8_regread64_aperture(device, GEN8_CP_IB3_BASE_LO_PIPE,
+		GEN8_CP_IB3_BASE_HI_PIPE, &snapshot->ib3base, PIPE_BR, 0, 0);
+
 	gen8_regread_aperture(device, GEN8_CP_IB1_REM_SIZE_PIPE,
 			&snapshot->ib1size, PIPE_BR, 0, 0);
 	gen8_regread_aperture(device, GEN8_CP_IB2_REM_SIZE_PIPE,
 			&snapshot->ib2size, PIPE_BR, 0, 0);
+	gen8_regread_aperture(device, GEN8_CP_IB3_REM_SIZE_PIPE,
+		&snapshot->ib3size, PIPE_BR, 0, 0);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
 		gen8_regread64_aperture(device, GEN8_CP_IB1_BASE_LO_PIPE,
