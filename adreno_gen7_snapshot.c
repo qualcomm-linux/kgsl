@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
+
+#include <uapi/linux/sched/types.h>
 
 #include "adreno.h"
 #include "adreno_snapshot.h"
@@ -1672,6 +1674,8 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	u32 cgc = 0, cgc1 = 0, cgc2 = 0;
 	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
 	int is_current_rt;
+	struct sched_param old_priority = { .sched_priority = current->prio };
+	int old_policy = current->policy;
 
 	gen7_crashdump_timedout = false;
 	gen7_snapshot_block_list = gpucore->gen7_snapshot_block_list;
@@ -1811,7 +1815,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	adreno_snapshot_preemption_record(device, snapshot);
 
 	if (is_current_rt)
-		sched_set_fifo(current);
+		sched_setscheduler(current, old_policy, &old_priority);
 }
 
 void gen7_crashdump_init(struct adreno_device *adreno_dev)
