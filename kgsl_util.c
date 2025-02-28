@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -306,7 +306,6 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 	if (ret)
 		return ret;
 
-	spin_lock(&adreno_dev->active_list_lock);
 	list_for_each_entry(ctxt, &adreno_dev->active_list, active_node) {
 		snprintf(name, sizeof(name), KGSL_ADRENO_CTX_ENTRY"_%d", ctxt->base.id);
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -314,9 +313,7 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	spin_unlock(&adreno_dev->active_list_lock);
 
-	read_lock(&kgsl_driver.proclist_lock);
 	list_for_each_entry(p, &kgsl_driver.process_list, list) {
 		snprintf(name, sizeof(name), KGSL_PROC_PRIV_ENTRY "_%d", pid_nr(p->pid));
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -324,9 +321,7 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	read_unlock(&kgsl_driver.proclist_lock);
 
-	spin_lock(&kgsl_driver.ptlock);
 	list_for_each_entry(pt, &kgsl_driver.pagetable_list, list) {
 		snprintf(name, sizeof(name), KGSL_PGTABLE_ENTRY"_%d", pt->name);
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -334,7 +329,6 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	spin_unlock(&kgsl_driver.ptlock);
 
 	return ret;
 }
