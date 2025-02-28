@@ -3152,6 +3152,25 @@ static const struct gen8_nonctxt_regs gen8_2_0_nonctxt_regs[] = {
 	{ 0 },
 };
 
+static const struct hfi_therm_profile_ctrl therm_profile_8_2_0 = {
+	.feature_en = 1,
+	.feature_rev = 1,
+	.tsens_en = 0x7FF,
+	.tj_limit = 900,
+	.tskin_addr = 0,
+	.tskin_limit = 0,
+	.tsens_cfg_cnt = 1,
+	.tsens_cfg.limit_u = 1130,
+	.tsens_cfg.limit_l = 10,
+	.tsens_cfg.margin_u = 30,
+	.tsens_cfg.margin_l = 20,
+	.throttle_cfg.throttle_hyst = 250,
+	.throttle_cfg.num_throttle_cnt = 3,
+	.throttle_cfg.throttle_lvls[0] = 50,
+	.throttle_cfg.throttle_lvls[1] = 37,
+	.throttle_cfg.throttle_lvls[2] = 20,
+};
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_2_0,
@@ -3160,7 +3179,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
 			ADRENO_PREEMPTION | ADRENO_LPAC | ADRENO_AQE |
 			ADRENO_GMU_WARMBOOT | ADRENO_IFPC | ADRENO_CONTENT_PROTECTION |
-			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS,
+			ADRENO_HW_FENCE | ADRENO_BCL | ADRENO_ACD | ADRENO_GMU_BASED_DCVS |
+			ADRENO_GMU_THERMAL_MITIGATION,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3189,6 +3209,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_0 = {
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (19708 * SZ_1K),
+	.therm_profile = &therm_profile_8_2_0,
 };
 
 /* GEN8_4_0 noncontext register list */
