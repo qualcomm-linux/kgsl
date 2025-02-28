@@ -592,6 +592,9 @@ static void process_ctx_bad(struct adreno_device *adreno_dev)
 		return;
 	}
 
+	adreno_dev->hwsched.reset_type = gen8_hwsched_lookup_key_value(adreno_dev,
+				PAYLOAD_FAULT_RESET_POLICY, KEY_GPU_RESET_POLICY);
+
 	gen8_hwsched_fault(adreno_dev, ADRENO_HARD_FAULT);
 }
 
@@ -1923,6 +1926,15 @@ static int gen8_hfi_send_hw_fence_feature_ctrl(struct adreno_device *adreno_dev)
 	return ret;
 }
 
+static int gen8_hfi_send_soft_reset_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	if (!gmu_core_capabilities_enabled(&KGSL_DEVICE(adreno_dev)->gmu_core.common_caps,
+					   FAC_SOFT_RESET))
+		return 0;
+
+	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_SOFT_RESET, 1, 0);
+}
+
 static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
 				const char *str)
 {
@@ -2627,6 +2639,10 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 			goto err;
 	}
 
+	ret = gen8_hfi_send_soft_reset_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	ret = send_start_msg(adreno_dev);
 	if (ret)
 		goto err;
@@ -3081,12 +3097,12 @@ static void populate_ibs(struct adreno_device *adreno_dev,
 #define DISPQ_SYNC_IRQ_BIT(_idx) ((DISPQ_IRQ_BIT(_idx) << (KGSL_PRIORITY_MAX_RB_LEVELS + 1)))
 
 
-static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj)
+static u32 get_irq_bit(struct adreno_device *adreno_dev, struct kgsl_context *context)
 {
 	if (adreno_is_preemption_enabled(adreno_dev))
-		return adreno_get_level(drawobj->context);
+		return adreno_get_level(context);
 
-	if (kgsl_context_is_lpac(drawobj->context))
+	if (kgsl_context_is_lpac(context))
 		return 1;
 
 	return 0;
@@ -3752,10 +3768,10 @@ skipib:
 	if (timestamp_cmp(hdr->sync_obj_ts, drawctxt->syncobj_timestamp) >= 0)
 		/* Send interrupt to GMU to receive the message */
 		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
-			DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+			DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj->context)));
 	else
 		gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
-			DISPQ_SYNC_IRQ_BIT(get_irq_bit(adreno_dev, drawobj)));
+			DISPQ_SYNC_IRQ_BIT(get_irq_bit(adreno_dev, drawobj->context)));
 
 	drawctxt->internal_timestamp = drawobj->timestamp;
 
@@ -3907,6 +3923,34 @@ static void trigger_context_unregister_fault(struct adreno_device *adreno_dev,
 	gen8_hwsched_fault(adreno_dev, ADRENO_GMU_FAULT);
 }
 
+int gen8_hwsched_process_detached_hw_fences(struct adreno_device *adreno_dev)
+{
+	struct adreno_hw_fence_entry *entry, *tmp;
+	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
+	struct kgsl_context *context = NULL;
+	int ret = 0;
+
+	list_for_each_entry_safe(entry, tmp, &hfi->detached_hw_fence_list, node) {
+
+		/*
+		 * This is part of the reset sequence and any error in this path will be handled by
+		 * the caller.
+		 */
+		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
+			HW_FENCE_FLAG_SKIP_MEMSTORE);
+		if (ret)
+			return ret;
+
+		context = &entry->drawctxt->base;
+
+		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
+
+		kgsl_context_put(context);
+	}
+
+	return ret;
+}
+
 static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	struct kgsl_context *context, u32 ts)
 {
@@ -4000,6 +4044,187 @@ void gen8_hwsched_context_detach(struct adreno_context *drawctxt)
 
 out:
 	mutex_unlock(&device->mutex);
+}
+
+static int handle_hw_fences_after_soft_reset(struct adreno_device *adreno_dev,
+			struct adreno_context *drawctxt)
+{
+	int ret = 0;
+
+	if (!drawctxt)
+		return ret;
+
+	ret = gen8_hwsched_process_detached_hw_fences(adreno_dev);
+	if (ret)
+		return ret;
+
+	return gen8_hwsched_disable_hw_fence_throttle(adreno_dev);
+}
+
+static int gen8_hwsched_hfi_msg_reply(struct adreno_device *adreno_dev,
+		enum hfi_msg_type msg, u32 hdr)
+{
+	struct hfi_msg_ret_cmd out = {0};
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	u32 seqnum;
+
+	out.hdr = ACK_MSG_HDR(msg);
+	seqnum = atomic_inc_return(&gmu->hfi.seqnum);
+	out.hdr = MSG_HDR_SET_SEQNUM_SIZE(out.hdr, seqnum, sizeof(out) >> 2);
+	out.error = GMU_SUCCESS;
+	out.req_hdr = hdr;
+
+	return gen8_hfi_cmdq_write(adreno_dev, (u32 *)&out, sizeof(out));
+}
+
+static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
+			  u32 mask, const char *client)
+{
+	u32 ack;
+	unsigned long t;
+
+	kgsl_regwrite(device, reg, mask);
+
+	t = jiffies + msecs_to_jiffies(100);
+	do {
+		kgsl_regread(device, ack_reg, &ack);
+		if ((ack & mask) == mask)
+			return;
+		usleep_range(10, 100);
+	} while (!time_after(jiffies, t));
+
+	kgsl_regread(device, ack_reg, &ack);
+	if ((ack & mask) == mask)
+		return;
+
+	dev_err(device->dev, "%s GBIF halt timed out\n", client);
+}
+
+static void gen8_hwsched_raise_dispatch_interrupt(struct adreno_device *adreno_dev)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct cmd_list_obj *obj, *tmp;
+
+	list_for_each_entry_safe(obj, tmp, &hwsched->cmd_list, node) {
+		struct kgsl_drawobj *drawobj = obj->drawobj;
+
+		/* Raise dispatch interrupt for inflight commands */
+		if (adreno_hwsched_drawobj_replay(adreno_dev, drawobj))
+			gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
+				DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj->context)));
+	}
+}
+
+int gen8_hwsched_soft_reset(struct adreno_device *adreno_dev,
+		struct kgsl_context *context, bool ctx_guilty)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct hfi_context_bad_cmd *in = (struct hfi_context_bad_cmd *)adreno_dev->hwsched.ctxt_bad;
+	int ret;
+
+	if (adreno_dev->hwsched.reset_type != GMU_GPU_SOFT_RESET)
+		return -EINVAL;
+
+	if (!test_bit(GMU_PRIV_GPU_STARTED, &gmu->flags))
+		return 0;
+
+	if (test_bit(ADRENO_HWSCHED_GPU_SOFT_RESET, &adreno_dev->hwsched.flags))
+		return 0;
+
+	gen8_disable_gpu_irq(adreno_dev);
+
+	/* Halt GX traffic */
+	_do_gbif_halt(device, GEN8_RBBM_GBIF_HALT,
+			GEN8_RBBM_GBIF_HALT_ACK,
+			GEN8_GBIF_GX_HALT_MASK,
+			"GX");
+
+	kgsl_regwrite(device, GEN8_RBBM_SW_RESET_CMD, 0x1);
+
+	/* Make sure above writes are posted */
+	wmb();
+
+	/* Allow the software reset to complete */
+	udelay(100);
+
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
+
+	/* Clear the busy_data stats - we're starting over from scratch */
+	memset(&adreno_dev->busy_data, 0, sizeof(adreno_dev->busy_data));
+
+	gen8_start(adreno_dev);
+
+	/* Re-initialize the coresight registers if applicable */
+	adreno_coresight_start(adreno_dev);
+
+	adreno_perfcounter_start(adreno_dev);
+
+	/* Clear FSR here in case it is set from a previous pagefault */
+	kgsl_mmu_clear_fsr(&device->mmu);
+
+	ret = gen8_hwsched_hfi_msg_reply(adreno_dev, F2H_MSG_CONTEXT_BAD, in->hdr);
+	if (ret)
+		goto done;
+
+	/* After sending ctxt bad reply wait for GMU soft fault recovery completion */
+	ret = gmu_core_timed_poll_check(device, GEN8_GMUCX_CM3_FW_INIT_RESULT,
+				FIELD_PREP(GENMASK(11, 9), 6), 1000, GENMASK(11, 9));
+	if (ret)
+		goto done;
+
+	gen8_hwsched_init_ucode_regs(adreno_dev);
+
+	gen8_enable_gpu_irq(adreno_dev);
+
+	ret = gen8_hwsched_boot_gpu(adreno_dev);
+	if (ret)
+		goto done;
+
+	gen8_hwsched_raise_dispatch_interrupt(adreno_dev);
+
+	if (ctx_guilty) {
+		struct adreno_context *drawctxt =  ADRENO_CONTEXT(context);
+
+		ret = handle_hw_fences_after_soft_reset(adreno_dev, drawctxt);
+		if (ret)
+			goto done;
+
+		ret = send_context_unregister_hfi(adreno_dev, context,
+			drawctxt->internal_timestamp);
+		if (ret)
+			goto done;
+
+		kgsl_sharedmem_writel(device->memstore,
+			KGSL_MEMSTORE_OFFSET(context->id, soptimestamp),
+			drawctxt->timestamp);
+
+		kgsl_sharedmem_writel(device->memstore,
+			KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp),
+			drawctxt->timestamp);
+
+		adreno_profile_process_results(adreno_dev);
+
+		context->gmu_registered = false;
+	}
+
+	/*
+	 * At this point it is safe to assume that we recovered. Setting
+	 * this field allows us to take a new snapshot for the next failure
+	 * if we are prioritizing the first unrecoverable snapshot.
+	 */
+	if (device->snapshot)
+		device->snapshot->recovered = true;
+
+	device->reset_counter++;
+	set_bit(ADRENO_HWSCHED_GPU_SOFT_RESET, &adreno_dev->hwsched.flags);
+
+done:
+	if (ret)
+		dev_err(device->dev, "GPU soft reset failed: %d\n", ret);
+
+	return ret;
 }
 
 u32 gen8_hwsched_preempt_count_get(struct adreno_device *adreno_dev)

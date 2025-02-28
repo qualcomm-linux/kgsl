@@ -523,7 +523,7 @@ error:
 	return ret;
 }
 
-static void gen8_hwsched_init_ucode_regs(struct adreno_device *adreno_dev)
+void gen8_hwsched_init_ucode_regs(struct adreno_device *adreno_dev)
 {
 	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1412,39 +1412,6 @@ static int process_inflight_hw_fences_after_reset(struct adreno_device *adreno_d
 	return ret;
 }
 
-/**
- * process_detached_hw_fences_after_reset - Send fences that couldn't be sent to GMU when a context
- * got detached. We must wait for ack when sending each of these fences to GMU so as to avoid
- * sending a large number of hardware fences in a short span of time.
- */
-static int process_detached_hw_fences_after_reset(struct adreno_device *adreno_dev)
-{
-	struct adreno_hw_fence_entry *entry, *tmp;
-	struct gen8_hwsched_hfi *hfi = to_gen8_hwsched_hfi(adreno_dev);
-	struct kgsl_context *context = NULL;
-	int ret = 0;
-
-	list_for_each_entry_safe(entry, tmp, &hfi->detached_hw_fence_list, node) {
-
-		/*
-		 * This is part of the reset sequence and any error in this path will be handled by
-		 * the caller.
-		 */
-		ret = gen8_send_hw_fence_hfi_wait_ack(adreno_dev, entry,
-			HW_FENCE_FLAG_SKIP_MEMSTORE);
-		if (ret)
-			return ret;
-
-		context = &entry->drawctxt->base;
-
-		adreno_hwsched_remove_hw_fence_entry(adreno_dev, entry);
-
-		kgsl_context_put(context);
-	}
-
-	return ret;
-}
-
 static int gen8_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt)
 {
@@ -1526,7 +1493,7 @@ static int handle_hw_fences_after_reset(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	ret = process_detached_hw_fences_after_reset(adreno_dev);
+	ret = gen8_hwsched_process_detached_hw_fences(adreno_dev);
 	if (ret)
 		return ret;
 

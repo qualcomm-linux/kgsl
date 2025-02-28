@@ -99,6 +99,12 @@ struct adreno_hwsched_ops {
 	void *(*get_rb_hostptr)(struct adreno_device *adreno_dev, u64 gpuaddr, u32 size);
 };
 
+enum gpu_reset_type {
+	GMU_GPU_RESET_NONE,
+	GMU_GPU_SOFT_RESET,
+	GMU_GPU_HARD_RESET,
+};
+
 /**
  * struct adreno_hwsched - Container for the hardware scheduler
  */
@@ -142,6 +148,8 @@ struct adreno_hwsched {
 	bool global_ctxt_gmu_registered;
 	/** @hw_fence: Container for hw fence related structures */
 	struct adreno_hwsched_hw_fence hw_fence;
+	/** @reset_type: GPU fault reset (hard/soft) type */
+	enum gpu_reset_type reset_type;
 };
 
 /*
@@ -157,6 +165,7 @@ enum adreno_hwsched_flags {
 	ADRENO_HWSCHED_CONTEXT_QUEUE,
 	ADRENO_HWSCHED_HW_FENCE,
 	ADRENO_HWSCHED_FORCE_RETIRE_GMU,
+	ADRENO_HWSCHED_GPU_SOFT_RESET,
 };
 
 /**
@@ -369,4 +378,14 @@ void adreno_hwsched_add_profile_events(struct adreno_device *adreno_dev,
  * @rcvd: Pointer to the received HFI timestamp retire command
  */
 void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd);
+
+/**
+ * adreno_hwsched_drawobj_replay - Check drawobj need to be replayed or not
+ * @adreno_dev: Pointer to the adreno device structure
+ * @drawobj: Pointer to the draw object
+ *
+ * Return true if drawobj needs to replayed, false otherwise
+ */
+bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj);
 #endif

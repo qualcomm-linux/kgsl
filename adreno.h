@@ -941,6 +941,9 @@ struct adreno_gpudev {
 	const char *(*iommu_fault_block)(struct kgsl_device *device,
 				unsigned int fsynr1);
 	int (*reset)(struct adreno_device *adreno_dev);
+	/** @soft_reset: Soft reset GPU on fault recovery */
+	int (*soft_reset)(struct adreno_device *adreno_dev,
+				struct kgsl_context *context, bool ctx_guilty);
 	/** @read_alwayson: Return the current value of the alwayson counter */
 	u64 (*read_alwayson)(struct adreno_device *adreno_dev);
 	/**

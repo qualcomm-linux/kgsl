@@ -3222,6 +3222,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.context_detach = gen8_hwsched_context_detach,
 		.read_alwayson = gen8_read_alwayson,
 		.reset = gen8_hwsched_reset_replay,
+		.soft_reset = gen8_hwsched_soft_reset,
 		.power_ops = &gen8_hwsched_power_ops,
 		.power_stats = gen8_power_stats,
 		.hw_isidle = gen8_hw_isidle,

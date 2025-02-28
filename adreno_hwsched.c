@@ -1365,7 +1365,7 @@ static void force_retire_timestamp(struct kgsl_device *device,
 }
 
 /* Return true if drawobj needs to replayed, false otherwise */
-static bool drawobj_replay(struct adreno_device *adreno_dev,
+bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj *drawobj)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1408,7 +1408,7 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 		 * Get rid of retired objects or objects that belong to detached
 		 * or invalidated contexts
 		 */
-		if (drawobj_replay(adreno_dev, drawobj)) {
+		if (adreno_hwsched_drawobj_replay(adreno_dev, drawobj)) {
 			hwsched->hwsched_ops->submit_drawobj(adreno_dev, drawobj);
 			continue;
 		}
@@ -1778,14 +1778,21 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	struct hfi_context_bad_cmd *cmd = hwsched->ctxt_bad;
+	int ret = 0;
+	bool ctx_guilty = false;
 
 	if (hwsched->recurring_cmdobj)
 		srcu_notifier_call_chain(&device->nh, GPU_SSR_BEGIN, NULL);
 
+	/* Do not do soft reset for a IOMMU fault (because IOMMU hardware needs a reset too) */
+	if (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT)
+		adreno_dev->hwsched.reset_type = GMU_GPU_HARD_RESET;
+
 	if (cmd->error == GMU_SYNCOBJ_TIMEOUT_ERROR) {
 		print_fault_syncobj(adreno_dev, cmd->gc.ctxt_id, cmd->gc.ts);
 		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
-		return;
+		ret = -ETIMEDOUT;
+		goto done;
 	}
 
 	/*
@@ -1847,7 +1854,13 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 			(context->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context)))
+			context_is_throttled(device, context))) {
+			ctx_guilty = true;
+		}
+
+		ret = gpudev->soft_reset(adreno_dev, context, ctx_guilty);
+
+		if (ctx_guilty)
 			adreno_drawctxt_set_guilty(device, context);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -1857,12 +1870,19 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 	}
 
 	if (drawobj_lpac) {
+		ctx_guilty = false;
 		force_retire_timestamp(device, drawobj_lpac);
 		if (context_lpac && ((context_lpac->flags & KGSL_CONTEXT_INVALIDATE_ON_FAULT) ||
 			(context_lpac->flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE) ||
 			(cmd->error == GMU_GPU_SW_HANG) ||
 			(cmd->error == GMU_GPU_SW_FUSE_VIOLATION) ||
-			context_is_throttled(device, context_lpac)))
+			context_is_throttled(device, context_lpac))) {
+			ctx_guilty = true;
+		}
+
+		ret = gpudev->soft_reset(adreno_dev, context_lpac, ctx_guilty);
+
+		if (ctx_guilty)
 			adreno_drawctxt_set_guilty(device, context_lpac);
 		/*
 		 * Put back the reference which we incremented while trying to find
@@ -1870,6 +1890,15 @@ static void adreno_hwsched_snapshot(struct adreno_device *adreno_dev, int fault)
 		 */
 		kgsl_drawobj_put(drawobj_lpac);
 	}
+done:
+	if (!drawobj && !drawobj_lpac)
+		ret = gpudev->soft_reset(adreno_dev, NULL, ctx_guilty);
+
+	memset(hwsched->ctxt_bad, 0x0, HFI_MAX_MSG_SIZE);
+	clear_bit(ADRENO_HWSCHED_GPU_SOFT_RESET, &adreno_dev->hwsched.flags);
+	adreno_dev->hwsched.reset_type = GMU_GPU_RESET_NONE;
+	if (ret)
+		gpudev->reset(adreno_dev);
 }
 
 static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)

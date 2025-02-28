@@ -117,6 +117,16 @@ struct gen8_nonctxt_regs {
 };
 
 /**
+ * struct gen8_limits_mit_cfg - Container for GPU limits mitigation configuration
+ */
+struct gen8_limits_mit_cfg {
+	/** @limits_mit_tbl: Table for GPU limits mitigation features */
+	const struct hfi_limits_mit_tbl *limits_mit_tbl;
+	/** @len: Number of entries in the table */
+	u32 len;
+};
+
+/**
  * struct adreno_gen8_core - gen8 specific GPU core definitions
  */
 struct adreno_gen8_core {
@@ -179,6 +189,8 @@ struct adreno_gen8_core {
 	u32 cl_no_ft_timeout_ms;
 	/** @therm_profile: GMU thermal mitigation profile */
 	const struct hfi_therm_profile_ctrl *therm_profile;
+	/** @limits_mit_cfg: GPU limits mitigation configuration */
+	const struct gen8_limits_mit_cfg *limits_mit_cfg;
 };
 
 /**
