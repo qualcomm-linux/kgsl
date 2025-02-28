@@ -768,6 +768,7 @@
 #define GEN8_CP_APERTURE_CNTL_GMU                              0x81d
 #define GEN8_CP_APERTURE_CNTL_CD                               0x81e
 #define GEN8_CP_CP2GMU_STATUS                                  0x822
+#define GEN8_CP_SEMAPHORE_REG_0                                0x825
 #define GEN8_CP_RL_ERROR_DETAILS_0                             0x840
 #define GEN8_CP_RL_ERROR_DETAILS_1                             0x841
 #define GEN8_CP_CRASH_DUMP_SCRIPT_BASE_LO                      0x842

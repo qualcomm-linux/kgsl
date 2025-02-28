@@ -3331,6 +3331,14 @@ static const struct kgsl_regmap_list gen8_3_0_gbif_cx_regs[] = {
 	{ GEN8_GBIF_CX_CONFIG, 0x20023000 },
 };
 
+static const struct kgsl_regmap_list gen8_8_0_gbif_cx_regs[] = {
+	{ GEN8_GBIF_QSB_SIDE0, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE1, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE2, 0x00071e20 },
+	{ GEN8_GBIF_QSB_SIDE3, 0x00071e20 },
+	{ GEN8_GBIF_CX_CONFIG, 0x40023000 },
+};
+
 /* GEN8_3_0 noncontext register list */
 static const struct gen8_nonctxt_regs gen8_3_0_nonctxt_regs[] = {
 	{ GEN8_CP_SMMU_STREAM_ID_LPAC, 0x00000101, BIT(PIPE_NONE) },
@@ -3510,6 +3518,37 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_6_0 = {
 	.bcl_data = 1,
 };
 
+static const struct adreno_gen8_core adreno_gpu_core_gen8_8_0 = {
+	.base = {
+		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_8_0,
+				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
+		.compatible = "qcom,adreno-gpu-gen8-8-0",
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
+			ADRENO_CONTENT_PROTECTION,
+		.gpudev = &adreno_gen8_hwsched_gpudev.base,
+		.perfcounters = &adreno_gen8_perfcounters,
+		.uche_gmem_alignment = SZ_64M,
+		.gmem_size = (SZ_512K + SZ_64K),
+		.bus_width = 32,
+		.snapshot_size = SZ_8M,
+		.num_ddr_channels = 1,
+	},
+	.sqefw_name = "gen80300_sqe.fw",
+	.gmufw_name = "gen80800_gmu.bin",
+	.zap_name = "gen80300_zap.mbn",
+	.ao_hwcg = gen8_ao_hwcg_regs,
+	.ao_hwcg_count = ARRAY_SIZE(gen8_ao_hwcg_regs),
+	.gbif = gen8_8_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen8_8_0_gbif_cx_regs),
+	.hang_detect_cycles = 0xcfffff,
+	.protected_regs = gen8_0_0_protected_regs, /* Reuse the protected regs list from Gen8_0_0 */
+	.nonctxt_regs = gen8_3_0_nonctxt_regs,
+	.highest_bank_bit = 14,
+	.gmu_hub_clk_freq = 200000000,
+	.gen8_snapshot_block_list = &gen8_3_0_snapshot_block_list,
+	.ctxt_record_size = (4558 * SZ_1K),
+};
+
 static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_a306,		/* Deprecated */
 	&adreno_gpu_core_a306a,		/* Deprecated */
@@ -3570,4 +3609,5 @@ static const struct adreno_gpu_core *adreno_gpulist[] = {
 	&adreno_gpu_core_gen8_3_0.base,
 	&adreno_gpu_core_gen8_4_0.base,
 	&adreno_gpu_core_gen8_6_0.base,
+	&adreno_gpu_core_gen8_8_0.base,
 };

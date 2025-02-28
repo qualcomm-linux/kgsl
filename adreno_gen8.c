@@ -987,7 +987,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 		 * of bits set in the slice mask.
 		 */
 		adreno_dev->chipid |= FIELD_PREP(GENMASK(7, 4), hweight32(slice_mask));
-	} else if (adreno_is_gen8_3_0(adreno_dev))
+	} else if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev))
 		slice_mask = GENMASK(GEN8_3_0_NUM_PHYSICAL_SLICES - 1, 0);
 	else if (adreno_is_gen8_6_0(adreno_dev))
 		slice_mask = GENMASK(GEN8_6_0_NUM_PHYSICAL_SLICES - 1, 0);
@@ -1266,7 +1266,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 first_slice = gen8_first_slice(adreno_dev);
 
 	/* Static IFPC restore only registers */
-	if (adreno_is_gen8_3_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_ifpc_pwrup_reglist);
 	} else if (adreno_is_gen8_2_0(adreno_dev)) {
@@ -1280,7 +1280,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	items++;
 
 	/* Static IFPC + preemption registers */
-	if (adreno_is_gen8_3_0(adreno_dev)) {
+	if (adreno_is_gen8_3_0(adreno_dev) || adreno_is_gen8_8_0(adreno_dev)) {
 		reglist[items].regs = gen8_3_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_3_0_pwrup_reglist);
 	} else if (adreno_is_gen8_2_0(adreno_dev)) {
@@ -2730,6 +2730,41 @@ static u32 _get_pipeid(u32 groupid)
 	}
 }
 
+static bool gen8_acquire_cp_semaphore(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 sem, i;
+
+	for (i = 0; i < 10; i++) {
+		kgsl_regwrite(device, GEN8_CP_SEMAPHORE_REG_0, BIT(8));
+
+		/*
+		 * Make sure the previous register write is posted before
+		 * checking the CP sempahore status
+		 */
+		mb();
+
+		kgsl_regread(device, GEN8_CP_SEMAPHORE_REG_0, &sem);
+		if (sem)
+			return true;
+
+		udelay(10);
+	}
+
+	/* Check CP semaphore status one last time */
+	kgsl_regread(device, GEN8_CP_SEMAPHORE_REG_0, &sem);
+
+	if (!sem)
+		return false;
+
+	return true;
+}
+
+static void gen8_release_cp_semaphore(struct adreno_device *adreno_dev)
+{
+	kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_CP_SEMAPHORE_REG_0, 0);
+}
+
 int gen8_perfcounter_remove(struct adreno_device *adreno_dev,
 			    struct adreno_perfcount_register *reg, u32 groupid)
 {
@@ -2819,6 +2854,11 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	u32 *data = ptr + sizeof(*lock);
 	int i, start_offset = -1;
 	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
+	unsigned long irq_flags;
+	int ret = 0;
+
+	if (!ADRENO_ACQUIRE_CP_SEMAPHORE(adreno_dev, irq_flags))
+		return -EBUSY;
 
 	if (flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) {
 		for (i = 0; i < perfcntr_list_len - 2; i++) {
@@ -2835,7 +2875,8 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 
 	if (kgsl_hwlock(lock)) {
 		kgsl_hwunlock(lock);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto err;
 	}
 
 	/*
@@ -2896,7 +2937,9 @@ update:
 			kgsl_regwrite(device, reg->reg_dependency[i], reg->countable);
 	}
 
-	return 0;
+err:
+	ADRENO_RELEASE_CP_SEMAPHORE(adreno_dev, irq_flags);
+	return ret;
 }
 
 static u64 gen8_read_alwayson(struct adreno_device *adreno_dev)
@@ -3238,6 +3281,8 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.fault_header = gen8_fault_header,
 		.lpac_fault_header = gen8_lpac_fault_header,
 		.power_feature_stats = gen8_power_feature_stats,
+		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
+		.release_cp_semaphore = gen8_release_cp_semaphore,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,
@@ -3268,6 +3313,8 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.swfuse_irqctrl = gen8_swfuse_irqctrl,
 		.get_uche_trap_base = gen8_get_uche_trap_base,
 		.fault_header = gen8_fault_header,
+		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
+		.release_cp_semaphore = gen8_release_cp_semaphore,
 	},
 	.hfi_probe = gen8_gmu_hfi_probe,
 	.handle_watchdog = gen8_gmu_handle_watchdog,
