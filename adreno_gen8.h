@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_H_
@@ -660,6 +660,28 @@ static inline u32 gen8_get_slice_mask(struct adreno_device *adreno_dev)
 					struct gen8_device, adreno_dev);
 
 	return gen8_dev->slice_mask;
+}
+
+/**
+ * gen8_hwcg_set - Set gpu hardware clock gating
+ * @adreno_dev: Handle to the adreno device
+ * @on: Boolean flag for clock gating setting
+ *
+ * Enables/disables the gpu hardware clock gating
+ */
+void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on);
+
+/**
+ * gen8_first_slice - Returns the first GPU slice that is active
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Return: The ID of the first active GPU slice
+ */
+static inline u32 gen8_first_slice(struct adreno_device *adreno_dev)
+{
+	u32 slice_mask = gen8_get_slice_mask(adreno_dev);
+
+	return ffs(slice_mask) - 1;
 }
 
 #endif

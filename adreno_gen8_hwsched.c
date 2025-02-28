@@ -589,6 +589,9 @@ static int gen8_hwsched_gpu_boot(struct adreno_device *adreno_dev)
 		goto err;
 	}
 
+	if (adreno_is_gen8_2_0(adreno_dev))
+		gen8_hwcg_set(adreno_dev, true);
+
 	/*
 	 * At this point it is safe to assume that we recovered. Setting
 	 * this field allows us to take a new snapshot for the next failure

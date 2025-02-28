@@ -1200,7 +1200,7 @@ static void gen8_nonctxt_regconfig(struct adreno_device *adreno_dev)
 
 #define RBBM_CLOCK_CNTL_ON 0x8aa8aa82
 
-static void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
+void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
@@ -1263,6 +1263,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	u32 items = 0, i, j, pipe_id;
 	u32 *dest = ptr + sizeof(*lock);
 	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
+	u32 first_slice = gen8_first_slice(adreno_dev);
 
 	/* Static IFPC restore only registers */
 	if (adreno_is_gen8_3_0(adreno_dev)) {
@@ -1391,7 +1392,8 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 
 			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
 			*dest++ = ext_list[i].offset;
-			gen8_regread_aperture(device, ext_list[i].offset, dest++, pipe_id, 0, 0);
+			gen8_regread_aperture(device, ext_list[i].offset, dest++, pipe_id,
+						first_slice, 0);
 			gen8_dev->ext_pwrup_list_len++;
 		}
 	}
@@ -1412,7 +1414,7 @@ static void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			*dest++ = FIELD_PREP(GENMASK(15, 12), pipe_id);
 			*dest++ = nc_overrides[i].offset;
 			gen8_regread_aperture(device, nc_overrides[i].offset,
-					dest++, pipe_id, 0, 0);
+					dest++, pipe_id, first_slice, 0);
 			gen8_dev->ext_pwrup_list_len++;
 		}
 	}
@@ -1763,7 +1765,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 	 * Enable hardware clock gating here to prevent any register access
 	 * issue due to internal clock gating.
 	 */
-	gen8_hwcg_set(adreno_dev, true);
+	if (!adreno_is_gen8_2_0(adreno_dev))
+		gen8_hwcg_set(adreno_dev, true);
 
 	/*
 	 * All registers must be written before this point so that we don't
@@ -2048,7 +2051,11 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 		}
 	}
 
-	return gen8_post_start(adreno_dev);
+	ret = gen8_post_start(adreno_dev);
+	if (!ret && adreno_is_gen8_2_0(adreno_dev))
+		gen8_hwcg_set(adreno_dev, true);
+
+	return ret;
 }
 
 /*
@@ -2124,7 +2131,7 @@ static void gen8_get_cp_hwfault_status(struct adreno_device *adreno_dev, u32 sta
 	}
 
 	gen8_regread_aperture(device, GEN8_CP_HW_FAULT_STATUS_PIPE, &hw_status,
-		pipe_id, 0, 0);
+		pipe_id, gen8_first_slice(adreno_dev), 0);
 	/* Clear aperture register */
 	gen8_host_aperture_set(adreno_dev, 0, 0, 0);
 
@@ -2137,6 +2144,7 @@ static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 sta
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 sw_status, status1;
 	u32 opcode, pipe_id = PIPE_NONE;
+	u32 first_slice = gen8_first_slice(adreno_dev);
 	const char * const table[] = {
 		[CP_SW_CSFRBWRAP] = "CSFRBWRAP",
 		[CP_SW_CSFIB1WRAP] = "CSFIB1WRAP",
@@ -2185,7 +2193,7 @@ static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 sta
 	}
 
 	gen8_regread_aperture(device, GEN8_CP_INTERRUPT_STATUS_PIPE, &sw_status,
-			      pipe_id, 0, 0);
+			      pipe_id, first_slice, 0);
 
 	dev_crit_ratelimited(device->dev, "CP SW Fault pipe_id: %u %s\n", pipe_id,
 			sw_status < ARRAY_SIZE(table) ? table[sw_status] : "UNKNOWN");
@@ -2194,14 +2202,14 @@ static void gen8_get_cp_swfault_status(struct adreno_device *adreno_dev, u32 sta
 		gen8_regwrite_aperture(device, GEN8_CP_SQE_STAT_ADDR_PIPE, 1,
 				pipe_id, 0, 0);
 		gen8_regread_aperture(device, GEN8_CP_SQE_STAT_DATA_PIPE, &opcode,
-				pipe_id, 0, 0);
+				pipe_id, first_slice, 0);
 		dev_crit_ratelimited(device->dev,
 			"CP opcode error interrupt | opcode=0x%8.8x\n", opcode);
 	}
 
 	if (sw_status & BIT(CP_SW_REGISTERPROTECTIONERROR)) {
 		gen8_regread_aperture(device, GEN8_CP_PROTECT_STATUS_PIPE, &status1,
-			pipe_id, 0, 0);
+			pipe_id, first_slice, 0);
 		dev_crit_ratelimited(device->dev,
 			"CP | Protected mode error | %s | addr=%lx | status=%x\n",
 			FIELD_GET(GENMASK(20, 20), status1) ? "READ" : "WRITE",

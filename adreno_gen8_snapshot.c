@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -795,10 +795,12 @@ static void gen8_rmw_aperture(struct kgsl_device *device,
 static void gen8_snapshot_mempool(struct kgsl_device *device,
 				struct kgsl_snapshot *snapshot)
 {
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gen8_cp_indexed_reg *cp_indexed_reg;
 	size_t mempool_index_registers_len  = gen8_snapshot_block_list->mempool_index_registers_len;
 	u32 i, j;
-	u32 slice_mask = gen8_get_slice_mask(ADRENO_DEVICE(device));
+	u32 slice_mask = gen8_get_slice_mask(adreno_dev);
+	u32 first_slice = gen8_first_slice(adreno_dev);
 
 	for (i = 0; i < mempool_index_registers_len; i++) {
 		cp_indexed_reg = &gen8_snapshot_block_list->mempool_index_registers[i];
@@ -807,7 +809,7 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 			/* set CP_CHICKEN_DBG[StabilizeMVC] to stabilize it while dumping */
 			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x4,
-				cp_indexed_reg->pipe_id, 0, 0);
+				cp_indexed_reg->pipe_id, first_slice, 0);
 
 			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x4,
 				cp_indexed_reg->pipe_id, j, 1);
@@ -819,7 +821,7 @@ static void gen8_snapshot_mempool(struct kgsl_device *device,
 
 			/* Reset CP_CHICKEN_DBG[StabilizeMVC] once we are done */
 			gen8_rmw_aperture(device, GEN8_CP_CHICKEN_DBG_PIPE, 0x4, 0x0,
-				cp_indexed_reg->pipe_id, 0, 0);
+				cp_indexed_reg->pipe_id, first_slice, 0);
 
 			gen8_rmw_aperture(device, GEN8_CP_SLICE_CHICKEN_DBG_PIPE, 0x4, 0x0,
 				cp_indexed_reg->pipe_id, j, 1);
