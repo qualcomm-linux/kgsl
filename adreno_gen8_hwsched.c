@@ -1768,6 +1768,7 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 					struct gen8_hwsched_device, gen8_dev);
 	struct gen8_hwsched_hfi *hw_hfi = &gen8_hwsched->hwsched_hfi;
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+	struct gen8_nonctxt_overrides *nc_overrides = gen8_dev->nc_overrides;
 	int ret, i;
 
 	ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev, KGSL_HWSCHED_DEVICE,
@@ -1838,11 +1839,26 @@ int gen8_hwsched_add_to_minidump(struct adreno_device *adreno_dev)
 			return ret;
 	}
 
-	if (!IS_ERR_OR_NULL(hw_hfi->big_ib_recurring))
+	if (!IS_ERR_OR_NULL(hw_hfi->big_ib_recurring)) {
 		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
 					KGSL_HFI_BIG_IB_REC_ENTRY,
 					hw_hfi->big_ib_recurring->hostptr,
 					hw_hfi->big_ib_recurring->size);
+		if (ret)
+			return ret;
+	}
+
+	if (nc_overrides) {
+		int len = 0;
+
+		while (nc_overrides[len].offset)
+			len++;
+
+		ret = kgsl_add_va_to_minidump(adreno_dev->dev.dev,
+					KGSL_NC_OVERRIDES_ENTRY,
+					(void *)(nc_overrides),
+					len * sizeof(*nc_overrides));
+	}
 
 	return ret;
 }

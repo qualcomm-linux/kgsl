@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <asm/cacheflush.h>
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
-#include <linux/mempool.h>
 #include <linux/of.h>
 #include <linux/scatterlist.h>
 #include <linux/version.h>
@@ -27,28 +26,6 @@ struct kgsl_pool_page_entry {
 };
 
 static struct kmem_cache *addr_page_cache;
-
-/**
- * struct kgsl_page_pool - Structure to hold information for the pool
- * @pool_order: Page order describing the size of the page
- * @page_count: Number of pages currently present in the pool
- * @reserved_pages: Number of pages reserved at init for the pool
- * @list_lock: Spinlock for page list in the pool
- * @pool_rbtree: RB tree with all pages held/reserved in this pool
- * @mempool: Mempool to pre-allocate tracking structs for pages in this pool
- * @debug_root: Pointer to the debugfs root for this pool
- * @max_pages: Limit on number of pages this pool can hold
- */
-struct kgsl_page_pool {
-	unsigned int pool_order;
-	unsigned int page_count;
-	unsigned int reserved_pages;
-	spinlock_t list_lock;
-	struct rb_root pool_rbtree;
-	mempool_t *mempool;
-	struct dentry *debug_root;
-	unsigned int max_pages;
-};
 
 static void *_pool_entry_alloc(gfp_t gfp_mask, void *arg)
 {
@@ -150,25 +127,6 @@ static void kgsl_destroy_page_pool(struct kgsl_page_pool *pool)
 }
 
 #else
-/**
- * struct kgsl_page_pool - Structure to hold information for the pool
- * @pool_order: Page order describing the size of the page
- * @page_count: Number of pages currently present in the pool
- * @reserved_pages: Number of pages reserved at init for the pool
- * @list_lock: Spinlock for page list in the pool
- * @page_list: List of pages held/reserved in this pool
- * @debug_root: Pointer to the debugfs root for this pool
- * @max_pages: Limit on number of pages this pool can hold
- */
-struct kgsl_page_pool {
-	unsigned int pool_order;
-	unsigned int page_count;
-	unsigned int reserved_pages;
-	spinlock_t list_lock;
-	struct list_head page_list;
-	struct dentry *debug_root;
-	unsigned int max_pages;
-};
 
 static int
 __kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
@@ -225,8 +183,8 @@ static void kgsl_destroy_page_pool(struct kgsl_page_pool *pool)
 }
 #endif
 
-static struct kgsl_page_pool kgsl_pools[6];
-static int kgsl_num_pools;
+struct kgsl_page_pool kgsl_pools[6];
+int kgsl_num_pools;
 static int kgsl_pool_max_pages;
 
 /* Return the index of the pool for the specified order */
