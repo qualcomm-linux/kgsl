@@ -1638,6 +1638,7 @@ poll:
 		rc = gmu_cntr_register_reply(adreno_dev, rcvd);
 		break;
 	case F2H_MSG_PROCESS_TRACE:
+		rc = 0;
 		gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
 		break;
 	default:
