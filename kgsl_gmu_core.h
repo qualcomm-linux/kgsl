@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -382,7 +382,7 @@ struct kgsl_gmu_trace {
 };
 
 /* GMU memdesc entries */
-#define GMU_KERNEL_ENTRIES		16
+#define GMU_KERNEL_ENTRIES		32
 
 enum gmu_mem_type {
 	GMU_ITCM = 0,
