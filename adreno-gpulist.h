@@ -2648,7 +2648,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 	.protected_regs = gen7_0_0_protected_regs,
 	.highest_bank_bit = 15,
 	.gen7_snapshot_block_list = &gen7_17_0_snapshot_block_list,
-	.ctxt_record_size = 1536 * 1024
+	.ctxt_record_size = 1536 * 1024,
+	.preempt_level = 1,
 };
 
 static const struct kgsl_regmap_list a663_hwcg_regs[] = {
