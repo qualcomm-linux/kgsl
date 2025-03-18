@@ -1634,7 +1634,7 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_ringbuffer *rb;
 	unsigned int i;
-	u32 hi, lo, cgc = 0, cgc1 = 0, cgc2 = 0;
+	u32 cgc = 0, cgc1 = 0, cgc2 = 0;
 	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
 	int is_current_rt;
 
@@ -1691,28 +1691,20 @@ void gen7_snapshot(struct adreno_device *adreno_dev,
 	if (is_current_rt)
 		sched_set_normal(current, 0);
 
-	kgsl_regread(device, GEN7_CP_IB1_BASE, &lo);
-	kgsl_regread(device, GEN7_CP_IB1_BASE_HI, &hi);
+	kgsl_regread64(device, GEN7_CP_IB1_BASE, GEN7_CP_IB1_BASE_HI, &snapshot->ib1base);
 
-	snapshot->ib1base = (((u64) hi) << 32) | lo;
+	kgsl_regread64(device, GEN7_CP_IB2_BASE, GEN7_CP_IB2_BASE_HI, &snapshot->ib2base);
 
-	kgsl_regread(device, GEN7_CP_IB2_BASE, &lo);
-	kgsl_regread(device, GEN7_CP_IB2_BASE_HI, &hi);
-
-	snapshot->ib2base = (((u64) hi) << 32) | lo;
+	kgsl_regread64(device, GEN7_CP_IB3_BASE, GEN7_CP_IB3_BASE_HI, &snapshot->ib3base);
 
 	kgsl_regread(device, GEN7_CP_IB1_REM_SIZE, &snapshot->ib1size);
 	kgsl_regread(device, GEN7_CP_IB2_REM_SIZE, &snapshot->ib2size);
+	kgsl_regread(device, GEN7_CP_IB3_REM_SIZE, &snapshot->ib3size);
 
-	kgsl_regread(device, GEN7_CP_LPAC_IB1_BASE, &lo);
-	kgsl_regread(device, GEN7_CP_LPAC_IB1_BASE_HI, &hi);
-
-	snapshot->ib1base_lpac = (((u64) hi) << 32) | lo;
-
-	kgsl_regread(device, GEN7_CP_LPAC_IB2_BASE, &lo);
-	kgsl_regread(device, GEN7_CP_LPAC_IB2_BASE_HI, &hi);
-
-	snapshot->ib2base_lpac = (((u64) hi) << 32) | lo;
+	kgsl_regread64(device, GEN7_CP_LPAC_IB1_BASE,
+		GEN7_CP_LPAC_IB1_BASE_HI, &snapshot->ib1base_lpac);
+	kgsl_regread64(device, GEN7_CP_LPAC_IB2_BASE,
+		GEN7_CP_LPAC_IB2_BASE_HI, &snapshot->ib2base_lpac);
 
 	kgsl_regread(device, GEN7_CP_LPAC_IB1_REM_SIZE, &snapshot->ib1size_lpac);
 	kgsl_regread(device, GEN7_CP_LPAC_IB2_REM_SIZE, &snapshot->ib2size_lpac);
