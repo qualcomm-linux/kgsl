@@ -52,6 +52,8 @@ static DEFINE_SPINLOCK(suspend_lock);
 #define TZ_V2_INIT_CA_ID_64        0xC
 #define TZ_V2_UPDATE_WITH_CA_ID_64 0xD
 
+#define TZ_DCVS_TUNING_ID          0xE
+
 #define TAG "msm_adreno_tz: "
 
 static u64 suspend_time;

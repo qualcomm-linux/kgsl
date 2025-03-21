@@ -754,6 +754,14 @@ struct adreno_device {
 	 * If set, a timeout will occur in 2 ^ (ahb_timeout_val + 1) cycles.
 	 */
 	u32 ahb_timeout_val;
+	/** @dcvs_tuning_mutex: Mutex taken during dcvs tuning */
+	struct mutex dcvs_tuning_mutex;
+	/** @dcvs_tuning_mingap_lvl: Current DCVS tuning level for mingap */
+	u32 dcvs_tuning_mingap_lvl;
+	/** @dcvs_tuning_penalty_lvl: Current DCVS tuning level for penalty */
+	u32 dcvs_tuning_penalty_lvl;
+	/** @dcvs_tuning_numbusy_lvl: Current DCVS tuning level for numbusy */
+	u32 dcvs_tuning_numbusy_lvl;
 };
 
 /**
