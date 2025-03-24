@@ -571,6 +571,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_UCHE_CCHE_HW_DBG_CNTL, BIT(PIPE_NONE), 0, 0, 2, },
 	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_RB_RBP_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
 	{ GEN8_RB_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_DBG_ECO_CNTL, BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_RB_CCU_CNTL, BIT(PIPE_BR), 0, 0, 0, },
