@@ -2291,7 +2291,7 @@ static int adreno_prop_device_info(struct kgsl_device *device,
 		.chip_id = adreno_dev->chipid,
 		.mmu_enabled = kgsl_mmu_has_feature(device, KGSL_MMU_PAGED),
 		.gmem_gpubaseaddr = 0,
-		.gmem_sizebytes = adreno_dev->gpucore->gmem_size,
+		.gmem_sizebytes = adreno_gmem_size(adreno_dev),
 	};
 
 	return copy_prop(param, &devinfo, sizeof(devinfo));

@@ -1059,6 +1059,8 @@ struct adreno_gpudev {
 	 * @release_cp_semaphore: Release CP semaphore
 	 */
 	void (*release_cp_semaphore)(struct adreno_device *adreno_dev);
+	/** @get_gmem_size: Return the GMEM size */
+	u32 (*get_gmem_size)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -2186,5 +2188,21 @@ static inline int adreno_gpudev_reset(struct adreno_device *adreno_dev)
 	}
 
 	return ret;
+}
+
+/**
+ * adreno_gmem_size - Returns the GMEM size
+ * @adreno_dev Adreno device handle
+ *
+ * Return: Size of GMEM in bytes
+ */
+static inline u32 adreno_gmem_size(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (gpudev->get_gmem_size)
+		return gpudev->get_gmem_size(adreno_dev);
+
+	return adreno_dev->gpucore->gmem_size;
 }
 #endif /*__ADRENO_H */
