@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2017,2019,2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_POOL_H
 #define __KGSL_POOL_H
@@ -39,6 +39,56 @@ static inline int kgsl_pool_size_total(void)
 	return 0;
 }
 #else
+
+#ifdef CONFIG_QCOM_KGSL_SORT_POOL
+#include <linux/mempool.h>
+
+/**
+ * struct kgsl_page_pool - Structure to hold information for the pool
+ * @pool_order: Page order describing the size of the page
+ * @page_count: Number of pages currently present in the pool
+ * @reserved_pages: Number of pages reserved at init for the pool
+ * @list_lock: Spinlock for page list in the pool
+ * @pool_rbtree: RB tree with all pages held/reserved in this pool
+ * @mempool: Mempool to pre-allocate tracking structs for pages in this pool
+ * @debug_root: Pointer to the debugfs root for this pool
+ * @max_pages: Limit on number of pages this pool can hold
+ */
+struct kgsl_page_pool {
+	u32 pool_order;
+	u32 page_count;
+	u32 reserved_pages;
+	spinlock_t list_lock;
+	struct rb_root pool_rbtree;
+	mempool_t *mempool;
+	struct dentry *debug_root;
+	u32 max_pages;
+};
+#else
+/**
+ * struct kgsl_page_pool - Structure to hold information for the pool
+ * @pool_order: Page order describing the size of the page
+ * @page_count: Number of pages currently present in the pool
+ * @reserved_pages: Number of pages reserved at init for the pool
+ * @list_lock: Spinlock for page list in the pool
+ * @page_list: List of pages held/reserved in this pool
+ * @debug_root: Pointer to the debugfs root for this pool
+ * @max_pages: Limit on number of pages this pool can hold
+ */
+struct kgsl_page_pool {
+	u32 pool_order;
+	u32 page_count;
+	u32 reserved_pages;
+	spinlock_t list_lock;
+	struct list_head page_list;
+	struct dentry *debug_root;
+	u32 max_pages;
+};
+#endif
+
+extern struct kgsl_page_pool kgsl_pools[6];
+extern int kgsl_num_pools;
+
 /**
  * kgsl_pool_free_page - Frees the page and adds it back to pool/system memory
  * @page: Pointer to page struct that needs to be freed

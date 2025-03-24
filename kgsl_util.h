@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _KGSL_UTIL_H_
@@ -32,6 +32,11 @@
 #define KGSL_PROC_PRIV_ENTRY "kgsl_proc_priv"
 #define KGSL_PGTABLE_ENTRY "kgsl_pgtable"
 #define KGSL_GMU_VRB_ENTRY "kgsl_gmu_vrb"
+#define KGSL_SYNC_FENCE_ENTRY "kgsl_sync_fence"
+#define KGSL_SYNC_TIMELINE_ENTRY "kgsl_sync_timeline"
+#define KGSL_PAGE_POOL_ENTRY "kgsl_page_pool"
+#define KGSL_ADRENO_TZ_DATA_ENTRY "kgsl_adreno_tz_data"
+#define KGSL_NC_OVERRIDES_ENTRY "kgsl_nc_overrides"
 
 #define MAX_VA_MINIDUMP_STR_LEN 32
 
