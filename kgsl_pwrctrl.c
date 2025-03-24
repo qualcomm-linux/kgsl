@@ -1828,6 +1828,10 @@ static int pmqos_max_notifier_call(struct notifier_block *nb, unsigned long val,
 	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
 		goto done;
 
+	/* If RT hint is active, send thermal constraint to GMU */
+	if (pwr->rt_pwrlevel_hint != INVALID_DCVS_IDX)
+		device->ftbl->set_thermal_index(device);
+
 	/* Update the current level using the new limit */
 	kgsl_pwrctrl_pwrlevel_change(device, pwr->active_pwrlevel);
 
@@ -1845,6 +1849,10 @@ static void kgsl_set_thermal_constraint(struct kthread_work *work)
 
 	if (!device->ftbl->gmu_based_dcvs_pwr_ops(device, 0, GPU_PWRLEVEL_OP_THERMAL))
 		goto done;
+
+	/* If RT hint is active, send thermal constraint to GMU */
+	if (pwr->rt_pwrlevel_hint != INVALID_DCVS_IDX)
+		device->ftbl->set_thermal_index(device);
 
 	/* Update the current level using the new limit */
 	if (device->state == KGSL_STATE_ACTIVE)
@@ -2047,6 +2055,8 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	}
 
 	pwr->power_flags = 0;
+
+	pwr->rt_pwrlevel_hint = INVALID_DCVS_IDX;
 
 	pm_runtime_enable(&pdev->dev);
 

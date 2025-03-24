@@ -176,6 +176,8 @@
 #define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
 /* GMU Based DCVS */
 #define ADRENO_GMU_BASED_DCVS BIT(22)
+/* RT hint feature for RB0 workloads */
+#define ADRENO_RT_HINT BIT(23)
 
 
 /*
@@ -505,6 +507,8 @@ struct adreno_power_ops {
 	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
 	void (*gmu_based_dcvs_pwr_ops)(struct adreno_device *adreno_dev, u32 arg,
 			enum gpu_pwrlevel_op op);
+	/** @set_thermal_index: Function ops for sending thermal constraint to GMU */
+	void (*set_thermal_index)(struct adreno_device *adreno_dev);
 };
 
 /**
