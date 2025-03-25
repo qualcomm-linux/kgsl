@@ -122,6 +122,8 @@
 	 BIT(CP_SW_LRZRTREFCNTOVF) |		\
 	 BIT(CP_SW_LRZRTCLRRESMISS))
 
+extern u32 adreno_slice_mask_override;
+
 /* IFPC & Preemption static powerup restore list */
 static const u32 gen8_pwrup_reglist[] = {
 	GEN8_UCHE_MODE_CNTL,
@@ -980,6 +982,10 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
 	if (adreno_is_gen8_2_0(adreno_dev)) {
+		if (adreno_slice_mask_override != U32_MAX)
+			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
+					adreno_slice_mask_override);
+
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
 		slice_mask = FIELD_GET(GENMASK(3, 0), slice_mask);
 

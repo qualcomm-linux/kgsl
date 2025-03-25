@@ -53,6 +53,7 @@ static struct adreno_device device_3d0;
 static bool adreno_preemption_enable;
 static u32 kgsl_gpu_sku_override = U32_MAX;
 static u32 kgsl_gpu_speed_bin_override = U32_MAX;
+u32 adreno_slice_mask_override = U32_MAX;
 
 /* Nice level for the higher priority GPU start thread */
 int adreno_wake_nice = -7;
@@ -4113,6 +4114,9 @@ MODULE_PARM_DESC(gpu_sku_override, "Override SKU code identifier for GPU driver"
 
 module_param_named(gpu_speed_bin_override, kgsl_gpu_speed_bin_override, uint, 0600);
 MODULE_PARM_DESC(gpu_speed_bin_override, "Override GPU speed bin");
+
+module_param_named(slice_mask_override, adreno_slice_mask_override, uint, 0600);
+MODULE_PARM_DESC(slice_mask_override, "Override GPU slice mask");
 
 module_init(kgsl_3d_init);
 module_exit(kgsl_3d_exit);
