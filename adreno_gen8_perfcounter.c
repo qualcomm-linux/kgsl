@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -14,8 +14,7 @@
 
 static void gen8_rbbm_perfctr_flush(struct kgsl_device *device)
 {
-	u32 val;
-	int ret;
+	u32 status, i;
 
 	/*
 	 * Flush delta counters (both perf counters and pipe stats) present in
@@ -27,31 +26,24 @@ static void gen8_rbbm_perfctr_flush(struct kgsl_device *device)
 	/* Ensure all writes are posted before polling status register */
 	wmb();
 
-	ret = kgsl_regmap_read_poll_timeout(&device->regmap, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS,
-		val, (val & PERFCOUNTER_FLUSH_DONE_MASK) == PERFCOUNTER_FLUSH_DONE_MASK,
-		100, 100 * 1000);
+	/*
+	 * Poll RBBM_PERFCTR_FLUSH_HOST_STATUS to wait for perfcounter flush completion.
+	 * Use a busy loop as this is called with interrupts and preemption disabled.
+	 */
+	for (i = 0; i < 10; i++) {
+		kgsl_regread(device, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS, &status);
+		if (((status & PERFCOUNTER_FLUSH_DONE_MASK) == PERFCOUNTER_FLUSH_DONE_MASK))
+			return;
 
-	if (ret)
-		dev_err(device->dev, "Perfcounter flush timed out: status=0x%08x\n", val);
-}
+		udelay(10);
+	}
 
-/*
- * For registers that do not get restored on power cycle, read the value and add
- * the stored shadow value
- */
-static u64 gen8_counter_read_norestore(struct adreno_device *adreno_dev,
-		const struct adreno_perfcount_group *group, u32 counter)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_perfcount_register *reg = &group->regs[counter];
-	u32 hi, lo;
+	/* Check status one last time */
+	kgsl_regread(device, GEN8_RBBM_PERFCTR_FLUSH_HOST_STATUS, &status);
 
-	gen8_rbbm_perfctr_flush(device);
-
-	kgsl_regread(device, reg->offset, &lo);
-	kgsl_regread(device, reg->offset_hi, &hi);
-
-	return ((((u64) hi) << 32) | lo) + reg->value;
+	if ((status & PERFCOUNTER_FLUSH_DONE_MASK) != PERFCOUNTER_FLUSH_DONE_MASK)
+		dev_err_ratelimited(device->dev,
+			"Perfcounter flush timed out: status=0x%08x\n", status);
 }
 
 static int gen8_counter_br_enable(struct adreno_device *adreno_dev,
@@ -123,6 +115,18 @@ static u64 gen8_counter_read(struct adreno_device *adreno_dev,
 
 	/* These registers are restored on power resume */
 	return (((u64) hi) << 32) | lo;
+}
+
+/*
+ * For registers that do not get restored on power cycle, read the value and add
+ * the stored shadow value
+ */
+static u64 gen8_counter_read_norestore(struct adreno_device *adreno_dev,
+		const struct adreno_perfcount_group *group, u32 counter)
+{
+	struct adreno_perfcount_register *reg = &group->regs[counter];
+
+	return gen8_counter_read(adreno_dev, group, counter) + reg->value;
 }
 
 static int gen8_counter_gbif_enable(struct adreno_device *adreno_dev,
