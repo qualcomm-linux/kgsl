@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -12,7 +12,6 @@
 #include <linux/of_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/soc/qcom/llcc-qcom.h>
-#include <soc/qcom/of_common.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -198,7 +197,7 @@ int a6xx_init(struct adreno_device *adreno_dev)
 							ADRENO_COOP_RESET);
 
 	/* If the memory type is DDR 4, override the existing configuration */
-	if (of_fdt_get_ddrtype() == 0x7) {
+	if (kgsl_get_ddrtype() == 0x7) {
 		if (adreno_is_a660_shima(adreno_dev) ||
 			adreno_is_a642l(adreno_dev) ||
 			adreno_is_a643(adreno_dev) ||

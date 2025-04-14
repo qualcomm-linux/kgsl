@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -226,6 +226,51 @@ void kgsl_hwunlock(struct cpu_gpu_lock *lock)
 	wmb();
 	lock->cpu_req = 0;
 }
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_UPSTREAM)
+u64 kgsl_get_ddrtype(void)
+{
+	int ret = -EINVAL;
+	u64 ddr_type;
+	struct device_node *root_node;
+	struct device_node *mem_node = NULL;
+
+	root_node = of_find_node_by_path("/");
+
+	if (!root_node) {
+		pr_err("kgsl: Unable to find device tree root node\n");
+		return (u64)ret;
+	}
+
+	do {
+		mem_node = of_get_next_child(root_node, mem_node);
+		if (of_node_name_prefix(mem_node, "memory"))
+			break;
+	} while (mem_node);
+
+	of_node_put(root_node);
+	if (!mem_node) {
+		pr_err("kgsl: Unable to find device tree memory node\n");
+		return (u64)ret;
+	}
+
+	ret = of_property_read_u64(mem_node, "ddr_device_type", &ddr_type);
+
+	of_node_put(mem_node);
+	if (ret) {
+		pr_err("kgsl: ddr_device_type read error %d\n", ret);
+		return (u64)ret;
+	}
+
+	return ddr_type;
+}
+#else
+#include <soc/qcom/of_common.h>
+u64 kgsl_get_ddrtype(void)
+{
+	return (u64)of_fdt_get_ddrtype();
+}
+#endif
 
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 #include <soc/qcom/minidump.h>
