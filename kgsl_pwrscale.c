@@ -22,7 +22,7 @@ static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
 
 static void do_devfreq_suspend(struct work_struct *work);
 static void do_devfreq_resume(struct work_struct *work);
-static void do_devfreq_notify(struct work_struct *work);
+static void do_devfreq_notify(struct kthread_work *work);
 
 /*
  * These variables are used to keep the latest data
@@ -133,24 +133,25 @@ void kgsl_pwrscale_update_stats(struct kgsl_device *device)
 void kgsl_pwrscale_update(struct kgsl_device *device)
 {
 	ktime_t t;
+	struct kgsl_pwrscale *pwrscale = &device->pwrscale;
 
 	if (WARN_ON(!mutex_is_locked(&device->mutex)))
 		return;
 
-	if (!device->pwrscale.enabled)
+	if (!pwrscale->enabled)
 		return;
 
 	t = ktime_get();
-	if (ktime_compare(t, device->pwrscale.next_governor_call) < 0)
+	if (ktime_compare(t, pwrscale->next_governor_call) < 0)
 		return;
 
-	device->pwrscale.next_governor_call = ktime_add_us(t,
+	pwrscale->next_governor_call = ktime_add_us(t,
 			KGSL_GOVERNOR_CALL_INTERVAL);
 
 	/* to call update_devfreq() from a kernel thread */
 	if (device->state != KGSL_STATE_SLUMBER)
-		queue_work(device->pwrscale.devfreq_wq,
-			&device->pwrscale.devfreq_notify_ws);
+		kthread_queue_work(pwrscale->devfreq_notify_worker,
+					&pwrscale->devfreq_notify_work);
 }
 
 /*
@@ -334,9 +335,9 @@ static int kgsl_devfreq_get_dev_status(struct device *dev,
 		last_b->gpu_minfreq = pwrlevel->gpu_freq;
 	}
 
-	kgsl_pwrctrl_busy_time(device, stat->total_time, stat->busy_time);
+	kgsl_pwrctrl_busy_time(device, stat->total_time, stat->busy_time, 0);
 	trace_kgsl_pwrstats(device, stat->total_time,
-		&pwrscale->accum_stats, device->active_context_count);
+		&pwrscale->accum_stats, device->active_context_count, 0);
 	memset(&pwrscale->accum_stats, 0, sizeof(pwrscale->accum_stats));
 
 	mutex_unlock(&device->mutex);
@@ -644,6 +645,11 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	struct msm_adreno_extended_profile *gpu_profile;
 	int i, ret;
 
+	/* Set default bus control to true on all targets */
+	pwr->bus_control = true;
+	/* KGSL is performing powerscale */
+	device->host_based_dcvs = true;
+
 	gpu_profile = &pwrscale->gpu_profile;
 	gpu_profile->private_data = &adreno_tz_data;
 
@@ -708,6 +714,13 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 		return -ENOMEM;
 	}
 
+	pwrscale->devfreq_notify_worker = kthread_create_worker(0, "kgsl_devfreq_notifier");
+	if (IS_ERR(pwrscale->devfreq_notify_worker)) {
+		ret = PTR_ERR(pwrscale->devfreq_notify_worker);
+		dev_err(device->dev, "Failed to create devfreq notify worker ret: %d\n", ret);
+		return ret;
+	}
+
 	ret = msm_adreno_tz_init();
 	if (ret) {
 		dev_err(device->dev, "Failed to add adreno tz governor: %d\n", ret);
@@ -734,8 +747,8 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 
 	INIT_WORK(&pwrscale->devfreq_suspend_ws, do_devfreq_suspend);
 	INIT_WORK(&pwrscale->devfreq_resume_ws, do_devfreq_resume);
-	INIT_WORK(&pwrscale->devfreq_notify_ws, do_devfreq_notify);
-
+	kthread_init_work(&pwrscale->devfreq_notify_work, do_devfreq_notify);
+	sched_set_fifo(pwrscale->devfreq_notify_worker->task);
 	pwrscale->next_governor_call = ktime_add_us(ktime_get(),
 			KGSL_GOVERNOR_CALL_INTERVAL);
 
@@ -762,10 +775,14 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 		devfreq_gpubw_exit();
 		dev_pm_opp_remove_all_dynamic(&pwrscale->busmondev);
 		device_unregister(&pwrscale->busmondev);
+		memset(&pwrscale->busmondev, 0, sizeof(pwrscale->busmondev));
 	}
 
 	if (!pwrscale->devfreqptr)
 		return;
+
+	if (!IS_ERR_OR_NULL(pwrscale->devfreq_notify_worker))
+		kthread_destroy_worker(pwrscale->devfreq_notify_worker);
 
 	if (pwrscale->devfreq_wq) {
 		flush_workqueue(pwrscale->devfreq_wq);
@@ -796,10 +813,10 @@ static void do_devfreq_resume(struct work_struct *work)
 	devfreq_resume_device(pwrscale->bus_devfreq);
 }
 
-static void do_devfreq_notify(struct work_struct *work)
+static void do_devfreq_notify(struct kthread_work *work)
 {
 	struct kgsl_pwrscale *pwrscale = container_of(work,
-			struct kgsl_pwrscale, devfreq_notify_ws);
+			struct kgsl_pwrscale, devfreq_notify_work);
 
 	mutex_lock(&pwrscale->devfreqptr->lock);
 	update_devfreq(pwrscale->devfreqptr);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/iommu.h>
@@ -132,42 +132,6 @@ static void a6xx_receive_ack_async(struct adreno_device *adreno_dev, void *rcvd)
 			" id %d seqnum %d\n",
 			MSG_HDR_GET_ID(waiters[i]),
 			MSG_HDR_GET_SEQNUM(waiters[i]));
-}
-
-static void log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd)
-{
-	struct hfi_ts_retire_cmd *cmd = (struct hfi_ts_retire_cmd *)rcvd;
-	struct kgsl_context *context;
-	struct retire_info info = {0};
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	context = kgsl_context_get(device, cmd->ctxt_id);
-	if (context == NULL)
-		return;
-
-	info.timestamp = cmd->ts;
-	info.rb_id = adreno_get_level(context);
-	info.gmu_dispatch_queue = context->gmu_dispatch_queue;
-	info.submitted_to_rb = cmd->submitted_to_rb;
-	info.sop = cmd->sop;
-	info.eop = cmd->eop;
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 4)
-		info.active = cmd->eop - cmd->sop;
-	else
-		info.active = cmd->active;
-	info.retired_on_gmu = cmd->retired_on_gmu;
-
-	/* protected GPU work must not be reported */
-	if  (!(context->flags & KGSL_CONTEXT_SECURE))
-		kgsl_work_period_update(device, context->proc_priv->period, info.active);
-
-	trace_adreno_cmdbatch_retired(context, &info, 0, 0, 0);
-
-	log_kgsl_cmdbatch_retired_event(context->id, cmd->ts, context->priority,
-		0, cmd->sop, cmd->eop);
-
-	kgsl_context_put(context);
 }
 
 /* Look up a particular key's value for a given type of payload */
@@ -366,9 +330,9 @@ static void log_gpu_fault(struct adreno_device *adreno_dev)
 
 static void process_ctx_bad(struct adreno_device *adreno_dev)
 {
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) < 2)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) < 2)
 		log_gpu_fault_legacy(adreno_dev);
 	else
 		log_gpu_fault(adreno_dev);
@@ -430,7 +394,7 @@ static void a6xx_hwsched_process_msgq(struct adreno_device *adreno_dev)
 			a6xx_receive_ack_async(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_TS_RETIRE) {
 			adreno_scheduler_queue(adreno_dev);
-			log_profiling_info(adreno_dev, rcvd);
+			adreno_hwsched_log_profiling_info(adreno_dev, rcvd);
 		} else if (MSG_HDR_GET_ID(rcvd[0]) == F2H_MSG_GMU_CNTR_RELEASE) {
 			struct hfi_gmu_cntr_release_cmd *cmd =
 				(struct hfi_gmu_cntr_release_cmd *) rcvd;
@@ -647,9 +611,10 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 {
 	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
 	struct a6xx_hfi *hfi = to_a6xx_hfi(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	if (IS_ERR_OR_NULL(hw_hfi->big_ib)) {
-		hw_hfi->big_ib = reserve_gmu_kernel_block(to_a6xx_gmu(adreno_dev),
+		hw_hfi->big_ib = gmu_core_reserve_kernel_block(device,
 				0,
 				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
@@ -659,8 +624,8 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LSR) &&
 			IS_ERR_OR_NULL(hw_hfi->big_ib_recurring)) {
-		hw_hfi->big_ib_recurring = reserve_gmu_kernel_block(
-				to_a6xx_gmu(adreno_dev), 0,
+		hw_hfi->big_ib_recurring = gmu_core_reserve_kernel_block(
+				device, 0,
 				HWSCHED_MAX_IBS * sizeof(struct hfi_issue_ib),
 				GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hw_hfi->big_ib_recurring))
@@ -668,7 +633,7 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	}
 
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = reserve_gmu_kernel_block(to_a6xx_gmu(adreno_dev),
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(device,
 				0, HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (IS_ERR(hfi->hfi_mem))
 			return PTR_ERR(hfi->hfi_mem);
@@ -681,195 +646,6 @@ int a6xx_hwsched_hfi_init(struct adreno_device *adreno_dev)
 	return PTR_ERR_OR_ZERO(hw_hfi->f2h_task);
 }
 
-static int get_attrs(u32 flags)
-{
-	int attrs = IOMMU_READ;
-
-	if (flags & HFI_MEMFLAG_GMU_PRIV)
-		attrs |= IOMMU_PRIV;
-
-	if (flags & HFI_MEMFLAG_GMU_WRITEABLE)
-		attrs |= IOMMU_WRITE;
-
-	return attrs;
-}
-
-static int gmu_import_buffer(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_entry *entry)
-{
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct hfi_mem_alloc_desc *desc = &entry->desc;
-	int attrs = get_attrs(desc->flags);
-	struct gmu_vma_entry *vma = &gmu->vma[GMU_NONCACHED_KERNEL];
-	int ret;
-
-	if (desc->flags & HFI_MEMFLAG_GMU_CACHEABLE)
-		vma = &gmu->vma[GMU_CACHE];
-
-	if ((vma->next_va + desc->size) > (vma->start + vma->size)) {
-		dev_err(GMU_PDEV_DEV(device),
-			"GMU mapping too big. available: %d required: %d\n",
-			vma->next_va - vma->start, desc->size);
-		return -ENOMEM;
-	}
-
-	ret = gmu_core_map_memdesc(device->gmu_core.domain,
-			entry->md, vma->next_va, attrs);
-	if (ret) {
-		dev_err(GMU_PDEV_DEV(device), "gmu map err: 0x%08x, %x\n",
-			vma->next_va, attrs);
-		return ret;
-	}
-
-	entry->md->gmuaddr = vma->next_va;
-	vma->next_va += desc->size;
-	return 0;
-}
-
-static struct hfi_mem_alloc_entry *lookup_mem_alloc_table(
-	struct adreno_device *adreno_dev, struct hfi_mem_alloc_desc *desc)
-{
-	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
-	int i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_entry *entry = &hw_hfi->mem_alloc_table[i];
-
-		if ((entry->desc.mem_kind == desc->mem_kind) &&
-			(entry->desc.gmu_mem_handle == desc->gmu_mem_handle))
-			return entry;
-	}
-
-	return NULL;
-}
-
-static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
-	struct adreno_device *adreno_dev, struct hfi_mem_alloc_desc *desc)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct device *gmu_pdev_dev = GMU_PDEV_DEV(device);
-	struct a6xx_hwsched_hfi *hfi = to_a6xx_hwsched_hfi(adreno_dev);
-	struct hfi_mem_alloc_entry *entry =
-		lookup_mem_alloc_table(adreno_dev, desc);
-	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
-	u64 flags = 0;
-	u32 priv = 0;
-	int ret;
-	const char *memkind_string = desc->mem_kind < HFI_MEMKIND_MAX ?
-			hfi_memkind_strings[desc->mem_kind] : "UNKNOWN";
-
-	if (entry)
-		return entry;
-
-	if (desc->mem_kind >= HFI_MEMKIND_MAX) {
-		dev_err(gmu_pdev_dev, "Invalid mem kind: %d\n",
-			desc->mem_kind);
-		return ERR_PTR(-EINVAL);
-	}
-
-	if (hfi->mem_alloc_entries == ARRAY_SIZE(hfi->mem_alloc_table)) {
-		dev_err(gmu_pdev_dev,
-			"Reached max mem alloc entries\n");
-		return ERR_PTR(-ENOMEM);
-	}
-
-	entry = &hfi->mem_alloc_table[hfi->mem_alloc_entries];
-
-	memcpy(&entry->desc, desc, sizeof(*desc));
-
-	entry->desc.host_mem_handle = desc->gmu_mem_handle;
-
-	if (desc->flags & HFI_MEMFLAG_GFX_PRIV)
-		priv |= KGSL_MEMDESC_PRIVILEGED;
-
-	if (!(desc->flags & HFI_MEMFLAG_GFX_WRITEABLE))
-		flags |= KGSL_MEMFLAGS_GPUREADONLY;
-
-	if (desc->flags & HFI_MEMFLAG_GFX_SECURE)
-		flags |= KGSL_MEMFLAGS_SECURE;
-
-	if (!(desc->flags & HFI_MEMFLAG_GFX_ACC)) {
-		if (desc->mem_kind == HFI_MEMKIND_MMIO_IPC_CORE)
-			entry->md = reserve_gmu_kernel_block_fixed(gmu, 0, desc->size,
-					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
-					GMU_CACHE : GMU_NONCACHED_KERNEL,
-					"qcom,ipc-core", get_attrs(desc->flags), desc->align);
-		else
-			entry->md = reserve_gmu_kernel_block(gmu, 0, desc->size,
-					(desc->flags & HFI_MEMFLAG_GMU_CACHEABLE) ?
-					GMU_CACHE : GMU_NONCACHED_KERNEL, desc->align);
-
-		if (IS_ERR(entry->md)) {
-			int ret = PTR_ERR(entry->md);
-
-			memset(entry, 0, sizeof(*entry));
-			return ERR_PTR(ret);
-		}
-		entry->desc.size = entry->md->size;
-		entry->desc.gmu_addr = entry->md->gmuaddr;
-
-		goto done;
-	}
-
-	entry->md = kgsl_allocate_global(device, desc->size, 0, flags, priv,
-		memkind_string);
-	if (IS_ERR(entry->md)) {
-		int ret = PTR_ERR(entry->md);
-
-		memset(entry, 0, sizeof(*entry));
-		return ERR_PTR(ret);
-	}
-
-	entry->desc.size = entry->md->size;
-	entry->desc.gpu_addr = entry->md->gpuaddr;
-
-	if (!(desc->flags & HFI_MEMFLAG_GMU_ACC))
-		goto done;
-
-	 /*
-	  * If gmu mapping fails, then we have to live with
-	  * leaking the gpu global buffer allocated above.
-	  */
-	ret = gmu_import_buffer(adreno_dev, entry);
-	if (ret) {
-		dev_err(gmu_pdev_dev,
-			"gpuaddr: 0x%llx size: %lld bytes lost\n",
-			entry->md->gpuaddr, entry->md->size);
-		memset(entry, 0, sizeof(*entry));
-		return ERR_PTR(ret);
-	}
-
-	entry->desc.gmu_addr = entry->md->gmuaddr;
-done:
-	hfi->mem_alloc_entries++;
-
-	return entry;
-}
-
-static int process_mem_alloc(struct adreno_device *adreno_dev,
-	struct hfi_mem_alloc_desc *mad)
-{
-	struct hfi_mem_alloc_entry *entry;
-
-	entry = get_mem_alloc_entry(adreno_dev, mad);
-	if (IS_ERR(entry))
-		return PTR_ERR(entry);
-
-	if (entry->md) {
-		mad->gpu_addr = entry->md->gpuaddr;
-		mad->gmu_addr = entry->md->gmuaddr;
-	}
-
-	/*
-	 * GMU uses the host_mem_handle to check if this memalloc was
-	 * successful
-	 */
-	mad->host_mem_handle = mad->gmu_mem_handle;
-
-	return 0;
-}
-
 static int mem_alloc_reply(struct adreno_device *adreno_dev, void *rcvd)
 {
 	struct hfi_mem_alloc_desc desc = {0};
@@ -880,7 +656,7 @@ static int mem_alloc_reply(struct adreno_device *adreno_dev, void *rcvd)
 
 	hfi_get_mem_alloc_desc(rcvd, &desc);
 
-	ret = process_mem_alloc(adreno_dev, &desc);
+	ret = adreno_hwsched_process_mem_alloc(adreno_dev, &desc);
 	if (ret)
 		return ret;
 
@@ -1004,22 +780,6 @@ done:
 	return rc;
 }
 
-static void reset_hfi_mem_records(struct adreno_device *adreno_dev)
-{
-	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
-	struct kgsl_memdesc *md = NULL;
-	u32 i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct hfi_mem_alloc_desc *desc = &hw_hfi->mem_alloc_table[i].desc;
-
-		if (desc->flags & HFI_MEMFLAG_HOST_INIT) {
-			md = hw_hfi->mem_alloc_table[i].md;
-			memset(md->hostptr, 0x0, md->size);
-		}
-	}
-}
-
 static void reset_hfi_queues(struct adreno_device *adreno_dev)
 {
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
@@ -1062,7 +822,7 @@ void a6xx_hwsched_hfi_stop(struct adreno_device *adreno_dev)
 	 * Reset the hfi host access memory records, As GMU expects hfi memory
 	 * records to be clear in bootup.
 	 */
-	reset_hfi_mem_records(adreno_dev);
+	adreno_hwsched_reset_hfi_mem(adreno_dev);
 }
 
 static void enable_async_hfi(struct adreno_device *adreno_dev)
@@ -1411,7 +1171,7 @@ int a6xx_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
 
 	/* Wait till the register is programmed with the countable */
 	ret = kgsl_regmap_read_poll_timeout(&device->regmap, reg->select, val,
-				val == countable, 100, ADRENO_IDLE_TIMEOUT);
+				val == countable, 100, ADRENO_IDLE_TIMEOUT * USEC_PER_MSEC);
 	if (!ret) {
 		reg->value = 0;
 		return ret;
@@ -1647,6 +1407,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	uint32_t *msg, u32 size_bytes, struct kgsl_drawobj_cmd *cmdobj,
 	struct adreno_submit_time *time)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_gmu_device *gmu = to_a6xx_gmu(adreno_dev);
 	struct hfi_queue_table *tbl = gmu->hfi.hfi_mem->hostptr;
 	struct hfi_queue_header *hdr = &tbl->qhdr[queue_idx];
@@ -1676,7 +1437,7 @@ static int a6xx_hfi_dispatch_queue_write(struct adreno_device *adreno_dev, uint3
 	}
 
 	/* Cookify any non used data at the end of the write buffer */
-	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
+	if (GMU_VER_MAJOR(device->gmu_core.ver.hfi) >= 2) {
 		for (; i < align_size; i++) {
 			queue[write] = 0xFAFAFAFA;
 			write = (write + 1) % hdr->queue_size;
@@ -1972,20 +1733,19 @@ void a6xx_hwsched_context_detach(struct adreno_context *drawctxt)
 	ret = send_context_unregister_hfi(adreno_dev, context,
 		drawctxt->internal_timestamp);
 
-	if (!ret) {
-		kgsl_sharedmem_writel(device->memstore,
-			KGSL_MEMSTORE_OFFSET(context->id, soptimestamp),
-			drawctxt->timestamp);
+	if (ret)
+		goto out;
 
-		kgsl_sharedmem_writel(device->memstore,
-			KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp),
-			drawctxt->timestamp);
+	kgsl_sharedmem_writel(device->memstore,
+		KGSL_MEMSTORE_OFFSET(context->id, soptimestamp), drawctxt->timestamp);
 
-		adreno_profile_process_results(adreno_dev);
-	}
+	kgsl_sharedmem_writel(device->memstore,
+		KGSL_MEMSTORE_OFFSET(context->id, eoptimestamp), drawctxt->timestamp);
 
+	adreno_profile_process_results(adreno_dev);
 	context->gmu_registered = false;
 
+out:
 	mutex_unlock(&device->mutex);
 }
 
@@ -2028,22 +1788,4 @@ done:
 	del_waiter(hfi, &pending_ack);
 
 	return rc ? 0 : pending_ack.results[2];
-}
-
-void *a6xx_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size)
-{
-	struct a6xx_hwsched_hfi *hw_hfi = to_a6xx_hwsched_hfi(adreno_dev);
-	u64 offset;
-	u32 i;
-
-	for (i = 0; i < hw_hfi->mem_alloc_entries; i++) {
-		struct kgsl_memdesc *md = hw_hfi->mem_alloc_table[i].md;
-
-		if (kgsl_gpuaddr_in_memdesc(md, gpuaddr, size)) {
-			offset = gpuaddr - md->gpuaddr;
-			return md->hostptr + offset;
-		}
-	}
-	return NULL;
 }

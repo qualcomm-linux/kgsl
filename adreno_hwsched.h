@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
 #define _ADRENO_HWSCHED_H_
 
+#include "adreno_hfi.h"
 #include "kgsl_sync.h"
 
 /* This structure represents inflight command object */
@@ -17,9 +18,45 @@ struct cmd_list_obj {
 	struct list_head node;
 };
 
+struct adreno_hwsched_hw_fence {
+	/** @lock: Spinlock for managing hardware fences */
+	spinlock_t lock;
+	/**
+	 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
+	 * by GMU
+	 */
+	u32 unack_count;
+	/**
+	 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
+	 * a desired threshold
+	 */
+	wait_queue_head_t unack_wq;
+	/**
+	 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
+	 * hardware fences drops to a desired threshold
+	 */
+	struct adreno_context *defer_drawctxt;
+	/**
+	 * @defer_ts: The timestamp of the hardware fence which got deferred
+	 */
+	u32 defer_ts;
+	/**
+	 * @flags: Flags to control the creation of new hardware fences
+	 */
+	unsigned long flags;
+	/** @seqnum: Sequence number for hardware fence packet header */
+	atomic_t seqnum;
+	/** @soccp_rproc: rproc handle for soccp */
+	struct rproc *soccp_rproc;
+	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
+	struct kgsl_memdesc md;
+	/** @pending_count: Number of hardware fences that haven't yet been sent to Tx Queue */
+	u32 pending_count;
+};
+
 /**
- * struct adreno_hw_fence_entry - A structure to store hardware fence and the context
- */
+* struct adreno_hw_fence_entry - A structure to store hardware fence and the context
+*/
 struct adreno_hw_fence_entry {
 	/** @cmd: H2F_MSG_HW_FENCE_INFO packet for this hardware fence */
 	struct hfi_hw_fence_info cmd;
@@ -56,17 +93,23 @@ struct adreno_hwsched_ops {
 	 */
 	void (*create_hw_fence)(struct adreno_device *adreno_dev,
 		struct kgsl_sync_fence *kfence);
-	/**
-	 * @get_rb_hostptr - Target specific function to get ringbuffer host pointer
-	 */
-	void *(*get_rb_hostptr)(struct adreno_device *adreno_dev, u64 gpuaddr, u32 size);
+};
+
+enum gpu_reset_type {
+	GMU_GPU_RESET_NONE,
+	GMU_GPU_SOFT_RESET,
+	GMU_GPU_HARD_RESET,
 };
 
 /**
  * struct adreno_hwsched - Container for the hardware scheduler
  */
 struct adreno_hwsched {
-	 /** @mutex: Mutex needed to run dispatcher function */
+	/** @mem_alloc_table: Array of HFI memory allocation entries */
+	struct hfi_mem_alloc_entry mem_alloc_table[32];
+	/** @mem_alloc_entries: Number of entries in the memory allocation table */
+	u32 mem_alloc_entries;
+	/** @mutex: Mutex needed to run dispatcher function */
 	struct mutex mutex;
 	/** @flags: Container for the dispatcher internal flags */
 	unsigned long flags;
@@ -94,8 +137,6 @@ struct adreno_hwsched {
 	struct work_struct lsr_check_ws;
 	/** @hw_fence: Container for the hw fences instance */
 	struct kmem_cache *hw_fence_cache;
-	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
-	atomic_t hw_fence_count;
 	/**
 	 * @submission_seqnum: Sequence number for sending submissions to GMU context queues or
 	 * dispatch queues
@@ -105,8 +146,10 @@ struct adreno_hwsched {
 	struct kgsl_memdesc global_ctxtq;
 	/** @global_ctxt_gmu_registered: Whether global context is registered with gmu */
 	bool global_ctxt_gmu_registered;
-	/** @hw_fence_md: Kgsl memory descriptor for hardware fences queue */
-	struct kgsl_memdesc hw_fence_md;
+	/** @hw_fence: Container for hw fence related structures */
+	struct adreno_hwsched_hw_fence hw_fence;
+	/** @reset_type: GPU fault reset (hard/soft) type */
+	enum gpu_reset_type reset_type;
 };
 
 /*
@@ -121,7 +164,23 @@ enum adreno_hwsched_flags {
 	ADRENO_HWSCHED_CTX_BAD_LEGACY,
 	ADRENO_HWSCHED_CONTEXT_QUEUE,
 	ADRENO_HWSCHED_HW_FENCE,
+	ADRENO_HWSCHED_FORCE_RETIRE_GMU,
+	ADRENO_HWSCHED_GPU_SOFT_RESET,
 };
+
+/**
+ * adreno_hwsched_process_mem_alloc - Process memory allocation for hwsched
+ * @adreno_dev: Pointer to the adreno device
+ * @mad: Pointer to the HFI memory allocation descriptor
+ *
+ * This function processes the memory allocation request for the hwsched.
+ * It retrieves or allocates the necessary memory based on the provided
+ * descriptor and updates the descriptor with the allocated memory addresses.
+ *
+ * Return: 0 on success, or a negative error code on failure.
+ */
+int adreno_hwsched_process_mem_alloc(struct adreno_device *adreno_dev,
+	struct hfi_mem_alloc_desc *mad);
 
 /**
  * adreno_hwsched_start() - activate the hwsched dispatcher
@@ -244,12 +303,12 @@ u32 adreno_hwsched_get_payload_rb_key_legacy(struct adreno_device *adreno_dev, u
 u32 adreno_hwsched_gpu_fault(struct adreno_device *adreno_dev);
 
 /**
- * adreno_hwsched_log_destroy_pending_fences - Log and destroy any pending hardware fences if soccp
+ * adreno_hwsched_log_remove_pending_fences - Log and remove any pending hardware fences if soccp
  * vote failed
  * @adreno_dev: pointer to the adreno device
  * @dev: Pointer to the gmu pdev device
  */
-void adreno_hwsched_log_destroy_pending_hw_fences(struct adreno_device *adreno_dev,
+void adreno_hwsched_log_remove_pending_hw_fences(struct adreno_device *adreno_dev,
 	struct device *dev);
 
 /**
@@ -325,4 +384,47 @@ int adreno_gmu_context_queue_write(struct adreno_device *adreno_dev,
  */
 void adreno_hwsched_add_profile_events(struct adreno_device *adreno_dev,
 	struct kgsl_drawobj_cmd *cmdobj, struct adreno_submit_time *time);
+
+/**
+ * adreno_hwsched_log_profiling_info - Log profiling information for a retired
+ * command batch
+ * @adreno_dev: Pointer to the adreno device structure
+ * @rcvd: Pointer to the received HFI timestamp retire command
+ */
+void adreno_hwsched_log_profiling_info(struct adreno_device *adreno_dev, u32 *rcvd);
+
+/**
+ * adreno_hwsched_drawobj_replay - Check drawobj need to be replayed or not
+ * @adreno_dev: Pointer to the adreno device structure
+ * @drawobj: Pointer to the draw object
+ *
+ * Return true if drawobj needs to replayed, false otherwise
+ */
+bool adreno_hwsched_drawobj_replay(struct adreno_device *adreno_dev,
+	struct kgsl_drawobj *drawobj);
+
+/**
+ * adreno_hwsched_get_rb_hostptr - Get the host pointer for a given GPU address
+ * @adreno_dev: Pointer to the adreno device
+ * @gpuaddr: GPU address to look up
+ * @size: Size of the memory region
+ *
+ * This function retrieves the host pointer corresponding to a given GPU address.
+ * It searches through the memory allocation table to find the matching memory
+ * descriptor and calculates the host pointer offset.
+ *
+ * Return: Host pointer if found, or NULL if the GPU address is not found in the
+ * memory allocation table.
+ */
+void *adreno_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
+	u64 gpuaddr, u32 size);
+
+/**
+ * adreno_hwsched_reset_hfi_mem - Reset HFI memory records
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * This function resets the HFI memory records. It iterates through the memory
+ * allocation table and resets the entries that have HFI_MEMFLAG_HOST_INIT set.
+ */
+void adreno_hwsched_reset_hfi_mem(struct adreno_device *adreno_dev);
 #endif

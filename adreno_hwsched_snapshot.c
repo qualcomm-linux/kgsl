@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2024-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "adreno.h"
@@ -54,7 +54,6 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 	struct kgsl_snapshot_rb_v2 *header = (struct kgsl_snapshot_rb_v2 *)buf;
 	u32 *data = (u32 *)(buf + sizeof(*header));
 	u32 size = adreno_hwsched_parse_payload(payload, KEY_RB_SIZEDWORDS) << 2;
-	const struct adreno_hwsched_ops *hwsched_ops = adreno_dev->hwsched.hwsched_ops;
 	u64 lo, hi, gpuaddr;
 	void *rb_hostptr = NULL;
 	char str[16];
@@ -67,8 +66,7 @@ static void adreno_hwsched_snapshot_rb_payload(struct adreno_device *adreno_dev,
 	if (snapshot->remain < sizeof(*section_header))
 		goto err;
 
-	if (hwsched_ops->get_rb_hostptr)
-		rb_hostptr = hwsched_ops->get_rb_hostptr(adreno_dev, gpuaddr, size);
+	rb_hostptr = adreno_hwsched_get_rb_hostptr(adreno_dev, gpuaddr, size);
 
 	if (rb_hostptr == NULL)
 		goto err;

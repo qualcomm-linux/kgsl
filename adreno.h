@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_H
 #define __ADRENO_H
@@ -12,7 +12,6 @@
 #include "adreno_coresight.h"
 #include "adreno_dispatch.h"
 #include "adreno_drawctxt.h"
-#include "adreno_hfi.h"
 #include "adreno_hwsched.h"
 #include "adreno_perfcounter.h"
 #include "adreno_profile.h"
@@ -80,6 +79,39 @@
 #define ADRENO_GPUREV(_a) ((_a)->gpucore->gpurev)
 
 /*
+ * Disable local interrupts and CPU preemption to avoid interruptions
+ * while holding the CP semaphore; otherwise, it could stall the CP.
+ * Make sure to call ADRENO_RELEASE_CP_SEMAPHORE after calling the
+ * below macro to reenable CPU interrupts.
+ */
+#define ADRENO_ACQUIRE_CP_SEMAPHORE(_adreno_dev, _flags) \
+	({ \
+		bool ret = true; \
+		if ((_adreno_dev)->gpucore->gpudev->acquire_cp_semaphore) { \
+			local_irq_save(_flags); \
+			preempt_disable(); \
+			ret = (_adreno_dev)->gpucore->gpudev->acquire_cp_semaphore(_adreno_dev); \
+			if (!ret) { \
+				preempt_enable(); \
+				local_irq_restore(_flags); \
+				dev_err_ratelimited(KGSL_DEVICE(_adreno_dev)->dev, "Timed out waiting to acquire CP semaphore: status=0x%08x\n", ret);\
+			} \
+		} \
+		ret; \
+	})
+
+#define ADRENO_RELEASE_CP_SEMAPHORE(_adreno_dev, _flags) \
+	({ \
+		do { \
+			if ((_adreno_dev)->gpucore->gpudev->release_cp_semaphore) { \
+				(_adreno_dev)->gpucore->gpudev->release_cp_semaphore(_adreno_dev); \
+				preempt_enable(); \
+				local_irq_restore(_flags); \
+			} \
+		} while (0);\
+	})
+
+/*
  * ADRENO_FEATURE - return true if the specified feature is supported by the GPU
  * core
  */
@@ -142,6 +174,11 @@
 #define ADRENO_CLX BIT(20)
 /* Enable GMU support for GMU based thermal mitigation */
 #define ADRENO_GMU_THERMAL_MITIGATION BIT(21)
+/* GMU Based DCVS */
+#define ADRENO_GMU_BASED_DCVS BIT(22)
+/* RT hint feature for RB0 workloads */
+#define ADRENO_RT_HINT BIT(23)
+
 
 /*
  * Adreno GPU quirks - control bits for various workarounds
@@ -251,12 +288,14 @@ enum adreno_gpurev {
 	ADRENO_REV_GEN7_9_1 = ADRENO_GPUREV_VALUE(7, 9, 1),
 	ADRENO_REV_GEN7_14_0 = ADRENO_GPUREV_VALUE(7, 14, 0),
 	ADRENO_REV_GEN7_11_0 = ADRENO_GPUREV_VALUE(7, 11, 0),
+	ADRENO_REV_GEN7_17_0 = ADRENO_GPUREV_VALUE(7, 17, 0),
 	ADRENO_REV_GEN8_0_0 = ADRENO_GPUREV_VALUE(8, 0, 0),
 	ADRENO_REV_GEN8_0_1 = ADRENO_GPUREV_VALUE(8, 0, 1),
 	ADRENO_REV_GEN8_2_0 = ADRENO_GPUREV_VALUE(8, 2, 0),
 	ADRENO_REV_GEN8_3_0 = ADRENO_GPUREV_VALUE(8, 3, 0),
 	ADRENO_REV_GEN8_4_0 = ADRENO_GPUREV_VALUE(8, 4, 0),
 	ADRENO_REV_GEN8_6_0 = ADRENO_GPUREV_VALUE(8, 6, 0),
+	ADRENO_REV_GEN8_8_0 = ADRENO_GPUREV_VALUE(8, 8, 0),
 };
 
 #define ADRENO_SOFT_FAULT BIT(0)
@@ -465,6 +504,11 @@ struct adreno_power_ops {
 	/** @gpu_bus_set: Target specific function to set gpu bandwidth */
 	int (*gpu_bus_set)(struct adreno_device *adreno_dev, int bus_level,
 		u32 ab);
+	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
+	void (*gmu_based_dcvs_pwr_ops)(struct adreno_device *adreno_dev, u32 arg,
+			enum gpu_pwrlevel_op op);
+	/** @set_thermal_index: Function ops for sending thermal constraint to GMU */
+	void (*set_thermal_index)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -643,8 +687,6 @@ struct adreno_device {
 	bool lpac_enabled;
 	/** @dms_enabled: True if DMS is enabled */
 	bool dms_enabled;
-	/** @warmboot_enabled: True if warmboot is enabled */
-	bool warmboot_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;
@@ -817,11 +859,6 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_DMS = 14,
 	/** @ADRENO_DEVICE_GMU_AB: Set if AB vote via GMU is enabled */
 	ADRENO_DEVICE_GMU_AB = 15,
-	/*
-	 * @ADRENO_DEVICE_FORCE_COLDBOOT: Set if a feature is toggled
-	 * via sysfs/debugfs or when we are doing fault recovery
-	 */
-	ADRENO_DEVICE_FORCE_COLDBOOT = 16,
 	/** @ADRENO_DEVICE_CX_TIMER_INITIALIZED: Set if the CX timer is initialized */
 	ADRENO_DEVICE_CX_TIMER_INITIALIZED = 17,
 	/** @ADRENO_DEVICE_RESET_RECOVERY: Set if the ADRENO device under goes reset recovery */
@@ -942,6 +979,9 @@ struct adreno_gpudev {
 	const char *(*iommu_fault_block)(struct kgsl_device *device,
 				unsigned int fsynr1);
 	int (*reset)(struct adreno_device *adreno_dev);
+	/** @soft_reset: Soft reset GPU on fault recovery */
+	int (*soft_reset)(struct adreno_device *adreno_dev,
+				struct kgsl_context *context, bool ctx_guilty);
 	/** @read_alwayson: Return the current value of the alwayson counter */
 	u64 (*read_alwayson)(struct adreno_device *adreno_dev);
 	/**
@@ -1007,6 +1047,20 @@ struct adreno_gpudev {
 	 * @lpac_fault_header: Print LPAC fault header
 	 */
 	void (*lpac_fault_header)(struct adreno_device *adreno_dev, struct kgsl_drawobj *drawobj);
+	/**
+	 * @power_feature_stats: Sample feature related perfcounter stats
+	 */
+	void (*power_feature_stats)(struct adreno_device *adreno_dev);
+	/**
+	 * @acquire_cp_semaphore: Return true if CP semaphore is acquired, otherwise false
+	 */
+	bool (*acquire_cp_semaphore)(struct adreno_device *adreno_dev);
+	/**
+	 * @release_cp_semaphore: Release CP semaphore
+	 */
+	void (*release_cp_semaphore)(struct adreno_device *adreno_dev);
+	/** @get_gmem_size: Return the GMEM size */
+	u32 (*get_gmem_size)(struct adreno_device *adreno_dev);
 };
 
 /**
@@ -1294,12 +1348,14 @@ ADRENO_TARGET(gen7_9_0, ADRENO_REV_GEN7_9_0)
 ADRENO_TARGET(gen7_9_1, ADRENO_REV_GEN7_9_1)
 ADRENO_TARGET(gen7_14_0, ADRENO_REV_GEN7_14_0)
 ADRENO_TARGET(gen7_11_0, ADRENO_REV_GEN7_11_0)
+ADRENO_TARGET(gen7_17_0, ADRENO_REV_GEN7_17_0)
 ADRENO_TARGET(gen8_0_0, ADRENO_REV_GEN8_0_0)
 ADRENO_TARGET(gen8_0_1, ADRENO_REV_GEN8_0_1)
 ADRENO_TARGET(gen8_2_0, ADRENO_REV_GEN8_2_0)
 ADRENO_TARGET(gen8_3_0, ADRENO_REV_GEN8_3_0)
 ADRENO_TARGET(gen8_4_0, ADRENO_REV_GEN8_4_0)
 ADRENO_TARGET(gen8_6_0, ADRENO_REV_GEN8_6_0)
+ADRENO_TARGET(gen8_8_0, ADRENO_REV_GEN8_8_0)
 
 static inline int adreno_is_gen7_9_x(struct adreno_device *adreno_dev)
 {
@@ -1312,11 +1368,16 @@ static inline int adreno_is_gen7_0_x_family(struct adreno_device *adreno_dev)
 		adreno_is_gen7_4_0(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
 }
 
+static inline int adreno_is_gen7_14_0_family(struct adreno_device *adreno_dev)
+{
+	return adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_17_0(adreno_dev);
+}
+
 static inline int adreno_is_gen7_2_x_family(struct adreno_device *adreno_dev)
 {
 	return adreno_is_gen7_2_0(adreno_dev) || adreno_is_gen7_2_1(adreno_dev) ||
 		adreno_is_gen7_6_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev) ||
-		adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
+		adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_11_0(adreno_dev);
 }
 
 static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
@@ -1328,7 +1389,7 @@ static inline int adreno_is_gen8_0_x_family(struct adreno_device *adreno_dev)
 /* Gen7 targets which does not support concurrent binning */
 static inline int adreno_is_gen7_no_cb_family(struct adreno_device *adreno_dev)
 {
-	return adreno_is_gen7_14_0(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
+	return adreno_is_gen7_14_0_family(adreno_dev) || adreno_is_gen7_3_0(adreno_dev);
 }
 
 /*
@@ -2043,13 +2104,6 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		uint32_t count);
 
 /**
- * adreno_mark_for_coldboot - Set a flag to coldboot gpu in the slumber exit
- * @adreno_dev: Adreno device handle
- *
- */
-void adreno_mark_for_coldboot(struct adreno_device *adreno_dev);
-
-/**
  * adreno_smmu_is_stalled() - Check whether smmu is stalled or not
  * @device: Pointer to adreno device
  *
@@ -2134,5 +2188,21 @@ static inline int adreno_gpudev_reset(struct adreno_device *adreno_dev)
 	}
 
 	return ret;
+}
+
+/**
+ * adreno_gmem_size - Returns the GMEM size
+ * @adreno_dev Adreno device handle
+ *
+ * Return: Size of GMEM in bytes
+ */
+static inline u32 adreno_gmem_size(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (gpudev->get_gmem_size)
+		return gpudev->get_gmem_size(adreno_dev);
+
+	return adreno_dev->gpucore->gmem_size;
 }
 #endif /*__ADRENO_H */

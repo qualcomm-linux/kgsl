@@ -33,20 +33,15 @@ static int gen7_counter_br_enable(struct adreno_device *adreno_dev,
 		const struct adreno_perfcount_group *group,
 		unsigned int counter, unsigned int countable)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	int ret = 0;
-	u32 val = 0;
+	int ret;
 
-	kgsl_regread(device, GEN7_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BR));
+	gen7_host_aperture_set(adreno_dev, PIPE_BR);
 
 	ret = gen7_perfcounter_update(adreno_dev, reg, true,
-					FIELD_PREP(GENMASK(13, 12), PIPE_BR), group->flags);
-	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, val);
+			FIELD_PREP(GENMASK(13, 12), PIPE_BR), group->flags);
 
-	/* Ensure all writes are posted before accessing the piped register */
-	mb();
+	gen7_host_aperture_set(adreno_dev, 0);
 
 	if (!ret)
 		reg->value = 0;
@@ -58,20 +53,15 @@ static int gen7_counter_bv_enable(struct adreno_device *adreno_dev,
 		const struct adreno_perfcount_group *group,
 		unsigned int counter, unsigned int countable)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_perfcount_register *reg = &group->regs[counter];
-	int ret = 0;
-	u32 val = 0;
+	int ret;
 
-	kgsl_regread(device, GEN7_CP_APERTURE_CNTL_HOST, &val);
-	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, FIELD_PREP(GENMASK(13, 12), PIPE_BV));
+	gen7_host_aperture_set(adreno_dev, PIPE_BV);
 
 	ret = gen7_perfcounter_update(adreno_dev, reg, true,
-					FIELD_PREP(GENMASK(13, 12), PIPE_BV), group->flags);
-	kgsl_regwrite(device, GEN7_CP_APERTURE_CNTL_HOST, val);
+			FIELD_PREP(GENMASK(13, 12), PIPE_BV), group->flags);
 
-	/* Ensure all writes are posted before accessing the piped register */
-	mb();
+	gen7_host_aperture_set(adreno_dev, 0);
 
 	if (!ret)
 		reg->value = 0;

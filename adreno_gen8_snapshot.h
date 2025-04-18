@@ -40,9 +40,39 @@ enum location_id {
 #define UNSLICE                 0
 #define SLICE                   1
 
-#define NUMBER_OF_SLICES(region, adreno_dev) \
-	((region == SLICE) ? gen8_get_num_slices(adreno_dev) : 1)
+/* Use SLICE_ID to access the region (0 for unsliced) */
 #define SLICE_ID(region, j) ((region == SLICE) ? j : 0)
+
+/*
+ * Use HEADER_SLICE_ID to specify the slice in the section header (UINT_MAX for unsliced).
+ * This allows snapshot parsers to differentiate between slice ID 0 and unsliced regions.
+ */
+#define HEADER_SLICE_ID(region, j) ((region == SLICE) ? j : UINT_MAX)
+
+#define SLICE_ACTIVE(_slice, _slice_mask) \
+	(!!(BIT(_slice) & (_slice_mask)))
+
+static inline int next_slice(int slice, u32 slice_mask)
+{
+	for (slice++; slice < fls(slice_mask); slice++) {
+		if (SLICE_ACTIVE(slice, slice_mask))
+			return slice;
+	}
+
+	return slice;
+}
+
+#define NEXT_SLICE(_slice, _region, _slice_mask) \
+	((_region != SLICE) ? fls(_slice_mask) : next_slice(_slice, _slice_mask))
+
+#define FIRST_SLICE(_region, _slice_mask) \
+	(((_region != SLICE) || SLICE_ACTIVE(0, _slice_mask)) ? 0 : \
+		NEXT_SLICE(0, _region, _slice_mask))
+
+#define FOR_EACH_SLICE(_slice, _region, _slice_mask) \
+	for (_slice = FIRST_SLICE(_region, _slice_mask); \
+		_slice < fls(_slice_mask); \
+		_slice = NEXT_SLICE(_slice, _region, _slice_mask))
 
 #define GEN8_DEBUGBUS_BLOCK_SIZE 0x100
 
@@ -344,10 +374,6 @@ enum gen8_debugbus_ids {
 };
 
 static const u32 gen8_debugbus_blocks[] = {
-	DEBUGBUS_GBIF_CX_GC_US_I_0,
-	DEBUGBUS_GMU_CX_GC_US_I_0,
-	DEBUGBUS_CX_GC_US_I_0,
-	DEBUGBUS_GBIF_GX_GC_US_I_0,
 	DEBUGBUS_GMU_GX_GC_US_I_0,
 	DEBUGBUS_DBGC_GC_US_I_0,
 	DEBUGBUS_RBBM_GC_US_I_0,

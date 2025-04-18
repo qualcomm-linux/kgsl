@@ -63,7 +63,7 @@ static int setup_dependency_domain_tbl(u32 *votes,
 		struct rpmh_arc_vals *dep_rail, struct rpmh_arc_vals *cx_rail,
 		u16 *vlvl, u32 *cx_vlvl, u32 num_entries)
 {
-	u32 cx_vote, mx_vote;
+	u32 cx_vote;
 	int i, j;
 
 	for (i = 1; i < num_entries; i++) {
@@ -90,25 +90,16 @@ static int setup_dependency_domain_tbl(u32 *votes,
 		}
 
 		/*
-		 * Set Mx dependency domain votes for Gx level. Look for indexes
+		 * Set MX dependency domain votes for GX level. Look for indexes
 		 * whose vlvl value is greater than or equal to the vlvl value
 		 * of the corresponding index of dependency rail
 		 */
 		for (j = 0; j < dep_rail->num; j++) {
-			if (dep_rail->val[j] >= vlvl[i]) {
-				mx_vote = j;
-				found_match = true;
+			if (dep_rail->val[j] >= vlvl[i] || j+1 == dep_rail->num)
 				break;
-			}
 		}
 
-		/* If we did not find a matching VLVL level then abort */
-		if (!found_match) {
-			pr_err("kgsl: Unsupported mx corner: %u\n", vlvl[i]);
-			return -EINVAL;
-		}
-
-		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, mx_vote);
+		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, j);
 	}
 
 	return 0;
@@ -211,10 +202,13 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 	/* If the target supports dedicated MxC rail, read the same */
 	if (cmd_db_read_addr("gmxc.lvl")) {
 		ret = adreno_rpmh_arc_cmds(&gmxc_arc, "gmxc.lvl");
-		if (ret)
-			return ret;
-		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
+		/* Dummy gMxC resource, treat as if no dedicated MxC */
+		if (ret == -ENODATA)
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
+		else
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
 	} else {
+		/* No gMxC resource entry, treat as if no dedicated MxC */
 		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
 	}
 

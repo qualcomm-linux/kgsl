@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN7_REG_H
@@ -181,6 +181,20 @@
 #define GEN7_CP_AQE_STAT_DATA_0          0xbbc
 #define GEN7_CP_AQE_STAT_DATA_1          0xbbd
 #define GEN7_LPAC_RBBM_STATUS            0x5fe
+
+/* CP Peripheral registers */
+#define GEN7_CP_PERIPH_IB1_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7005 : 0x7002)
+#define GEN7_CP_PERIPH_IB1_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7006 : 0x7003)
+#define GEN7_CP_PERIPH_IB1_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x7007 : 0x7004)
+#define GEN7_CP_PERIPH_IB1_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x7008 : 0x7005)
+#define GEN7_CP_PERIPH_IB2_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7009 : 0x7006)
+#define GEN7_CP_PERIPH_IB2_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700a : 0x7007)
+#define GEN7_CP_PERIPH_IB2_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x700b : 0x7008)
+#define GEN7_CP_PERIPH_IB2_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x700c : 0x7009)
+#define GEN7_CP_PERIPH_IB3_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700d : 0x700a)
+#define GEN7_CP_PERIPH_IB3_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700e : 0x700b)
+#define GEN7_CP_PERIPH_IB3_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x700f : 0x700c)
+#define GEN7_CP_PERIPH_IB3_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x7010 : 0x700d)
 
 /* RBBM registers */
 #define GEN7_RBBM_INT_0_STATUS                   0x201
@@ -752,6 +766,7 @@
 #define GEN7_DBGC_TRACE_BUFFER_STATUS               0x699
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_ADDR          0x69b
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_DATA          0x69c
+#define GEN7_DBGC_SMMU_FAULT_BLOCK_HALT_CFG         0x69e
 
 /* VSC registers */
 #define GEN7_VSC_PERFCTR_VSC_SEL_0          0xcd8
@@ -1256,6 +1271,7 @@
 /* GPUCC registers */
 #define GEN7_11_0_GPU_CC_CX_CFG_GDSCR		0x26424
 #define GEN7_GPU_CC_CX_CFG_GDSCR		0x26443
+#define GEN7_17_0_GPU_CC_CX_CFG_GDSCR		0x26445
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541
 
 /* GPU RSC sequencer registers */

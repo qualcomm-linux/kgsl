@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -79,6 +79,10 @@
 #define HFI_FEATURE_DMS		27
 #define HFI_FEATURE_THERMAL		28
 #define HFI_FEATURE_AQE		29
+#define HFI_FEATURE_TDCVS		30
+#define HFI_FEATURE_DCE		31
+#define HFI_FEATURE_IFF_PCLX		32
+#define HFI_FEATURE_SOFT_RESET		0x10000001
 
 /* Types to be used with H2F_MSG_TABLE */
 enum hfi_table_type {
@@ -90,6 +94,9 @@ enum hfi_table_type {
 	HFI_TABLE_CLX_V2	= 5,
 	HFI_TABLE_THERM		= 6,
 	HFI_TABLE_DCVS_DATA	= 7,
+	HFI_TABLE_SYS_TIME_DATA	= 8,
+	HFI_TABLE_GMU_SCALING_DATA	= 9,
+	HFI_TABLE_LIMITS_MITIGATION	= 10,
 	HFI_TABLE_MAX,
 };
 
@@ -121,6 +128,7 @@ enum hfi_table_type {
 #define HFI_VALUE_RB_GPU_QOS		123
 #define HFI_VALUE_RB_IB_RULE		124
 #define HFI_VALUE_GMU_WARMBOOT		125
+#define HFI_VALUE_RB_GPULEVEL_RULE	133
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -244,6 +252,11 @@ enum hfi_mem_kind {
 	HFI_MEMKIND_AQE_BUFFER,
 	/** @HFI_MEMKIND_HW_FENCE_SHADOW: Shadow memory used for caching external input fences */
 	HFI_MEMKIND_HW_FENCE_SHADOW,
+	/**
+	 * @HFI_MEMKIND_FREQMGR_SCRATCH: Scratch memory for FreqMgr task to retain information
+	 * related to GMU based DCVS.
+	 */
+	HFI_MEMKIND_FREQMGR_SCRATCH,
 	HFI_MEMKIND_MAX,
 };
 
@@ -275,6 +288,7 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
+	[HFI_MEMKIND_FREQMGR_SCRATCH] = "GMU FREQMGR SCRATCH",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -494,6 +508,7 @@ enum hfi_msg_type {
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
 	F2H_MSG_PROCESS_TRACE		= 155,
+	F2H_MSG_PLATFORM		= 200,
 	HFI_MAX_ID,
 };
 
@@ -507,6 +522,23 @@ enum gmu_ret_type {
 	GMU_ERROR_TIMEOUT,
 	GMU_ERROR_NOT_SUPPORTED,
 	GMU_ERROR_NO_ENTRY,
+};
+
+/* Platform specific F2H subtype message for GMU */
+enum gmu_f2h_msg_platform {
+	F2H_ST_MSG_SCALE_GMU,
+};
+
+enum gmu_rail_domain {
+	GMU_GX_DOMAIN = 0,
+	GMU_MX_DOMAIN,
+	GMU_DOMAIN_MAX,
+};
+
+enum gmu_limits_mit_feature {
+	GMU_MIT_IFF = 0,
+	GMU_MIT_PCLX,
+	GMU_MIT_MAX,
 };
 
 /* H2F */
@@ -625,6 +657,38 @@ struct hfi_clx_table_v2_cmd {
 	u32 version;
 	/** @domain: GFX and MXC Domain information */
 	struct clx_domain_v2 domain[CLX_DOMAINS_V2];
+} __packed;
+
+struct limits_mitigation_cfg {
+	/** @enable: Enable limits mitigation for this domain */
+	u32 enable;
+	/** @msg_path: Message notification path */
+	u32 msg_path;
+	/**
+	 * @lkgen: bits[0:0]  Static or dynamic leakage
+	 *         bits[1:31] Static leakage value
+	 */
+	u32 lkgen;
+	/** @mode: Static or dynamic throttle */
+	u32 mode;
+	/** @sid_val: SID value for static throttle */
+	u32 sid_val;
+	/** @mit_time: Mitigation time in microseconds */
+	u32 mit_time;
+	/** @curr_limit: Max current in mA during mitigation */
+	u32 curr_limit;
+} __packed;
+
+/* H2F */
+struct hfi_limits_mit_tbl {
+	/** @feature_id: Value from enum gmu_limits_mit_feature */
+	u8 feature_id;
+	/** @domain: Value from enum gmu_rail_domain */
+	u8 domain;
+	/** @feature_rev: Feature revision */
+	u16 feature_rev;
+	/** @mit_cfg: Mitigation config */
+	struct limits_mitigation_cfg mit_cfg;
 } __packed;
 
 /* H2F */
@@ -860,7 +924,7 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_INDIRECT		BIT(9)
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
-
+#define CMDBATCH_NOP_SUBMISSION	BIT(20)
 
 /* This indicates that the SYNCOBJ is kgsl output fence */
 #define GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT		0
@@ -910,7 +974,7 @@ struct hfi_context_rule_cmd {
 	u32 hdr;
 	u32 ctxt_id;
 	u32 type;
-	u32 status;
+	u32 sub_type;
 } __packed;
 
 struct fault_info {
@@ -940,9 +1004,10 @@ struct hfi_context_bad_cmd_legacy {
 } __packed;
 
 /* H2F */
-struct hfi_context_bad_reply_cmd {
+struct hfi_msg_ret_cmd {
 	u32 hdr;
 	u32 req_hdr;
+	u32 error;
 } __packed;
 
 /* H2F */
@@ -1093,6 +1158,20 @@ struct pending_cmd {
 	struct list_head node;
 };
 
+struct hfi_msg_platform {
+	/** @header: Header for the platform specific msg */
+	u32 header;
+	/** @sub_type: Sub type for the platform msg */
+	u32 sub_type;
+	/** @cmd: Pointer to the HFI platform cmd */
+	u32 cmd[];
+} __packed;
+
+struct hfi_scale_gmu_cmd {
+	/** @gmu_pwrlevel: Gmu index of gmu power level to scale to */
+	u32 gmu_pwrlevel;
+} __packed;
+
 static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)
 {
 	if (WARN_ON(size > HFI_MAX_MSG_SIZE))
@@ -1140,6 +1219,7 @@ struct payload_section {
 #define PAYLOAD_FAULT_REGS 1
 #define PAYLOAD_RB 2
 #define PAYLOAD_PREEMPT_TIMEOUT 3
+#define PAYLOAD_FAULT_RESET_POLICY 4
 
 /* Keys for PAYLOAD_FAULT_REGS type payload */
 #define KEY_CP_OPCODE_ERROR 1
@@ -1187,6 +1267,9 @@ struct payload_section {
 /* Keys for PAYLOAD_PREEMPT_TIMEOUT type payload */
 #define KEY_PREEMPT_TIMEOUT_CUR_RB_ID 1
 #define KEY_PREEMPT_TIMEOUT_NEXT_RB_ID 2
+
+/* Keys for PAYLOAD_FAULT_RESET_POLICY type payload */
+#define KEY_GPU_RESET_POLICY 1
 
 /* Types of errors that trigger context bad HFI */
 

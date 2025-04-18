@@ -875,7 +875,7 @@ kgsl_context_destroy(struct kref *kref)
 			trace_kgsl_constraint(device,
 				device->pwrctrl.constraint.type,
 				device->pwrctrl.active_pwrlevel,
-				0);
+				0, 0);
 			device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 		}
 
@@ -5141,6 +5141,15 @@ static int _register_device(struct kgsl_device *device)
 
 	device->dev->dma_mask = &dma_mask;
 	device->dev->dma_parms = &dma_parms;
+
+	/*
+	 * Mark KGSL device as dma coherent when io-coherency
+	 * is enabled to skip cache operations for imported dma
+	 * buffers.
+	 */
+	if (kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT) &&
+		IS_ENABLED(CONFIG_QCOM_KGSL_IOCOHERENCY_DEFAULT))
+		device->dev->dma_coherent = true;
 
 	dma_set_max_seg_size(device->dev, (u32)DMA_BIT_MASK(32));
 

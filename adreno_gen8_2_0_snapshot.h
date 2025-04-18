@@ -9,10 +9,6 @@
 #include "adreno_gen8_snapshot.h"
 
 static const u32 gen8_2_0_debugbus_blocks[] = {
-	DEBUGBUS_GBIF_CX_GC_US_I_0,
-	DEBUGBUS_GMU_CX_GC_US_I_0,
-	DEBUGBUS_CX_GC_US_I_0,
-	DEBUGBUS_GBIF_GX_GC_US_I_0,
 	DEBUGBUS_GMU_GX_GC_US_I_0,
 	DEBUGBUS_DBGC_GC_US_I_0,
 	DEBUGBUS_RBBM_GC_US_I_0,
@@ -255,6 +251,39 @@ static struct gen8_shader_block gen8_2_0_shader_blocks[] = {
 };
 
 /*
+ * Block   : ['AHB_PRECD']
+ * REGION  : UNSLICE
+ * pairs   : 1 (Regs:2)
+ */
+static const u32 gen8_2_0_ahb_precd_gpu_registers[] = {
+	 0x00012, 0x00013,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen8_2_0_ahb_precd_gpu_registers), 8));
+
+/*
+ * Block   : ['AHB_PRECD']
+ * REGION  : SLICE
+ * pairs   : 1 (Regs:3)
+ */
+static const u32 gen8_2_0_ahb_precd_gpu_slice_registers[] = {
+	 0x00580, 0x00582,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen8_2_0_ahb_precd_gpu_slice_registers), 8));
+
+/*
+ * Block   : ['AHB_SECURE']
+ * REGION  : UNSLICE
+ * pairs   : 3 (Regs:7)
+ */
+static const u32 gen8_2_0_ahb_secure_gpu_registers[] = {
+	 0x0f400, 0x0f400, 0x0f800, 0x0f803, 0x0fc00, 0x0fc01,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen8_2_0_ahb_secure_gpu_registers), 8));
+
+/*
  * Block   : ['GBIF']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
@@ -274,10 +303,10 @@ static_assert(IS_ALIGNED(sizeof(gen8_2_0_gbif_registers), 8));
  * Block   : ['VFD', 'VPC', 'VSC']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
- * pairs   : 119 (Regs:1193)
+ * pairs   : 116 (Regs:1184)
  */
 static const u32 gen8_2_0_gpu_registers[] = {
-	0x00008, 0x0000d, 0x00010, 0x00013, 0x00015, 0x00016, 0x00018, 0x00018,
+	0x00008, 0x0000d, 0x00010, 0x00011, 0x00015, 0x00016, 0x00018, 0x00018,
 	0x0001a, 0x0001a, 0x0001c, 0x0001c, 0x0001e, 0x0001e, 0x00028, 0x0002b,
 	0x0002d, 0x00039, 0x00040, 0x00053, 0x00062, 0x00066, 0x00069, 0x0006e,
 	0x00071, 0x00072, 0x00074, 0x00074, 0x00076, 0x0009a, 0x0009d, 0x000af,
@@ -306,7 +335,6 @@ static const u32 gen8_2_0_gpu_registers[] = {
 	0x0ed52, 0x0ed52, 0x0ed66, 0x0ed68, 0x0ed6b, 0x0ed6d, 0x0ed6f, 0x0ed6f,
 	0x0ed80, 0x0ed81, 0x0ed85, 0x0ed85, 0x0ed87, 0x0ed87, 0x0ed8a, 0x0ed8a,
 	0x0ed92, 0x0ed92, 0x0eda6, 0x0eda8, 0x0edab, 0x0edad, 0x0edaf, 0x0edaf,
-	0x0f400, 0x0f400, 0x0f800, 0x0f803, 0x0fc00, 0x0fc01,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_2_0_gpu_registers), 8));
@@ -317,10 +345,10 @@ static_assert(IS_ALIGNED(sizeof(gen8_2_0_gpu_registers), 8));
  * Block   : ['VFD', 'VPC', 'VSC']
  * REGION  : SLICE
  * Pipeline: PIPE_NONE
- * pairs   : 12 (Regs:91)
+ * pairs   : 12 (Regs:88)
  */
 static const u32 gen8_2_0_gpu_slice_registers[] = {
-	0x00500, 0x00500, 0x00580, 0x00584, 0x00586, 0x0058d, 0x0058f, 0x00599,
+	0x00500, 0x00500, 0x00583, 0x00584, 0x00586, 0x0058d, 0x0058f, 0x00599,
 	0x005a0, 0x005b3, 0x005c0, 0x005c0, 0x005c2, 0x005c6, 0x005e0, 0x005e3,
 	0x005ec, 0x005ec, 0x00f01, 0x00f02, 0x00f04, 0x00f0c, 0x00f20, 0x00f37,
 	UINT_MAX, UINT_MAX,
@@ -388,7 +416,7 @@ static_assert(IS_ALIGNED(sizeof(gen8_2_0_gmuao_registers), 8));
  * Block   : ['GMUCX', 'GMUCX_RAM']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
- * pairs   : 141 (Regs:731)
+ * pairs   : 136 (Regs:710)
  */
 static const u32 gen8_2_0_gmucx_registers[] = {
 	0x1f400, 0x1f40b, 0x1f40f, 0x1f411, 0x1f500, 0x1f500, 0x1f507, 0x1f507,
@@ -425,8 +453,6 @@ static const u32 gen8_2_0_gmucx_registers[] = {
 	0x20304, 0x20305, 0x20308, 0x2030c, 0x20310, 0x20314, 0x20318, 0x2031a,
 	0x20320, 0x20322, 0x20324, 0x20326, 0x20328, 0x2032a, 0x2032c, 0x2032e,
 	0x20330, 0x20333, 0x20338, 0x20338, 0x20340, 0x2034f, 0x20380, 0x20385,
-	0x20400, 0x20400, 0x20404, 0x20404, 0x20410, 0x20414, 0x20420, 0x20422,
-	0x20480, 0x2048a,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_2_0_gmucx_registers), 8));
@@ -491,13 +517,13 @@ static_assert(IS_ALIGNED(sizeof(gen8_2_0_cx_dbgc_registers), 8));
  * REGION  : UNSLICE
  * Pipeline: CP_PIPE_NONE
  * Cluster : CLUSTER_NONE
- * pairs   : 15 (Regs:310)
+ * pairs   : 14 (Regs:307)
  */
 static const u32 gen8_2_0_cp_cp_pipe_none_registers[] = {
 	0x00800, 0x0081e, 0x00820, 0x0082d, 0x00838, 0x0083e, 0x00840, 0x00847,
 	0x0084b, 0x0084c, 0x00850, 0x0088f, 0x008b5, 0x008b6, 0x008c0, 0x008cb,
 	0x008d0, 0x008e4, 0x008e7, 0x008ee, 0x008fa, 0x008fd, 0x00928, 0x00929,
-	0x00958, 0x0095b, 0x00980, 0x009ff, 0x0f000, 0x0f002,
+	0x00958, 0x0095b, 0x00980, 0x009ff,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_2_0_cp_cp_pipe_none_registers), 8));
@@ -2174,18 +2200,21 @@ static struct gen8_reg_list gen8_2_0_misc_registers[] = {
 
 static struct gen8_reg_list gen8_2_0_ahb_registers[] = {
 	{ UNSLICE, gen8_2_0_gbif_registers },
+	{ UNSLICE, gen8_2_0_ahb_precd_gpu_registers },
+	{ SLICE, gen8_2_0_ahb_precd_gpu_slice_registers },
+	{ UNSLICE, gen8_2_0_ahb_secure_gpu_registers },
 };
 
 /*
  * Block   : ['GDPM_LKG']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
- * pairs   : 11 (Regs:131)
+ * pairs   : 9 (Regs:34)
  */
 static const u32 gen8_2_0_gdpm_lkg_registers[] = {
 	0x21c00, 0x21c00, 0x21c08, 0x21c09, 0x21c0c, 0x21c0d, 0x21c40, 0x21c41,
 	0x21c44, 0x21c4b, 0x21c80, 0x21c88, 0x21ca0, 0x21ca7, 0x21cc0, 0x21cc0,
-	0x21ce0, 0x21ce0, 0x22000, 0x22010, 0x22040, 0x2208f,
+	0x21ce0, 0x21ce0,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_2_0_gdpm_lkg_registers), 8));
@@ -2320,16 +2349,16 @@ static_assert(IS_ALIGNED(sizeof(gen8_2_0_gpu_cc_pll0_cm_pll_taycan_common_regist
  * Block   : ['GPU_CC_GPU_CC_REG']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
- * pairs   : 28 (Regs:130)
+ * pairs   : 27 (Regs:127)
  */
 static const u32 gen8_2_0_gpu_cc_gpu_cc_reg_registers[] = {
-	0x25000, 0x25002, 0x25400, 0x25404, 0x25800, 0x25804, 0x25c00, 0x25c04,
-	0x26000, 0x26004, 0x26400, 0x26406, 0x26415, 0x26418, 0x2641c, 0x2641d,
-	0x2641f, 0x2643e, 0x26441, 0x26442, 0x26478, 0x2647a, 0x26489, 0x2648c,
-	0x2649e, 0x2649e, 0x264a0, 0x264a1, 0x264a3, 0x264a4, 0x264c5, 0x264c7,
-	0x264e8, 0x264e9, 0x264f9, 0x264fd, 0x2650c, 0x2650c, 0x2651c, 0x2651e,
-	0x26540, 0x2654b, 0x26554, 0x26556, 0x26558, 0x2655c, 0x2655e, 0x2655f,
-	0x26563, 0x26563, 0x2656d, 0x26573, 0x26576, 0x26576, 0x26578, 0x2657a,
+	0x25400, 0x25404, 0x25800, 0x25804, 0x25c00, 0x25c04, 0x26000, 0x26004,
+	0x26400, 0x26406, 0x26415, 0x26418, 0x2641c, 0x2641d, 0x2641f, 0x2643e,
+	0x26441, 0x26442, 0x26478, 0x2647a, 0x26489, 0x2648c, 0x2649e, 0x2649e,
+	0x264a0, 0x264a1, 0x264a3, 0x264a4, 0x264c5, 0x264c7, 0x264e8, 0x264e9,
+	0x264f9, 0x264fd, 0x2650c, 0x2650c, 0x2651c, 0x2651e, 0x26540, 0x2654b,
+	0x26554, 0x26556, 0x26558, 0x2655c, 0x2655e, 0x2655f, 0x26563, 0x26563,
+	0x2656d, 0x26573, 0x26576, 0x26576, 0x26578, 0x2657a,
 	UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_2_0_gpu_cc_gpu_cc_reg_registers), 8));

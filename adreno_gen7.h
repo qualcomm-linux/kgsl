@@ -360,14 +360,6 @@ int gen7_probe_common(struct platform_device *pdev,
 	const struct adreno_gpu_core *gpucore);
 
 /**
- * gen7_hw_isidle - Check whether gen7 gpu is idle or not
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: True if gpu is idle, otherwise false
- */
-bool gen7_hw_isidle(struct adreno_device *adreno_dev);
-
-/**
  * gen7_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
  * @str: String describing the failure
@@ -519,10 +511,43 @@ void gen7_rdpm_cx_freq_update(struct gen7_gmu_device *gmu, u32 freq);
  */
 int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev);
 
+/**
+ * gen7_host_aperture_set - Program CP aperture register
+ * @adreno_dev: Handle to the adreno device
+ * @pipe_id: Pipe for which the register is to be set
+ *
+ * This function programs CP aperture register.
+ */
+void gen7_host_aperture_set(struct adreno_device *adreno_dev, u32 pipe_id);
+
 #ifdef CONFIG_QCOM_KGSL_CORESIGHT
 void gen7_coresight_init(struct adreno_device *device);
 #else
 static inline void gen7_coresight_init(struct adreno_device *device) { }
 #endif
 
+/**
+ * gen7_periph_regread64 - Read 64 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords_lo: Lower 32 bit address to read
+ * @offsetwords_hi: Higher 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 64 bit value for peripheral registers
+ */
+void gen7_periph_regread64(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe);
+
+/**
+ * gen7_periph_regread - Read 32 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords: 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 32 bit value for peripheral registers
+ */
+void gen7_periph_regread(struct kgsl_device *device, u32 offsetwords,
+	u32 *value, u32 pipe);
 #endif

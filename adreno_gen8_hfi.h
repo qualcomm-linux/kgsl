@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __ADRENO_GEN8_HFI_H
@@ -88,7 +88,7 @@ int gen8_hfi_queue_write(struct adreno_device *adreno_dev, u32 queue_idx,
  * @output: Pointer to read the data into
  * @max_size: Number of bytes to read from the queue
  *
- * Return: 0 on success or negative error on failure
+ * Return: Size of the message read on success or negative error on failure
  */
 int gen8_hfi_queue_read(struct gen8_gmu_device *gmu, u32 queue_idx,
 		u32 *output, u32 max_size);

@@ -10,6 +10,22 @@
 #include "adreno_gen8_hwsched_hfi.h"
 
 /**
+ * enum gen8_gmu_dcvs_obj - Type of DCVS object to be used for GMU based DCVS
+ * @GMU_GPU_DCVS_OBJ_OFF: DCVS disabled
+ * @GMU_GPU_DCVS_OBJ_DEPRECATED: Deprecated object
+ * @GMU_GPU_DCVS_OBJ_DOS: DCVS Old School algorithm
+ * @GMU_GPU_DCVS_OBJ_PARITY: Parity algorithm based on host based DCVS
+ * @GMU_GPU_DCVS_OBJ_MAX: enum to define max allowed object
+ */
+enum gen8_gmu_dcvs_obj {
+	GMU_GPU_DCVS_OBJ_OFF = 0,
+	GMU_GPU_DCVS_OBJ_DEPRECATED = 1,
+	GMU_GPU_DCVS_OBJ_DOS = 2,
+	GMU_GPU_DCVS_OBJ_PARITY = 3,
+	GMU_GPU_DCVS_OBJ_MAX,
+};
+
+/**
  * struct gen8_hwsched_device - Container for the gen8 hwscheduling device
  */
 struct gen8_hwsched_device {
@@ -90,4 +106,16 @@ void gen8_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
  */
 void gen8_hwsched_soccp_vote(struct adreno_device *adreno_dev, bool pwr_on);
 
+/**
+ * gen8_hwsched_set_pwrconstraint - Send perf hint to GMU
+ * @adreno_dev: A handle to adreno device
+ * @context_id: Id for the context associated with hint
+ */
+void gen8_hwsched_set_pwrconstraint(struct adreno_device *adreno_dev, u32 context_id);
+
+/**
+ * gen8_hwsched_init_ucode_regs - Initializes CP ucode registers
+ * @adreno_dev: A handle to adreno device
+ */
+void gen8_hwsched_init_ucode_regs(struct adreno_device *adreno_dev);
 #endif

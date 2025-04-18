@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_H_
@@ -14,6 +14,7 @@
 #include "gen8_reg.h"
 
 #define GEN8_0_0_NUM_PHYSICAL_SLICES	3
+#define GEN8_2_0_NUM_PHYSICAL_SLICES	3
 #define GEN8_3_0_NUM_PHYSICAL_SLICES	1
 #define GEN8_6_0_NUM_PHYSICAL_SLICES	2
 
@@ -73,6 +74,8 @@ struct gen8_device {
 	struct mutex nc_mutex;
 	/** @nc_overrides_enabled: Set through debugfs path when any override is enabled */
 	bool nc_overrides_enabled;
+	/** @slice_mask: The bitmask of active GPU slices */
+	u32 slice_mask;
 };
 
 /**
@@ -112,6 +115,16 @@ struct gen8_nonctxt_regs {
 	u32 val;
 	/** @pipelines: pipelines to write */
 	u32 pipelines;
+};
+
+/**
+ * struct gen8_limits_mit_cfg - Container for GPU limits mitigation configuration
+ */
+struct gen8_limits_mit_cfg {
+	/** @limits_mit_tbl: Table for GPU limits mitigation features */
+	const struct hfi_limits_mit_tbl *limits_mit_tbl;
+	/** @len: Number of entries in the table */
+	u32 len;
 };
 
 /**
@@ -177,6 +190,8 @@ struct adreno_gen8_core {
 	u32 cl_no_ft_timeout_ms;
 	/** @therm_profile: GMU thermal mitigation profile */
 	const struct hfi_therm_profile_ctrl *therm_profile;
+	/** @limits_mit_cfg: GPU limits mitigation configuration */
+	const struct gen8_limits_mit_cfg *limits_mit_cfg;
 };
 
 /**
@@ -375,6 +390,14 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev);
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev);
 
 /**
+ * gen8_get_gpu_slice_info - Get information about the active slices
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Get information about the active slices and save it in the gen8 device
+ */
+void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev);
+
+/**
  * gen8_rb_start - Gen8 specific ringbuffer setup
  * @adreno_dev: An Adreno GPU handle
  *
@@ -409,14 +432,6 @@ int gen8_microcode_read(struct adreno_device *adreno_dev);
 int gen8_probe_common(struct platform_device *pdev,
 	struct adreno_device *adreno_dev, u32 chipid,
 	const struct adreno_gpu_core *gpucore);
-
-/**
- * gen8_hw_isidle - Check whether gen8 gpu is idle or not
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: True if gpu is idle, otherwise false
- */
-bool gen8_hw_isidle(struct adreno_device *adreno_dev);
 
 /**
  * gen8_spin_idle_debug - Debug logging used when gpu fails to idle
@@ -603,6 +618,30 @@ void gen8_regread64_aperture(struct kgsl_device *device,
 void gen8_regread_aperture(struct kgsl_device *device,
 	u32 offsetwords, u32 *value, u32 pipe, u32 slice_id, u32 use_slice_id);
 
+/**
+ * gen8_periph_regread64 - Read 64 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords_lo: Lower 32 bit address to read
+ * @offsetwords_hi: Higher 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 64 bit value for peripheral registers
+ */
+void gen8_periph_regread64(struct kgsl_device *device,
+	u32 offsetwords_lo, u32 offsetwords_hi, u64 *value, u32 pipe);
+
+/**
+ * gen8_periph_regread - Read 32 bit peripheral register values
+ * @device: Handle to the KGSL device
+ * @offsetwords: 32 bit address to read
+ * @value: The value of register at offsetwords
+ * @pipe: Pipe for which the register is to be read
+ *
+ * This function reads the 32 bit value for peripheral registers
+ */
+void gen8_periph_regread(struct kgsl_device *device, u32 offsetwords,
+	u32 *value, u32 pipe);
 
 /**
  * gen8_host_aperture_set - Program CP aperture register
@@ -623,18 +662,55 @@ static inline void gen8_coresight_init(struct adreno_device *device) { }
 #endif
 
 /**
- * gen8_get_num_slices - Get the number of physical slices for Gen8 GPUs
+ * gen8_get_slice_mask - Get a bitmask representing the GPU slices that are active
  * @adreno_dev: Handle to the adreno device
  *
- * Return: Number of physical slices available on Gen8 GPUs
+ * Return: Bitmask where each bit set represents an active GPU slice
+ */
+static inline u32 gen8_get_slice_mask(struct adreno_device *adreno_dev)
+{
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+
+	return gen8_dev->slice_mask;
+}
+
+/**
+ * gen8_hwcg_set - Set gpu hardware clock gating
+ * @adreno_dev: Handle to the adreno device
+ * @on: Boolean flag for clock gating setting
+ *
+ * Enables/disables the gpu hardware clock gating
+ */
+void gen8_hwcg_set(struct adreno_device *adreno_dev, bool on);
+
+/**
+ * gen8_first_slice - Returns the first GPU slice that is active
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Return: The ID of the first active GPU slice
+ */
+static inline u32 gen8_first_slice(struct adreno_device *adreno_dev)
+{
+	u32 slice_mask = gen8_get_slice_mask(adreno_dev);
+
+	return ffs(slice_mask) - 1;
+}
+
+/*
+ * gen8_get_num_slices - Returns the number of GPU slices that are active
+ * @adreno_dev: Handle to the adreno device
+ *
+ * Return: Number of active GPU slices
  */
 static inline u32 gen8_get_num_slices(struct adreno_device *adreno_dev)
 {
-	if (adreno_is_gen8_3_0(adreno_dev))
-		return GEN8_3_0_NUM_PHYSICAL_SLICES;
-	else if (adreno_is_gen8_6_0(adreno_dev))
-		return GEN8_6_0_NUM_PHYSICAL_SLICES;
-	else
-		return GEN8_0_0_NUM_PHYSICAL_SLICES;
+	struct gen8_device *gen8_dev = container_of(adreno_dev,
+					struct gen8_device, adreno_dev);
+
+	return hweight32(gen8_dev->slice_mask);
 }
+
+u32 gen8_get_gmem_size(struct adreno_device *adreno_dev);
+
 #endif

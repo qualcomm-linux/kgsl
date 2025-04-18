@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -25,6 +25,7 @@
 #include <linux/string.h>
 
 #include "adreno.h"
+#include "kgsl_pool.h"
 #include "kgsl_util.h"
 
 bool kgsl_genpd_is_enabled(struct device *dev)
@@ -279,6 +280,77 @@ int kgsl_add_va_to_minidump(struct device *dev, const char *name, void *ptr,
 	return ret;
 }
 
+static bool include_global_in_minidump(struct kgsl_global_memdesc *md)
+{
+	static const char * const globals[] = {"ringbuffer", "memstore", "scratch",
+				"profile", "profile_desc", "alwayson"};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(globals); i++) {
+		if (!strcmp(md->name, globals[i]))
+			return true;
+	}
+
+	return false;
+}
+
+#ifdef CONFIG_QCOM_KGSL_USE_SHMEM
+static int kgsl_add_page_pools_to_va_minidump(struct kgsl_device *device)
+{
+	return 0;
+}
+#else
+static int kgsl_add_page_pools_to_va_minidump(struct kgsl_device *device)
+{
+	int i, ret;
+
+	for (i = 0; i < kgsl_num_pools; i++) {
+		ret = kgsl_add_va_to_minidump(device->dev, KGSL_PAGE_POOL_ENTRY,
+				(void *)&kgsl_pools[i], sizeof(kgsl_pools[i]));
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_SYNC_FILE
+static int kgsl_add_sync_timeline_info_to_va_minidump(struct kgsl_device *device)
+{
+	int ret, id;
+	struct kgsl_context *context;
+
+	idr_for_each_entry(&device->context_idr, context, id) {
+		char name[MAX_VA_MINIDUMP_STR_LEN];
+		struct kgsl_sync_fence *kfence, *next;
+		struct kgsl_sync_timeline *ktimeline = context->ktimeline;
+
+		snprintf(name, sizeof(name), KGSL_SYNC_TIMELINE_ENTRY "_ctxt:%d", context->id);
+		ret = kgsl_add_va_to_minidump(device->dev, name,
+				(void *)(ktimeline), sizeof(*ktimeline));
+		if (ret)
+			return ret;
+
+		list_for_each_entry_safe(kfence, next, &ktimeline->child_list_head, child_list) {
+			snprintf(name, sizeof(name), KGSL_SYNC_FENCE_ENTRY "_ctxt:%d",
+				context->id);
+			ret = kgsl_add_va_to_minidump(device->dev, name,
+					(void *)(kfence), sizeof(*kfence));
+			if (ret)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+#else
+static int kgsl_add_sync_timeline_info_to_va_minidump(struct kgsl_device *device)
+{
+	return 0;
+}
+#endif
+
 static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 {
 	int ret;
@@ -286,6 +358,7 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 	struct kgsl_pagetable *pt;
 	struct adreno_context *ctxt;
 	struct kgsl_process_private *p;
+	struct kgsl_global_memdesc *md;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	ret = kgsl_add_va_to_minidump(device->dev, KGSL_DRIVER,
@@ -293,20 +366,21 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 	if (ret)
 		return ret;
 
-	/* hwsched path may not have scratch entry */
-	if (device->scratch) {
-		ret = kgsl_add_va_to_minidump(device->dev, KGSL_SCRATCH_ENTRY,
-				device->scratch->hostptr, device->scratch->size);
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS) &&
+		device->pwrscale.enabled) {
+		struct msm_busmon_extended_profile bus_profile = device->pwrscale.bus_profile;
+
+		ret = kgsl_add_va_to_minidump(device->dev, KGSL_ADRENO_TZ_DATA_ENTRY,
+				(void *)bus_profile.private_data,
+				sizeof(*bus_profile.private_data));
 		if (ret)
 			return ret;
 	}
 
-	ret = kgsl_add_va_to_minidump(device->dev, KGSL_MEMSTORE_ENTRY,
-			device->memstore->hostptr, device->memstore->size);
+	ret = kgsl_add_page_pools_to_va_minidump(device);
 	if (ret)
 		return ret;
 
-	spin_lock(&adreno_dev->active_list_lock);
 	list_for_each_entry(ctxt, &adreno_dev->active_list, active_node) {
 		snprintf(name, sizeof(name), KGSL_ADRENO_CTX_ENTRY"_%d", ctxt->base.id);
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -314,9 +388,7 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	spin_unlock(&adreno_dev->active_list_lock);
 
-	read_lock(&kgsl_driver.proclist_lock);
 	list_for_each_entry(p, &kgsl_driver.process_list, list) {
 		snprintf(name, sizeof(name), KGSL_PROC_PRIV_ENTRY "_%d", pid_nr(p->pid));
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -324,9 +396,7 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	read_unlock(&kgsl_driver.proclist_lock);
 
-	spin_lock(&kgsl_driver.ptlock);
 	list_for_each_entry(pt, &kgsl_driver.pagetable_list, list) {
 		snprintf(name, sizeof(name), KGSL_PGTABLE_ENTRY"_%d", pt->name);
 		ret = kgsl_add_va_to_minidump(device->dev, name,
@@ -334,7 +404,26 @@ static int kgsl_add_driver_data_to_va_minidump(struct kgsl_device *device)
 		if (ret)
 			break;
 	}
-	spin_unlock(&kgsl_driver.ptlock);
+
+	ret = kgsl_add_sync_timeline_info_to_va_minidump(device);
+	if (ret)
+		return ret;
+
+	/*
+	 * Global buffers for HWSCHED are dumped in target-specific code. Therefore,
+	 * only dump the required globals for SWSCHED here.
+	 */
+	if (!adreno_dev->hwsched_enabled) {
+		list_for_each_entry(md, &device->globals, node) {
+			if (include_global_in_minidump(md)) {
+				snprintf(name, sizeof(name), "kgsl_%s", md->name);
+				ret = kgsl_add_va_to_minidump(device->dev, name,
+						md->memdesc.hostptr, md->memdesc.size);
+				if (ret)
+					break;
+			}
+		}
+	}
 
 	return ret;
 }

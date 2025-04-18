@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -220,12 +220,13 @@ static void init_queues(struct adreno_device *adreno_dev)
 
 int gen8_hfi_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct gen8_hfi *hfi = &gmu->hfi;
 
 	/* Allocates & maps memory for HFI */
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = gen8_reserve_gmu_kernel_block(gmu, 0,
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(device, 0,
 				HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (!IS_ERR(hfi->hfi_mem))
 			init_queues(adreno_dev);
@@ -387,10 +388,10 @@ int gen8_hfi_send_core_fw_start(struct adreno_device *adreno_dev)
 int gen8_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 		struct pending_cmd *ret_cmd, u32 size_bytes)
 {
-	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int rc;
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) <= 4)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) <= 4)
 		return gen8_hfi_send_generic_req(adreno_dev, cmd, size_bytes);
 
 	rc = gen8_hfi_send_cmd_wait_inline(adreno_dev, cmd, size_bytes, ret_cmd);
@@ -537,6 +538,9 @@ int gen8_hfi_process_queue(struct gen8_gmu_device *gmu,
 		case F2H_MSG_DEBUG: /* No Reply */
 			adreno_gen8_receive_debug_req(gmu, rcvd);
 			break;
+		case F2H_MSG_PROCESS_TRACE:
+			gmu_core_process_trace_data(device, GMU_PDEV_DEV(device), &gmu->trace);
+			break;
 		default: /* No Reply */
 			dev_err(GMU_PDEV_DEV(device),
 				"HFI request %d not supported\n",
@@ -561,6 +565,48 @@ int gen8_hfi_send_bcl_feature_ctrl(struct adreno_device *adreno_dev)
 	 * BIT[15:21] - Throttle level 3 (optional)
 	 */
 	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_BCL, 1, adreno_dev->bcl_data);
+}
+
+int gen8_hfi_send_iff_pclx_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	static struct hfi_table_cmd *tbl_cmd;
+	struct hfi_table_entry *entry;
+	u32 hdr_size, len;
+	int ret;
+
+	if (!gen8_core->limits_mit_cfg)
+		return 0;
+
+	len = gen8_core->limits_mit_cfg->len;
+	hdr_size = sizeof(*tbl_cmd) + sizeof(*entry) + (len * sizeof(struct hfi_limits_mit_tbl));
+
+	if (!tbl_cmd) {
+		tbl_cmd = devm_kzalloc(&device->pdev->dev, hdr_size, GFP_KERNEL);
+		if (!tbl_cmd)
+			return -ENOMEM;
+	}
+
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_IFF_PCLX, 1, 0);
+	if (ret)
+		return ret;
+
+	if (tbl_cmd->hdr)
+		return gen8_hfi_send_generic_req(adreno_dev, tbl_cmd, hdr_size);
+
+	tbl_cmd->hdr = CREATE_MSG_HDR(H2F_MSG_TABLE, HFI_MSG_CMD);
+	tbl_cmd->version = 0;
+	tbl_cmd->type = HFI_TABLE_LIMITS_MITIGATION;
+
+	entry = tbl_cmd->entry;
+	entry->count = len;
+	entry->stride = sizeof(struct hfi_limits_mit_tbl) >> 2;
+
+	memcpy(entry->data, gen8_core->limits_mit_cfg->limits_mit_tbl,
+		entry->count * (entry->stride << 2));
+
+	return gen8_hfi_send_generic_req(adreno_dev, tbl_cmd, hdr_size);
 }
 
 int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
@@ -605,7 +651,11 @@ int gen8_hfi_send_clx_feature_ctrl(struct adreno_device *adreno_dev)
 	cmd.domain[1].lkgen = 0;
 	cmd.domain[1].currbudget = 50;
 
-	return gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+	ret = gen8_hfi_send_generic_req(adreno_dev, &cmd, sizeof(cmd));
+	if (ret)
+		return ret;
+
+	return gen8_hfi_send_iff_pclx_feature_ctrl(adreno_dev);
 }
 
 #define EVENT_PWR_ACD_THROTTLE_PROF 44
@@ -681,11 +731,12 @@ int gen8_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev)
 	 */
 	static u32 cmd_buf[200];
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_dcvs_table *tbl = &gmu->dcvs_table;
 	int ret = 0;
 
 	/* Starting with GMU HFI Version 2.6.1, use H2F_MSG_TABLE */
-	if (gmu->ver.hfi >= HFI_VERSION(2, 6, 1)) {
+	if (device->gmu_core.ver.hfi >= HFI_VERSION(2, 6, 1)) {
 		struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
 		u32 dword_off;
 

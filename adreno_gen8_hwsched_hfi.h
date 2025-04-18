@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN8_HWSCHED_HFI_H_
@@ -92,8 +92,6 @@ struct hfi_thermaltable_cmd {
 } __packed;
 
 struct gen8_hwsched_hfi {
-	struct hfi_mem_alloc_entry mem_alloc_table[32];
-	u32 mem_alloc_entries;
 	/** @irq_mask: Store the hfi interrupt mask */
 	u32 irq_mask;
 	/** @msglock: To protect the list of un-ACKed hfi packets */
@@ -110,37 +108,6 @@ struct gen8_hwsched_hfi {
 	struct kgsl_memdesc *big_ib_recurring;
 	/** @msg_mutex: Mutex for accessing the msgq */
 	struct mutex msgq_mutex;
-	struct {
-		/** @lock: Spinlock for managing hardware fences */
-		spinlock_t lock;
-		/**
-		 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
-		 * by GMU
-		 */
-		u32 unack_count;
-		/**
-		 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
-		 * a desired threshold
-		 */
-		wait_queue_head_t unack_wq;
-		/**
-		 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
-		 * hardware fences drops to a desired threshold
-		 */
-		struct adreno_context *defer_drawctxt;
-		/**
-		 * @defer_ts: The timestamp of the hardware fence which got deferred
-		 */
-		u32 defer_ts;
-		/**
-		 * @flags: Flags to control the creation of new hardware fences
-		 */
-		unsigned long flags;
-		/** @seqnum: Sequence number for hardware fence packet header */
-		atomic_t seqnum;
-		/** @soccp_rproc: rproc handle for soccp */
-		struct rproc *soccp_rproc;
-	} hw_fence;
 	/**
 	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop
 	 * to a desired threshold in given amount of time
@@ -247,6 +214,17 @@ int gen8_hwsched_submit_drawobj(struct adreno_device *adreno_dev,
  */
 void gen8_hwsched_context_detach(struct adreno_context *drawctxt);
 
+/**
+ * gen8_hwsched_soft_reset - Do a soft reset of the GPU hardware
+ * @adreno_dev: Pointer to adreno device structure
+ * @context: Pointer to the KGSL context
+ * @ctx_guilty: Set to true if context is invalidated on the fault
+ *
+ * Return: 0 on success and negative error on failure
+ */
+int gen8_hwsched_soft_reset(struct adreno_device *adreno_dev,
+		struct kgsl_context *context, bool ctx_guilty);
+
 /* Helper function to get to gen8 hwsched hfi device from adreno device */
 struct gen8_hwsched_hfi *to_gen8_hwsched_hfi(struct adreno_device *adreno_dev);
 
@@ -302,6 +280,19 @@ void gen8_hwsched_context_destroy(struct adreno_device *adreno_dev,
 u32 gen8_hwsched_hfi_get_value(struct adreno_device *adreno_dev, u32 prop);
 
 /**
+ * gen8_hwsched_hfi_set_value - Send SET_VALUE packet to GMU to set the value of a property
+ * @adreno_dev: Pointer to adreno device
+ * @type: Type of the property to set
+ * @subtype: Sub type of the property to set
+ * @data: Value to be set to the property
+ *
+ * This functions sends SET_VALUE HFI packet to set value of a property
+ *
+ * Return: On success, return 0. On failure, return error code
+ */
+int gen8_hwsched_hfi_set_value(struct adreno_device *adreno_dev, u32 type, u32 subtype, u32 data);
+
+/**
  * gen8_send_hw_fence_hfi_wait_ack - Send hardware fence info to GMU
  * @adreno_dev: Pointer to adreno device
  * @entry: Pointer to the adreno hardware fence entry
@@ -323,6 +314,17 @@ int gen8_send_hw_fence_hfi_wait_ack(struct adreno_device *adreno_dev,
  */
 void gen8_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence);
+
+/**
+ * gen8_hwsched_process_detached_hw_fences - Send fences that couldn't be sent to GMU when a context
+ * got detached. We must wait for ack when sending each of these fences to GMU so as to avoid
+ * sending a large number of hardware fences in a short span of time.
+ * @adreno_dev: Pointer to adreno device
+ *
+ * Return: Zero on success or negative error on failure
+ *
+ */
+int gen8_hwsched_process_detached_hw_fences(struct adreno_device *adreno_dev);
 
 /**
  * gen8_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
@@ -369,13 +371,15 @@ void gen8_hwsched_process_msgq(struct adreno_device *adreno_dev);
 int gen8_hwsched_boot_gpu(struct adreno_device *adreno_dev);
 
 /**
- * gen8_hwsched_get_rb_hostptr - Get rinbuffer host pointer
+ * gen8_hwsched_set_gmu_based_dcvs_value - Set value for GMU based DCVS
  * @adreno_dev: pointer to the adreno device
- * @gpuaddr: ringbuffer gpu address
- * @size: size of the ringbuffer
+ * @type: Type of HFI for set value
+ * @subtype: Sub type of HFI
+ * @val: Value to set
+ * @default_vote: True if this is a bootup default vote
  *
- * Return: Host pointer of the gpu ringbuffer
+ * Return: Zero on success or negative error on failure
  */
-void *gen8_hwsched_get_rb_hostptr(struct adreno_device *adreno_dev,
-	u64 gpuaddr, u32 size);
+int gen8_hwsched_set_gmu_based_dcvs_value(struct adreno_device *adreno_dev, u32 type,
+		u32 subtype, u32 val, bool default_vote);
 #endif

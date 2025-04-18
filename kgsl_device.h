@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -75,6 +75,14 @@ enum kgsl_event_results {
 
 #define KGSL_CONTEXT_ID(_context) \
 	((_context != NULL) ? (_context)->id : KGSL_MEMSTORE_GLOBAL)
+
+enum gpu_pwrlevel_op {
+	GPU_PWRLEVEL_OP_THERMAL,
+	GPU_PWRLEVEL_OP_MIN_PWRLEVEL,
+	GPU_PWRLEVEL_OP_MAX_PWRLEVEL,
+	GPU_PWRLEVEL_OP_GPUCLK,
+	GPU_PWRLEVEL_OP_PERF_HINT,
+};
 
 struct kgsl_device;
 struct platform_device;
@@ -170,6 +178,11 @@ struct kgsl_functable {
 	void (*set_isdb_breakpoint_registers)(struct kgsl_device *device);
 	/** @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
+	int (*gmu_based_dcvs_pwr_ops)(struct kgsl_device *device, u32 arg,
+		enum gpu_pwrlevel_op op);
+	/** @set_thermal_index: Target specific function to send thermal constraint to GMU */
+	void (*set_thermal_index)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {
@@ -351,6 +364,8 @@ struct kgsl_device {
 	u32 max_syncobj_hw_fence_count;
 	/** @file_mutex: Mutex to protect device open and close operations */
 	struct mutex file_mutex;
+	/** @host_based_dcvs: Set when KGSL is in charge of DCVS */
+	bool host_based_dcvs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \

@@ -310,14 +310,6 @@ int a6xx_probe_common(struct platform_device *pdev,
 	const struct adreno_gpu_core *gpucore);
 
 /**
- * a6xx_hw_isidle - Check whether a6xx gpu is idle or not
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: True if gpu is idle, otherwise false
- */
-bool a6xx_hw_isidle(struct adreno_device *adreno_dev);
-
-/**
  * a6xx_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
  *

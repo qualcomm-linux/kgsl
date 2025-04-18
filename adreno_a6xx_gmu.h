@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_A6XX_GMU_H
 #define __ADRENO_A6XX_GMU_H
@@ -13,7 +13,6 @@
 
 /**
  * struct a6xx_gmu_device - GMU device structure
- * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
  * @dump_mem: pointer to GMU debug dump memory
@@ -25,13 +24,6 @@
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct a6xx_gmu_device {
-	struct {
-		u32 core;
-		u32 core_dev;
-		u32 pwr;
-		u32 pwr_dev;
-		u32 hfi;
-	} ver;
 	int irq;
 	const struct firmware *fw_image;
 	struct kgsl_memdesc *dump_mem;
@@ -51,11 +43,6 @@ struct a6xx_gmu_device {
 	u32 vlvls[GMU_MAX_PWRLEVELS];
 	struct kgsl_mailbox mailbox;
 	bool preallocations;
-	/** @gmu_globals: Array to store gmu global buffers */
-	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
-	/** @global_entries: To keep track of number of gmu buffers */
-	u32 global_entries;
-	struct gmu_vma_entry *vma;
 	unsigned int log_wptr_retention;
 	/** @cm3_fault: whether gmu received a cm3 fault interrupt */
 	atomic_t cm3_fault;
@@ -105,39 +92,6 @@ struct a6xx_gmu_device *to_a6xx_gmu(struct adreno_device *adreno_dev);
 
 /* Helper function to get to adreno device from a6xx gmu device */
 struct adreno_device *a6xx_gmu_to_adreno(struct a6xx_gmu_device *gmu);
-
-/**
- * reserve_gmu_kernel_block() - Allocate a gmu buffer
- * @gmu: Pointer to the a6xx gmu device
- * @addr: Desired gmu virtual address
- * @size: Size of the buffer in bytes
- * @vma_id: Target gmu vma where this bufer should be mapped
- * @va_align: Alignment as a power of two(2^n) bytes for the GMU VA
- *
- * This function allocates a buffer and maps it in
- * the desired gmu vma
- *
- * Return: Pointer to the memory descriptor or error pointer on failure
- */
-struct kgsl_memdesc *reserve_gmu_kernel_block(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, u32 va_align);
-
-/**
- * reserve_gmu_kernel_block_fixed() - Maps phyical resource address to gmu
- * @gmu: Pointer to the a6xx gmu device
- * @addr: Desired gmu virtual address
- * @size: Size of the buffer in bytes
- * @vma_id: Target gmu vma where this buffer should be mapped
- * @resource: Name of the resource to get the size and address to allocate
- * @attrs: Attributes for the mapping
- * @va_align: Alignment as a power of two(2^n) bytes for the GMU VA
- *
- * This function maps the physcial resource address to desired gmu vma
- *
- * Return: Pointer to the memory descriptor or error pointer on failure
- */
-struct kgsl_memdesc *reserve_gmu_kernel_block_fixed(struct a6xx_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 va_align);
 
 /**
  * a6xx_build_rpmh_tables - Build the rpmh tables

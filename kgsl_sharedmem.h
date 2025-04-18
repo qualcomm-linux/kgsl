@@ -8,6 +8,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/dma-mapping.h>
+#include <linux/platform_device.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 
@@ -102,8 +103,6 @@ struct kgsl_memdesc {
 	struct mutex ranges_lock;
 	/** @gmuaddr: GMU VA if this is mapped in GMU */
 	u32 gmuaddr;
-	/*@kgsl_dev: kgsl device dev instance */
-	struct device *kgsl_dev;
 	/*@shmem_page_list: shmem pages list */
 	struct list_head shmem_page_list;
 };

@@ -289,9 +289,10 @@ TRACE_EVENT(kgsl_pwrlevel,
 		unsigned int pwrlevel,
 		unsigned int freq,
 		unsigned int prev_pwrlevel,
-		unsigned int prev_freq),
+		unsigned int prev_freq,
+		u64 ticks),
 
-	TP_ARGS(device, pwrlevel, freq, prev_pwrlevel, prev_freq),
+	TP_ARGS(device, pwrlevel, freq, prev_pwrlevel, prev_freq, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
@@ -299,6 +300,7 @@ TRACE_EVENT(kgsl_pwrlevel,
 		__field(unsigned int, freq)
 		__field(unsigned int, prev_pwrlevel)
 		__field(unsigned int, prev_freq)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
@@ -307,15 +309,17 @@ TRACE_EVENT(kgsl_pwrlevel,
 		__entry->freq = freq;
 		__entry->prev_pwrlevel = prev_pwrlevel;
 		__entry->prev_freq = prev_freq;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s pwrlevel=%d freq=%d prev_pwrlevel=%d prev_freq=%d",
+		"d_name=%s pwrlevel=%d freq=%d prev_pwrlevel=%d prev_freq=%d ticks=%llu",
 		__get_str(device_name),
 		__entry->pwrlevel,
 		__entry->freq,
 		__entry->prev_pwrlevel,
-		__entry->prev_freq
+		__entry->prev_freq,
+		__entry->ticks
 	)
 );
 
@@ -323,34 +327,38 @@ TRACE_EVENT(kgsl_pwrlevel,
  * Tracepoint for kgsl gpu_frequency
  */
 TRACE_EVENT(gpu_frequency,
-	TP_PROTO(unsigned int gpu_freq, unsigned int gpu_id),
-	TP_ARGS(gpu_freq, gpu_id),
+	TP_PROTO(unsigned int gpu_freq, unsigned int gpu_id, u64 ticks),
+	TP_ARGS(gpu_freq, gpu_id, ticks),
 	TP_STRUCT__entry(
 		__field(unsigned int, gpu_freq)
 		__field(unsigned int, gpu_id)
+		__field(u64, ticks)
 	),
 	TP_fast_assign(
 		__entry->gpu_freq = gpu_freq;
 		__entry->gpu_id = gpu_id;
+		__entry->ticks = ticks;
 	),
 
-	TP_printk("gpu_freq=%luKhz gpu_id=%lu",
+	TP_printk("gpu_freq=%luKhz gpu_id=%lu ticks=%llu",
 		(unsigned long)__entry->gpu_freq,
-		(unsigned long)__entry->gpu_id)
+		(unsigned long)__entry->gpu_id,
+		__entry->ticks)
 );
 
 TRACE_EVENT(kgsl_buslevel,
 
 	TP_PROTO(struct kgsl_device *device, u32 pwrlevel,
-		 u32 bus, u32 avg_bw),
+		 u32 bus, u32 avg_bw, u64 ticks),
 
-	TP_ARGS(device, pwrlevel, bus, avg_bw),
+	TP_ARGS(device, pwrlevel, bus, avg_bw, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
 		__field(u32, pwrlevel)
 		__field(u32, bus)
 		__field(u32, avg_bw)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
@@ -358,48 +366,53 @@ TRACE_EVENT(kgsl_buslevel,
 		__entry->pwrlevel = pwrlevel;
 		__entry->bus = bus;
 		__entry->avg_bw = avg_bw;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s pwrlevel=%u bus=%u avg_bw=%u",
+		"d_name=%s pwrlevel=%u bus=%u avg_bw=%u ticks=%llu",
 		__get_str(device_name),
 		__entry->pwrlevel,
 		__entry->bus,
-		__entry->avg_bw
+		__entry->avg_bw,
+		__entry->ticks
 	)
 );
 
 TRACE_EVENT(kgsl_gpubusy,
 	TP_PROTO(struct kgsl_device *device, unsigned int busy,
-		unsigned int elapsed),
+		unsigned int elapsed, u64 ticks),
 
-	TP_ARGS(device, busy, elapsed),
+	TP_ARGS(device, busy, elapsed, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
 		__field(unsigned int, busy)
 		__field(unsigned int, elapsed)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
 		kgsl_assign_str(device_name, device->name);
 		__entry->busy = busy;
 		__entry->elapsed = elapsed;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s busy=%u elapsed=%d",
+		"d_name=%s busy=%u elapsed=%d ticks=%llu",
 		__get_str(device_name),
 		__entry->busy,
-		__entry->elapsed
+		__entry->elapsed,
+		__entry->ticks
 	)
 );
 
 TRACE_EVENT(kgsl_pwrstats,
 	TP_PROTO(struct kgsl_device *device, s64 time,
-		struct kgsl_power_stats *pstats, u32 ctxt_count),
+		struct kgsl_power_stats *pstats, u32 ctxt_count, u64 ticks),
 
-	TP_ARGS(device, time, pstats, ctxt_count),
+	TP_ARGS(device, time, pstats, ctxt_count, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
@@ -408,6 +421,7 @@ TRACE_EVENT(kgsl_pwrstats,
 		__field(u64, ram_time)
 		__field(u64, ram_wait)
 		__field(u32, context_count)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
@@ -417,12 +431,14 @@ TRACE_EVENT(kgsl_pwrstats,
 		__entry->ram_time = pstats->ram_time;
 		__entry->ram_wait = pstats->ram_wait;
 		__entry->context_count = ctxt_count;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s total=%lld busy=%lld ram_time=%lld ram_wait=%lld context_count=%u",
+		"d_name=%s total=%lld busy=%lld ram_time=%lld ram_wait=%lld context_count=%u ticks=%llu",
 		__get_str(device_name), __entry->total_time, __entry->busy_time,
-		__entry->ram_time, __entry->ram_wait, __entry->context_count
+		__entry->ram_time, __entry->ram_wait, __entry->context_count,
+		__entry->ticks
 	)
 );
 
@@ -910,15 +926,16 @@ TRACE_EVENT(kgsl_user_pwrlevel_constraint,
 TRACE_EVENT(kgsl_constraint,
 
 	TP_PROTO(struct kgsl_device *device, unsigned int type,
-		unsigned int value, unsigned int on),
+		unsigned int value, unsigned int on, u64 ticks),
 
-	TP_ARGS(device, type, value, on),
+	TP_ARGS(device, type, value, on, ticks),
 
 	TP_STRUCT__entry(
 		__string(device_name, device->name)
 		__field(unsigned int, type)
 		__field(unsigned int, value)
 		__field(unsigned int, on)
+		__field(u64, ticks)
 	),
 
 	TP_fast_assign(
@@ -926,14 +943,16 @@ TRACE_EVENT(kgsl_constraint,
 		__entry->type = type;
 		__entry->value = value;
 		__entry->on = on;
+		__entry->ticks = ticks;
 	),
 
 	TP_printk(
-		"d_name=%s constraint_type=%s constraint_value=%u status=%s",
+		"d_name=%s constraint_type=%s constraint_value=%u status=%s ticks=%llu",
 		__get_str(device_name),
 		show_constraint(__entry->type),
 		__entry->value,
-		__entry->on ? "ON" : "OFF"
+		__entry->on ? "ON" : "OFF",
+		__entry->ticks
 	)
 );
 

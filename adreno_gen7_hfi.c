@@ -220,12 +220,13 @@ static void init_queues(struct adreno_device *adreno_dev)
 
 int gen7_hfi_init(struct adreno_device *adreno_dev)
 {
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	struct gen7_hfi *hfi = &gmu->hfi;
 
 	/* Allocates & maps memory for HFI */
 	if (IS_ERR_OR_NULL(hfi->hfi_mem)) {
-		hfi->hfi_mem = gen7_reserve_gmu_kernel_block(gmu, 0,
+		hfi->hfi_mem = gmu_core_reserve_kernel_block(device, 0,
 				HFIMEM_SIZE, GMU_NONCACHED_KERNEL, 0);
 		if (!IS_ERR(hfi->hfi_mem))
 			init_queues(adreno_dev);
@@ -389,10 +390,10 @@ int gen7_hfi_send_core_fw_start(struct adreno_device *adreno_dev)
 int gen7_hfi_send_generic_req_v5(struct adreno_device *adreno_dev, void *cmd,
 		struct pending_cmd *ret_cmd, u32 size_bytes)
 {
-	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int rc;
 
-	if (GMU_VER_MINOR(gmu->ver.hfi) <= 4)
+	if (GMU_VER_MINOR(device->gmu_core.ver.hfi) <= 4)
 		return gen7_hfi_send_generic_req(adreno_dev, cmd, size_bytes);
 
 	rc = gen7_hfi_send_cmd_wait_inline(adreno_dev, cmd, size_bytes, ret_cmd);
@@ -670,11 +671,12 @@ int gen7_hfi_send_gpu_perf_table(struct adreno_device *adreno_dev)
 	 */
 	static u32 cmd_buf[200];
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen7_dcvs_table *tbl = &gmu->dcvs_table;
 	int ret = 0;
 
 	/* Starting with GMU HFI Version 2.6.1, use H2F_MSG_TABLE */
-	if (gmu->ver.hfi >= HFI_VERSION(2, 6, 1)) {
+	if (device->gmu_core.ver.hfi >= HFI_VERSION(2, 6, 1)) {
 		struct hfi_table_cmd *cmd = (struct hfi_table_cmd *)&cmd_buf[0];
 		u32 dword_off;
 

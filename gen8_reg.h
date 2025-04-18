@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _GEN8_REG_H
@@ -37,6 +37,8 @@
 
 /* RBBM registers */
 #define GEN8_RBBM_GBIF_CLIENT_QOS_CNTL           0x008
+#define GEN8_RBBM_GBIF_HALT                      0x00a
+#define GEN8_RBBM_GBIF_HALT_ACK                  0x00b
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL          0x010
 #define GEN8_RBBM_WAIT_IDLE_CLOCKS_CNTL2         0x011
 #define GEN8_RBBM_STATUS                         0x012
@@ -766,6 +768,7 @@
 #define GEN8_CP_APERTURE_CNTL_GMU                              0x81d
 #define GEN8_CP_APERTURE_CNTL_CD                               0x81e
 #define GEN8_CP_CP2GMU_STATUS                                  0x822
+#define GEN8_CP_SEMAPHORE_REG_0                                0x825
 #define GEN8_CP_RL_ERROR_DETAILS_0                             0x840
 #define GEN8_CP_RL_ERROR_DETAILS_1                             0x841
 #define GEN8_CP_CRASH_DUMP_SCRIPT_BASE_LO                      0x842
@@ -881,9 +884,24 @@
 #define GEN8_CP_ROQ_SDS_STATUS_PIPE                            0x924
 #define GEN8_CP_ROQ_MRB_STATUS_PIPE                            0x925
 #define GEN8_CP_ROQ_VSD_STATUS_PIPE                            0x926
+#define GEN8_CP_RESERVED_REG_0                                 0x958
 #define GEN8_CP_SLICE_MEM_POOL_DBG_ADDR_PIPE                   0xb00
 #define GEN8_CP_SLICE_MEM_POOL_DBG_DATA_PIPE                   0xb01
 #define GEN8_CP_SLICE_CHICKEN_DBG_PIPE                         0xb93
+
+/* CP Peripheral registers */
+#define GEN8_CP_PERIPH_IB1_BASE_LO   0x7005
+#define GEN8_CP_PERIPH_IB1_BASE_HI   0x7006
+#define GEN8_CP_PERIPH_IB1_SIZE      0x7007
+#define GEN8_CP_PERIPH_IB1_OFFSET    0x7008
+#define GEN8_CP_PERIPH_IB2_BASE_LO   0x7009
+#define GEN8_CP_PERIPH_IB2_BASE_HI   0x700a
+#define GEN8_CP_PERIPH_IB2_SIZE      0x700b
+#define GEN8_CP_PERIPH_IB2_OFFSET    0x700c
+#define GEN8_CP_PERIPH_IB3_BASE_LO   0x700d
+#define GEN8_CP_PERIPH_IB3_BASE_HI   0x700e
+#define GEN8_CP_PERIPH_IB3_SIZE      0x700f
+#define GEN8_CP_PERIPH_IB3_OFFSET    0x7010
 
 /* UCHE registers */
 #define GEN8_UCHE_MODE_CNTL                 0xe01
@@ -959,6 +977,7 @@
 #define GEN8_GRAS_PERFCTR_LRZ_SEL_3         0x8733
 
 /* RB registers */
+#define GEN8_RB_RBP_CNTL                    0x8e01
 #define GEN8_RB_DBG_ECO_CNTL                0x8e04
 #define GEN8_RB_CCU_DBG_ECO_CNTL            0x8e06
 #define GEN8_RB_CCU_CNTL                    0x8e07
@@ -1149,6 +1168,8 @@
 #define GEN8_SP_HLSQ_DBG_ECO_CNTL                0xae6c
 #define GEN8_SP_READ_SEL                         0xae6d
 #define GEN8_SP_DBG_CNTL                         0xae71
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL_1              0xae73
+#define GEN8_SP_HLSQ_DBG_ECO_CNTL_2              0xae74
 
 #define GEN8_SP_PERFCTR_HLSQ_SEL_0          0xae60
 #define GEN8_SP_PERFCTR_HLSQ_SEL_1          0xae61
@@ -1276,6 +1297,7 @@
 
 #define GEN8_GBIF_CLIENT_HALT_MASK        BIT(0)
 #define GEN8_GBIF_ARB_HALT_MASK           BIT(1)
+#define GEN8_GBIF_GX_HALT_MASK            BIT(0)
 #define GEN8_GBIF_REINIT_GX_IDLE_MASK     BIT(0)
 
 #define GEN8_GBIF_PERF_PWR_CNT_EN                0x3cc0
@@ -1618,6 +1640,8 @@
 #define GEN8_GPU_CX_MISC_INT_0_STATUS		0x27834
 #define GEN8_GPU_CX_MISC_AO_COUNTER_LO		0x27880
 #define GEN8_GPU_CX_MISC_AO_COUNTER_HI		0x27881
+#define GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST	0x27886
+#define GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL     0x27887
 #define GEN8_GPU_CX_MISC_SW_FUSE_VALUE		0x27c00
 
 /* GPU SW Fuse Feature bit fields */
