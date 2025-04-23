@@ -1,13 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
 
-#include <linux/rbtree.h>
+#include <linux/iommu.h>
 #include <linux/mailbox_client.h>
+#include <linux/of_platform.h>
+#include <linux/rbtree.h>
 
 /* GMU_DEVICE - Given an KGSL device return the GMU specific struct */
 #define GMU_DEVICE_OPS(_a) ((_a)->gmu_core.dev_ops)
@@ -522,5 +524,17 @@ void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace);
  * @trace: Pointer to kgsl gmu trace
  */
 void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
+
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_paging_domain_alloc(dev);
+}
+#else
+static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+{
+	return iommu_domain_alloc(&platform_bus_type);
+}
+#endif
 
 #endif /* __KGSL_GMU_CORE_H */
