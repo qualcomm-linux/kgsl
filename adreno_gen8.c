@@ -1316,6 +1316,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	u64 uche_trap_base = gen8_get_uche_trap_base();
 	u32 rgba8888_lossless = 0, fp16compoptdis = 0;
 	int is_current_rt = rt_task(current);
+	int nice = task_nice(current);
 
 	/* Reset aperture fields to go through first aperture write check */
 	gen8_dev->aperture = UINT_MAX;
@@ -1532,7 +1533,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 	device->regmap.use_relaxed = true;
 
 	if (!is_current_rt)
-		sched_set_normal(current, 0);
+		sched_set_normal(current, nice);
 
 	return 0;
 }
