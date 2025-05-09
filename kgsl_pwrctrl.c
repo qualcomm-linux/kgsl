@@ -245,13 +245,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
 	_isense_clk_set_rate(pwr, pwr->active_pwrlevel);
 
-	trace_kgsl_pwrlevel(device,
-			pwr->active_pwrlevel, pwrlevel->gpu_freq,
-			pwr->previous_pwrlevel,
-			pwr->pwrlevels[old_level].gpu_freq);
-
-	KGSL_TRACE_GPU_FREQ(pwrlevel->gpu_freq/1000, 0);
-
 	/*  Update the bus after GPU clock decreases. */
 	if (new_level > old_level)
 		kgsl_bus_update(device, KGSL_BUS_VOTE_ON);
