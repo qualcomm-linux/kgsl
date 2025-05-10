@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk-provider.h>
@@ -18,6 +18,7 @@
 #include "adreno_a6xx.h"
 #include "adreno_a6xx_rgmu.h"
 #include "adreno_snapshot.h"
+#include "kgsl.h"
 #include "kgsl_bus.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
@@ -988,6 +989,8 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 	if (test_bit(RGMU_PRIV_FIRST_BOOT_DONE, &rgmu->flags))
 		return a6xx_boot(adreno_dev);
 
+	KGSL_BOOT_MARKER("ADRENO Init");
+
 	ret = a6xx_ringbuffer_init(adreno_dev);
 	if (ret)
 		return ret;
@@ -1038,6 +1041,8 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 	device->pwrctrl.last_stat_updated = ktime_get();
 
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
+
+	KGSL_BOOT_MARKER("ADRENO Ready");
 
 	return 0;
 }
