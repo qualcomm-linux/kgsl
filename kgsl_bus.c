@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <dt-bindings/interconnect/qcom,icc.h>
 #include <linux/interconnect.h>
 #include <linux/of.h>
-#include <soc/qcom/of_common.h>
 
 #include "kgsl_bus.h"
 #include "kgsl_device.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 
 
 static u32 _ab_buslevel_update(struct kgsl_pwrctrl *pwr,
@@ -174,12 +174,12 @@ int kgsl_bus_init(struct kgsl_device *device, struct platform_device *pdev)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	int count;
-	int ddr = of_fdt_get_ddrtype();
+	u64 ddr = kgsl_get_ddrtype();
 
-	if (ddr >= 0) {
+	if (!IS_ERR_VALUE(ddr)) {
 		char str[32];
 
-		snprintf(str, sizeof(str), "qcom,bus-table-ddr%d", ddr);
+		snprintf(str, sizeof(str), "qcom,bus-table-ddr%llu", ddr);
 
 		pwr->ddr_table = kgsl_bus_get_table(pdev, str, &count);
 		if (!IS_ERR(pwr->ddr_table))
