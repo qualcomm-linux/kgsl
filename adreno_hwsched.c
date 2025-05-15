@@ -1093,6 +1093,9 @@ static int adreno_hwsched_queue_cmds(struct kgsl_device_private *dev_priv,
 	} else
 		kmem_cache_free(jobs_cache, job);
 
+	if (test_and_clear_bit(ADRENO_CONTEXT_FAULT, &context->priv))
+		return -EPROTO;
+
 	return 0;
 }
 
@@ -1714,6 +1717,9 @@ static void adreno_hwsched_reset_and_snapshot_legacy(struct adreno_device *adren
 			drawobj = NULL;
 	}
 
+	if (drawobj && drawobj->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj->context->priv);
+
 	adreno_gpufault_stats(adreno_dev, drawobj, NULL, fault);
 
 	if (!drawobj) {
@@ -1799,6 +1805,9 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 			drawobj = NULL;
 	}
 
+	if (drawobj && drawobj->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj->context->priv);
+
 	do_fault_header(adreno_dev, drawobj, fault);
 
 	if (!obj_lpac && (fault & ADRENO_IOMMU_STALL_ON_PAGE_FAULT))
@@ -1824,6 +1833,9 @@ static void adreno_hwsched_reset_and_snapshot(struct adreno_device *adreno_dev, 
 		if (gpudev->lpac_fault_header)
 			gpudev->lpac_fault_header(adreno_dev, drawobj_lpac);
 	}
+
+	if (drawobj_lpac && drawobj_lpac->context)
+		set_bit(ADRENO_CONTEXT_FAULT, &drawobj_lpac->context->priv);
 
 	kgsl_device_snapshot(device, context, context_lpac, false);
 	adreno_gpufault_stats(adreno_dev, drawobj, drawobj_lpac, fault);
