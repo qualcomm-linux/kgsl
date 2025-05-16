@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023,2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __ADRENO_GEN7_GMU_H
 #define __ADRENO_GEN7_GMU_H
@@ -103,6 +103,8 @@ struct gen7_gmu_device {
 	void __iomem *rdpm_cx_virt;
 	/** @rdpm_mx_virt: Pointer where the RDPM MX block is mapped */
 	void __iomem *rdpm_mx_virt;
+	/** @pdc_cfg_base: Base address of PDC cfg registers */
+	void __iomem *pdc_cfg_base;
 	/** @num_oob_perfcntr: Number of active oob_perfcntr requests */
 	u32 num_oob_perfcntr;
 	/** @acd_debug_val: DVM value to calibrate ACD for a level */
