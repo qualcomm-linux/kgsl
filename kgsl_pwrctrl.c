@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2025, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/clk/qcom.h>
@@ -19,6 +19,7 @@
 
 #include "kgsl_device.h"
 #include "kgsl_bus.h"
+#include "kgsl_power_trace.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_sysfs.h"
 #include "kgsl_trace.h"
@@ -243,13 +244,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	kgsl_pwrctrl_pwrlevel_change_settings(device, 0);
 	device->ftbl->gpu_clock_set(device, pwr->active_pwrlevel);
 	_isense_clk_set_rate(pwr, pwr->active_pwrlevel);
-
-	trace_kgsl_pwrlevel(device,
-			pwr->active_pwrlevel, pwrlevel->gpu_freq,
-			pwr->previous_pwrlevel,
-			pwr->pwrlevels[old_level].gpu_freq);
-
-	trace_gpu_frequency(pwrlevel->gpu_freq/1000, 0);
 
 	/*  Update the bus after GPU clock decreases. */
 	if (new_level > old_level)
@@ -2256,7 +2250,7 @@ static int _wake(struct kgsl_device *device)
 		kgsl_pwrctrl_axi(device, true);
 		kgsl_pwrscale_wake(device);
 		kgsl_pwrctrl_irq(device, true);
-		trace_gpu_frequency(
+		KGSL_TRACE_GPU_FREQ(
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq/1000, 0);
 
 		kgsl_bus_update(device, KGSL_BUS_VOTE_ON);
@@ -2347,7 +2341,7 @@ _slumber(struct kgsl_device *device)
 		device->ftbl->stop(device);
 		kgsl_pwrctrl_disable(device);
 		kgsl_pwrscale_sleep(device);
-		trace_gpu_frequency(0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	case KGSL_STATE_SUSPEND:
@@ -2357,7 +2351,7 @@ _slumber(struct kgsl_device *device)
 		break;
 	case KGSL_STATE_AWARE:
 		kgsl_pwrctrl_disable(device);
-		trace_gpu_frequency(0, 0);
+		KGSL_TRACE_GPU_FREQ(0, 0);
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_SLUMBER);
 		break;
 	default:
