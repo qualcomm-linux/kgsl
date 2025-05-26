@@ -407,14 +407,6 @@ kgsl_reclaim_shrink_count_objects(struct shrinker *shrinker,
 	return count_reclaimable;
 }
 
-/* Shrinker callback data*/
-static struct shrinker kgsl_reclaim_shrinker = {
-	.count_objects = kgsl_reclaim_shrink_count_objects,
-	.scan_objects = kgsl_reclaim_shrink_scan_objects,
-	.seeks = DEFAULT_SEEKS,
-	.batch = 0,
-};
-
 void kgsl_reclaim_proc_private_init(struct kgsl_process_private *process)
 {
 	mutex_init(&process->reclaim_lock);
@@ -424,28 +416,74 @@ void kgsl_reclaim_proc_private_init(struct kgsl_process_private *process)
 	atomic_set(&process->unpinned_page_count, 0);
 }
 
-int kgsl_reclaim_start(void)
+#if (KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE)
+static int kgsl_reclaim_shrinker_init(void)
+{
+	kgsl_driver.reclaim_shrinker = shrinker_alloc(0, "kgsl_reclaim_shrinker");
+
+	if (!kgsl_driver.reclaim_shrinker)
+		return -ENOMEM;
+
+	/* Initialize shrinker */
+	kgsl_driver.reclaim_shrinker->count_objects = kgsl_reclaim_shrink_count_objects;
+	kgsl_driver.reclaim_shrinker->scan_objects = kgsl_reclaim_shrink_scan_objects;
+	kgsl_driver.reclaim_shrinker->seeks = DEFAULT_SEEKS;
+	kgsl_driver.reclaim_shrinker->batch = 0;
+
+	shrinker_register(kgsl_driver.reclaim_shrinker);
+	return 0;
+}
+
+static void kgsl_reclaim_shrinker_close(void)
+{
+	if (kgsl_driver.reclaim_shrinker)
+		shrinker_free(kgsl_driver.reclaim_shrinker);
+
+	kgsl_driver.reclaim_shrinker = NULL;
+}
+#else
+/* Shrinker callback data*/
+static struct shrinker kgsl_reclaim_shrinker = {
+	.count_objects = kgsl_reclaim_shrink_count_objects,
+	.scan_objects = kgsl_reclaim_shrink_scan_objects,
+	.seeks = DEFAULT_SEEKS,
+	.batch = 0,
+};
+
+static int kgsl_reclaim_shrinker_init(void)
 {
 	int ret;
 
+	kgsl_driver.reclaim_shrinker = &kgsl_reclaim_shrinker;
+
 	/* Initialize shrinker */
 #if (KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE)
-	ret = register_shrinker(&kgsl_reclaim_shrinker, "kgsl_reclaim_shrinker");
+	ret = register_shrinker(kgsl_driver.reclaim_shrinker, "kgsl_reclaim_shrinker");
 #else
-	ret = register_shrinker(&kgsl_reclaim_shrinker);
+	ret = register_shrinker(kgsl_driver.reclaim_shrinker);
 #endif
-	if (ret)
-		pr_err("kgsl: reclaim: Failed to register shrinker\n");
-
 	return ret;
+}
+
+static void kgsl_reclaim_shrinker_close(void)
+{
+	unregister_shrinker(kgsl_driver.reclaim_shrinker);
+}
+#endif
+
+int kgsl_reclaim_start(void)
+{
+	return kgsl_reclaim_shrinker_init();
 }
 
 int kgsl_reclaim_init(void)
 {
 	int ret = kgsl_reclaim_start();
 
-	if (ret)
+	if (ret) {
+		pr_err("kgsl: reclaim: Failed to register shrinker\n");
 		return ret;
+	}
 
 	INIT_WORK(&reclaim_work, kgsl_reclaim_background_work);
 
@@ -454,8 +492,6 @@ int kgsl_reclaim_init(void)
 
 void kgsl_reclaim_close(void)
 {
-	/* Unregister shrinker */
-	unregister_shrinker(&kgsl_reclaim_shrinker);
-
+	kgsl_reclaim_shrinker_close();
 	cancel_work_sync(&reclaim_work);
 }

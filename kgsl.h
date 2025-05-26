@@ -200,6 +200,10 @@ struct kgsl_driver {
 	struct workqueue_struct *workqueue;
 	/* @lockless_workqueue: Pointer to a workqueue handler which doesn't hold device mutex */
 	struct workqueue_struct *lockless_workqueue;
+	/** @pool_shrinker: Pointer to a shrinker that resizes the kgsl page pools */
+	struct shrinker *pool_shrinker;
+	/** @reclaim_shrinker: Pointer to a shrinker that reclaims kgsl memory */
+	struct shrinker *reclaim_shrinker;
 };
 
 extern struct kgsl_driver kgsl_driver;
