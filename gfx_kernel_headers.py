@@ -1,4 +1,6 @@
 # Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 as published by
