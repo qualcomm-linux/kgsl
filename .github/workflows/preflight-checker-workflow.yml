@@ -1,0 +1,19 @@
+name: preflight-checkers 
+on:
+  pull_request_target:
+    branches: [ "gfx-kernel.le.0.0" ]
+  push:
+    branches: [ "gfx-kernel.le.0.0" ]
+  workflow_dispatch:
+
+jobs:
+  checker:
+    uses: qualcomm-linux/qli-actions/.github/workflows/multi-checker.yml@main
+    with:
+        repolinter: true # default: true
+        semgrep: true # default: true
+        copyright-license-detector: true # default: true
+        pr-check-emails: true # default: true
+
+    secrets:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
