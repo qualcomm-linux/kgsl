@@ -84,6 +84,7 @@
 #define HFI_FEATURE_IFF_PCLX		32
 #define HFI_FEATURE_SOFT_RESET		0x10000001
 #define HFI_FEATURE_DCVS_PROFILE	0x10000002
+#define HFI_FEATURE_FAST_CONTEXT_DESTROY	0x10000003
 
 /*
  * MINBW_HYST_MASK = 0xffff
@@ -271,6 +272,16 @@ enum hfi_mem_kind {
 	 * related to GMU based DCVS.
 	 */
 	HFI_MEMKIND_FREQMGR_SCRATCH,
+	/**
+	 * @HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE: Used for requesting privileged non
+	 * secure preemption records for the internal dummy buffer
+	 */
+	HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE,
+	/**
+	 * @HFI_MEMKIND_DUMMY_CSW_COUNTER: Used for requesting preemption performance
+	 * counter save/restore buffer for the internal dummy buffer
+	 */
+	HFI_MEMKIND_DUMMY_CSW_COUNTER,
 	HFI_MEMKIND_MAX,
 };
 
@@ -303,6 +314,8 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
 	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
 	[HFI_MEMKIND_FREQMGR_SCRATCH] = "GMU FREQMGR SCRATCH",
+	[HFI_MEMKIND_DUMMY_CSW_PRIV_NON_SECURE] = "GMU DUMMY CSW PRIV NON SECURE",
+	[HFI_MEMKIND_DUMMY_CSW_COUNTER] = "GMU DUMMY CSW COUNTER",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -1554,6 +1567,7 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
  * adreno_hwsched_ctxt_unregister_wait_completion - Wait for HFI ack for context unregister
  * adreno_dev: Pointer to the adreno device
  * dev: Pointer to the device structure
+ * context: Pointer to the context structure
  * ack: Pointer to the pending ack
  * process_msgq: Function pointer to the msgq processing function
  * cmd: Pointer to the hfi packet header and data
@@ -1567,7 +1581,7 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
  */
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd);
 

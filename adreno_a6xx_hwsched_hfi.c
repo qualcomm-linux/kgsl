@@ -1700,7 +1700,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	}
 
 	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
-		GMU_PDEV_DEV(device), &pending_ack, a6xx_hwsched_process_msgq, &cmd);
+		GMU_PDEV_DEV(device), context, &pending_ack, a6xx_hwsched_process_msgq, &cmd);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, context);
 		goto done;

@@ -2858,14 +2858,18 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 
 int adreno_hwsched_ctxt_unregister_wait_completion(
 	struct adreno_device *adreno_dev,
-	struct device *dev, struct pending_cmd *ack,
+	struct device *dev, struct kgsl_context *context, struct pending_cmd *ack,
 	void (*process_msgq)(struct adreno_device *adreno_dev),
 	struct hfi_unregister_ctxt_cmd *cmd)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
+	int rb = adreno_get_level(context);
 	int ret;
+	bool fast = adreno_is_fast_context_destroy_enabled(adreno_dev);
 	u64 start, end;
+	char prefix[60];
 
 	start = gpudev->read_alwayson(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
@@ -2885,15 +2889,20 @@ int adreno_hwsched_ctxt_unregister_wait_completion(
 	end = gpudev->read_alwayson(adreno_dev);
 
 	if (completion_done(&ack->complete)) {
+		snprintf(prefix, sizeof(prefix),
+			"Ack unprocessed for %scontext unregister", fast ? "fast " : "");
 		dev_err_ratelimited(dev,
-			"Ack unprocessed for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
-			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id,
-			cmd->ts, start, end);
+			"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+			prefix, kgsl_context_type(drawctxt->type), rb,
+			MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 		return 0;
 	}
 
+	snprintf(prefix, sizeof(prefix),
+		"Ack timeout for %scontext unregister", fast ? "fast " : "");
 	dev_err_ratelimited(dev,
-		"Ack timeout for context unregister seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		"%s type: %s rb: %d seq: %d ctx: %u ts: %u ticks=0x%llx/0x%llx\n",
+		prefix, kgsl_context_type(drawctxt->type), rb,
 		MSG_HDR_GET_SEQNUM(ack->sent_hdr), cmd->ctxt_id, cmd->ts, start, end);
 	return -ETIMEDOUT;
 }

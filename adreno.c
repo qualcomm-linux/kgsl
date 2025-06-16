@@ -1771,6 +1771,8 @@ const char *hfi_feature_to_string(u32 feature)
 		return "DMS";
 	case HFI_FEATURE_AQE:
 		return "AQE";
+	case HFI_FEATURE_FAST_CONTEXT_DESTROY:
+		return "FAST_CONTEXT_DESTROY";
 	}
 	return "unknown";
 }

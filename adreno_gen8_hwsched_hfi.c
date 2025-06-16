@@ -1762,6 +1762,28 @@ static int gen8_hfi_send_soft_reset_feature_ctrl(struct adreno_device *adreno_de
 	return gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_SOFT_RESET, 1, 0);
 }
 
+static int gen8_hfi_send_fast_context_destroy_feature_ctrl(struct adreno_device *adreno_dev)
+{
+	int ret;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_FAST_CONTEXT_DESTROY))
+		return 0;
+
+	if (!gmu_core_capabilities_enabled(&KGSL_DEVICE(adreno_dev)->gmu_core.platform_caps,
+					   FAC_FAST_CONTEXT_DESTROY))
+		return 0;
+
+	/*
+	 * Enable the fast context destroy optimization if requested by the static
+	 * feature flag and if the capability is supported by the GMU.
+	 */
+	ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_FAST_CONTEXT_DESTROY, 1, 0);
+	if (!ret)
+		set_bit(ADRENO_DEVICE_FAST_CONTEXT_DESTROY, &adreno_dev->priv);
+
+	return ret;
+}
+
 static void gen8_spin_idle_debug_lpac(struct adreno_device *adreno_dev,
 				const char *str)
 {
@@ -2542,51 +2564,10 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 	return gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 }
 
-int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
+static int gen8_hwsched_feature_ctrl(struct adreno_device *adreno_dev)
 {
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct pending_cmd ack = {0};
 	int ret;
-
-	reset_hfi_queues(adreno_dev);
-
-	ret = gen8_gmu_hfi_start(adreno_dev);
-	if (ret)
-		goto err;
-
-	if (gen8_hwsched_warmboot_possible(adreno_dev))
-		return gen8_hwsched_warmboot_init_gmu(adreno_dev);
-
-	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT) &&
-		(!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))) {
-		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_WARMBOOT, 0) == 1)
-			gmu_core->warmboot_enabled = true;
-	}
-
-	warmboot_init_message_record_bitmask(adreno_dev);
-
-	/* Reset the variable here and set it when we successfully record the scratch */
-	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
-	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
-
-	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
-		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_gpu_perf_table(adreno_dev);
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.bw_table, sizeof(gmu->hfi.bw_table));
-	if (ret)
-		goto err;
-
-	ret = gen8_hfi_send_gmu_dcvs_req(adreno_dev);
-	if (ret)
-		goto err;
 
 	ret = gen8_hfi_send_acd_feature_ctrl(adreno_dev);
 	if (ret)
@@ -2675,11 +2656,69 @@ int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
 	if (ret)
 		goto err;
 
+	ret = gen8_hfi_send_fast_context_destroy_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
+
 	if (adreno_dev->dcvs_profile_enabled) {
 		ret = gen8_hfi_send_feature_ctrl(adreno_dev, HFI_FEATURE_DCVS_PROFILE, 1, 0);
 		if (ret)
 			goto err;
 	}
+
+err:
+	return ret;
+}
+
+int gen8_hwsched_hfi_start(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct pending_cmd ack = {0};
+	int ret;
+
+	reset_hfi_queues(adreno_dev);
+
+	ret = gen8_gmu_hfi_start(adreno_dev);
+	if (ret)
+		goto err;
+
+	if (gen8_hwsched_warmboot_possible(adreno_dev))
+		return gen8_hwsched_warmboot_init_gmu(adreno_dev);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT) &&
+		(!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))) {
+		if (gen8_hfi_send_get_value(adreno_dev, HFI_VALUE_GMU_WARMBOOT, 0) == 1)
+			gmu_core->warmboot_enabled = true;
+	}
+
+	warmboot_init_message_record_bitmask(adreno_dev);
+
+	/* Reset the variable here and set it when we successfully record the scratch */
+	clear_bit(GMU_PRIV_WARMBOOT_GMU_INIT_DONE, &gmu->flags);
+	clear_bit(GMU_PRIV_WARMBOOT_GPU_BOOT_DONE, &gmu->flags);
+
+	ret = gen8_hwsched_hfi_send_warmboot_cmd(adreno_dev, gmu->gmu_init_scratch,
+		HFI_WARMBOOT_SET_SCRATCH, false, &ack);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_gpu_perf_table(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_generic_req(adreno_dev, &gmu->hfi.bw_table, sizeof(gmu->hfi.bw_table));
+	if (ret)
+		goto err;
+
+	ret = gen8_hfi_send_gmu_dcvs_req(adreno_dev);
+	if (ret)
+		goto err;
+
+	ret = gen8_hwsched_feature_ctrl(adreno_dev);
+	if (ret)
+		goto err;
 
 	ret = send_start_msg(adreno_dev);
 	if (ret)
@@ -4124,7 +4163,7 @@ static int send_context_unregister_hfi(struct adreno_device *adreno_dev,
 	}
 
 	ret = adreno_hwsched_ctxt_unregister_wait_completion(adreno_dev,
-			gmu_pdev_dev, &pending_ack,
+			gmu_pdev_dev, context, &pending_ack,
 			gen8_hwsched_process_msgq, &cmd);
 	if (ret) {
 		trigger_context_unregister_fault(adreno_dev, drawctxt);
