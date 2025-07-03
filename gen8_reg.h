@@ -530,7 +530,6 @@
 #define GEN8_RBBM_SLICE_PERFCTR_SRAM_INIT_CMD     0x5e8
 #define GEN8_RBBM_SLICE_PERFCTR_FLUSH_HOST_CMD    0x5eb
 #define GEN8_RBBM_SLICE_NC_MODE_CNTL              0x5ec
-#define GEN8_VSC_KMD_DBG_ECO_CNTL                 0xdf0
 
 /* DBGC_CFG registers */
 #define GEN8_DBGC_CFG_DBGBUS_SEL_A               0x600
@@ -753,6 +752,8 @@
 /* VSC registers */
 #define GEN8_VSC_PERFCTR_VSC_SEL_0          0xcd8
 #define GEN8_VSC_PERFCTR_VSC_SEL_1          0xcd9
+#define GEN8_VSC_KMD_DBG_ECO_CNTL           0xdf0
+#define GEN8_VSC_VISIBILITY_FLUSH_CNTL      0xdf8
 
 /* CP registers */
 #define GEN8_CP_RB_BASE_LO_GC                                  0x800
@@ -793,6 +794,7 @@
 #define GEN8_CP_CRASH_DUMP_SCRIPT_BASE_HI                      0x843
 #define GEN8_CP_CRASH_DUMP_CNTL                                0x844
 #define GEN8_CP_CRASH_DUMP_STATUS                              0x845
+#define GEN8_CP_MULTIDRAW_CNTL                                 0x84a
 #define GEN8_CP_DBG_ECO_CNTL                                   0x84b
 #define GEN8_CP_MISC_CNTL                                      0x84c
 #define GEN8_CP_APRIV_CNTL_PIPE                                0x84d
@@ -1162,6 +1164,7 @@
 #define GEN8_SP_CHICKEN_BITS_3                   0xae0a
 #define GEN8_SP_CHICKEN_BITS_4                   0xae0b
 #define GEN8_SP_STATUS                           0xae0c
+#define GEN8_SP_L0_PERF_TUNE                     0xae0e
 #define GEN8_SP_PERFCTR_SHADER_MASK              0xae0f
 #define GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO        0xae10
 #define GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_HI        0xae11
