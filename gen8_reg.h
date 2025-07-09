@@ -1170,6 +1170,7 @@
 #define GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_HI        0xae11
 #define GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_LO      0xae12
 #define GEN8_SP_HLSQ_LPAC_GMEM_RANGE_MIN_HI      0xae13
+#define GEN8_SP_CHICKEN_BITS_5                   0xae14
 #define GEN8_SP_LPAC_CPI_STATUS                  0xae15
 #define GEN8_SP_LPAC_DBG_STATUS                  0xae16
 #define GEN8_SP_LPAC_ISDB_BATCH_COUNT            0xae17
