@@ -1105,10 +1105,9 @@
 #define GEN8_PC_PERFCTR_PC_SEL_15           0x9e3f
 #define GEN8_PC_CHICKEN_BITS_1              0x9e50
 #define GEN8_PC_DBG_ECO_CNTL                0x9e53
-#define GEN8_PC_CHICKEN_BITS_2              0x9f20
-#define GEN8_PC_CHICKEN_BITS_5              0x9f23
-
 #define GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1 0x9e64
+#define GEN8_PC_US_CONTEXT_SWITCH_SAVE_RESTORE_ADDR 0x9e6c
+#define GEN8_PC_US_CONTEXT_SWITCH_SAVE_RESTORE_DATA 0x9e6d
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_0      0x9f00
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_1      0x9f01
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_2      0x9f02
@@ -1125,6 +1124,8 @@
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_13     0x9f0d
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_14     0x9f0e
 #define GEN8_PC_SLICE_PERFCTR_PC_SEL_15     0x9f0f
+#define GEN8_PC_CHICKEN_BITS_2              0x9f20
+#define GEN8_PC_CHICKEN_BITS_5              0x9f23
 
 
 /* VFD registers */

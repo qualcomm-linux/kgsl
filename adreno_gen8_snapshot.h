@@ -33,9 +33,15 @@ enum location_id {
 };
 
 enum uSPTP_id {
-	uSPTP0 = 0,
-	uSPTP1 = 1,
-	SPTOP  = 15,
+	uSPTP0      = 0,
+	uSPTP1      = 1,
+	uSPTP0_nSP0 = 4,
+	uSPTP0_nSP1 = 5,
+	uSPTP0_nSP2 = 6,
+	uSPTP1_nSP0 = 8,
+	uSPTP1_nSP1 = 9,
+	uSPTP1_nSP2 = 10,
+	SPTOP       = 15,
 };
 
 #define STATE_NON_CONTEXT     0
@@ -203,6 +209,14 @@ struct gen8_cp_indexed_reg {
 	u32 size;
 };
 
+struct gen8_pc_indexed_reg {
+	u32 addr;
+	u32 data;
+	u32 slice_region;
+	u32 pipe_id;
+	u32 size;
+};
+
 struct gen8_reg_list {
 	u32 slice_region;
 	const u32 *regs;
@@ -273,6 +287,8 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_GMU_GC_S_0_I_0             = 150,
 	DEBUGBUS_SLICE_GC_S_0_I_0           = 151,
 	DEBUGBUS_HLSQ_SPTP_STAR_GC_S_0_I_0  = 152,
+	DEBUGBUS_SLICE_HM1_S_0_I_0          = 154,
+	DEBUGBUS_SLICE_HM1_S_0_I_1          = 155,
 	DEBUGBUS_USP_GC_S_0_I_0             = 160,
 	DEBUGBUS_USP_GC_S_0_I_1             = 161,
 	DEBUGBUS_USPTP_GC_S_0_I_0           = 166,
@@ -291,6 +307,18 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_HLSQ_GC_S_0_I_1            = 203,
 	DEBUGBUS_VFD_GC_S_0_I_0             = 208,
 	DEBUGBUS_VFD_GC_S_0_I_1             = 209,
+	DEBUGBUS_NSP_S_0_I_0                = 214,
+	DEBUGBUS_NSP_S_0_I_1                = 215,
+	DEBUGBUS_NSP_S_0_I_2                = 216,
+	DEBUGBUS_NSP_S_0_I_3                = 217,
+	DEBUGBUS_NSP_S_0_I_4                = 218,
+	DEBUGBUS_NSP_S_0_I_5                = 219,
+	DEBUGBUS_NSP_S_0_I_6                = 220,
+	DEBUGBUS_NSP_S_0_I_7                = 221,
+	DEBUGBUS_MALU_S_0_I_0               = 230,
+	DEBUGBUS_MALU_S_0_I_1               = 231,
+	DEBUGBUS_MALU_S_0_I_2               = 232,
+	DEBUGBUS_MALU_S_0_I_3               = 233,
 	DEBUGBUS_CP_GC_S_1_I_0              = 256,
 	DEBUGBUS_PC_BR_S_1_I_0              = 257,
 	DEBUGBUS_PC_BV_S_1_I_0              = 258,
@@ -316,6 +344,8 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_GMU_GC_S_1_I_0             = 278,
 	DEBUGBUS_SLICE_GC_S_1_I_0           = 279,
 	DEBUGBUS_HLSQ_SPTP_STAR_GC_S_1_I_0  = 280,
+	DEBUGBUS_SLICE_HM1_S_1_I_0          = 282,
+	DEBUGBUS_SLICE_HM1_S_1_I_1          = 283,
 	DEBUGBUS_USP_GC_S_1_I_0             = 288,
 	DEBUGBUS_USP_GC_S_1_I_1             = 289,
 	DEBUGBUS_USPTP_GC_S_1_I_0           = 294,
@@ -333,6 +363,18 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_HLSQ_GC_S_1_I_0            = 330,
 	DEBUGBUS_HLSQ_GC_S_1_I_1            = 331,
 	DEBUGBUS_VFD_GC_S_1_I_0             = 336,
+	DEBUGBUS_NSP_S_1_I_0                = 342,
+	DEBUGBUS_NSP_S_1_I_1                = 343,
+	DEBUGBUS_NSP_S_1_I_2                = 344,
+	DEBUGBUS_NSP_S_1_I_3                = 345,
+	DEBUGBUS_NSP_S_1_I_4                = 346,
+	DEBUGBUS_NSP_S_1_I_5                = 347,
+	DEBUGBUS_NSP_S_1_I_6                = 348,
+	DEBUGBUS_NSP_S_1_I_7                = 349,
+	DEBUGBUS_MALU_S_1_I_0               = 358,
+	DEBUGBUS_MALU_S_1_I_1               = 359,
+	DEBUGBUS_MALU_S_1_I_2               = 360,
+	DEBUGBUS_MALU_S_1_I_3               = 361,
 	DEBUGBUS_VFD_GC_S_1_I_1             = 337,
 	DEBUGBUS_CP_GC_S_2_I_0              = 384,
 	DEBUGBUS_PC_BR_S_2_I_0              = 385,
@@ -359,6 +401,8 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_GMU_GC_S_2_I_0             = 406,
 	DEBUGBUS_SLICE_GC_S_2_I_0           = 407,
 	DEBUGBUS_HLSQ_SPTP_STAR_GC_S_2_I_0  = 408,
+	DEBUGBUS_SLICE_HM1_S_2_I_0          = 410,
+	DEBUGBUS_SLICE_HM1_S_2_I_1          = 411,
 	DEBUGBUS_USP_GC_S_2_I_0             = 416,
 	DEBUGBUS_USP_GC_S_2_I_1             = 417,
 	DEBUGBUS_USPTP_GC_S_2_I_0           = 422,
@@ -377,6 +421,18 @@ enum gen8_debugbus_ids {
 	DEBUGBUS_HLSQ_GC_S_2_I_1            = 459,
 	DEBUGBUS_VFD_GC_S_2_I_0             = 464,
 	DEBUGBUS_VFD_GC_S_2_I_1             = 465,
+	DEBUGBUS_NSP_S_2_I_0                = 470,
+	DEBUGBUS_NSP_S_2_I_1                = 471,
+	DEBUGBUS_NSP_S_2_I_2                = 472,
+	DEBUGBUS_NSP_S_2_I_3                = 473,
+	DEBUGBUS_NSP_S_2_I_4                = 474,
+	DEBUGBUS_NSP_S_2_I_5                = 475,
+	DEBUGBUS_NSP_S_2_I_6                = 476,
+	DEBUGBUS_NSP_S_2_I_7                = 477,
+	DEBUGBUS_MALU_S_2_I_0               = 486,
+	DEBUGBUS_MALU_S_2_I_1               = 487,
+	DEBUGBUS_MALU_S_2_I_2               = 488,
+	DEBUGBUS_MALU_S_2_I_3               = 489,
 	/* Slice 3 - present in gen8_1_0 (4-slice GPU) */
 	DEBUGBUS_CP_GC_S_3_I_0              = 512,
 	DEBUGBUS_PC_BR_S_3_I_0              = 513,
@@ -678,6 +734,7 @@ enum gen8_statetype_ids {
 	HLSQ_FRONTEND_META             = 97,
 	HLSQ_INDIRECT_META             = 98,
 	HLSQ_BACKEND_META              = 99,
+	HLSQ_SHADOW_SP_RAM             = 100,
 };
 
 struct gen8_snapshot_block_list {
@@ -737,6 +794,10 @@ struct gen8_snapshot_block_list {
 	struct gen8_cp_indexed_reg *mempool_index_registers;
 	/* mempool_index_registers_len : Length of the mempool index registers */
 	size_t mempool_index_registers_len;
+	/* pc_index_registers : List of PC index_registers */
+	struct gen8_pc_indexed_reg *pc_index_registers;
+	/* pc_index_registers_len : Length of the PC index registers */
+	size_t pc_index_registers_len;
 };
 
 #endif /*__ADRENO_GEN8_SNAPSHOT_H */

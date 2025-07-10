@@ -11,6 +11,7 @@
 #include "adreno_gen8_3_0_snapshot.h"
 #include "adreno_gen8_6_0_snapshot.h"
 #include "adreno_gen8_9_0_snapshot.h"
+#include "adreno_gen8_11_0_snapshot.h"
 #include "adreno_snapshot.h"
 
 static struct kgsl_memdesc *gen8_capturescript;
@@ -207,6 +208,37 @@ const struct gen8_snapshot_block_list gen8_9_0_snapshot_block_list = {
 	.index_registers_len = ARRAY_SIZE(gen8_2_0_cp_indexed_reg_list),
 	.mempool_index_registers = gen8_2_0_cp_mempool_reg_list,
 	.mempool_index_registers_len = ARRAY_SIZE(gen8_2_0_cp_mempool_reg_list),
+};
+
+const struct gen8_snapshot_block_list gen8_11_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen8_11_0_ahb_registers,
+	.num_pre_crashdumper_regs = ARRAY_SIZE(gen8_11_0_ahb_registers),
+	.debugbus_blocks = gen8_11_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen8_11_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen8_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen8_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen8_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen8_cx_debugbus_blocks),
+	.gmu_cx_unsliced_regs = gen8_11_0_gmucx_registers,
+	.gmu_gx_regs = gen8_2_0_gmu_gx_registers,
+	.num_gmu_gx_regs = ARRAY_SIZE(gen8_2_0_gmu_gx_registers),
+	.rscc_regs = gen8_2_0_rscc_rsc_registers,
+	.reg_list = gen8_11_0_misc_registers,
+	.cx_misc_regs = gen8_11_0_cx_misc_registers,
+	.shader_blocks = gen8_11_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen8_11_0_shader_blocks),
+	.cp_clusters = gen8_11_0_cp_clusters,
+	.num_cp_clusters = ARRAY_SIZE(gen8_11_0_cp_clusters),
+	.clusters = gen8_11_0_mvc_clusters,
+	.num_clusters = ARRAY_SIZE(gen8_11_0_mvc_clusters),
+	.sptp_clusters = gen8_11_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen8_11_0_sptp_clusters),
+	.index_registers = gen8_11_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen8_11_0_cp_indexed_reg_list),
+	.mempool_index_registers = gen8_11_0_cp_mempool_reg_list,
+	.mempool_index_registers_len = ARRAY_SIZE(gen8_11_0_cp_mempool_reg_list),
+	.pc_index_registers = gen8_11_0_pc_indexed_reg_list,
+	.pc_index_registers_len = ARRAY_SIZE(gen8_11_0_pc_indexed_reg_list),
 };
 
 #define GEN8_SP_READ_SEL_VAL(_contextid, _sliceid, _location, _pipe, _statetype, _usptp, _sptp) \
