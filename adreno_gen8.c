@@ -1390,18 +1390,18 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)) {
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev) ||
+			adreno_is_gen8_1_0(adreno_dev)) {
 		if (adreno_slice_mask_override != U32_MAX)
 			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
 					adreno_slice_mask_override);
 
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
-		if (adreno_is_gen8_9_0(adreno_dev))
-			slice_mask = GET_SLICE_MASK(GEN8_9_0_NUM_PHYSICAL_SLICES, slice_mask);
-		else if (adreno_is_gen8_1_0(adreno_dev))
+		if (adreno_is_gen8_1_0(adreno_dev))
 			slice_mask = GET_SLICE_MASK(GEN8_1_0_NUM_PHYSICAL_SLICES, slice_mask);
 		else
-			slice_mask = GET_SLICE_MASK(GEN8_2_0_NUM_PHYSICAL_SLICES, slice_mask);
+			slice_mask = GET_SLICE_MASK(3, slice_mask);
+
 		/*
 		 * Update the chipid with the number of active slices. This is the number
 		 * of bits set in the slice mask.
@@ -1731,6 +1731,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_1_0(adreno_dev)) {
 		reglist[items].regs = gen8_1_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_1_0_ifpc_pwrup_reglist);
+	} else if (adreno_is_gen8_11_0(adreno_dev)) {
+		reglist[items].regs = gen8_11_0_ifpc_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen8_11_0_ifpc_pwrup_reglist);
 	} else {
 		reglist[items].regs = gen8_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_ifpc_pwrup_reglist);
@@ -1748,6 +1751,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_1_0(adreno_dev)) {
 		reglist[items].regs = gen8_1_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_1_0_pwrup_reglist);
+	} else if (adreno_is_gen8_11_0(adreno_dev)) {
+		reglist[items].regs = gen8_11_0_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen8_11_0_pwrup_reglist);
 	} else {
 		reglist[items].regs = gen8_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_pwrup_reglist);
@@ -1844,6 +1850,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		} else if (adreno_is_gen8_1_0(adreno_dev)) {
 			ext_list = gen8_1_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_1_0_pwrup_extlist);
+		} else if (adreno_is_gen8_11_0(adreno_dev)) {
+			ext_list = gen8_11_0_pwrup_extlist;
+			ext_len = ARRAY_SIZE(gen8_11_0_pwrup_extlist);
 		} else {
 			ext_list = gen8_0_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_0_0_pwrup_extlist);
@@ -3758,9 +3767,12 @@ u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 		return (adreno_dev->gpucore->gmem_size / GEN8_1_0_NUM_PHYSICAL_SLICES) *
 		gen8_get_num_slices(adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev)) {
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev)) {
 		if (adreno_is_gen8_9_0(adreno_dev))
 			return (adreno_dev->gpucore->gmem_size / GEN8_9_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+		else if (adreno_is_gen8_11_0(adreno_dev))
+			return (adreno_dev->gpucore->gmem_size / GEN8_11_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
 		else
 			return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *

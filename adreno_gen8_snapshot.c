@@ -2145,8 +2145,9 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 	u64 capturescript_regs_pages =
-		(adreno_is_gen8_2_x(adreno_dev) ||
-		 adreno_is_gen8_1_0(adreno_dev) ? 400 : 200);
+		((adreno_is_gen8_2_x(adreno_dev) ||
+		 adreno_is_gen8_1_0(adreno_dev) ||
+		adreno_is_gen8_11_0(adreno_dev)) ? 400 : 200);
 
 	ret = adreno_allocate_global(device, &gen8_capturescript,
 		50 * PAGE_SIZE, 0, KGSL_MEMFLAGS_GPUREADONLY,
