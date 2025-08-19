@@ -1351,7 +1351,7 @@ static void _enable_gpuhtw_llc(struct kgsl_mmu *mmu, struct iommu_domain *domain
 		iommu_set_pgtable_quirks(domain, IO_PGTABLE_QUIRK_ARM_OUTER_WBWA);
 }
 
-#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE) || !defined (CONFIG_QCOM_SCM_ADDON)
 static int _kgsl_set_smmu_aperture(u32 num_context_bank)
 {
 	return qcom_scm_set_gpu_smmu_aperture(num_context_bank);
