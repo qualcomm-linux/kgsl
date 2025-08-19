@@ -526,12 +526,12 @@ void gmu_core_trace_header_init(struct kgsl_gmu_trace *trace);
 void gmu_core_reset_trace_header(struct kgsl_gmu_trace *trace);
 
 #if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
-static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+static inline struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
 {
 	return iommu_paging_domain_alloc(dev);
 }
 #else
-static struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
+static inline struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
 {
 	return iommu_domain_alloc(&platform_bus_type);
 }
