@@ -2330,7 +2330,7 @@ static int gen7_gmu_acd_probe(struct kgsl_device *device,
 
 	if (ret)
 		dev_err_probe(&gmu->pdev->dev, ret,
-				"AOP messaging init failed: %d\n");
+				"AOP messaging init failed\n");
 
 	return ret == -EPROBE_DEFER ? ret: 0;
 }
