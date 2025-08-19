@@ -531,6 +531,7 @@ static inline struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *de
 	return iommu_paging_domain_alloc(dev);
 }
 #else
+#include <linux/platform_device.h>
 static inline struct iommu_domain *gmu_core_iommu_domain_alloc(struct device *dev)
 {
 	return iommu_domain_alloc(&platform_bus_type);
