@@ -1352,12 +1352,12 @@ static void _enable_gpuhtw_llc(struct kgsl_mmu *mmu, struct iommu_domain *domain
 }
 
 #if (KERNEL_VERSION(6, 13, 0) <= LINUX_VERSION_CODE)
-int _kgsl_set_smmu_aperture(u32 num_context_bank)
+static int _kgsl_set_smmu_aperture(u32 num_context_bank)
 {
 	return qcom_scm_set_gpu_smmu_aperture(num_context_bank);
 }
 #else
-int _kgsl_set_smmu_aperture(u32 num_context_bank)
+static int _kgsl_set_smmu_aperture(u32 num_context_bank)
 {
 	return qcom_scm_kgsl_set_smmu_aperture(num_context_bank);
 }
