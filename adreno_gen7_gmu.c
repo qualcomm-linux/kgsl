@@ -486,7 +486,7 @@ static int find_vma_block(struct gen7_gmu_device *gmu, u32 addr, u32 size)
 {
 	int i;
 
-	for (i = 0; i < GMU_MEM_TYPE_MAX; i++) {
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gmu->vma[i];
 
 		if ((addr >= vma->start) &&
@@ -2563,7 +2563,9 @@ int gen7_gmu_probe(struct kgsl_device *device,
 		goto error;
 
 	gmu->vma = gen7_gmu_vma;
-	for (i = 0; i < ARRAY_SIZE(gen7_gmu_vma); i++) {
+	gmu->num_vmas = ARRAY_SIZE(gen7_gmu_vma);
+
+	for (i = 0; i < gmu->num_vmas; i++) {
 		struct gmu_vma_entry *vma = &gen7_gmu_vma[i];
 
 		vma->vma_root = RB_ROOT;
