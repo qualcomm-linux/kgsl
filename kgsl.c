@@ -5150,8 +5150,6 @@ int kgsl_of_property_read_ddrtype(struct device_node *node, const char *base,
 	return of_property_read_u32(node, base, ptr);
 }
 
-int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev);
-
 int kgsl_device_platform_probe(struct kgsl_device *device)
 {
 	struct platform_device *pdev = device->pdev;

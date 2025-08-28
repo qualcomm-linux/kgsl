@@ -200,4 +200,6 @@ struct kgsl_iommu_pt {
 int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context);
 
+int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev);
+
 #endif
