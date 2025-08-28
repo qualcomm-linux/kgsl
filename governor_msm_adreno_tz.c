@@ -251,7 +251,7 @@ static int tz_init(struct device *dev, struct devfreq_msm_adreno_tz_data *priv,
 
 	tzmem_pool = qcom_tzmem_pool_new(&pool_config);
 	if (IS_ERR(tzmem_pool)) {
-		pr_err(TAG "tz: Failed to create qcom_tzmem_pool %d\n", PTR_ERR(tzmem_pool));
+		pr_err(TAG "tz: Failed to create qcom_tzmem_pool %pe\n", tzmem_pool);
 		return PTR_ERR(tzmem_pool);
 	}
 
