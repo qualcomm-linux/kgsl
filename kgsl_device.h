@@ -210,8 +210,6 @@ struct kgsl_functable {
 	/** @alloc_dcvs_profile_memory: Function ops for GMU based DCVS profile operations */
 	void (*alloc_dcvs_profile_memory)(struct kgsl_device *device,
 		struct kgsl_process_private *proc_priv);
-	/** @is_reset_recovery: Check if the ADRENO device under goes reset recovery */
-	bool (*is_reset_recovery)(struct kgsl_device *device);
 	/** @is_first_boot_done: Check if the ADRENO device first boot is done */
 	bool (*is_first_boot_done)(struct kgsl_device *device);
 };
