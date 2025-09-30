@@ -1400,6 +1400,29 @@ int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout)
 	}
 }
 
+void kgsl_pwrctrl_disable_mx_gdsc(struct kgsl_device *device)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (pwr->gmu_mx_pd)
+		pm_runtime_put_sync(pwr->gmu_mx_pd);
+}
+
+int kgsl_pwrctrl_enable_mx_gdsc(struct kgsl_device *device)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	int ret;
+
+	if (!pwr->gmu_mx_pd)
+		return 0;
+
+	ret = pm_runtime_resume_and_get(pwr->gmu_mx_pd);
+	if (ret)
+		dev_err(device->dev, "Failed to enable MX gdsc, error %d\n", ret);
+
+	return ret;
+}
+
 int kgsl_pwrctrl_enable_cx_gdsc(struct kgsl_device *device)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -1572,6 +1595,26 @@ static int kgsl_device_link_add_cxpd_iommu(struct kgsl_device *device)
 	return 0;
 }
 #endif
+
+int kgsl_pwrctrl_probe_mx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
+{
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+	if (!IS_ERR_OR_NULL(pwr->gmu_mx_pd))
+		return 0;
+
+	if (of_property_read_bool(pdev->dev.of_node, "power-domains")) {
+		pwr->gmu_mx_pd = dev_pm_domain_attach_by_name(&pdev->dev, "gmu_mx");
+
+		if (IS_ERR_OR_NULL(pwr->gmu_mx_pd)) {
+			dev_err(device->dev,
+				"Failed to attach GMU mx power domain\n");
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
 
 static int kgsl_pwrctrl_probe_cx_gdsc(struct kgsl_device *device, struct platform_device *pdev)
 {
@@ -2255,9 +2298,13 @@ void kgsl_pwrctrl_close(struct kgsl_device *device)
 	if (pwr->gx_pd)
 		dev_pm_domain_detach(pwr->gx_pd, false);
 
+	if (pwr->gmu_mx_pd)
+		dev_pm_domain_detach(pwr->gmu_mx_pd, false);
+
 	pwr->gmu_cx_pd = NULL;
 	pwr->cx_pd = NULL;
 	pwr->gx_pd = NULL;
+	pwr->gmu_mx_pd = NULL;
 }
 
 void kgsl_idle_check(struct work_struct *work)

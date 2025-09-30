@@ -243,6 +243,10 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	ret = kgsl_pwrctrl_enable_mx_gdsc(device);
+	if (ret)
+		goto cx_gdsc_off;
+
 	/* Start the GMU at the lowest available frequency level */
 	ret = gmu_core_enable_clks(device, 0);
 	if (ret)
@@ -357,6 +361,8 @@ clks_gdsc_off:
 	gmu_core_disable_clks(device);
 
 gdsc_off:
+	kgsl_pwrctrl_disable_mx_gdsc(device);
+cx_gdsc_off:
 	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	gmu_core_rdpm_cx_freq_update(device, 0);
@@ -386,6 +392,10 @@ static int gen8_hwsched_gmu_boot(struct adreno_device *adreno_dev)
 	ret = kgsl_pwrctrl_enable_cx_gdsc(device);
 	if (ret)
 		return ret;
+
+	ret = kgsl_pwrctrl_enable_mx_gdsc(device);
+	if (ret)
+		goto cx_gdsc_off;
 
 	/* Start the GMU at the lowest available frequency level */
 	ret = gmu_core_enable_clks(device, 0);
@@ -449,6 +459,8 @@ clks_gdsc_off:
 	gmu_core_disable_clks(device);
 
 gdsc_off:
+	kgsl_pwrctrl_disable_mx_gdsc(device);
+cx_gdsc_off:
 	kgsl_pwrctrl_disable_cx_gdsc(device);
 
 	gmu_core_rdpm_cx_freq_update(device, 0);
@@ -544,6 +556,8 @@ static int gen8_hwsched_gmu_power_off(struct adreno_device *adreno_dev)
 	gen8_hwsched_hfi_stop(adreno_dev);
 
 	gmu_core_disable_clks(device);
+
+	kgsl_pwrctrl_disable_mx_gdsc(device);
 
 	kgsl_pwrctrl_disable_cx_gdsc(device);
 

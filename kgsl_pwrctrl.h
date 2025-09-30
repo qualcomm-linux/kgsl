@@ -125,6 +125,8 @@ struct kgsl_pwrctrl {
 	struct device *cx_pd;
 	/** @gmu_cx_pd: Power domain for controlling GMU CX GDSC instance */
 	struct device *gmu_cx_pd;
+	/** @gmu_mx_pd: Power domain for controlling GMU MX GDSC instance */
+	struct device *gmu_mx_pd;
 	/** @gx_pd: Power domain for controlling GX GDSC */
 	struct device *gx_pd;
 	/** @gx_regulator_parent: Pointer to the GX domain parent supply */
@@ -374,5 +376,28 @@ u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq);
 int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device);
 
 static int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout);
+
+/**
+ * kgsl_pwrctrl_probe_mx_gdsc - Probe mx gdsc
+ * @device: Pointer to the kgsl device
+ * @pdev: Pointer to the platform device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int kgsl_pwrctrl_probe_mx_gdsc(struct kgsl_device *device, struct platform_device *pdev);
+
+/**
+ * kgsl_pwrctrl_enable_mx_gdsc - Enable mx gdsc
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or negative error on failure
+ */
+int kgsl_pwrctrl_enable_mx_gdsc(struct kgsl_device *device);
+
+/**
+ * kgsl_pwrctrl_disable_mx_gdsc - Disable mx gdsc
+ * @device: Pointer to the kgsl device
+ */
+void kgsl_pwrctrl_disable_mx_gdsc(struct kgsl_device *device);
 
 #endif /* __KGSL_PWRCTRL_H */
