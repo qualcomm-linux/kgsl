@@ -53,15 +53,20 @@ static int setup_cx_arc_votes(struct gen8_gmu_device *gmu,
 	return ret;
 }
 
-#define GEN8_DEP_VOTE_SET(cx, mx) \
-	(FIELD_PREP(GENMASK(31, 14), 0x3FFFF) | \
+#define GEN8_DEP_VOTE_SET(cx, mx, bx) \
+	(FIELD_PREP(GENMASK(31, 26), 0x3F) | \
+	 FIELD_PREP(GENMASK(25, 20), bx) | \
+	 FIELD_PREP(GENMASK(19, 14), 0x3F) | \
 	 FIELD_PREP(GENMASK(13, 8), mx) | \
 	 FIELD_PREP(GENMASK(7, 0), cx))
 
-static int setup_dependency_domain_tbl(u32 *votes,
+#define GEN8_DEP_VOTE_SET_BX(bx) (FIELD_PREP(GENMASK(25, 20), bx))
+
+static int setup_dependency_domain_tbl(struct adreno_device *adreno_dev, u32 *votes,
 		struct rpmh_arc_vals *dep_rail, struct rpmh_arc_vals *cx_rail,
 		u16 *vlvl, u32 *cx_vlvl, u32 num_entries)
 {
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	u32 cx_vote;
 	int i, j;
 
@@ -98,7 +103,62 @@ static int setup_dependency_domain_tbl(u32 *votes,
 				break;
 		}
 
-		votes[i] = GEN8_DEP_VOTE_SET(cx_vote, j);
+		/*
+		 * Targets with three rail memory will setup bx vote separately. For targets without
+		 * three rail memory, set bx to 0x3F
+		 */
+		if (gen8_core->three_rail_memory)
+			votes[i] = GEN8_DEP_VOTE_SET(cx_vote, j, 0x0);
+		else
+			votes[i] = GEN8_DEP_VOTE_SET(cx_vote, j, 0x3F);
+	}
+
+	return 0;
+}
+
+static int adreno_rpmh_setup_volt_dependency_tbl_gbx(u32 *votes, struct rpmh_arc_vals *pri_rail,
+		struct rpmh_arc_vals *sec_rail, u16 *vlvl, u32 num_entries)
+{
+	int i, j, k;
+	uint16_t cur_vlvl;
+	bool found_match;
+
+	/*
+	 * i tracks current KGSL GPU frequency table entry
+	 * j tracks secondary rail voltage table entry
+	 * k tracks primary rail voltage table entry
+	 */
+	for (i = 0; i < num_entries; i++) {
+		found_match = false;
+
+		/* Look for a primary rail voltage that matches a VLVL level */
+		for (k = 0; k < pri_rail->num; k++) {
+			if (pri_rail->val[k] >= vlvl[i]) {
+				cur_vlvl = pri_rail->val[k];
+				found_match = true;
+				break;
+			}
+		}
+
+		/* If we did not find a matching VLVL level then abort */
+		if (!found_match)
+			return -EINVAL;
+
+		/*
+		 * Look for a secondary rail index whose VLVL value
+		 * is greater than or equal to the VLVL value of the
+		 * corresponding index of the primary rail
+		 */
+		for (j = 0; j < sec_rail->num; j++) {
+			if (sec_rail->val[j] >= cur_vlvl ||
+					j + 1 == sec_rail->num)
+				break;
+		}
+
+		if (j == sec_rail->num)
+			j = 0;
+
+		votes[i] |= GEN8_DEP_VOTE_SET_BX(j);
 	}
 
 	return 0;
@@ -110,18 +170,21 @@ static int setup_dependency_domain_tbl(u32 *votes,
  * @pri_rail: Pointer to primary power rail vlvl table
  * @sec_rail: Pointer to second/dependent power rail vlvl table
  * @gmxc_rail: Pointer to MxG power rail vlvl table
+ * @gbx_rail: Pointer to BX power rail vlvl table
  *
  * This function initializes the gx votes for all gpu frequencies
  * for gpu dcvs
  */
 static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	struct rpmh_arc_vals *pri_rail, struct rpmh_arc_vals *sec_rail,
-	struct rpmh_arc_vals *gmxc_rail, struct rpmh_arc_vals *cx_rail)
+	struct rpmh_arc_vals *gmxc_rail, struct rpmh_arc_vals *cx_rail,
+	struct rpmh_arc_vals *gbx_rail)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_dcvs_table *table = &gmu->dcvs_table;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	u16 vlvl_tbl[MAX_GX_LEVELS];
 	u32 cx_vlvl_tbl[MAX_GX_LEVELS];
 	u32 gx_votes[MAX_GX_LEVELS];
@@ -156,10 +219,17 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = setup_dependency_domain_tbl(dep_votes, sec_rail, cx_rail,
+	ret = setup_dependency_domain_tbl(adreno_dev, dep_votes, sec_rail, cx_rail,
 			vlvl_tbl, cx_vlvl_tbl, table->gpu_level_num);
 	if (ret)
 		return ret;
+
+	if (gen8_core->three_rail_memory) {
+		ret = adreno_rpmh_setup_volt_dependency_tbl_gbx(dep_votes, pri_rail, gbx_rail,
+			vlvl_tbl, table->gpu_level_num);
+		if (ret)
+			return ret;
+	}
 
 	/* Populate DCVS table with all the votes */
 	for (i = 1; i < table->gpu_level_num; i++) {
@@ -179,7 +249,8 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 static int build_dcvs_table(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc, gmxc_arc;
+	struct rpmh_arc_vals gx_arc, cx_arc, mx_arc, gmxc_arc, gbx_arc;
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	int ret;
 
 	ret = adreno_rpmh_arc_cmds(&gx_arc, "gfx.lvl");
@@ -194,6 +265,12 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
+	if (gen8_core->three_rail_memory) {
+		ret = adreno_rpmh_arc_cmds(&gbx_arc, "gbx.lvl");
+		if (ret)
+			return ret;
+	}
+
 	ret = setup_cx_arc_votes(gmu, &cx_arc, &mx_arc);
 	if (ret)
 		return ret;
@@ -203,12 +280,14 @@ static int build_dcvs_table(struct adreno_device *adreno_dev)
 		ret = adreno_rpmh_arc_cmds(&gmxc_arc, "gmxc.lvl");
 		/* Dummy gMxC resource, treat as if no dedicated MxC */
 		if (ret == -ENODATA)
-			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc,
+				&gbx_arc);
 		else
-			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc);
+			ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, &gmxc_arc, &cx_arc,
+				&gbx_arc);
 	} else {
 		/* No gMxC resource entry, treat as if no dedicated MxC */
-		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc);
+		ret = setup_gx_arc_votes(adreno_dev, &gx_arc, &mx_arc, NULL, &cx_arc, &gbx_arc);
 	}
 
 	return ret;
