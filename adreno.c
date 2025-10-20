@@ -3231,6 +3231,12 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val = adreno_dev->fastblend_enabled ? 1 : 0;
 	else if (param->type == KGSL_PROP_IS_AQE_ENABLED)
 		val = ADRENO_FEATURE(adreno_dev, ADRENO_AQE) ? 1 : 0;
+	else if (param->type == KGSL_PROP_MULTIDRAW_MODE)
+		val = adreno_dev->multidraw_mode;
+	else if (param->type == KGSL_PROP_VIZ_FLUSH_DRAW_COUNT)
+		val = adreno_dev->viz_flush_draw_count;
+	else if (param->type == KGSL_PROP_VIZ_FLUSH_PRIM_COUNT)
+		val = adreno_dev->viz_flush_prim_count;
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -3276,6 +3282,9 @@ static const struct {
 	{ KGSL_PROP_IS_FASTBLEND_ENABLED, adreno_prop_u32},
 	{ KGSL_PROP_UCHE_TRAP_BASE, adreno_prop_uche_trap_base },
 	{ KGSL_PROP_IS_AQE_ENABLED, adreno_prop_u32 },
+	{ KGSL_PROP_MULTIDRAW_MODE, adreno_prop_u32 },
+	{ KGSL_PROP_VIZ_FLUSH_DRAW_COUNT, adreno_prop_u32 },
+	{ KGSL_PROP_VIZ_FLUSH_PRIM_COUNT, adreno_prop_u32 },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,

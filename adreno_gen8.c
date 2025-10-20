@@ -887,6 +887,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_CP_RESERVED_REG_0, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_CP_CHICKEN_DBG_PIPE, BIT(PIPE_BV) | BIT(PIPE_BR) | BIT(PIPE_LPAC) | BIT(PIPE_AQE0) |
 		BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV), 0, 0, 0, },
+	{ GEN8_CP_MULTIDRAW_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_GPU_CX_MISC_SMMU_INTR_MASK0, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_GPU_CX_MISC_SMMU_INTR_MASK1, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_UCHE_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
@@ -924,6 +925,7 @@ struct gen8_nonctxt_overrides gen8_nc_overrides[] = {
 	{ GEN8_VPC_DBG_ECO_CNTL_2, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_VPC_DBG_ECO_CNTL_3, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 3, },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR), 0, 0, 0, },
+	{ GEN8_VSC_VISIBILITY_FLUSH_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_DBG_ECO_CNTL, BIT(PIPE_NONE), 0, 0, 1, },
 	{ GEN8_SP_NC_MODE_CNTL, BIT(PIPE_NONE), 0, 0, 0, },
 	{ GEN8_SP_CHICKEN_BITS, BIT(PIPE_NONE), 0, 0, 1, },
@@ -1968,6 +1970,22 @@ static u64 gen8_get_uche_trap_base(void)
 	return GEN8_UCHE_TRAP_BASE;
 }
 
+void gen8_setup_adreno_props(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 reg;
+
+	if (!adreno_is_gen8_11_0(adreno_dev))
+		return;
+
+	/* Store the multidraw and visibility flush settings */
+	kgsl_regread(device, GEN8_CP_MULTIDRAW_CNTL, &reg);
+	adreno_dev->multidraw_mode = FIELD_GET(GENMASK(0, 0), reg);
+	kgsl_regread(device, GEN8_VSC_VISIBILITY_FLUSH_CNTL, &reg);
+	adreno_dev->viz_flush_draw_count = FIELD_GET(GENMASK(7, 0), reg);
+	adreno_dev->viz_flush_prim_count = FIELD_GET(GENMASK(23, 8), reg);
+}
+
 /*
  * All Gen8 targets support marking certain transactions as always privileged
  * which allows us to mark more memory as privileged without having to
@@ -2167,6 +2185,9 @@ int gen8_start(struct adreno_device *adreno_dev)
 
 	/* Program noncontext registers */
 	gen8_nonctxt_regconfig(adreno_dev);
+
+	/* Read GPU registers with the GMU OOB set to update adreno props */
+	gen8_setup_adreno_props(adreno_dev);
 
 	/* Enable hardware hang detection */
 	kgsl_regwrite(device, GEN8_RBBM_INTERFACE_HANG_INT_CNTL, BIT(30) |

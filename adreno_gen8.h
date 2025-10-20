@@ -784,4 +784,14 @@ static inline void gen8_populate_ctxt_record_size(struct adreno_device *adreno_d
 	adreno_dev->aqe_ctxt_record_sz = PAGE_ALIGN(adreno_dev->aqe_ctxt_record_sz);
 }
 
+/**
+ * gen8_setup_adreno_props - Set up adreno property values for future queries
+ * @adreno_dev: Handle to the adreno device
+ *
+ * This function sets up several adreno property values so that they can later
+ * be queried from userspace. This setup is performed at GPU first boot and,
+ * depending on the target, may involve reading some GPU registers.
+ */
+void gen8_setup_adreno_props(struct adreno_device *adreno_dev);
+
 #endif

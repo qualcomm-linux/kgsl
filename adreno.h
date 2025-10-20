@@ -925,6 +925,12 @@ struct adreno_device {
 	 * registers
 	 */
 	struct adreno_ubwc_props ubwc_props;
+	/** @multidraw_mode: Whether PC unroll is enabled for multidraw **/
+	u32 multidraw_mode;
+	/** @viz_flush_draw_count: Draw count to flush visibility stream **/
+	u32 viz_flush_draw_count;
+	/** @viz_flush_prim_count: Prim count to flush visibility stream **/
+	u32 viz_flush_prim_count;
 };
 
 /* Time to wait for suspend recovery gate to complete */

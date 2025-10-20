@@ -363,6 +363,9 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_GPU_SECURE_VA_SIZE	0x31
 #define KGSL_PROP_GPU_SECURE_VA_INUSE	0x32
 #define KGSL_PROP_DCVS_PROFILE		0x33
+#define KGSL_PROP_MULTIDRAW_MODE	0x34
+#define KGSL_PROP_VIZ_FLUSH_DRAW_COUNT	0x35
+#define KGSL_PROP_VIZ_FLUSH_PRIM_COUNT	0x36
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.
