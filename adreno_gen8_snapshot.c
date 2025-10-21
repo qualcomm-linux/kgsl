@@ -1987,6 +1987,29 @@ static bool gen8_snapshot_cp_indexed_regs(struct kgsl_device *device,
 	return ret;
 }
 
+static bool gen8_snapshot_pc_indexed_regs(struct kgsl_device *device,
+			struct kgsl_snapshot *snapshot)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	bool ret = true;
+	int i;
+
+	if (!adreno_is_gen8_11_0(adreno_dev))
+		return true;
+
+	for (i = 0; i < gen8_snapshot_block_list->pc_index_registers_len; i++) {
+		ret = gen8_snapshot_indexed_registers(device, snapshot,
+			gen8_snapshot_block_list->pc_index_registers[i].addr,
+			gen8_snapshot_block_list->pc_index_registers[i].data, 0,
+			gen8_snapshot_block_list->pc_index_registers[i].size,
+			gen8_snapshot_block_list->pc_index_registers[i].pipe_id, UINT_MAX);
+		if (!ret)
+			break;
+	}
+
+	return ret;
+}
+
 /*
  * gen8_snapshot() - GEN8 GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -2106,6 +2129,10 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 	/* Mempool debug data */
 	if (!gen8_snapshot_mempool(device, snapshot))
+		goto err;
+
+	/* PC indexed regs data */
+	if (!gen8_snapshot_pc_indexed_regs(device, snapshot))
 		goto err;
 
 	/*
