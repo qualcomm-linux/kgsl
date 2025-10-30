@@ -6,6 +6,7 @@
 #define __ADRENO_GEN7_5_0_SNAPSHOT_H
 
 #include "adreno_gen7_15_0_snapshot.h"
+#include "adreno_gen7_2_0_snapshot.h"
 
 /*
  * Block   : ['CPR']
@@ -52,20 +53,6 @@ static const u32 gen7_5_0_gpu_cc_pll0_cm_pll_zonda_ole_registers[] = {
 };
 static_assert(IS_ALIGNED(sizeof(gen7_5_0_gpu_cc_pll0_cm_pll_zonda_ole_registers), 8));
 
-/*
- * Block   : ['DPM_LEAKAGE']
- * REGION  : UNSLICE
- * Pipeline: PIPE_NONE
- * pairs   : 9 (Regs:26)
- */
-static const u32 gen7_5_0_dpm_leakage_registers[] = {
-	 0x21c00, 0x21c00, 0x21c08, 0x21c09, 0x21c0e, 0x21c0f, 0x21c4f, 0x21c50,
-	 0x21c52, 0x21c52, 0x21c54, 0x21c56, 0x21c58, 0x21c5a, 0x21c5c, 0x21c60,
-	 0x22048, 0x2204e,
-	 UINT_MAX, UINT_MAX,
-};
-static_assert(IS_ALIGNED(sizeof(gen7_5_0_dpm_leakage_registers), 8));
-
 static const u32 *gen7_5_0_external_core_regs[] = {
 	gen7_15_0_gpu_cc_acd_acd_registers,
 	gen7_15_0_gpu_cc_ahb2phy_broadcast_swman_registers,
@@ -74,6 +61,6 @@ static const u32 *gen7_5_0_external_core_regs[] = {
 	gen7_5_0_gpu_cc_pll0_cm_pll_zonda_ole_registers,
 	gen7_15_0_gpu_cc_pll1_cm_pll_lucid_ole_registers,
 	gen7_5_0_cpr_registers,
-	gen7_5_0_dpm_leakage_registers,
+	gen7_2_0_dpm_lkg_registers,
 };
 #endif /*_ADRENO_GEN7_5_0_SNAPSHOT_H */
