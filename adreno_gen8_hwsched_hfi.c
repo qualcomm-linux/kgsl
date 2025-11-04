@@ -2432,7 +2432,7 @@ static int gen8_hwsched_build_dcvs_table(struct adreno_device *adreno_dev)
 	return 0;
 }
 
-static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
+static int gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gmu_core_device *gmu_core = &device->gmu_core;
@@ -2448,11 +2448,8 @@ static u32 gen8_hwsched_build_gmu_scaling_table(struct adreno_device *adreno_dev
 	u32 size_table_dwords = (sizeof(*cmd) >> 2) + size_first_entry_dwords +
 				size_second_entry_dwords;
 
-	/*
-	 * Return early if the scaling table is already generated or if the ddr threshold
-	 * to scale is not set for the target
-	 */
-	if (gmu->gmu_scaling_cmdbuf || !gmu_core->perf_ddr_bw[0])
+	/* Return early if the scaling table is already generated */
+	if (gmu->gmu_scaling_cmdbuf)
 		return 0;
 
 	/*
@@ -2535,6 +2532,7 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 	struct hfi_table_cmd *cmd;
 	int ret;
 
@@ -2555,6 +2553,10 @@ static int gen8_hfi_send_gmu_dcvs_req(struct adreno_device *adreno_dev)
 	ret = gen8_hfi_send_generic_req(adreno_dev, cmd, MSG_HDR_GET_SIZE(cmd->hdr) << 2);
 	if (ret)
 		return ret;
+
+	/* Do not scale gmu if perf_ddr_bw is not configured */
+	if (!gmu_core->perf_ddr_bw[0])
+		return 0;
 
 	ret = gen8_hwsched_build_gmu_scaling_table(adreno_dev);
 	if (ret)
