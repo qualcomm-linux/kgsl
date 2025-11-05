@@ -227,6 +227,8 @@ struct adreno_gen8_core {
 	bool gmu_mx_gdsc;
 	/** @three_rail_memory: This target has BX rail in addition to GX and MX */
 	bool three_rail_memory;
+	/** @malu: This target has MALU */
+	bool malu;
 };
 
 /**

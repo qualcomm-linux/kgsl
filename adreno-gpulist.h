@@ -4558,6 +4558,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_11_0 = {
 	.preempt_level = 0,
 	.gmu_mx_gdsc = true,
 	.three_rail_memory = true,
+	.malu = true,
 };
 
 static const struct adreno_gpu_core *adreno_gpulist[] = {
