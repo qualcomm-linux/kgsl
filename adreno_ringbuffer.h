@@ -39,6 +39,8 @@
 #define F_KERNEL_PROFILE	BIT(6)
 /* Indicates that the submission has a preamble */
 #define F_PREAMBLE		BIT(7)
+/* Indicates that the submission has mALU workload */
+#define F_MALU			BIT(8)
 
 #define IS_NOTPROTECTED(flags) ((flags) & F_NOTPROTECTED)
 #define IS_WFI(flags) ((flags) & F_WFI)

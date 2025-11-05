@@ -1253,7 +1253,8 @@ struct kgsl_drawobj_cmd *kgsl_drawobj_cmd_create(struct kgsl_device *device,
 		| KGSL_DRAWOBJ_PROFILING
 		| KGSL_DRAWOBJ_PROFILING_KTIME
 		| KGSL_DRAWOBJ_START_RECURRING
-		| KGSL_DRAWOBJ_STOP_RECURRING);
+		| KGSL_DRAWOBJ_STOP_RECURRING
+		| KGSL_DRAWOBJ_USES_MALU);
 
 	INIT_LIST_HEAD(&cmdobj->cmdlist);
 	INIT_LIST_HEAD(&cmdobj->memlist);

@@ -4170,6 +4170,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		uint32_t count)
 {
 	struct kgsl_device *device = dev_priv->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_memobj_node *ib;
 	unsigned int i;
 
@@ -4177,6 +4178,13 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 		/* Verify the IBs before they get queued */
 		if (drawobj[i]->type == CMDOBJ_TYPE) {
 			struct kgsl_drawobj_cmd *cmdobj = CMDOBJ(drawobj[i]);
+
+			/* Only allow mALU submissions if hardware supports mALU */
+			if ((drawobj[i]->flags & KGSL_DRAWOBJ_USES_MALU) &&
+				!test_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv)) {
+				dev_err_once(device->dev, "mALU workload isn't supported\n");
+				return -EINVAL;
+			}
 
 			list_for_each_entry(ib, &cmdobj->cmdlist, node)
 				if (!_verify_ib(dev_priv,

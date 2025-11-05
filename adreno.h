@@ -973,6 +973,8 @@ enum adreno_device_flags {
 	ADRENO_DEVICE_FIRST_BOOT_DONE = 19,
 	/** @ADRENO_DEVICE_FAST_CONTEXT_DESTROY: Set if fast context destroy is enabled on GMU */
 	ADRENO_DEVICE_FAST_CONTEXT_DESTROY = 20,
+	/** @ADRENO_DEVICE_ALLOW_MALU_WORKLOAD: mALU workload is supported by GMU and GPU */
+	ADRENO_DEVICE_ALLOW_MALU_WORKLOAD = 21,
 };
 
 /**

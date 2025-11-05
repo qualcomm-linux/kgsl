@@ -227,6 +227,21 @@ static void gen8_hwsched_set_ctxt_record_vrb(struct adreno_device *adreno_dev)
 		adreno_dev->aqe_ctxt_record_sz >> 10);
 }
 
+static void _enable_malu_submissions(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+
+	if (!gen8_core->malu)
+		return;
+
+	/* Make sure GMU FW also supports mALU */
+	if (gen8_hwsched_hfi_get_value(adreno_dev, HFI_VALUE_MALU, 0) == 1)
+		set_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv);
+	else
+		dev_err_once(GMU_PDEV_DEV(device), "FW doesn't support mALU\n");
+}
+
 static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -331,6 +346,8 @@ static int gen8_hwsched_gmu_first_boot(struct adreno_device *adreno_dev)
 		/* If gmu_ab feature flag is enabled but GMU doesn't support it, set it to false */
 		adreno_dev->gmu_ab = false;
 	}
+
+	_enable_malu_submissions(adreno_dev);
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 

@@ -105,6 +105,7 @@
 /* RECURRING bits must be set for LSR workload with IOCTL_KGSL_RECURRING_COMMAND. */
 #define KGSL_CMDBATCH_START_RECURRING	0x00100000
 #define KGSL_CMDBATCH_STOP_RECURRING	0x00200000
+#define KGSL_CMDBATCH_USES_MALU		0x00400000
 
 /*
  * Reserve bits [16:19] and bits [28:31] for possible bits shared between

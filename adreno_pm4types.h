@@ -100,6 +100,7 @@
 /* Stall the SQE until the CP processing pipeline is empty */
 #define CP_WAIT_FOR_CP_FLUSH 0x13
 
+#define CP_POWER_CONTROL 0x5b /* Control mALU power */
 #define CP_SET_PROTECTED_MODE  0x5f /* sets the register protection mode */
 
 /* Used to switch GPU between secure and non-secure modes */

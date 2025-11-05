@@ -227,7 +227,8 @@ struct kgsl_drawobj_sync_event {
 	{ KGSL_DRAWOBJ_SYNC, "SYNC" }, \
 	{ KGSL_DRAWOBJ_END_OF_FRAME, "EOF" }, \
 	{ KGSL_DRAWOBJ_PWR_CONSTRAINT, "PWR_CONSTRAINT" }, \
-	{ KGSL_DRAWOBJ_SUBMIT_IB_LIST, "IB_LIST" }
+	{ KGSL_DRAWOBJ_SUBMIT_IB_LIST, "IB_LIST" }, \
+	{ KGSL_DRAWOBJ_USES_MALU, "MALU" }
 
 /**
  * enum kgsl_drawobj_cmd_priv - Internal command obj flags

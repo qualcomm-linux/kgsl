@@ -144,6 +144,7 @@ enum hfi_table_type {
 #define HFI_VALUE_DCVS_ENABLE		131
 #define HFI_VALUE_DCVS_TUNING_PARAM	132
 #define HFI_VALUE_RB_GPULEVEL_RULE	133
+#define HFI_VALUE_MALU			135
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -955,6 +956,7 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
 #define CMDBATCH_NOP_SUBMISSION	BIT(20)
+#define CMDBATCH_USES_MALU	BIT(21)
 
 /* This indicates that the SYNCOBJ is kgsl output fence */
 #define GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT		0
