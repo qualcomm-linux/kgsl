@@ -1165,10 +1165,9 @@ static inline void gen8_genpd_synced_poweroff(struct device *dev)
 static void _disable_malu_gdsc(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	u32 reg;
 
-	if (!gen8_core->malu)
+	if (!adreno_dev->malu_enabled)
 		return;
 
 	if (!gen8_gmu_malu_is_on(adreno_dev))
@@ -1623,7 +1622,6 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
-	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	int level, ret;
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_AWARE);
@@ -1704,9 +1702,6 @@ static int gen8_gmu_first_boot(struct adreno_device *adreno_dev)
 		/* If gmu_ab feature flag is enabled but GMU doesn't support it, set it to false */
 		adreno_dev->gmu_ab = false;
 	}
-
-	if (gen8_core->malu)
-		set_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv);
 
 	icc_set_bw(pwr->icc_path, 0, 0);
 

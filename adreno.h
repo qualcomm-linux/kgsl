@@ -766,6 +766,8 @@ struct adreno_device {
 	bool dms_enabled;
 	/** @minbw_enabled: True if minbw vote is enabled */
 	bool minbw_enabled;
+	/** @malu_enabled: True if mALU is enabled */
+	bool malu_enabled;
 	/** @preempt_override: True if command line param enables preemption */
 	bool preempt_override;
 	struct kgsl_memdesc *profile_buffer;

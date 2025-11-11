@@ -3237,6 +3237,8 @@ static int adreno_prop_u32(struct kgsl_device *device,
 		val = adreno_dev->viz_flush_draw_count;
 	else if (param->type == KGSL_PROP_VIZ_FLUSH_PRIM_COUNT)
 		val = adreno_dev->viz_flush_prim_count;
+	else if (param->type == KGSL_PROP_IS_MALU_ENABLED)
+		val = adreno_dev->malu_enabled ? 1 : 0;
 
 	return copy_prop(param, &val, sizeof(val));
 }
@@ -4190,7 +4192,7 @@ int adreno_verify_cmdobj(struct kgsl_device_private *dev_priv,
 
 			/* Only allow mALU submissions if hardware supports mALU */
 			if ((drawobj[i]->flags & KGSL_DRAWOBJ_USES_MALU) &&
-				!test_bit(ADRENO_DEVICE_ALLOW_MALU_WORKLOAD, &adreno_dev->priv)) {
+				!adreno_dev->malu_enabled) {
 				dev_err_once(device->dev, "mALU workload isn't supported\n");
 				return -EINVAL;
 			}

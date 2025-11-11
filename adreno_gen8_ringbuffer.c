@@ -282,12 +282,6 @@ int gen8_ringbuffer_addcmds(struct adreno_device *adreno_dev,
 	cmds[index++] = cp_type7_packet(CP_NOP, 1);
 	cmds[index++] = drawctxt ? CMD_IDENTIFIER : CMD_INTERNAL_IDENTIFIER;
 
-	if (flags & F_MALU) {
-		cmds[index++] = cp_type7_packet(CP_POWER_CONTROL, 2);
-		cmds[index++] = 1; /* Control mALU power */
-		cmds[index++] = 1; /* Turn on mALU */
-	}
-
 	/* This is 25 dwords when drawctxt is not NULL and perfcounter needs to be zapped*/
 	index += gen8_preemption_pre_ibsubmit(adreno_dev, rb, drawctxt,
 		&cmds[index]);
@@ -300,6 +294,16 @@ int gen8_ringbuffer_addcmds(struct adreno_device *adreno_dev,
 
 	cmds[index++] = cp_type7_packet(CP_THREAD_CONTROL, 1);
 	cmds[index++] = CP_SET_THREAD_BR;
+
+	/*
+	 * The POWER_CONTROL packet should always be after IFPC disable MARKER
+	 * to avoid opcode errors
+	 */
+	if (flags & F_MALU) {
+		cmds[index++] = cp_type7_packet(CP_POWER_CONTROL, 2);
+		cmds[index++] = 1; /* Control mALU power */
+		cmds[index++] = 1; /* Turn on mALU */
+	}
 
 	profile_gpuaddr = adreno_profile_preib_processing(adreno_dev,
 		drawctxt, &profile_dwords);

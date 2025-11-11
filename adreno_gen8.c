@@ -1378,6 +1378,7 @@ static void gen8_read_softfuse_speedbin(struct adreno_device *adreno_dev, u32 *s
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 	u32 feature_fuse = 0;
 
 	/* Get HW feature soft fuse value */
@@ -1389,6 +1390,9 @@ void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 	/* If software enables LPAC without HW support, disable it */
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 		adreno_dev->lpac_enabled = feature_fuse & BIT(GEN8_LPAC_SW_FUSE);
+
+	if (gen8_core->malu)
+		adreno_dev->malu_enabled = feature_fuse & BIT(GEN8_MALU_SW_FUSE);
 
 	adreno_dev->feature_fuse = feature_fuse;
 }
@@ -2923,7 +2927,7 @@ static void gen8_gpc_err_int_callback(struct adreno_device *adreno_dev, int bit)
 static void gen8_swfuse_violation_callback(struct adreno_device *adreno_dev, int bit)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	u32 status;
+	u32 status, mask = GENMASK(GEN8_RAYTRACING_SW_FUSE, GEN8_LPAC_SW_FUSE);
 
 	/*
 	 * SWFUSEVIOLATION error is typically the result of enabling software
@@ -2933,6 +2937,7 @@ static void gen8_swfuse_violation_callback(struct adreno_device *adreno_dev, int
 	 * blender HW pipeline.
 	 * 2) LPAC (BIT:1): Fault
 	 * 3) RAYTRACING (BIT:2): Fault
+	 * 4) mALU (BIT:3): Fault
 	 */
 	kgsl_regread(device, GEN8_RBBM_SW_FUSE_INT_STATUS, &status);
 
@@ -2945,8 +2950,11 @@ static void gen8_swfuse_violation_callback(struct adreno_device *adreno_dev, int
 	dev_crit_ratelimited(device->dev,
 		"RBBM: SW Feature Fuse violation status=0x%8.8x\n", status);
 
-	/* Trigger a fault in the dispatcher for LPAC and RAYTRACING violation */
-	if (status & GENMASK(GEN8_RAYTRACING_SW_FUSE, GEN8_LPAC_SW_FUSE)) {
+	if (adreno_dev->malu_enabled)
+		mask |= BIT(GEN8_MALU_SW_FUSE);
+
+	/* Trigger a fault in the dispatcher for LPAC, RAYTRACING and mALU violation */
+	if (status & mask) {
 		adreno_irqctrl(adreno_dev, 0);
 		adreno_scheduler_fault(adreno_dev, ADRENO_HARD_FAULT);
 	}
@@ -3662,8 +3670,14 @@ err:
 
 static void gen8_swfuse_irqctrl(struct adreno_device *adreno_dev, bool state)
 {
-		kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_SW_FUSE_INT_MASK,
-			state ? GEN8_SW_FUSE_INT_MASK : 0);
+	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
+	u32 mask = GEN8_SW_FUSE_INT_MASK;
+
+	if (gen8_core->malu)
+		mask |= BIT(GEN8_MALU_SW_FUSE);
+
+	kgsl_regwrite(KGSL_DEVICE(adreno_dev), GEN8_RBBM_SW_FUSE_INT_MASK,
+			state ? mask : 0);
 }
 
 static void gen8_lpac_fault_header(struct adreno_device *adreno_dev,

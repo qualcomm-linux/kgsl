@@ -50,6 +50,7 @@ enum gmu_platform_capabilities {
 	FAC_FORCE_RETIRE_COMMAND = 5,
 	FAC_SOFT_RESET = 6,
 	FAC_FAST_CONTEXT_DESTROY = 7,
+	FAC_POWER_CONTROL_WA = 8,
 };
 
 /*
