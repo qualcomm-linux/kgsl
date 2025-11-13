@@ -696,8 +696,8 @@ static int thermal_max_notifier_call(struct notifier_block *nb, unsigned long va
 }
 
 struct devfreq_simple_ondemand_data ondemand_data = {
-	.upthreshold = 0,
-	.downdifferential = 0,
+	.upthreshold = 50,
+	.downdifferential = 10,
 };
 
 int kgsl_pwrscale_adreno_tz_init(struct kgsl_device *device, struct platform_device *pdev,
@@ -805,13 +805,14 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	gpu_profile->profile.initial_freq =
 		pwr->pwrlevels[pwr->default_pwrlevel].gpu_freq;
 
-	gpu_profile->profile.polling_ms = 10;
 	for (i = 0; i < pwr->num_pwrlevels; i++)
 		pwrscale->freq_table[i] = pwr->pwrlevels[i].gpu_freq;
 
 	if (!strcmp(governor, "simple_ondemand")) {
+		gpu_profile->profile.polling_ms = 50;
 		data = &ondemand_data;
 	} else if (!strcmp(governor, "msm-adreno-tz")) {
+		gpu_profile->profile.polling_ms = 10;
 		ret = kgsl_pwrscale_adreno_tz_init(device, pdev, governor);
 		if (ret)
 			return ret;
