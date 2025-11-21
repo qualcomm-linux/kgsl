@@ -13,6 +13,16 @@
 #include "kgsl_device.h"
 
 /*
+ * List of Bus Control Modules (BCMs) that need to be configured for the GPU
+ * to access DDR. For each bus level we will generate a vote each BCM.
+ */
+static struct bcm gen8_11_0_ddr_bcms[] = {
+	{ .name = "SH0", .buswidth = 32 },
+	{ .name = "MC0", .buswidth = 4 },
+	{ .name = "ACV", .fixed = true },
+};
+
+/*
  * setup_gmu_arc_votes - Build the gmu voting table
  * @gmu: Pointer to gmu device
  * @pri_rail: Pointer to primary power rail vlvl table
@@ -315,9 +325,14 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	u32 count = 0;
 	int ret;
 
-	ddr = adreno_rpmh_build_bw_votes(adreno_ddr_bcms, ARRAY_SIZE(adreno_ddr_bcms),
-		pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl,
-		adreno_dev->gmu_ab);
+	if (adreno_is_gen8_11_0(adreno_dev))
+		ddr = adreno_rpmh_build_bw_votes(gen8_11_0_ddr_bcms, ARRAY_SIZE(gen8_11_0_ddr_bcms),
+			pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl,
+			adreno_dev->gmu_ab);
+	else
+		ddr = adreno_rpmh_build_bw_votes(adreno_ddr_bcms, ARRAY_SIZE(adreno_ddr_bcms),
+			pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl,
+			adreno_dev->gmu_ab);
 
 	if (IS_ERR(ddr))
 		return PTR_ERR(ddr);
