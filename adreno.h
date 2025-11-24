@@ -289,6 +289,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A663 = 663,
 	ADRENO_REV_A680 = 680,
 	ADRENO_REV_A702 = 702,
+	ADRENO_REV_A704 = 704,
 	/*
 	 * Version numbers may exceed 1 digit
 	 * Bits 16-23: Major
@@ -1362,6 +1363,7 @@ ADRENO_TARGET(a663, ADRENO_REV_A663)
 ADRENO_TARGET(a680, ADRENO_REV_A680)
 ADRENO_TARGET(gen6_3_26_0, ADRENO_REV_GEN6_3_26_0)
 ADRENO_TARGET(a702, ADRENO_REV_A702)
+ADRENO_TARGET(a704, ADRENO_REV_A704)
 
 /* A642L and A643 is derived from A660 and shares same logic */
 static inline int adreno_is_a660(struct adreno_device *adreno_dev)
@@ -1440,6 +1442,17 @@ static inline int adreno_is_a612_family(struct adreno_device *adreno_dev)
 	unsigned int rev = ADRENO_GPUREV(adreno_dev);
 
 	return (rev == ADRENO_REV_A612 || rev == ADRENO_REV_GEN6_3_26_0);
+}
+
+/*
+ * A704 is derived from A702 and shares the same register specs.
+ * Derived GPUs from A702 need to be added to this list.
+ */
+static inline int adreno_is_a702_family(struct adreno_device *adreno_dev)
+{
+	u32 rev = ADRENO_GPUREV(adreno_dev);
+
+	return (rev == ADRENO_REV_A702 || rev == ADRENO_REV_A704);
 }
 
 static inline int adreno_is_a640v2(struct adreno_device *adreno_dev)
