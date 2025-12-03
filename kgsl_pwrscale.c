@@ -757,16 +757,6 @@ int kgsl_pwrscale_adreno_tz_init(struct kgsl_device *device, struct platform_dev
 		return ret;
 	}
 
-	pwr->nb_max.notifier_call = thermal_max_notifier_call;
-	ret = dev_pm_qos_add_notifier(&pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
-
-	if (ret) {
-		dev_err(device->dev, "Unable to register notifier call for thermal: %d\n", ret);
-		device->pwrscale.enabled = false;
-		msm_adreno_tz_exit();
-		return ret;
-	}
-
 	if (adreno_tz_data.bus.num)
 		pwrscale_busmon_create(device, pdev, pwrscale->freq_table);
 
@@ -834,6 +824,9 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	pwrscale->devfreq_wq = create_freezable_workqueue("kgsl_devfreq_wq");
 	if (!pwrscale->devfreq_wq) {
 		dev_err(device->dev, "Failed to allocate kgsl devfreq workqueue\n");
+		devfreq_remove_device(pwrscale->devfreqptr);
+		pwrscale->devfreqptr = NULL;
+		kgsl_gpu_governor_cleanup();
 		device->pwrscale.enabled = false;
 		return -ENOMEM;
 	}
@@ -843,6 +836,23 @@ int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
 	if (IS_ERR(pwrscale->cooling_dev)) {
 		dev_err(&pdev->dev, "Failed to register GPU devfreq cooling device\n");
 		pwrscale->cooling_dev = NULL;
+	}
+
+	pwr->nb_max.notifier_call = thermal_max_notifier_call;
+	ret = dev_pm_qos_add_notifier(&pdev->dev, &pwr->nb_max, DEV_PM_QOS_MAX_FREQUENCY);
+	if (ret) {
+		dev_err(device->dev, "Unable to register notifier call for thermal: %d\n", ret);
+		if (pwrscale->cooling_dev) {
+			devfreq_cooling_unregister(pwrscale->cooling_dev);
+			pwrscale->cooling_dev = NULL;
+		}
+		destroy_workqueue(pwrscale->devfreq_wq);
+		pwrscale->devfreq_wq = NULL;
+		devfreq_remove_device(pwrscale->devfreqptr);
+		pwrscale->devfreqptr = NULL;
+		kgsl_gpu_governor_cleanup();
+		device->pwrscale.enabled = false;
+		return ret;
 	}
 
 	WARN_ON(sysfs_create_link(&device->dev->kobj,
