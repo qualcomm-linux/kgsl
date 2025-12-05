@@ -700,7 +700,12 @@ struct limits_mitigation_cfg {
 	 *         bits[1:31] Static leakage value
 	 */
 	u32 lkgen;
-	/** @mode: Static or dynamic throttle */
+	/** @mode:
+	 * bit[0]: Static or dynamic throttle
+	 *         0 = (static) throttle to fixed sid level
+	 *         1 = (dynamic) throttle to sid lievel calculated by HW
+	 * bit[1]: select Mx/Bx,Mx = 0 , Bx =1, unused field for gx
+	 */
 	u32 mode;
 	/** @sid_val: SID value for static throttle */
 	u32 sid_val;
