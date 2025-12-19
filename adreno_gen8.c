@@ -2191,6 +2191,8 @@ int gen8_start(struct adreno_device *adreno_dev)
 	_llc_gpuhtw_slice_activate(adreno_dev);
 
 	for (pipe_id = PIPE_BR; pipe_id <= PIPE_DDE_BV; pipe_id++) {
+		u32 val = CP_SW_FAULT_STATUS_MASK_PIPE;
+
 		if ((pipe_id == PIPE_LPAC) && !ADRENO_FEATURE(adreno_dev, ADRENO_LPAC))
 			continue;
 		if (((pipe_id == PIPE_AQE0) || (pipe_id == PIPE_AQE1)) &&
@@ -2200,8 +2202,14 @@ int gen8_start(struct adreno_device *adreno_dev)
 		gen8_regwrite_aperture(device, GEN8_CP_APRIV_CNTL_PIPE,
 			(pipe_id == PIPE_BR ? GEN8_BR_APRIV_DEFAULT : GEN8_APRIV_DEFAULT),
 			pipe_id, 0, 0);
+
+		/* Disable the CP_SW_RTWROVF bit for BV pipe to prevent false interrupt from CP */
+		if (adreno_is_gen8_11_0(adreno_dev) && (pipe_id == PIPE_BV))
+			val &= ~(BIT(CP_SW_RTWROVF));
+
 		gen8_regwrite_aperture(device, GEN8_CP_INTERRUPT_STATUS_MASK_PIPE,
-			CP_SW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
+			val, pipe_id, 0, 0);
+
 		gen8_regwrite_aperture(device, GEN8_CP_HW_FAULT_STATUS_MASK_PIPE,
 			CP_HW_FAULT_STATUS_MASK_PIPE, pipe_id, 0, 0);
 	}
