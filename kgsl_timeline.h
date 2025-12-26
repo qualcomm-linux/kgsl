@@ -50,19 +50,20 @@ struct kgsl_timeline_event {
 };
 
 /**
- * kgsl_fences_timeline_value_str - Get the timeline value as a string
+ * kgsl_fence_timeline_value_str - Get the timeline value as a string
  * @fence: Pointer to the dma_fence object
  * @value: Pointer to the character buffer to store the value string
  * @size: Size of the character buffer
  *
- * This function retrieves the timeline value from a DMA fence as a string.
+ * This function retrieves the timeline value from a DMA fence as a string and
+ * copies at most @size characters into @value.
  * It delegates to the appropriate timeline_value_str implementation based on
  * the fence operations.
  *
  * If either the fence, fence operations, or value pointer is NULL, the function
  * returns without doing anything.
  */
-void kgsl_fences_timeline_value_str(struct dma_fence *fence, char *value,
+void kgsl_fence_timeline_value_str(struct dma_fence *fence, char *value,
 	size_t size);
 
 /**

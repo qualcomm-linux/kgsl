@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/sched.h>
@@ -34,6 +34,7 @@
 #define LOG_SYNCPOINT_FENCE_EXPIRE_EVENT 6
 #define LOG_TIMELINE_FENCE_ALLOC_EVENT 7
 #define LOG_TIMELINE_FENCE_RELEASE_EVENT 8
+#define LOG_CX_WAIT_TIMEOUT_EVENT 9
 
 static spinlock_t lock;
 static void *kgsl_eventlog;
@@ -50,7 +51,7 @@ struct kgsl_log_header {
 	u32 event;
 	/** @size: Size of the event data in bytes */
 	u32 size;
-};
+} __packed;
 
 /* Add a marker to skip the rest of the eventlog and start over fresh */
 static void add_skip_header(u32 offset)
@@ -119,7 +120,7 @@ void kgsl_eventlog_exit(void)
 
 void log_kgsl_fire_event(u32 id, u32 ts, u32 type, u32 age)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		u32 ts;
 		u32 type;
@@ -138,7 +139,7 @@ void log_kgsl_fire_event(u32 id, u32 ts, u32 type, u32 age)
 
 void log_kgsl_cmdbatch_submitted_event(u32 id, u32 ts, u32 prio, u64 flags)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		u32 ts;
 		u32 prio;
@@ -158,7 +159,7 @@ void log_kgsl_cmdbatch_submitted_event(u32 id, u32 ts, u32 prio, u64 flags)
 void log_kgsl_cmdbatch_retired_event(u32 id, u32 ts, u32 prio, u64 flags,
 		u64 start, u64 retire)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		u32 ts;
 		u32 prio;
@@ -181,7 +182,7 @@ void log_kgsl_cmdbatch_retired_event(u32 id, u32 ts, u32 prio, u64 flags,
 
 void log_kgsl_syncpoint_fence_event(u32 id, char *fence_name)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		char name[LOG_FENCE_NAME_LEN];
 	} *entry;
@@ -197,7 +198,7 @@ void log_kgsl_syncpoint_fence_event(u32 id, char *fence_name)
 
 void log_kgsl_syncpoint_fence_expire_event(u32 id, char *fence_name)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		char name[LOG_FENCE_NAME_LEN];
 	} *entry;
@@ -213,7 +214,7 @@ void log_kgsl_syncpoint_fence_expire_event(u32 id, char *fence_name)
 
 void log_kgsl_timeline_fence_alloc_event(u32 id, u64 seqno)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		u64 seqno;
 	} *entry;
@@ -228,7 +229,7 @@ void log_kgsl_timeline_fence_alloc_event(u32 id, u64 seqno)
 
 void log_kgsl_timeline_fence_release_event(u32 id, u64 seqno)
 {
-	struct {
+	struct __packed {
 		u32 id;
 		u64 seqno;
 	} *entry;
@@ -239,6 +240,19 @@ void log_kgsl_timeline_fence_release_event(u32 id, u64 seqno)
 
 	entry->id = id;
 	entry->seqno = seqno;
+}
+
+void log_kgsl_cx_wait_timeout_event(u32 timeout_vote)
+{
+	struct __packed {
+		u32 timeout_vote;
+	} *entry;
+
+	entry = kgsl_eventlog_alloc(LOG_CX_WAIT_TIMEOUT_EVENT, sizeof(*entry));
+	if (!entry)
+		return;
+
+	entry->timeout_vote = timeout_vote;
 }
 
 size_t kgsl_snapshot_eventlog_buffer(struct kgsl_device *device,

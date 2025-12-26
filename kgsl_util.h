@@ -14,25 +14,31 @@
 #define KGSL_A6XX_DEVICE "kgsl_a6xx_device"
 #define KGSL_GEN7_DEVICE "kgsl_gen7_device"
 #define KGSL_HWSCHED_DEVICE "kgsl_hwsched_device"
+#define KGSL_GEN8_DEVICE "kgsl_gen8_device"
 
-#define KGSL_SCRATCH_ENTRY "kgsl_scratch"
-#define KGSL_MEMSTORE_ENTRY "kgsl_memstore"
+#define KGSL_SCRATCH_ENTRY "scratch"
+#define KGSL_MEMSTORE_ENTRY "memstore"
 #define KGSL_GMU_LOG_ENTRY "kgsl_gmu_log"
 #define KGSL_GMU_TRACE_ENTRY "kgsl_gmu_trace"
 #define KGSL_HFIMEM_ENTRY "kgsl_hfi_mem"
 #define KGSL_GMU_DUMPMEM_ENTRY "kgsl_gmu_dump_mem"
-#define KGSL_GMU_RB_ENTRY "kgsl_gmu_rb"
-#define KGSL_GMU_KERNEL_PROF_ENTRY "kgsl_gmu_kernel_profiling"
-#define KGSL_GMU_USER_PROF_ENTRY "kgsl_gmu_user_profiling"
-#define KGSL_GMU_CMD_BUFFER_ENTRY "kgsl_gmu_cmd_buffer"
+#define KGSL_GMU_RB_ENTRY "gmu_rb"
+#define KGSL_GMU_KERNEL_PROF_ENTRY "gmu_kernel_profiling"
+#define KGSL_GMU_USER_PROF_ENTRY "gmu_user_profiling"
+#define KGSL_GMU_CMD_BUFFER_ENTRY "gmu_cmd_buffer"
 #define KGSL_HFI_BIG_IB_ENTRY "kgsl_hfi_big_ib"
 #define KGSL_HFI_BIG_IB_REC_ENTRY "kgsl_hfi_big_ib_rec"
 #define KGSL_ADRENO_CTX_ENTRY "kgsl_adreno_ctx"
 #define KGSL_PROC_PRIV_ENTRY "kgsl_proc_priv"
 #define KGSL_PGTABLE_ENTRY "kgsl_pgtable"
 #define KGSL_GMU_VRB_ENTRY "kgsl_gmu_vrb"
+#define KGSL_SYNC_FENCE_ENTRY "kgsl_sync_fence"
+#define KGSL_SYNC_TIMELINE_ENTRY "kgsl_sync_timeline"
+#define KGSL_PAGE_POOL_ENTRY "kgsl_page_pool"
+#define KGSL_ADRENO_TZ_DATA_ENTRY "kgsl_adreno_tz_data"
+#define KGSL_NC_OVERRIDES_ENTRY "kgsl_nc_overrides"
 
-#define MAX_VA_MINIDUMP_STR_LEN 32
+#define MAX_VA_MINIDUMP_STR_LEN 48
 
 
 /**
@@ -55,6 +61,10 @@
  * gpu temperature sensors
  */
 #define GPU_TSENSE_EN_REQ BIT(3)
+/**
+ * Request TZ to program tsense measurement to a large period
+ */
+#define GPU_TSENSE_MEASURE_DEFAULT_DISABLE BIT(4)
 
 struct regulator;
 struct clk_bulk_data;
@@ -251,9 +261,9 @@ static inline void kgsl_remove_from_minidump(char *name, u64 virt_addr, u64 phy_
 }
 
 static inline int kgsl_add_va_to_minidump(struct device *dev, const char *name, void *ptr,
-               size_t size)
+		size_t size)
 {
-       return 0;
+	return 0;
 }
 
 static inline void kgsl_qcom_va_md_register(struct kgsl_device *device)
@@ -318,8 +328,10 @@ int cmp_u32(const void *first, const void *second);
 #define kgsl_delete_timer_sync(timer) del_timer_sync(timer)
 #endif
 
-#if (KERNEL_VERSION(6, 16, 0) > LINUX_VERSION_CODE)
-#define timer_container_of from_timer
+#if (KERNEL_VERSION(6, 16, 0) <= LINUX_VERSION_CODE)
+#define kgsl_timer_container_of timer_container_of
+#else
+#define kgsl_timer_container_of from_timer
 #endif
 
 #if (KERNEL_VERSION(6, 18, 0) <= LINUX_VERSION_CODE)

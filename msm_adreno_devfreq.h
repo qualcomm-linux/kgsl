@@ -57,7 +57,7 @@ struct devfreq_msm_adreno_tz_data {
 	/* Multiplier to change gpu busy status */
 	u32 mod_percent;
 	/* Increase IB vote on high ddr stall */
-	bool avoid_ddr_stall;
+	bool fast_bus_hint;
 };
 
 struct msm_adreno_extended_profile {
@@ -79,42 +79,7 @@ typedef void(*getbw_func)(unsigned long *, unsigned long *, void *);
 int devfreq_vbif_update_bw(void);
 void devfreq_vbif_register_callback(getbw_func func, void *data);
 
-#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
-int devfreq_gpubw_init(void);
-
-void devfreq_gpubw_exit(void);
-#else
-static inline int devfreq_gpubw_init(void)
-{
-	return -EINVAL;
-}
-
-static inline void devfreq_gpubw_exit(void)
-{
-}
-#endif
-
-#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
-int msm_adreno_tz_init(void);
-
-void msm_adreno_tz_exit(void);
-
 int msm_adreno_tz_reinit(struct devfreq *devfreq);
-#else
-static inline int msm_adreno_tz_init(void)
-{
-	return -EINVAL;
-}
-
-static inline void msm_adreno_tz_exit(void)
-{
-}
-
-static inline int msm_adreno_tz_reinit(struct devfreq *devfreq)
-{
-	return -EINVAL;
-}
-#endif
 
 #if defined(CONFIG_QTEE_SHM_BRIDGE)
 #include <linux/qtee_shmbridge.h>

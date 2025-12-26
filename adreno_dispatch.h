@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef ____ADRENO_DISPATCHER_H
@@ -61,9 +62,7 @@ struct adreno_dispatch_job {
  * @state: Current state of the dispatcher (active or paused)
  * @timer: Timer to monitor the progress of the drawobjs
  * @inflight: Number of drawobj operations pending in the ringbuffer
- * @fault: Non-zero if a fault was detected.
  * @pending: Priority list of contexts waiting to submit drawobjs
- * @work: work_struct to put the dispatcher in a work queue
  * @kobj: kobject for the dispatcher directory in the device sysfs node
  * @idle_gate: Gate to wait on for dispatcher to idle
  */
@@ -73,15 +72,12 @@ struct adreno_dispatcher {
 	struct timer_list timer;
 	struct timer_list fault_timer;
 	unsigned int inflight;
-	atomic_t fault;
 	/** @jobs - Array of dispatch job lists for each priority level */
 	struct llist_head jobs[16];
 	/** @requeue - Array of lists for dispatch jobs that got requeued */
 	struct llist_head requeue[16];
-	struct kthread_work work;
 	struct kobject kobj;
 	struct completion idle_gate;
-	struct kthread_worker *worker;
 };
 
 enum adreno_dispatcher_flags {
@@ -91,6 +87,7 @@ enum adreno_dispatcher_flags {
 };
 
 struct adreno_device;
+struct adreno_submit_time;
 struct kgsl_device;
 
 void adreno_dispatcher_start(struct kgsl_device *device);
@@ -101,12 +98,13 @@ void adreno_dispatcher_stop(struct adreno_device *adreno_dev);
 void adreno_dispatcher_start_fault_timer(struct adreno_device *adreno_dev);
 void adreno_dispatcher_stop_fault_timer(struct kgsl_device *device);
 
-void adreno_dispatcher_schedule(struct kgsl_device *device);
-
 /**
- * adreno_dispatcher_fault - Set dispatcher fault to request recovery
- * @adreno_dev: A handle to adreno device
- * @fault: The type of fault
+ * adreno_drain_and_idle - Drain any pending work and wait for
+ * dispatcher and hardware to become idle
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or negative error on failure
  */
-void adreno_dispatcher_fault(struct adreno_device *adreno_dev, u32 fault);
+int adreno_drain_and_idle(struct kgsl_device *device);
+
 #endif /* __ADRENO_DISPATCHER_H */

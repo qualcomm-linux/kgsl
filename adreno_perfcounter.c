@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -174,11 +174,11 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 		goto done;
 	}
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	ret = adreno_perfcntr_active_oob_get(adreno_dev);
 	if (ret) {
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 		goto done;
 	}
 
@@ -198,8 +198,15 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 		/* group/counter iterator */
 		for (i = 0; i < group->reg_count; i++) {
 			if (group->regs[i].countable == list[j].countable) {
+				unsigned long irq_flags;
+
+				if (!ADRENO_ACQUIRE_CP_SEMAPHORE(adreno_dev, irq_flags)) {
+					ret = -EAGAIN;
+					break;
+				}
 				list[j].value = adreno_perfcounter_read(
 					adreno_dev, list[j].groupid, i);
+				ADRENO_RELEASE_CP_SEMAPHORE(adreno_dev, irq_flags);
 				break;
 			}
 		}
@@ -207,7 +214,7 @@ int adreno_perfcounter_read_group(struct adreno_device *adreno_dev,
 
 	adreno_perfcntr_active_oob_put(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	/* write the data */
 	if (ret == 0)
@@ -303,8 +310,6 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	if (counters == NULL || groupid >= counters->group_count)
 		return -EINVAL;
 
-	mutex_lock(&device->mutex);
-
 	group = &(counters->groups[groupid]);
 	*max_counters = group->reg_count;
 
@@ -312,23 +317,21 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	 * if NULL countable or *count of zero, return max reg_count in
 	 * *max_counters and return success
 	 */
-	if (countables == NULL || count == 0) {
-		mutex_unlock(&device->mutex);
+	if (countables == NULL || count == 0)
 		return 0;
-	}
 
 	t = min_t(unsigned int, group->reg_count, count);
 
 	buf = kmalloc_array(t, sizeof(unsigned int), GFP_KERNEL);
-	if (buf == NULL) {
-		mutex_unlock(&device->mutex);
+	if (buf == NULL)
 		return -ENOMEM;
-	}
+
+	kgsl_mutex_lock(&device->mutex);
 
 	for (i = 0; i < t; i++)
 		buf[i] = group->regs[i].countable;
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	if (copy_to_user(countables, buf, sizeof(unsigned int) * t))
 		ret = -EFAULT;
@@ -449,6 +452,9 @@ int adreno_perfcounter_get(struct adreno_device *adreno_dev,
 		return ret;
 	}
 
+	if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE))
+		adreno_dev->no_restore_count++;
+
 	/* set initial kernel and user count */
 	if (flags & PERFCOUNTER_FLAG_KERNEL) {
 		group->regs[empty].kernelcount = 1;
@@ -511,14 +517,11 @@ int adreno_perfcounter_put(struct adreno_device *adreno_dev,
 			/* mark available if not used anymore */
 			if (group->regs[i].kernelcount == 0 &&
 					group->regs[i].usercount == 0) {
-				/*
-				 * Perfcounter register is added to the power
-				 * up reglist only if group_restore flag is set.
-				 * Hence check the flag before removing the entry
-				 * from the reglist.
-				 */
-				if ((group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE) &&
-						gpudev->perfcounter_remove)
+
+				if (!(group->flags & ADRENO_PERFCOUNTER_GROUP_RESTORE))
+					adreno_dev->no_restore_count--;
+
+				if (gpudev->perfcounter_remove)
 					ret = gpudev->perfcounter_remove(adreno_dev,
 							&group->regs[i], groupid);
 				if (!ret)

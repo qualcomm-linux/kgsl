@@ -6,6 +6,8 @@
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
 
+#include <linux/spinlock.h> /* Included before rtmutex.h to avoid a compile error */
+#include <linux/rtmutex.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <trace/events/gpu_mem.h>
@@ -18,6 +20,26 @@
 #define KGSL_IOCTL_FUNC(_cmd, _func) \
 	[_IOC_NR((_cmd))] = \
 		{ .cmd = (_cmd), .func = (_func) }
+
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+#define kgsl_mutex_init(mutex)		rt_mutex_init(mutex)
+#define kgsl_mutex_lock(mutex)		rt_mutex_lock(mutex)
+#define kgsl_mutex_unlock(mutex)	rt_mutex_unlock(mutex)
+#define kgsl_mutex_trylock(mutex)	rt_mutex_trylock(mutex)
+
+#if (KERNEL_VERSION(5, 10, 0) >= LINUX_VERSION_CODE)
+#define kgsl_mutex_is_locked(mutex)	rt_mutex_is_locked(mutex)
+#else
+#define kgsl_mutex_is_locked(mutex)	((mutex)->rtmutex.owner != NULL)
+#endif
+
+#else
+#define kgsl_mutex_init(mutex)		mutex_init(mutex)
+#define kgsl_mutex_lock(mutex)		mutex_lock(mutex)
+#define kgsl_mutex_unlock(mutex)		mutex_unlock(mutex)
+#define kgsl_mutex_trylock(mutex)	mutex_trylock(mutex)
+#define kgsl_mutex_is_locked(mutex)	mutex_is_locked(mutex)
+#endif
 
 /*
  * KGSL device state is initialized to INIT when platform_probe		*
@@ -76,6 +98,16 @@ enum kgsl_event_results {
 #define KGSL_CONTEXT_ID(_context) \
 	((_context != NULL) ? (_context)->id : KGSL_MEMSTORE_GLOBAL)
 
+enum gpu_pwrlevel_op {
+	GPU_PWRLEVEL_OP_THERMAL,
+	GPU_PWRLEVEL_OP_MIN_PWRLEVEL,
+	GPU_PWRLEVEL_OP_MAX_PWRLEVEL,
+	GPU_PWRLEVEL_OP_GPUCLK,
+	GPU_PWRLEVEL_OP_PERF_HINT,     /* Mutex grabbed in the ops function */
+	GPU_PWRLEVEL_OP_DCVS_ENABLE,
+	GPU_PWRLEVEL_OP_TUNING_ATTR,
+};
+
 struct kgsl_device;
 struct platform_device;
 struct kgsl_device_private;
@@ -90,7 +122,7 @@ struct kgsl_functable {
 	 * by the client device.  The driver will not check for a NULL
 	 * pointer before calling the hook.
 	 */
-	int (*suspend_context)(struct kgsl_device *device);
+	void (*check_idle)(struct kgsl_device *device);
 	int (*first_open)(struct kgsl_device *device);
 	int (*last_close)(struct kgsl_device *device);
 	int (*start)(struct kgsl_device *device, int priority);
@@ -170,6 +202,18 @@ struct kgsl_functable {
 	void (*set_isdb_breakpoint_registers)(struct kgsl_device *device);
 	/** @create_hw_fence: Create a hardware fence */
 	void (*create_hw_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
+	/** @gmu_based_dcvs_pwr_ops: Function ops for GMU based DCVS power operations */
+	int (*gmu_based_dcvs_pwr_ops)(struct kgsl_device *device, u32 arg,
+		enum gpu_pwrlevel_op op);
+	/** @set_thermal_index: Target specific function to send thermal constraint to GMU */
+	void (*set_thermal_index)(struct kgsl_device *device);
+	/** @alloc_dcvs_profile_memory: Function ops for GMU based DCVS profile operations */
+	void (*alloc_dcvs_profile_memory)(struct kgsl_device *device,
+		struct kgsl_process_private *proc_priv);
+	/** @is_reset_recovery: Check if the ADRENO device under goes reset recovery */
+	bool (*is_reset_recovery)(struct kgsl_device *device);
+	/** @is_first_boot_done: Check if the ADRENO device first boot is done */
+	bool (*is_first_boot_done)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {
@@ -255,7 +299,11 @@ struct kgsl_device {
 	/** @skip_inline_submit: Track if user threads should make an inline submission or not */
 	bool skip_inline_submit;
 
+#if IS_ENABLED(CONFIG_QCOM_KGSL_RT_MUTEX)
+	struct rt_mutex mutex;
+#else
 	struct mutex mutex;
+#endif
 	uint32_t state;
 	uint32_t requested_state;
 
@@ -280,6 +328,7 @@ struct kgsl_device {
 	struct notifier_block panic_nb;
 	struct {
 		void *ptr;
+		dma_addr_t dma_handle;
 		u32 size;
 	} snapshot_memory_atomic;
 
@@ -324,6 +373,10 @@ struct kgsl_device {
 	rwlock_t event_groups_lock;
 	/** @speed_bin: Speed bin for the GPU device if applicable */
 	u32 speed_bin;
+	/** @debug_bus_bin: Debug bus bin for the GPU device if applicable */
+	u32 debug_bus_bin;
+	/** @soc_code: Identifier containing product and feature code */
+	u32 soc_code;
 	/** @gmu_fault: Set when a gmu or rgmu fault is encountered */
 	bool gmu_fault;
 	/** @regmap: GPU register map */
@@ -358,6 +411,21 @@ struct kgsl_device {
 	unsigned long idle_jiffies;
 	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
 	bool dump_all_ibs;
+	/** @freq_limiter_irq_clear: reset controller to clear freq limiter irq */
+	struct reset_control *freq_limiter_irq_clear;
+	/** @freq_limiter_intr_num: The interrupt number for freq limiter */
+	int freq_limiter_intr_num;
+	/** @cx_host_irq_num: Interrupt number for cx_host_irq */
+	int cx_host_irq_num;
+	/**
+	 * @max_syncobj_hw_fence_count: Maximum number of hardware fences that are allowed in a sync
+	 * object
+	 */
+	u32 max_syncobj_hw_fence_count;
+	/** @file_mutex: Mutex to protect device open and close operations */
+	struct mutex file_mutex;
+	/** @host_based_dcvs: Set when KGSL is in charge of DCVS */
+	bool host_based_dcvs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -373,6 +441,8 @@ struct kgsl_device {
  * @KGSL_CONTEXT_PRIV_PAGEFAULT - The context has caused a page fault.
  * @KGSL_CONTEXT_PRIV_DEVICE_SPECIFIC - this value and higher values are
  *	reserved for devices specific use.
+ * @KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE - this context got invalidated
+ * and needs its hardware fences drained after device reset
  */
 enum kgsl_context_priv {
 	KGSL_CONTEXT_PRIV_SUBMITTED = 0,
@@ -380,6 +450,7 @@ enum kgsl_context_priv {
 	KGSL_CONTEXT_PRIV_INVALID,
 	KGSL_CONTEXT_PRIV_PAGEFAULT,
 	KGSL_CONTEXT_PRIV_DEVICE_SPECIFIC = 16,
+	KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE,
 };
 
 struct kgsl_process_private;
@@ -460,6 +531,8 @@ struct kgsl_context {
 	struct list_head faults;
 	/** @fault_lock: Mutex to protect faults */
 	struct mutex fault_lock;
+	/** @deferred_destroy_ws: Work struct used to destroy context in a deferred manner */
+	struct work_struct deferred_destroy_ws;
 };
 
 #define _context_comm(_c) \
@@ -474,6 +547,20 @@ struct kgsl_context {
 		dev_err((_d)->dev, "%s[%d]: " fmt, \
 		_context_comm((_c)), \
 		pid_nr((_c)->proc_priv->pid), ##args)
+
+/**
+ * struct kgsl_dcvs_profile_private - Private structure for a KGSL DCVS profile
+ * @gmu_registered: True if DCVS profile is registered with GMU
+ * @user_profile_registered: True if user DCVS IOCTL profile is received
+ * @md: Memory descriptor for the DCVS profile region
+ * @profile_mutex: Mutex lock to protect kgsl_dcvs_profile_private
+ */
+struct kgsl_dcvs_profile_private {
+	bool gmu_registered;
+	bool user_profile_registered;
+	struct kgsl_memdesc md;
+	struct mutex profile_mutex;
+};
 
 /**
  * struct kgsl_process_private -  Private structure for a KGSL process (across
@@ -554,6 +641,14 @@ struct kgsl_process_private {
 	 * @cmdline: Cmdline string of the process
 	 */
 	char *cmdline;
+	/** @fault_count: Count of GPU faults from this process */
+	u32 fault_count;
+	/** @pf_count: Total count of pagefaults from this process */
+	u32 pf_count;
+	/** @pf_type_counts: Count of pagefaults of each type from this process */
+	u32 pf_type_counts[KGSL_IOMMU_PAGEFAULT_TYPES];
+	/** @profile: Container for the DCVS profile */
+	struct kgsl_dcvs_profile_private profile;
 };
 
 struct kgsl_device_private {
@@ -565,8 +660,10 @@ struct kgsl_device_private {
  * struct kgsl_snapshot - details for a specific snapshot instance
  * @ib1base: Active IB1 base address at the time of fault
  * @ib2base: Active IB2 base address at the time of fault
+ * @ib3base: Active IB3 base address at the time of fault
  * @ib1size: Number of DWORDS pending in IB1 at the time of fault
  * @ib2size: Number of DWORDS pending in IB2 at the time of fault
+ * @ib3size: Number of DWORDS pending in IB3 at the time of fault
  * @ib1dumped: Active IB1 dump status to sansphot binary
  * @ib2dumped: Active IB2 dump status to sansphot binary
  * @start: Pointer to the start of the static snapshot region
@@ -586,10 +683,12 @@ struct kgsl_device_private {
  * @recovered: True if GPU was recovered after previous snapshot
  */
 struct kgsl_snapshot {
-	uint64_t ib1base;
-	uint64_t ib2base;
-	unsigned int ib1size;
-	unsigned int ib2size;
+	u64 ib1base;
+	u64 ib2base;
+	u64 ib3base;
+	u32 ib1size;
+	u32 ib2size;
+	u32 ib3size;
 	bool ib1dumped;
 	bool ib2dumped;
 	u64 ib1base_lpac;
@@ -684,7 +783,8 @@ static inline bool kgsl_state_is_awake(struct kgsl_device *device)
  */
 static inline void kgsl_start_idle_timer(struct kgsl_device *device)
 {
-	device->idle_jiffies = jiffies + msecs_to_jiffies(device->pwrctrl.interval_timeout);
+	device->idle_jiffies = jiffies +
+		msecs_to_jiffies(atomic64_read(&device->pwrctrl.interval_timeout));
 	mod_timer(&device->idle_timer, device->idle_jiffies);
 }
 
@@ -819,6 +919,19 @@ kgsl_context_put(struct kgsl_context *context)
 {
 	if (context)
 		kref_put(&context->refcount, kgsl_context_destroy);
+}
+
+/*
+ * kgsl_context_put_deferred() - Puts refcount and triggers deferred
+ * context destroy when refcount is the last refcount.
+ * @context: context to put
+ *
+ * Use this to put a context from within atomic context
+ */
+static inline void kgsl_context_put_deferred(struct kgsl_context *context)
+{
+	if (context)
+		kref_put(&context->refcount, kgsl_context_destroy_deferred);
 }
 
 /**
@@ -981,7 +1094,7 @@ struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
  * the number of strings in the binary
  */
 #define SNAPSHOT_ERR_NOMEM(_d, _s) \
-	dev_err((_d)->dev, \
+	dev_err_ratelimited((_d)->dev, \
 	"snapshot: not enough snapshot memory for section %s\n", (_s))
 
 /**
@@ -1000,6 +1113,24 @@ size_t kgsl_snapshot_dump_registers(struct kgsl_device *device, u8 *buf,
 void kgsl_snapshot_indexed_registers(struct kgsl_device *device,
 	struct kgsl_snapshot *snapshot, unsigned int index,
 	unsigned int data, unsigned int start, unsigned int count);
+
+/**
+ * kgsl_snapshot_indexed_registers_v2 - Add a set of indexed registers to the
+ * snapshot
+ * @device: Pointer to the KGSL device being snapshotted
+ * @snapshot: Snapshot instance
+ * @index: Offset for the index register
+ * @data: Offset for the data register
+ * @start: Index to start reading
+ * @count: Number of entries to read
+ * @pipe_id: Pipe ID to be dumped
+ * @slice_id: Slice ID to be dumped
+ *
+ * Dump the values from an indexed register group into the snapshot
+ */
+void kgsl_snapshot_indexed_registers_v2(struct kgsl_device *device,
+	struct kgsl_snapshot *snapshot, u32 index, u32 data,
+	u32 start, u32 count, u32 pipe_id, u32 slice_id);
 
 int kgsl_snapshot_get_object(struct kgsl_snapshot *snapshot,
 	struct kgsl_process_private *process, uint64_t gpuaddr,

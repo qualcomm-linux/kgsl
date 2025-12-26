@@ -1,0 +1,1 @@
+canoe_consolidate_gpuconf

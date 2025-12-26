@@ -8,13 +8,13 @@
 #include <linux/interconnect.h>
 #include <linux/of.h>
 #include <linux/sort.h>
+#include <soc/qcom/of_common.h>
 
 #include "kgsl_bus.h"
 #include "kgsl_device.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
-
 
 static u32 _ab_buslevel_update(struct kgsl_pwrctrl *pwr,
 		u32 ib)
@@ -204,6 +204,7 @@ int kgsl_bus_init(struct kgsl_device *device, struct platform_device *pdev)
 
 	/* Look if a generic table is present */
 	pwr->ddr_table = kgsl_bus_get_table(pdev, "qcom,bus-table-ddr", &count);
+
 	if (!IS_ERR(pwr->ddr_table))
 		goto done;
 
@@ -212,6 +213,7 @@ int kgsl_bus_init(struct kgsl_device *device, struct platform_device *pdev)
 	 * values from OPP table.
 	 */
 	pwr->ddr_table = kgsl_bus_get_table_from_opp_freqs(pdev, &count);
+
 	if (IS_ERR(pwr->ddr_table)) {
 		int ret = PTR_ERR(pwr->ddr_table);
 

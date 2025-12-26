@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_H_
@@ -55,26 +55,6 @@ void gen7_hwsched_snapshot(struct adreno_device *adreno_dev,
  * @adreno_dev: Pointer to the adreno device
  */
 void gen7_hwsched_handle_watchdog(struct adreno_device *adreno_dev);
-
-/**
- * gen7_hwsched_active_count_get - Increment the active count
- * @adreno_dev: Pointer to the adreno device
- *
- * This function increments the active count. If active count
- * is 0, this function also powers up the device.
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_hwsched_active_count_get(struct adreno_device *adreno_dev);
-
-/**
- * gen7_hwsched_active_count_put - Put back the active count
- * @adreno_dev: Pointer to the adreno device
- *
- * This function decrements the active count sets the idle
- * timer if active count is zero.
- */
-void gen7_hwsched_active_count_put(struct adreno_device *adreno_dev);
 
 /**
  * gen7_hwsched_add_to_minidump - Register hwsched_device with va minidump

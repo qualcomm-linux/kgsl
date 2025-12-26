@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #if !defined(_ADRENO_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -15,9 +15,9 @@
 #define TRACE_INCLUDE_FILE adreno_trace
 
 #include <linux/tracepoint.h>
-#include "adreno_a3xx.h"
 #include "adreno_a5xx.h"
 #include "adreno_gen7.h"
+#include "adreno_gen8.h"
 #include "adreno_hfi.h"
 
 #if (KERNEL_VERSION(6, 10, 0) > LINUX_VERSION_CODE)
@@ -172,18 +172,20 @@ TRACE_EVENT(adreno_syncobj_submitted,
 );
 
 TRACE_EVENT(adreno_syncobj_retired,
-	TP_PROTO(u32 id, u32 timestamp),
-	TP_ARGS(id, timestamp),
+	TP_PROTO(u32 id, u32 timestamp, u64 ticks),
+	TP_ARGS(id, timestamp, ticks),
 	TP_STRUCT__entry(
 		__field(u32, id)
 		__field(u32, timestamp)
+		__field(u64, ticks)
 	),
 	TP_fast_assign(
 		__entry->id = id;
 		__entry->timestamp = timestamp;
+		__entry->ticks = ticks;
 	),
 	TP_printk(
-		"ctx=%u ts=%u", __entry->id, __entry->timestamp)
+		"ctx=%u ts=%u ticks=%llu", __entry->id, __entry->timestamp, __entry->ticks)
 );
 
 TRACE_EVENT(adreno_cmdbatch_submitted,
@@ -595,64 +597,6 @@ TRACE_EVENT(adreno_sp_tp,
 );
 
 /*
- * Tracepoint for a3xx irq. Includes status info
- */
-TRACE_EVENT(kgsl_a3xx_irq_status,
-
-	TP_PROTO(struct adreno_device *adreno_dev, unsigned int status),
-
-	TP_ARGS(adreno_dev, status),
-
-	TP_STRUCT__entry(
-		__string(device_name, adreno_dev->dev.name)
-		__field(unsigned int, status)
-	),
-
-	TP_fast_assign(
-		adreno_assign_str(device_name, adreno_dev->dev.name);
-		__entry->status = status;
-	),
-
-	TP_printk(
-		"d_name=%s status=%s",
-		__get_str(device_name),
-		__entry->status ? __print_flags(__entry->status, "|",
-			{ BIT(A3XX_INT_RBBM_GPU_IDLE), "RBBM_GPU_IDLE" },
-			{ BIT(A3XX_INT_RBBM_AHB_ERROR), "RBBM_AHB_ERR" },
-			{ BIT(A3XX_INT_RBBM_REG_TIMEOUT), "RBBM_REG_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_ME_MS_TIMEOUT),
-				"RBBM_ME_MS_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_PFP_MS_TIMEOUT),
-				"RBBM_PFP_MS_TIMEOUT" },
-			{ BIT(A3XX_INT_RBBM_ATB_BUS_OVERFLOW),
-				"RBBM_ATB_BUS_OVERFLOW" },
-			{ BIT(A3XX_INT_VFD_ERROR), "RBBM_VFD_ERROR" },
-			{ BIT(A3XX_INT_CP_SW_INT), "CP_SW" },
-			{ BIT(A3XX_INT_CP_T0_PACKET_IN_IB),
-				"CP_T0_PACKET_IN_IB" },
-			{ BIT(A3XX_INT_CP_OPCODE_ERROR), "CP_OPCODE_ERROR" },
-			{ BIT(A3XX_INT_CP_RESERVED_BIT_ERROR),
-				"CP_RESERVED_BIT_ERROR" },
-			{ BIT(A3XX_INT_CP_HW_FAULT), "CP_HW_FAULT" },
-			{ BIT(A3XX_INT_CP_DMA), "CP_DMA" },
-			{ BIT(A3XX_INT_CP_IB2_INT), "CP_IB2_INT" },
-			{ BIT(A3XX_INT_CP_IB1_INT), "CP_IB1_INT" },
-			{ BIT(A3XX_INT_CP_RB_INT), "CP_RB_INT" },
-			{ BIT(A3XX_INT_CP_REG_PROTECT_FAULT),
-				"CP_REG_PROTECT_FAULT" },
-			{ BIT(A3XX_INT_CP_RB_DONE_TS), "CP_RB_DONE_TS" },
-			{ BIT(A3XX_INT_CP_VS_DONE_TS), "CP_VS_DONE_TS" },
-			{ BIT(A3XX_INT_CP_PS_DONE_TS), "CP_PS_DONE_TS" },
-			{ BIT(A3XX_INT_CACHE_FLUSH_TS), "CACHE_FLUSH_TS" },
-			{ BIT(A3XX_INT_CP_AHB_ERROR_HALT),
-				"CP_AHB_ERROR_HALT" },
-			{ BIT(A3XX_INT_MISC_HANG_DETECT), "MISC_HANG_DETECT" },
-			{ BIT(A3XX_INT_UCHE_OOB_ACCESS), "UCHE_OOB_ACCESS" })
-			: "None"
-	)
-);
-
-/*
  * Tracepoint for a5xx irq. Includes status info
  */
 TRACE_EVENT(kgsl_a5xx_irq_status,
@@ -783,6 +727,70 @@ TRACE_EVENT(kgsl_gen7_irq_status,
 			{ BIT(GEN7_INT_ISDBCPUIRQ), "ISDBCPUIRQ" },
 			{ BIT(GEN7_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" },
 			{ BIT(GEN7_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" })
+			: "None"
+	)
+);
+
+/*
+ * Tracepoint for gen8 irq. Includes status info
+ */
+TRACE_EVENT(kgsl_gen8_irq_status,
+
+	TP_PROTO(struct adreno_device *adreno_dev, u32 status),
+
+	TP_ARGS(adreno_dev, status),
+
+	TP_STRUCT__entry(
+		__string(device_name, adreno_dev->dev.name)
+		__field(u32, status)
+	),
+
+	TP_fast_assign(
+		adreno_assign_str(device_name, adreno_dev->dev.name);
+		__entry->status = status;
+	),
+
+	TP_printk(
+		"d_name=%s status=%s",
+		__get_str(device_name),
+		__entry->status ? __print_flags(__entry->status, "|",
+			{ BIT(GEN8_INT_GPUIDLE), "GPUIDLE" },
+			{ BIT(GEN8_INT_AHBERROR), "AHBERROR" },
+			{ BIT(GEN8_INT_CPIPCINT0), "CPIPCINT0" },
+			{ BIT(GEN8_INT_CPIPCINT1), "CPIPCINT1" },
+			{ BIT(GEN8_INT_ATBASYNCFIFOOVERFLOW),
+				"ATBASYNCFIFOOVERFLOW" },
+			{ BIT(GEN8_INT_GPCERROR), "GPCERROR" },
+			{ BIT(GEN8_INT_SWINTERRUPT), "SWINTERRUPT" },
+			{ BIT(GEN8_INT_HWERROR), "HWERROR" },
+			{ BIT(GEN8_INT_CCU_CLEAN_DEPTH_TS),
+				"CCU_CLEAN_DEPTH_TS" },
+			{ BIT(GEN8_INT_CCU_CLEAN_COLOR_TS),
+				"CCU_CLEAN_COLOR_TS" },
+			{ BIT(GEN8_INT_CCU_RESOLVE_CLEAN_TS),
+				"CCU_RESOLVE_CLEAN_TS" },
+			{ BIT(GEN8_INT_PM4CPINTERRUPT), "PM4CPINTERRUPT" },
+			{ BIT(GEN8_INT_PM4CPINTERRUPTLPAC),
+				"PM4CPINTERRUPTLPAC" },
+			{ BIT(GEN8_INT_RB_DONE_TS), "RB_DONE_TS" },
+			{ BIT(GEN8_INT_CACHE_CLEAN_TS), "CACHE_CLEAN_TS" },
+			{ BIT(GEN8_INT_CACHE_CLEAN_TS_LPAC),
+				"CACHE_CLEAN_TS_LPAC" },
+			{ BIT(GEN8_INT_ATBBUSOVERFLOW), "ATBBUSOVERFLOW" },
+			{ BIT(GEN8_INT_HANGDETECTINTERRUPT),
+				"HANGDETECTINTERRUPT" },
+			{ BIT(GEN8_INT_OUTOFBOUNDACCESS),
+				"OUTOFBOUNDACCESS" },
+			{ BIT(GEN8_INT_UCHETRAPINTERRUPT),
+				"UCHETRAPINTERRUPT" },
+			{ BIT(GEN8_INT_DEBUGBUSINTERRUPT0),
+				"DEBUGBUSINTERRUPT0" },
+			{ BIT(GEN8_INT_DEBUGBUSINTERRUPT1),
+				"DEBUGBUSINTERRUPT1" },
+			{ BIT(GEN8_INT_TSBWRITEERROR), "TSBWRITEERROR" },
+			{ BIT(GEN8_INT_SWFUSEVIOLATION), "SWFUSEVIOLATION" },
+			{ BIT(GEN8_INT_ISDBCPUIRQ), "ISDBCPUIRQ" },
+			{ BIT(GEN8_INT_ISDBUNDERDEBUG), "ISDBUNDERDEBUG" })
 			: "None"
 	)
 );
@@ -951,6 +959,26 @@ TRACE_EVENT(adreno_preempt_done,
 	)
 );
 
+TRACE_EVENT(adreno_ext_hw_fence_signal,
+	TP_PROTO(u64 context, u64 seq_no, u32 flags, u64 gmu_ticks),
+	TP_ARGS(context, seq_no, flags, gmu_ticks),
+	TP_STRUCT__entry(
+		__field(u64, context)
+		__field(u64, seq_no)
+		__field(u32, flags)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->context = context;
+		__entry->seq_no = seq_no;
+		__entry->flags = flags;
+		__entry->ticks = gmu_ticks;
+	),
+	TP_printk("id=%llu seqno=%llu flags=0x%x ticks=%llu",
+		__entry->context, __entry->seq_no, __entry->flags, __entry->ticks
+	)
+);
+
 TRACE_EVENT(adreno_ifpc_count,
 	TP_PROTO(unsigned int ifpc_count),
 	TP_ARGS(ifpc_count),
@@ -961,6 +989,151 @@ TRACE_EVENT(adreno_ifpc_count,
 		__entry->ifpc_count = ifpc_count;
 	),
 	TP_printk("total times GMU entered IFPC = %d", __entry->ifpc_count)
+);
+
+TRACE_EVENT(adreno_dcvs_tuning,
+	TP_PROTO(u32 param, u32 mingap, u32 penalty, u32 numbusy),
+	TP_ARGS(param, mingap, penalty, numbusy),
+	TP_STRUCT__entry(
+		__field(u32, param)
+		__field(u32, mingap)
+		__field(u32, penalty)
+		__field(u32, numbusy)
+	),
+	TP_fast_assign(
+		__entry->param = param;
+		__entry->mingap = mingap;
+		__entry->penalty = penalty;
+		__entry->numbusy = numbusy;
+	),
+	TP_printk("param=%u mingap=%u penalty=%u numbusy=%u",
+		__entry->param, __entry->mingap, __entry->penalty, __entry->numbusy)
+);
+
+TRACE_EVENT(adreno_gpu_vote_params,
+	TP_PROTO(u32 cur_pwrlevel,
+		u32 prev_pwrlevel,
+		u32 avg_busy,
+		u32 flag,
+		u32 penalty,
+		u32 step_down_count,
+		u32 pwrlevel_cap,
+		u32 num_samples,
+		u32 target_fps,
+		u32 mod_percent,
+		u64 ticks
+	),
+	TP_ARGS(cur_pwrlevel, prev_pwrlevel, avg_busy, flag, penalty, step_down_count,
+		pwrlevel_cap, num_samples, target_fps, mod_percent, ticks
+	),
+	TP_STRUCT__entry(
+		__field(u32, cur_pwrlevel)
+		__field(u32, prev_pwrlevel)
+		__field(u32, avg_busy)
+		__field(u32, flag)
+		__field(u32, penalty)
+		__field(u32, step_down_count)
+		__field(u32, pwrlevel_cap)
+		__field(u32, num_samples)
+		__field(u32, target_fps)
+		__field(u32, mod_percent)
+		__field(u64, ticks)
+	),
+	TP_fast_assign(
+		__entry->cur_pwrlevel = cur_pwrlevel;
+		__entry->prev_pwrlevel = prev_pwrlevel;
+		__entry->avg_busy = avg_busy;
+		__entry->flag = flag;
+		__entry->penalty = penalty;
+		__entry->step_down_count = step_down_count;
+		__entry->pwrlevel_cap = pwrlevel_cap;
+		__entry->num_samples = num_samples;
+		__entry->target_fps = target_fps;
+		__entry->mod_percent = mod_percent;
+		__entry->ticks = ticks;
+	),
+	TP_printk("cur_pwrlevel=%u prev_pwrlevel=%u avg_busy=%u penalty_up=%lu penalty_down=%lu first_step_down_count=%lu subsequent_step_down_count=%lu min_pwrlevel=%lu max_pwrlevel=%lu target_fps=%u num_samples_up=%lu num_samples_down=%lu mod_percent=%u flags=0x%08x ticks=%llu",
+		__entry->cur_pwrlevel,
+		__entry->prev_pwrlevel,
+		__entry->avg_busy,
+		FIELD_GET(GENMASK(15, 0), __entry->penalty),
+		FIELD_GET(GENMASK(31, 16), __entry->penalty),
+		FIELD_GET(GENMASK(15, 0), __entry->step_down_count),
+		FIELD_GET(GENMASK(31, 16), __entry->step_down_count),
+		FIELD_GET(GENMASK(15, 0), __entry->pwrlevel_cap),
+		FIELD_GET(GENMASK(31, 16), __entry->pwrlevel_cap),
+		__entry->target_fps,
+		FIELD_GET(GENMASK(15, 0), __entry->num_samples),
+		FIELD_GET(GENMASK(31, 16), __entry->num_samples),
+		__entry->mod_percent,
+		__entry->flag,
+		__entry->ticks
+	)
+);
+
+TRACE_EVENT(adreno_gpu_dcvs_profile,
+	TP_PROTO(const struct trace_dcvs_profile *prof, u64 ticks),
+	TP_ARGS(prof, ticks),
+	TP_STRUCT__entry(
+		__field(u32, action)
+		__field(u32, profile)
+		__field(u64, ticks)
+		__field(int, min_gpu_freq)
+		__field(int, max_gpu_freq)
+		__field(int, target_fps)
+		__field(int, penalty_up)
+		__field(int, penalty_down)
+		__field(int, first_step_down_count)
+		__field(int, subsequent_step_down_count)
+		__field(int, num_samples_up)
+		__field(int, num_samples_down)
+		__field(int, strict_frame)
+		__field(int, non_linear_ramp_up)
+		__field(int, non_linear_ramp_down)
+		__field(int, min_bus_freq)
+		__field(int, max_bus_freq)
+	),
+	TP_fast_assign(
+		__entry->action = prof->action;
+		__entry->profile = prof->profile;
+		__entry->ticks = ticks;
+		__entry->min_gpu_freq = prof->attrs.min_gpu_freq;
+		__entry->max_gpu_freq = prof->attrs.max_gpu_freq;
+		__entry->target_fps = prof->attrs.target_fps;
+		__entry->penalty_up = prof->attrs.penalty_up;
+		__entry->penalty_down = prof->attrs.penalty_down;
+		__entry->first_step_down_count = prof->attrs.first_step_down_count;
+		__entry->subsequent_step_down_count = prof->attrs.subsequent_step_down_count;
+		__entry->num_samples_up = prof->attrs.num_samples_up;
+		__entry->num_samples_down = prof->attrs.num_samples_down;
+		__entry->strict_frame = prof->attrs.strict_frame;
+		__entry->non_linear_ramp_up = prof->attrs.non_linear_ramp_up;
+		__entry->non_linear_ramp_down = prof->attrs.non_linear_ramp_down;
+		__entry->min_bus_freq = prof->attrs.min_bus_freq;
+		__entry->max_bus_freq = prof->attrs.max_bus_freq;
+	),
+	TP_printk("action=%s profile=0x%x ticks=%llu min_gpu_freq=%d max_gpu_freq=%d target_fps=%d penalty_up=%d penalty_down=%d first_step_down_count=%d subsequent_step_down_count=%d num_samples_up=%d num_samples_down=%d strict_frame=%d non_linear_ramp_up=%d non_linear_ramp_down=%d min_bus_freq=%d max_bus_freq=%d",
+		__print_symbolic(__entry->action,
+			{ GMU_DCVS_PROFILE_REGISTER, "REGISTER" },
+			{ GMU_DCVS_PROFILE_ACTIVATE, "ACTIVATE" },
+			{ GMU_DCVS_PROFILE_DEACTIVATE, "DEACTIVATE" }),
+		__entry->profile,
+		__entry->ticks,
+		__entry->min_gpu_freq,
+		__entry->max_gpu_freq,
+		__entry->target_fps,
+		__entry->penalty_up,
+		__entry->penalty_down,
+		__entry->first_step_down_count,
+		__entry->subsequent_step_down_count,
+		__entry->num_samples_up,
+		__entry->num_samples_down,
+		__entry->strict_frame,
+		__entry->non_linear_ramp_up,
+		__entry->non_linear_ramp_down,
+		__entry->min_bus_freq,
+		__entry->max_bus_freq
+	)
 );
 
 #endif /* _ADRENO_TRACE_H */

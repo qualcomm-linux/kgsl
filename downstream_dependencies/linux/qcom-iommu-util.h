@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __QCOM_IOMMU_UTIL_H
@@ -13,6 +13,7 @@
 
 /* IOMMU fault behaviors */
 #define QCOM_IOMMU_FAULT_MODEL_NO_STALL	BIT(2)
+#define QCOM_IOMMU_FAULT_MODEL_NON_FATAL	BIT(0)
 
 #ifndef IOMMU_SYS_CACHE
 /* Attributes are not supported, so render them ineffective. */

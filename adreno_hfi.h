@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -77,7 +77,24 @@
 #define HFI_FEATURE_HW_FENCE	25
 #define HFI_FEATURE_PERF_NORETAIN	26
 #define HFI_FEATURE_DMS		27
+#define HFI_FEATURE_THERMAL		28
 #define HFI_FEATURE_AQE		29
+#define HFI_FEATURE_TDCVS		30
+#define HFI_FEATURE_DCE		31
+#define HFI_FEATURE_IFF_PCLX		32
+#define HFI_FEATURE_SOFT_RESET		0x10000001
+#define HFI_FEATURE_DCVS_PROFILE	0x10000002
+
+/*
+ * MINBW_HYST_MASK = 0xffff
+ * (7680 xo ticks which is 400us)
+ */
+#define DEFAULT_MINBW_HYST 0x1e00
+
+/* MINBW_IDX_MASK = 0xff0000*/
+#define DEFAULT_MINBW_IDX  0x1
+
+#define HFI_MINBW_DEFAULT (DEFAULT_MINBW_HYST | (DEFAULT_MINBW_IDX << 16))
 
 /* Types to be used with H2F_MSG_TABLE */
 enum hfi_table_type {
@@ -89,11 +106,14 @@ enum hfi_table_type {
 	HFI_TABLE_CLX_V2	= 5,
 	HFI_TABLE_THERM		= 6,
 	HFI_TABLE_DCVS_DATA	= 7,
+	HFI_TABLE_SYS_TIME_DATA	= 8,
+	HFI_TABLE_GMU_SCALING_DATA	= 9,
+	HFI_TABLE_LIMITS_MITIGATION	= 10,
 	HFI_TABLE_MAX,
 };
 
-/* A6xx uses a different value for KPROF */
-#define HFI_FEATURE_A6XX_KPROF	14
+/* For Gen7 & Gen8 ACD */
+#define F_PWR_ACD_CALIBRATE	78
 
 #define HFI_VALUE_FT_POLICY		100
 #define HFI_VALUE_RB_MAX_CMDS		101
@@ -120,6 +140,9 @@ enum hfi_table_type {
 #define HFI_VALUE_RB_GPU_QOS		123
 #define HFI_VALUE_RB_IB_RULE		124
 #define HFI_VALUE_GMU_WARMBOOT		125
+#define HFI_VALUE_DCVS_ENABLE		131
+#define HFI_VALUE_DCVS_TUNING_PARAM	132
+#define HFI_VALUE_RB_GPULEVEL_RULE	133
 #define HFI_VALUE_GLOBAL_TOKEN		0xFFFFFFFF
 
 #define HFI_CTXT_FLAG_PMODE			BIT(0)
@@ -241,6 +264,13 @@ enum hfi_mem_kind {
 	 * between LPAC and GC
 	 */
 	HFI_MEMKIND_AQE_BUFFER,
+	/** @HFI_MEMKIND_HW_FENCE_SHADOW: Shadow memory used for caching external input fences */
+	HFI_MEMKIND_HW_FENCE_SHADOW,
+	/**
+	 * @HFI_MEMKIND_FREQMGR_SCRATCH: Scratch memory for FreqMgr task to retain information
+	 * related to GMU based DCVS.
+	 */
+	HFI_MEMKIND_FREQMGR_SCRATCH,
 	HFI_MEMKIND_MAX,
 };
 
@@ -271,6 +301,8 @@ static const char * const hfi_memkind_strings[] = {
 	[HFI_MEMKIND_HW_FENCE] = "GMU HW FENCE",
 	[HFI_MEMKIND_PREEMPT_SCRATCH] = "GMU PREEMPTION",
 	[HFI_MEMKIND_AQE_BUFFER] = "GMU AQE BUFFER",
+	[HFI_MEMKIND_HW_FENCE_SHADOW] = "GMU HW FENCE SHADOW",
+	[HFI_MEMKIND_FREQMGR_SCRATCH] = "GMU FREQMGR SCRATCH",
 	[HFI_MEMKIND_MAX] = "GMU UNKNOWN",
 };
 
@@ -456,6 +488,7 @@ enum hfi_msg_type {
 	H2F_MSG_TEST			= 5,
 	H2F_MSG_ACD_TBL			= 7,
 	H2F_MSG_CLX_TBL			= 8,
+	H2F_MSG_THERM_TBL		= 9,
 	H2F_MSG_START			= 10,
 	H2F_MSG_FEATURE_CTRL		= 11,
 	H2F_MSG_GET_VALUE		= 12,
@@ -489,6 +522,10 @@ enum hfi_msg_type {
 	F2H_MSG_SYNCOBJ_QUERY		= 153,
 	H2F_MSG_WARMBOOT_CMD		= 154,
 	F2H_MSG_PROCESS_TRACE		= 155,
+	F2H_MSG_PLATFORM_LA		= 200,
+	H2F_MSG_PLATFORM_LA		= 201,
+	F2H_MSG_PLATFORM_WIN		= 202, /* Reserved */
+	H2F_MSG_PLATFORM_WIN		= 203, /* Reserved */
 	HFI_MAX_ID,
 };
 
@@ -502,6 +539,23 @@ enum gmu_ret_type {
 	GMU_ERROR_TIMEOUT,
 	GMU_ERROR_NOT_SUPPORTED,
 	GMU_ERROR_NO_ENTRY,
+};
+
+/* Platform specific F2H subtype message for GMU */
+enum gmu_f2h_msg_platform {
+	F2H_ST_MSG_SCALE_GMU,
+};
+
+enum gmu_rail_domain {
+	GMU_GX_DOMAIN = 0,
+	GMU_MX_DOMAIN,
+	GMU_DOMAIN_MAX,
+};
+
+enum gmu_limits_mit_feature {
+	GMU_MIT_IFF = 0,
+	GMU_MIT_PCLX,
+	GMU_MIT_MAX,
 };
 
 /* H2F */
@@ -535,8 +589,8 @@ struct hfi_bwtable_cmd {
 
 struct opp_gx_desc {
 	u32 vote;
-	/* This is 'acdLvl' in gmu fw which is now repurposed for cx vote */
-	u32 cx_vote;
+	/* This is 'acdLvl' in gmu fw which is now repurposed for various dependency votes */
+	u32 dep_vote;
 	u32 freq;
 } __packed;
 
@@ -551,7 +605,7 @@ struct hfi_dcvstable_v1_cmd {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_desc gx_votes[MAX_GX_LEVELS_LEGACY];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 } __packed;
 
 /* H2F */
@@ -560,7 +614,7 @@ struct hfi_dcvstable_cmd {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_gx_desc gx_votes[MAX_GX_LEVELS_LEGACY];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 } __packed;
 
 /* H2F */
@@ -620,6 +674,38 @@ struct hfi_clx_table_v2_cmd {
 	u32 version;
 	/** @domain: GFX and MXC Domain information */
 	struct clx_domain_v2 domain[CLX_DOMAINS_V2];
+} __packed;
+
+struct limits_mitigation_cfg {
+	/** @enable: Enable limits mitigation for this domain */
+	u32 enable;
+	/** @msg_path: Message notification path */
+	u32 msg_path;
+	/**
+	 * @lkgen: bits[0:0]  Static or dynamic leakage
+	 *         bits[1:31] Static leakage value
+	 */
+	u32 lkgen;
+	/** @mode: Static or dynamic throttle */
+	u32 mode;
+	/** @sid_val: SID value for static throttle */
+	u32 sid_val;
+	/** @mit_time: Mitigation time in microseconds */
+	u32 mit_time;
+	/** @curr_limit: Max current in mA during mitigation */
+	u32 curr_limit;
+} __packed;
+
+/* H2F */
+struct hfi_limits_mit_tbl {
+	/** @feature_id: Value from enum gmu_limits_mit_feature */
+	u8 feature_id;
+	/** @domain: Value from enum gmu_rail_domain */
+	u8 domain;
+	/** @feature_rev: Feature revision */
+	u16 feature_rev;
+	/** @mit_cfg: Mitigation config */
+	struct limits_mitigation_cfg mit_cfg;
 } __packed;
 
 /* H2F */
@@ -855,7 +941,7 @@ struct hfi_ts_notify_cmd {
 #define CMDBATCH_INDIRECT		BIT(9)
 #define CMDBATCH_RECURRING_START   BIT(18)
 #define CMDBATCH_RECURRING_STOP   BIT(19)
-
+#define CMDBATCH_NOP_SUBMISSION	BIT(20)
 
 /* This indicates that the SYNCOBJ is kgsl output fence */
 #define GMU_SYNCOBJ_FLAG_KGSL_FENCE_BIT		0
@@ -898,6 +984,7 @@ struct hfi_context_pointers_cmd {
 	u64 user_ctxt_record_addr;
 	u32 version;
 	u32 gmu_context_queue_addr;
+	u32 dcvs_profile_addr;
 } __packed;
 
 /* H2F */
@@ -905,7 +992,7 @@ struct hfi_context_rule_cmd {
 	u32 hdr;
 	u32 ctxt_id;
 	u32 type;
-	u32 status;
+	u32 sub_type;
 } __packed;
 
 struct fault_info {
@@ -935,9 +1022,10 @@ struct hfi_context_bad_cmd_legacy {
 } __packed;
 
 /* H2F */
-struct hfi_context_bad_reply_cmd {
+struct hfi_msg_ret_cmd {
 	u32 hdr;
 	u32 req_hdr;
+	u32 error;
 } __packed;
 
 /* H2F */
@@ -952,9 +1040,29 @@ struct hfi_submit_cmd {
 	u32 big_ib_gmu_va;
 } __packed;
 
-struct hfi_syncobj {
+/* This structure is only used for hw fence feature on gen7 hwsched targets */
+struct hfi_syncobj_legacy {
+	/** @ctxt_id: dma fence context id for external fence and gmu context id for kgsl fence */
 	u64 ctxt_id;
+	/** @seq_no: Sequence number (or timestamp) of this fence */
 	u64 seq_no;
+	/** @flags: Flags for this fence */
+	u64 flags;
+} __packed;
+
+struct hfi_syncobj {
+	/**
+	 * @header: bits[0:15]: size of this packet in dwords, bits[15:23]: version,
+	 * bits[24:31] unused
+	 */
+	u32 header;
+	/** @hash_index: hash index of external input fence */
+	u32 hash_index;
+	/** @ctxt_id: dma fence context id for external fence and gmu context id for kgsl fence */
+	u64 ctxt_id;
+	/** @seq_no: Sequence number (or timestamp) of this fence */
+	u64 seq_no;
+	/** @flags: Flags for this fence */
 	u64 flags;
 } __packed;
 
@@ -965,6 +1073,14 @@ struct hfi_submit_syncobj {
 	u32 timestamp;
 	u32 num_syncobj;
 } __packed;
+
+#define HFI_SYNCOBJ_LEGACY_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj_legacy))
+
+#define HFI_SYNCOBJ_HW_FENCE_MAX \
+	((HFI_MAX_MSG_SIZE - sizeof(struct hfi_submit_syncobj)) \
+	/ sizeof(struct hfi_syncobj))
 
 struct hfi_log_block {
 	u32 hdr;
@@ -1060,6 +1176,37 @@ struct pending_cmd {
 	struct list_head node;
 };
 
+struct hfi_msg_platform {
+	/** @hdr: Header for the platform specific msg */
+	u32 hdr;
+	/** @sub_type: Sub type for the platform msg */
+	u32 sub_type;
+} __packed;
+
+struct hfi_scale_gmu_cmd {
+	/** @header: Header for the scale gmu packet */
+	struct hfi_msg_platform header;
+	/** @gmu_pwrlevel: Gmu index of gmu power level to scale to */
+	u32 gmu_pwrlevel;
+} __packed;
+
+/* Platform specific H2F subtype message for GMU */
+enum h2f_platform_action {
+	H2F_ST_MSG_PROFILE_REGISTER,
+};
+
+/* H2F */
+struct hfi_profile_register {
+	/** @header: Header for the profile register packet */
+	struct hfi_msg_platform header;
+	/** @version: Version of the profile register packet */
+	u32 version;
+	/** @gmu_addr: Address of the GMU to store DCVS profile */
+	u32 gmu_addr;
+	/** @attrs_addr: Address of the KGSL shared profile attrs */
+	u32 attrs_addr;
+} __packed;
+
 static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)
 {
 	if (WARN_ON(size > HFI_MAX_MSG_SIZE))
@@ -1107,6 +1254,7 @@ struct payload_section {
 #define PAYLOAD_FAULT_REGS 1
 #define PAYLOAD_RB 2
 #define PAYLOAD_PREEMPT_TIMEOUT 3
+#define PAYLOAD_FAULT_RESET_POLICY 4
 
 /* Keys for PAYLOAD_FAULT_REGS type payload */
 #define KEY_CP_OPCODE_ERROR 1
@@ -1123,6 +1271,23 @@ struct payload_section {
 #define KEY_AQE0_HW_FAULT 12
 #define KEY_AQE1_OPCODE_ERROR 13
 #define KEY_AQE1_HW_FAULT 14
+#define KEY_CP_BR_SW_FAULT 15
+#define KEY_CP_BV_SW_FAULT 16
+#define KEY_CP_LPAC_SW_FAULT 17
+#define KEY_CP_AQE0_SW_FAULT 18
+#define KEY_CP_AQE0_PROTECTED_ERROR 19
+#define KEY_CP_AQE1_SW_FAULT 20
+#define KEY_CP_AQE1_PROTECTED_ERROR 21
+#define KEY_CP_DDEBR_OPCODE_ERROR 22
+#define KEY_CP_DDEBR_PROTECTED_ERROR 23
+#define KEY_CP_DDEBR_HW_FAULT 24
+#define KEY_CP_DDEBR_SW_FAULT 25
+#define KEY_CP_DDEBV_OPCODE_ERROR 26
+#define KEY_CP_DDEBV_PROTECTED_ERROR 27
+#define KEY_CP_DDEBV_HW_FAULT 28
+#define KEY_CP_DDEBV_SW_FAULT 29
+#define KEY_CP_AHB_ERROR 30
+#define KEY_TSB_WRITE_ERROR 31
 
 /* Keys for PAYLOAD_RB type payload */
 #define KEY_RB_ID 1
@@ -1137,6 +1302,9 @@ struct payload_section {
 /* Keys for PAYLOAD_PREEMPT_TIMEOUT type payload */
 #define KEY_PREEMPT_TIMEOUT_CUR_RB_ID 1
 #define KEY_PREEMPT_TIMEOUT_NEXT_RB_ID 2
+
+/* Keys for PAYLOAD_FAULT_RESET_POLICY type payload */
+#define KEY_GPU_RESET_POLICY 1
 
 /* Types of errors that trigger context bad HFI */
 
@@ -1185,18 +1353,85 @@ struct payload_section {
 /* Fault due to software fuse violation interrupt */
 #define GMU_GPU_SW_FUSE_VIOLATION 621
 /* AQE related error codes */
-#define GMU_GPU_AQE0_OPCODE_ERRROR 622
+#define GMU_GPU_AQE0_OPCODE_ERROR 622
 #define GMU_GPU_AQE0_UCODE_ERROR 623
 #define GMU_GPU_AQE0_HW_FAULT_ERROR 624
 #define GMU_GPU_AQE0_ILLEGAL_INST_ERROR 625
-#define GMU_GPU_AQE1_OPCODE_ERRROR 626
+#define GMU_GPU_AQE1_OPCODE_ERROR 626
 #define GMU_GPU_AQE1_UCODE_ERROR 627
 #define GMU_GPU_AQE1_HW_FAULT_ERROR 628
 #define GMU_GPU_AQE1_ILLEGAL_INST_ERROR 629
 /* GMU encountered a sync object which is signaled via software but not via hardware */
 #define GMU_SYNCOBJ_TIMEOUT_ERROR 630
+#define GMU_CP_DDEBR_HW_FAULT_ERROR 631
+#define GMU_CP_DDEBR_OPCODE_ERROR 632
+#define GMU_CP_DDEBR_UCODE_ERROR 633
+#define GMU_CP_DDEBR_PROTECTED_ERROR 634
+#define GMU_CP_DDEBR_ILLEGAL_INST_ERROR 635
+#define GMU_CP_DDEBV_HW_FAULT_ERROR 636
+#define GMU_CP_DDEBV_OPCODE_ERROR 637
+#define GMU_CP_DDEBV_UCODE_ERROR 638
+#define GMU_CP_DDEBV_PROTECTED_ERROR 639
+#define GMU_CP_DDEBV_ILLEGAL_INST_ERROR 640
+#define GMU_CP_BR_SW_FAULT_ERROR 641
+#define GMU_CP_BV_SW_FAULT_ERROR 642
+#define GMU_CP_LPAC_SW_FAULT_ERROR 643
+#define GMU_CP_AQE0_SW_FAULT_ERROR 644
+#define GMU_CP_AQE1_SW_FAULT_ERROR 645
+#define GMU_CP_AQE0_PROTECTED_ERROR 646
+#define GMU_CP_AQE1_PROTECTED_ERROR 647
+#define GMU_CP_DDEBR_SW_FAULT_ERROR 648
+#define GMU_CP_DDEBV_SW_FAULT_ERROR 649
+/* Non fatal GPU error codes */
+#define GMU_CP_AHB_ERROR 650
+#define GMU_ATB_ASYNC_FIFO_OVERFLOW 651
+#define GMU_RBBM_ATB_BUF_OVERFLOW 652
+#define GMU_UCHE_OOB_ACCESS 653
+#define GMU_UCHE_TRAP_INTR  654
+#define GMU_TSB_WRITE_ERROR 655
+/* DBGC interrupt */
+#define GMU_DBGC_INTR_ERROR 656
+
 /* GPU encountered an unknown CP error */
 #define GMU_CP_UNKNOWN_ERROR 700
+
+#define GPU_DCVS_TUNING_INVALID_VALUE 0xffffffff
+#define GPU_DCVS_TUNING_INVALID_ACK_DATA 0xfffffffe
+
+/**
+ * Keep this enum in sync with dcvs_tunables_strings[]. Each index in this enum must correspond
+ * to the matching string entry.
+ */
+enum gpu_tuning_attr {
+	GPU_TUNING_KEY_BUSY_PENALTY_UP = 0,
+	GPU_TUNING_KEY_BUSY_PENALTY_DOWN = 1,
+	GPU_TUNING_KEY_FIRST_STEP_DOWN_COUNT = 2,
+	GPU_TUNING_KEY_SUBSEQUENT_STEP_DOWN_COUNT = 3,
+	GPU_TUNING_KEY_MIN_GPU_FREQUENCY = 4,
+	GPU_TUNING_KEY_MAX_GPU_FREQUENCY = 5,
+	GPU_TUNING_KEY_TARGET_FPS = 6,
+	GPU_TUNING_KEY_NUM_SAMPLES_UP = 7,
+	GPU_TUNING_KEY_NUM_SAMPLES_DOWN = 8,
+	GPU_TUNING_KEY_STRICT_FRAME = 9,
+	GPU_TUNING_KEY_NON_LINEAR_RAMP_UP = 10,
+	GPU_TUNING_KEY_NON_LINEAR_RAMP_DOWN = 11,
+	GPU_TUNING_KEY_MOD_PERCENT = 12,
+	GPU_TUNING_KEY_BUS_MIN_FREQUENCY = 13,
+	GPU_TUNING_KEY_BUS_MAX_FREQUENCY = 14,
+	GPU_TUNING_KEY_MIN_AB_MBPS = 15,
+	GPU_TUNING_KEY_MAX_AB_MBPS = 16,
+	GPU_TUNING_KEY_MAX,
+};
+
+/* Macro for subtype of the HFI_VALUE_DCVS_TUNING_PARAM property */
+#define HFI_DCVS_ATTRS_DEFAULT 0
+#define HFI_DCVS_ATTRS_AGGREGATED 1
+
+enum gpu_dcvs_profile_action {
+	GMU_DCVS_PROFILE_REGISTER = 1,
+	GMU_DCVS_PROFILE_ACTIVATE = 2,
+	GMU_DCVS_PROFILE_DEACTIVATE = 3,
+};
 
 /**
  * hfi_update_read_idx - Update the read index of an hfi queue
@@ -1316,6 +1551,27 @@ int adreno_hwsched_wait_ack_completion(struct adreno_device *adreno_dev,
 	void (*process_msgq)(struct adreno_device *adreno_dev));
 
 /**
+ * adreno_hwsched_ctxt_unregister_wait_completion - Wait for HFI ack for context unregister
+ * adreno_dev: Pointer to the adreno device
+ * dev: Pointer to the device structure
+ * ack: Pointer to the pending ack
+ * process_msgq: Function pointer to the msgq processing function
+ * cmd: Pointer to the hfi packet header and data
+ *
+ * This function waits for the completion structure for context unregister hfi ack,
+ * which gets signaled asynchronously. In case there is a timeout, process the msgq
+ * one last time. If the ack is present, log an error and move on. If the ack isn't
+ * present, log an error and return -ETIMEDOUT.
+ *
+ * Return: 0 on success and -ETIMEDOUT on failure
+ */
+int adreno_hwsched_ctxt_unregister_wait_completion(
+	struct adreno_device *adreno_dev,
+	struct device *dev, struct pending_cmd *ack,
+	void (*process_msgq)(struct adreno_device *adreno_dev),
+	struct hfi_unregister_ctxt_cmd *cmd);
+
+/**
  * hfi_get_minidump_string - Get the va-minidump string from entry
  * mem_kind: mem_kind type
  * hfi_minidump_str: Pointer to the output string
@@ -1345,10 +1601,23 @@ static inline int hfi_get_minidump_string(u32 mem_kind, char *hfi_minidump_str,
 	case HFI_MEMKIND_CMD_BUFFER:
 		snprintf(hfi_minidump_str, size, KGSL_GMU_CMD_BUFFER_ENTRY);
 		break;
+	case HFI_MEMKIND_MEMSTORE:
+		snprintf(hfi_minidump_str, size, KGSL_MEMSTORE_ENTRY);
+		break;
 	default:
 		return -EINVAL;
 	}
 
 	return 0;
 }
+
+/**
+ * hfi_feature_to_string - Convert an HFI feature value to its
+ * string representation
+ * @feature: HFI feature value to convert
+ *
+ * Return: Pointer to a string representing the given feature.
+ * If the feature is unknown, the function returns "unknown".
+ */
+const char *hfi_feature_to_string(u32 feature);
 #endif

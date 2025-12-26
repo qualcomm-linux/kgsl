@@ -59,8 +59,8 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer,
 	if (!atomic) {
 		/* If WPTR update fails, set the fault and trigger recovery */
 		if (ret) {
-			gmu_core_fault_snapshot(device);
-			adreno_dispatcher_fault(adreno_dev,
+			gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+			adreno_scheduler_fault(adreno_dev,
 				ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 		}
 	}
@@ -100,7 +100,7 @@ static void _gen7_preemption_done(struct adreno_device *adreno_dev)
 			adreno_dev->next_rb->wptr);
 
 		/* Set a fault and restart */
-		adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 
 		return;
 	}
@@ -146,7 +146,7 @@ static void _gen7_preemption_fault(struct adreno_device *adreno_dev)
 			adreno_set_preempt_state(adreno_dev,
 				ADRENO_PREEMPT_COMPLETE);
 
-			adreno_dispatcher_schedule(device);
+			adreno_scheduler_queue(adreno_dev);
 			return;
 		}
 	}
@@ -160,7 +160,7 @@ static void _gen7_preemption_fault(struct adreno_device *adreno_dev)
 		adreno_get_rptr(adreno_dev->next_rb),
 		adreno_dev->next_rb->wptr);
 
-	adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 }
 
 static void _gen7_preemption_worker(struct work_struct *work)
@@ -172,12 +172,12 @@ static void _gen7_preemption_worker(struct work_struct *work)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	/* Need to take the mutex to make sure that the power stays on */
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_FAULTED))
 		_gen7_preemption_fault(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 /* Find the highest priority active ringbuffer */
@@ -381,11 +381,11 @@ void gen7_preemption_trigger(struct adreno_device *adreno_dev, bool atomic)
 err:
 	/* If fenced write fails, take inline snapshot and trigger recovery */
 	if (!in_interrupt()) {
-		gmu_core_fault_snapshot(device);
-		adreno_dispatcher_fault(adreno_dev,
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		adreno_scheduler_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	} else {
-		adreno_dispatcher_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 	adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE);
 	/* Clear the keep alive */
@@ -416,7 +416,7 @@ void gen7_preemption_callback(struct adreno_device *adreno_dev, int bit)
 		 * there then we have to assume something bad happened
 		 */
 		adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE);
-		adreno_dispatcher_schedule(KGSL_DEVICE(adreno_dev));
+		adreno_scheduler_queue(adreno_dev);
 		return;
 	}
 
@@ -485,11 +485,9 @@ void gen7_preemption_prepare_postamble(struct adreno_device *adreno_dev)
 	 */
 	preempt->postamble_bootup_len = count;
 
-	/* Reserve 11 dwords in the device scratch buffer to clear perfcounters */
+	/* Insert PM4 packets in device scratch buffer to clear perfcounters */
 	if (!adreno_dev->perfcounter) {
-		postamble[count++] = cp_type7_packet(CP_REG_RMW, 3);
-		postamble[count++] = GEN7_RBBM_PERFCTR_SRAM_INIT_CMD;
-		postamble[count++] = 0x0;
+		postamble[count++] = cp_type4_packet(GEN7_RBBM_PERFCTR_SRAM_INIT_CMD, 1);
 		postamble[count++] = 0x1;
 
 		postamble[count++] = cp_type7_packet(CP_WAIT_REG_MEM, 6);
@@ -511,14 +509,14 @@ void gen7_preemption_schedule(struct adreno_device *adreno_dev)
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE))
 		_gen7_preemption_done(adreno_dev);
 
 	gen7_preemption_trigger(adreno_dev, false);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 u32 gen7_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
@@ -566,27 +564,11 @@ u32 gen7_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 
 done:
 	if (drawctxt) {
-		struct adreno_ringbuffer *rb = drawctxt->rb;
-		u64 dest = PREEMPT_SCRATCH_ADDR(adreno_dev, rb->id);
-		u64 gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
-
-		*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
-		cmds += cp_gpuaddr(adreno_dev, cmds, dest);
-		*cmds++ = lower_32_bits(gpuaddr);
-		*cmds++ = upper_32_bits(gpuaddr);
-
-		if (adreno_dev->preempt.postamble_len) {
-			u64 kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
-
-			*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
-			*cmds++ = lower_32_bits(kmd_postamble_addr);
-			*cmds++ = upper_32_bits(kmd_postamble_addr);
-			*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
-				| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_len));
-		}
+		cmds += adreno_prepare_preib_preempt_scratch(adreno_dev, drawctxt, cmds);
+		cmds += adreno_prepare_preib_postamble_scratch(adreno_dev, cmds);
 	}
 
-	return (unsigned int) (cmds - cmds_orig);
+	return (u32) (cmds - cmds_orig);
 }
 
 u32 gen7_preemption_post_ibsubmit(struct adreno_device *adreno_dev,
@@ -777,35 +759,4 @@ int gen7_preemption_init(struct adreno_device *adreno_dev)
 done:
 	clear_bit(ADRENO_DEVICE_PREEMPTION, &adreno_dev->priv);
 	return ret;
-}
-
-int gen7_preemption_context_init(struct kgsl_context *context)
-{
-	struct kgsl_device *device = context->device;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	u64 flags = 0;
-
-	if (!adreno_preemption_feature_set(adreno_dev))
-		return 0;
-
-	if (context->flags & KGSL_CONTEXT_SECURE)
-		flags |= KGSL_MEMFLAGS_SECURE;
-
-	if (is_compat_task())
-		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
-
-	/*
-	 * gpumem_alloc_entry takes an extra refcount. Put it only when
-	 * destroying the context to keep the context record valid
-	 */
-	context->user_ctxt_record = gpumem_alloc_entry(context->dev_priv,
-			GEN7_CP_CTXRECORD_USER_RESTORE_SIZE, flags);
-	if (IS_ERR(context->user_ctxt_record)) {
-		int ret = PTR_ERR(context->user_ctxt_record);
-
-		context->user_ctxt_record = NULL;
-		return ret;
-	}
-
-	return 0;
 }

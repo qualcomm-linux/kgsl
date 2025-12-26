@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2002,2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/debugfs.h>
 
 #include "adreno.h"
+#include "kgsl_pwrscale.h"
+
 extern struct dentry *kgsl_debugfs_dir;
 
 static void set_isdb(struct adreno_device *adreno_dev, void *priv)
@@ -168,6 +170,60 @@ static int _gpu_client_pf_get(void *data, u64 *val)
 DEFINE_DEBUGFS_ATTRIBUTE(_gpu_client_pf_fops, _gpu_client_pf_get,
 				_gpu_client_pf_set, "%llu\n");
 
+static int _prealloc_atomic_snap_mem_set(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+
+	kgsl_mutex_lock(&device->mutex);
+
+	/* Allocate atomic snapshot memory if it's not allocated yet */
+	if (!val || device->snapshot_memory_atomic.ptr) {
+		kgsl_mutex_unlock(&device->mutex);
+		return 0;
+	}
+
+	device->snapshot_memory_atomic.size = device->snapshot_memory.size;
+
+	/* Ensure size is visible to other threads before setting address */
+	smp_wmb();
+
+	device->snapshot_memory_atomic.ptr = dma_alloc_coherent(&device->pdev->dev,
+		device->snapshot_memory_atomic.size, &device->snapshot_memory_atomic.dma_handle,
+		GFP_KERNEL);
+
+	if (WARN_ON((!device->snapshot_memory_atomic.ptr))) {
+		/* Fallback to slab allocator if DMA allocation fails */
+		device->snapshot_memory_atomic.size = (SZ_2M + SZ_1M);
+
+		/* Ensure size is visible to other threads before setting address */
+		smp_wmb();
+
+		device->snapshot_memory_atomic.ptr = devm_kzalloc(&device->pdev->dev,
+			device->snapshot_memory_atomic.size, GFP_KERNEL);
+	}
+
+	if (!device->snapshot_memory_atomic.ptr) {
+		kgsl_mutex_unlock(&device->mutex);
+		dev_err(device->dev, "Failed to allocate memory for atomic snapshot\n");
+		return -ENOMEM;
+	}
+
+	kgsl_mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
+static int _prealloc_atomic_snap_mem_get(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+
+	*val = device->snapshot_memory_atomic.ptr ? 1 : 0;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(_prealloc_atomic_snapshot_mem_fops, _prealloc_atomic_snap_mem_get,
+				_prealloc_atomic_snap_mem_set, "%llu\n");
+
 typedef void (*reg_read_init_t)(struct kgsl_device *device);
 typedef void (*reg_read_fill_t)(struct kgsl_device *device, int i,
 	unsigned int *vals, int linec);
@@ -290,7 +346,7 @@ static void drawobj_print(struct seq_file *s,
 		cmdobj_print(s, CMDOBJ(drawobj));
 
 	seq_puts(s, " flags: ");
-	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS),
+	print_flags(s, drawobj->flags, KGSL_DRAWOBJ_FLAGS);
 	kgsl_drawobj_put(drawobj);
 	seq_puts(s, "\n");
 }
@@ -480,6 +536,10 @@ static int _bcl_throttle_time_us_get(void *data, u64 *val)
 {
 	struct kgsl_device *device = data;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpudev *gpudev  = ADRENO_GPU_DEVICE(adreno_dev);
+
+	if (gpudev->power_feature_stats)
+		gpudev->power_feature_stats(adreno_dev);
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_BCL))
 		*val = 0;
@@ -564,8 +624,10 @@ DEFINE_DEBUGFS_ATTRIBUTE(preempt_level_fops, _preempt_level_show, _preempt_level
 static int _warmboot_show(void *data, u64 *val)
 {
 	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu = &device->gmu_core;
 
-	*val = (u64)adreno_dev->warmboot_enabled;
+	*val = (u64)gmu->warmboot_enabled;
 	return 0;
 }
 
@@ -577,11 +639,13 @@ static int _warmboot_show(void *data, u64 *val)
 static int _warmboot_store(void *data, u64 val)
 {
 	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_core_device *gmu_core = &device->gmu_core;
 
-	if (adreno_dev->warmboot_enabled == val)
+	if (gmu_core->warmboot_enabled == val)
 		return 0;
 
-	return adreno_power_cycle_bool(adreno_dev, &adreno_dev->warmboot_enabled, val);
+	return adreno_power_cycle_bool(adreno_dev, &gmu_core->warmboot_enabled, val);
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(warmboot_fops, _warmboot_show, _warmboot_store, "%llu\n");
@@ -615,6 +679,124 @@ static int _ifpc_hyst_show(void *data, u64 *val)
 
 DEFINE_DEBUGFS_ATTRIBUTE(ifpc_hyst_fops, _ifpc_hyst_show, _ifpc_hyst_store, "%llu\n");
 
+static void set_minbw_data(struct adreno_device *adreno_dev, void *priv)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct gmu_dev_ops *ops = GMU_DEVICE_OPS(device);
+
+	if (ops && ops->minbw_idle_level_set)
+		ops->minbw_idle_level_set(device, *((u32 *)priv));
+}
+
+static int _minbw_data_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	u32 minbw_val;
+
+	/* Only 24 bits are allowed by GMU for this feature */
+	if (val & 0xffffffffff000000)
+		return -EINVAL;
+
+	/* We cannot use minBW if IFPC or minBW is disabled */
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_IFPC) ||
+		(!ADRENO_FEATURE(adreno_dev, ADRENO_GMU_MINBW)))
+		return 0;
+
+	minbw_val = (u32)val;
+
+	return adreno_power_cycle(adreno_dev, set_minbw_data, &minbw_val);
+}
+
+static int _minbw_data_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64)adreno_dev->minbw_data;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(minbw_fops, _minbw_data_show, _minbw_data_store, "%llu\n");
+
+static int _gmu_fp_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	/* Max allowed GMU fault settings are 9 bits */
+	val = FIELD_GET(GENMASK(GMU_FAULT_MAX, 0), val);
+
+	if (val == device->gmu_core.gf_panic)
+		return 0;
+
+	kgsl_mutex_lock(&device->mutex);
+	device->gmu_core.gf_panic = val;
+	kgsl_mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
+static int _gmu_fp_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+
+	*val = (u64) KGSL_DEVICE(adreno_dev)->gmu_core.gf_panic;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(gmu_fp_fops, _gmu_fp_show, _gmu_fp_store, "%llu\n");
+
+static void _toggle_host_based_dcvs(struct adreno_device *adreno_dev, void *priv)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool val = *((bool *)priv);
+
+	if (val) {
+		/* Enable host based DCVS */
+		device->pwrscale.devfreq_enabled = true;
+		device->pwrctrl.bus_control = true;
+		kgsl_pwrscale_close(device);
+		device->host_based_dcvs = val;
+		kgsl_pwrscale_init(device, device->pdev);
+		kgsl_pwrscale_governor_enable(device);
+		adreno_dev->dcvs_profile_enabled = false;
+	} else {
+		/* Disable host based DCVS */
+		kgsl_pwrscale_governor_disable(device, false);
+		kgsl_pwrscale_close(device);
+		device->host_based_dcvs = val;
+		kgsl_pwrscale_init(device, device->pdev);
+		device->pwrscale.devfreq_enabled = false;
+		device->pwrctrl.bus_control = false;
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_DCVS_PROFILE))
+			adreno_dev->dcvs_profile_enabled = true;
+	}
+}
+
+static int _host_based_dcvs_show(void *data, u64 *val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	*val = (u64)device->host_based_dcvs;
+	return 0;
+}
+
+static int _host_based_dcvs_store(void *data, u64 val)
+{
+	struct adreno_device *adreno_dev = data;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	bool host_based_dcvs;
+
+	if ((val == device->host_based_dcvs) || (val > 1))
+		return 0;
+
+	host_based_dcvs = (bool)val;
+	return adreno_power_cycle(adreno_dev, _toggle_host_based_dcvs, &host_based_dcvs);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(host_based_dcvs_fops, _host_based_dcvs_show,
+				_host_based_dcvs_store, "%llu\n");
+
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -644,9 +826,16 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("isdb", 0644, device->d_debugfs,
 			device, &_isdb_fops);
 
-	if (gmu_core_isenabled(device))
+	if (gmu_core_isenabled(device)) {
 		debugfs_create_file("ifpc_hyst", 0644, device->d_debugfs,
 			device, &ifpc_hyst_fops);
+
+		debugfs_create_file("minbw", 0644, device->d_debugfs,
+			device, &minbw_fops);
+
+		debugfs_create_file("gmu_fault_policy", 0644, device->d_debugfs,
+			device, &gmu_fp_fops);
+	}
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_WARMBOOT))
 		debugfs_create_file("warmboot", 0644, device->d_debugfs,
@@ -658,6 +847,8 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		device, &_gpu_client_pf_fops);
 	debugfs_create_bool("dump_all_ibs", 0644, snapshot_dir,
 		&device->dump_all_ibs);
+	debugfs_create_file("prealloc_atomic_snapshot_mem", 0644, snapshot_dir,
+		device, &_prealloc_atomic_snapshot_mem_fops);
 
 	adreno_dev->bcl_debugfs_dir = debugfs_create_dir("bcl", device->d_debugfs);
 	if (!IS_ERR_OR_NULL(adreno_dev->bcl_debugfs_dir)) {
@@ -677,4 +868,8 @@ void adreno_debugfs_init(struct adreno_device *adreno_dev)
 		debugfs_create_file("skipsaverestore", 0644, adreno_dev->preemption_debugfs_dir,
 			device, &skipsaverestore_fops);
 	}
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_GMU_BASED_DCVS))
+		debugfs_create_file("host_based_dcvs", 0644, device->d_debugfs,
+				device, &host_based_dcvs_fops);
 }

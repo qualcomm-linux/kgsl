@@ -88,7 +88,7 @@ int kgsl_regmap_add_region(struct kgsl_regmap *regmap, struct platform_device *p
 	return ret;
 }
 
-#if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
+#ifndef in_range
 #define in_range(a, base, len) \
 	(((a) >= (base)) && ((a) < ((base) + (len))))
 #endif
@@ -127,10 +127,13 @@ u32 kgsl_regmap_read(struct kgsl_regmap *regmap, u32 offset)
 	if (region->ops && region->ops->preaccess)
 		region->ops->preaccess(region);
 
-	val = readl_relaxed(region_addr(region, offset));
-	/* Allow previous read to post before returning the value */
-	rmb();
-
+	if (regmap->use_relaxed) {
+		val = readl_relaxed(region_addr(region, offset));
+		/* Allow previous read to post before returning the value */
+		rmb();
+	} else {
+		val = readl(region_addr(region, offset));
+	}
 	return val;
 }
 
@@ -144,10 +147,13 @@ void kgsl_regmap_write(struct kgsl_regmap *regmap, u32 value, u32 offset)
 	if (region->ops && region->ops->preaccess)
 		region->ops->preaccess(region);
 
-	/* Make sure all pending writes have posted first */
-	wmb();
-	writel_relaxed(value, region_addr(region, offset));
-
+	if (regmap->use_relaxed) {
+		/* Make sure all pending writes have posted first */
+		wmb();
+		writel_relaxed(value, region_addr(region, offset));
+	} else {
+		writel(value, region_addr(region, offset));
+	}
 	trace_kgsl_regwrite(offset, value);
 }
 
@@ -186,7 +192,7 @@ void kgsl_regmap_multi_write(struct kgsl_regmap *regmap,
 		prev = region;
 
 		writel_relaxed(list[i].val, region_addr(region, list[i].offset));
-		trace_kgsl_regwrite(list[i].val, list[i].offset);
+		trace_kgsl_regwrite(list[i].offset, list[i].val);
 	}
 }
 
@@ -203,11 +209,17 @@ void kgsl_regmap_rmw(struct kgsl_regmap *regmap, u32 offset, u32 mask,
 	if (region->ops && region->ops->preaccess)
 		region->ops->preaccess(region);
 
-	val = readl_relaxed(region_addr(region, offset));
-	/* Make sure the read posted and all pending writes are done */
-	mb();
-	writel_relaxed((val & ~mask) | or, region_addr(region, offset));
-
+	if (regmap->use_relaxed) {
+		val = readl_relaxed(region_addr(region, offset));
+		/* Make sure the read posted and all pending writes are done */
+		mb();
+		writel_relaxed((val & ~mask) | or, region_addr(region, offset));
+	} else {
+		val = readl(region_addr(region, offset));
+		/* Make sure the read posted and all pending writes are done */
+		mb();
+		writel((val & ~mask) | or, region_addr(region, offset));
+	}
 	trace_kgsl_regwrite(offset, (val & ~mask) | or);
 }
 

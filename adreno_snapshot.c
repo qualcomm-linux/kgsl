@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/utsname.h>
@@ -162,8 +162,8 @@ static int snapshot_freeze_obj_list(struct kgsl_snapshot *snapshot,
 				(ib_objs->gpuaddr + ib_objs->size)) &&
 				(objbuf[index].entry->priv == process)) {
 				freeze = 0;
-				objbuf[index].entry->memdesc.priv &=
-					~KGSL_MEMDESC_SKIP_RECLAIM;
+				CLEAR_FLAG(KGSL_MEMDESC_SKIP_RECLAIM,
+					&(objbuf[index].entry->memdesc.priv));
 				break;
 			}
 		}
@@ -283,16 +283,10 @@ void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
-				index += 3;
-			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
-				index += 4;
-			}
+			ibaddr = rbptr[(index + 2) % KGSL_RB_DWORDS];
+			ibaddr = ibaddr << 32 | rbptr[(index + 1) % KGSL_RB_DWORDS];
+			ibsize = rbptr[(index + 3) % KGSL_RB_DWORDS];
+			index += 4;
 
 			/* Don't parse known global IBs */
 			if (kgsl_gpuaddr_in_memdesc(iommu->setstate,
@@ -356,10 +350,7 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 		index--;
 
 		if (index < 0) {
-			if (ADRENO_LEGACY_PM4(adreno_dev))
-				index = KGSL_RB_DWORDS - 3;
-			else
-				index = KGSL_RB_DWORDS - 4;
+			index = KGSL_RB_DWORDS - 4;
 
 			/* We wrapped without finding what we wanted */
 			if (index < rb->wptr) {
@@ -372,14 +363,9 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
-			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
-			}
+			ibaddr = rbptr[index + 2];
+			ibaddr = ibaddr << 32 | rbptr[index + 1];
+			ibsize = rbptr[index + 3];
 
 			if (adreno_ib_addr_overlap(snapshot->ib1base,
 					ibaddr, ibsize)) {
@@ -467,14 +453,9 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 			uint64_t ibaddr;
 			uint64_t ibsize;
 
-			if (ADRENO_LEGACY_PM4(adreno_dev)) {
-				ibaddr = rbptr[index + 1];
-				ibsize = rbptr[index + 2];
-			} else {
-				ibaddr = rbptr[index + 2];
-				ibaddr = ibaddr << 32 | rbptr[index + 1];
-				ibsize = rbptr[index + 3];
-			}
+			ibaddr = rbptr[index + 2];
+			ibaddr = ibaddr << 32 | rbptr[index + 1];
+			ibsize = rbptr[index + 3];
 
 			index = (index + 1) % KGSL_RB_DWORDS;
 
@@ -601,19 +582,6 @@ out:
 	spin_unlock(&process->mem_lock);
 	return ret;
 }
-
-struct snapshot_ib_meta {
-	struct kgsl_snapshot *snapshot;
-	struct kgsl_snapshot_object *obj;
-	uint64_t ib1base;
-	uint64_t ib1size;
-	uint64_t ib2base;
-	uint64_t ib2size;
-	u64 ib1base_lpac;
-	u64 ib1size_lpac;
-	u64 ib2base_lpac;
-	u64 ib2size_lpac;
-};
 
 static void kgsl_snapshot_add_active_ib_obj_list(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot)
@@ -814,14 +782,14 @@ static size_t snapshot_ib(struct kgsl_device *device, u8 *buf,
 static void dump_object(struct kgsl_device *device, int obj,
 		struct kgsl_snapshot *snapshot)
 {
-	struct snapshot_ib_meta metadata;
-
 	metadata.snapshot = snapshot;
 	metadata.obj = &objbuf[obj];
 	metadata.ib1base = snapshot->ib1base;
 	metadata.ib1size = snapshot->ib1size;
 	metadata.ib2base = snapshot->ib2base;
 	metadata.ib2size = snapshot->ib2size;
+	metadata.ib3base = snapshot->ib3base;
+	metadata.ib3size = snapshot->ib3size;
 	metadata.ib1base_lpac = snapshot->ib1base_lpac;
 	metadata.ib1size_lpac = snapshot->ib1size_lpac;
 	metadata.ib2base_lpac = snapshot->ib2base_lpac;
@@ -989,7 +957,7 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 	header->seconds = ktime_get_real_seconds();
 	header->power_flags = device->pwrctrl.power_flags;
 	header->power_level = device->pwrctrl.active_pwrlevel;
-	header->power_interval_timeout = device->pwrctrl.interval_timeout;
+	header->power_interval_timeout = atomic64_read(&device->pwrctrl.interval_timeout);
 	header->grpclk = clk_get_rate(device->pwrctrl.grp_clks[0]);
 
 	/* Get the current PT base */
@@ -1050,23 +1018,24 @@ static void adreno_snapshot_os(struct kgsl_device *device,
 
 static void adreno_static_ib_dump(struct kgsl_device *device,
 				struct kgsl_process_private *process, u64 ib1base,
-				u32 ib1size, u64 ib2base, u32 ib2size)
+				u32 ib1size, u64 ib2base, u32 ib2size,
+				u64 ib3base, u32 ib3size)
 {
 	if (process == NULL)
 		return;
 
 	 /* Make sure that the last IB1 that was being executed is dumped.
-	 * Since this was the last IB1 that was processed, we should have
-	 * already added it to the list during the ringbuffer parse but we
-	 * want to be double plus sure.
-	 * The problem is that IB size from the register is the unprocessed size
-	 * of the buffer not the original size, so if we didn't catch this
-	 * buffer being directly used in the RB, then we might not be able to
-	 * dump the whole thing. Try to dump the maximum possible size from the
-	 * IB1 base address till the end of memdesc size so that we dont miss
-	 * what we are interested in. Print a warning message so we can try to
-	 * figure how often this really happens.
-	 */
+	  * Since this was the last IB1 that was processed, we should have
+	  * already added it to the list during the ringbuffer parse but we
+	  * want to be double plus sure.
+	  * The problem is that IB size from the register is the unprocessed size
+	  * of the buffer not the original size, so if we didn't catch this
+	  * buffer being directly used in the RB, then we might not be able to
+	  * dump the whole thing. Try to dump the maximum possible size from the
+	  * IB1 base address till the end of memdesc size so that we dont miss
+	  * what we are interested in. Print a warning message so we can try to
+	  * figure how often this really happens.
+	  */
 
 	if (ib1base && (-ENOENT == find_object(ib1base, process))) {
 		struct kgsl_mem_entry *entry;
@@ -1091,16 +1060,90 @@ static void adreno_static_ib_dump(struct kgsl_device *device,
 	}
 
 	/*
-	 * Add the last parsed IB2 to the list. The IB2 should be found as we
-	 * parse the objects below, but we try to add it to the list first, so
-	 * it too can be parsed.  Don't print an error message in this case - if
-	 * the IB2 is found during parsing, the list will be updated with the
-	 * correct size.
+	 * Add the last parsed IB2 and IB3 to the list. These should be found as we
+	 * parse the objects below, but we try to add them to the list first, so
+	 * they too can be parsed. Don't print an error message in this case - if
+	 * the IB2 and IB3 are found during parsing, the list will be updated with
+	 * the correct size.
 	 */
-
 	if (ib2base && (-ENOENT == find_object(ib2base, process)))
 		kgsl_snapshot_push_object(device, process, ib2base, ib2size);
 
+	if (ib3base && (-ENOENT == find_object(ib3base, process)))
+		kgsl_snapshot_push_object(device, process, ib3base, ib3size);
+}
+
+/**
+ * adreno_snapshot_sqe -  Dump the SQE firmware version and few dwords
+ * @device: Pointer to the kgsl device
+ * @buf: Pointer to the snapshot buffer
+ * @remain: Remaining size in snapshot buffer
+ * @priv: Private pointer to pass to the function
+ *
+ * Return: Number of bytes written to the snapshot buffer
+ */
+static size_t adreno_snapshot_sqe(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	void *data = buf + sizeof(*header);
+	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
+
+	if (remain < DEBUG_SECTION_SZ(SQE_FW_SNAPSHOT_DWORDS)) {
+		SNAPSHOT_ERR_NOMEM(device, "SQE VERSION DEBUG");
+		return 0;
+	}
+
+	/* Dump the SQE firmware version and few dwords */
+	header->type = SNAPSHOT_DEBUG_SQE_VERSION;
+	header->size = SQE_FW_SNAPSHOT_DWORDS;
+	memcpy(data, fw->memdesc->hostptr, (SQE_FW_SNAPSHOT_DWORDS * sizeof(u32)));
+
+	return DEBUG_SECTION_SZ(SQE_FW_SNAPSHOT_DWORDS);
+}
+
+/* adreno_snapshot_aqe() - Dump AQE data in snapshot */
+static size_t adreno_snapshot_aqe(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_AQE);
+
+	/*
+	 * AQE firmware memory is allocated in the hwsched path.
+	 * In swsched path, the address is NULL, so add a check
+	 * to avoid NULL pointer dereference.
+	 */
+	if ((!ADRENO_FEATURE(adreno_dev, ADRENO_AQE)) || (fw->memdesc == NULL))
+		return 0;
+
+	if (remain < DEBUG_SECTION_SZ(AQE_FW_SNAPSHOT_DWORDS)) {
+		SNAPSHOT_ERR_NOMEM(device, "AQE VERSION DEBUG");
+		return 0;
+	}
+
+	/* Dump the AQE firmware version and few dwords */
+	header->type = SNAPSHOT_DEBUG_AQE_VERSION;
+	header->size = AQE_FW_SNAPSHOT_DWORDS;
+	memcpy(data, fw->memdesc->hostptr, AQE_FW_SNAPSHOT_DWORDS * sizeof(u32));
+
+	return DEBUG_SECTION_SZ(AQE_FW_SNAPSHOT_DWORDS);
+}
+
+static void adreno_snapshot_firmware(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot)
+{
+
+	/* Dump SQE firmware version and few dwords */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, adreno_snapshot_sqe, NULL);
+
+	/* Dump AQE firmware version */
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, adreno_snapshot_aqe, NULL);
 }
 
 /* adreno_snapshot - Snapshot the Adreno GPU state
@@ -1140,7 +1183,11 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 	snapshot_frozen_objsize = 0;
 
 	snapshot->process = setup_fault_process(device, snapshot, context);
-	snapshot->process_lpac = setup_fault_process(device, snapshot, context_lpac);
+	if (context_lpac)
+		snapshot->process_lpac = setup_fault_process(device, snapshot, context_lpac);
+
+	/* Dump firmware version and few dwords */
+	adreno_snapshot_firmware(device, snapshot);
 
 	/* Add GPU specific sections - registers mainly, but other stuff too */
 	if (gpudev->snapshot)
@@ -1195,11 +1242,12 @@ void adreno_snapshot(struct kgsl_device *device, struct kgsl_snapshot *snapshot,
 			snapshot, snapshot_capture_mem_list, snapshot->process_lpac);
 
 	adreno_static_ib_dump(device, snapshot->process,
-		snapshot->ib1base, snapshot->ib1size, snapshot->ib2base, snapshot->ib2size);
+		snapshot->ib1base, snapshot->ib1size, snapshot->ib2base, snapshot->ib2size,
+		snapshot->ib3base, snapshot->ib3size);
 
 	adreno_static_ib_dump(device, snapshot->process_lpac,
 		snapshot->ib1base_lpac, snapshot->ib1size_lpac,
-		snapshot->ib2base_lpac, snapshot->ib2size_lpac);
+		snapshot->ib2base_lpac, snapshot->ib2size_lpac, 0, 0);
 	/*
 	 * Go through the list of found objects and dump each one.  As the IBs
 	 * are parsed, more objects might be found, and objbufptr will increase
@@ -1299,37 +1347,120 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 	return (count * 4);
 }
 
-size_t adreno_snapshot_cx_misc_registers(struct kgsl_device *device,
+static size_t snapshot_gmu_version(struct kgsl_device *device,
 		u8 *buf, size_t remain, void *priv)
 {
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const u32 *ptr = (const u32 *)priv;
-	u32 *data = (unsigned int *)buf;
-	int count = 0, k;
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *) (buf + sizeof(*header));
+	struct kgsl_snapshot_gmu_version *ver = priv;
 
-	/* Figure out how many registers we are going to dump */
-	count = adreno_snapshot_regs_count(ptr);
-
-	if (remain < (count * sizeof(u32))) {
-		SNAPSHOT_ERR_NOMEM(device, "CX_MISC REGISTERS");
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "GMU Version");
 		return 0;
 	}
 
-	for (; ptr[0] != UINT_MAX; ptr += 2) {
-		int cnt = REG_COUNT(ptr);
+	header->type = ver->type;
+	header->size = 1;
 
-		if (cnt == 1)
-			*data++ = BIT(31) | ptr[0];
-		else {
-			*data++ = ptr[0];
-			*data++ = cnt;
-		}
+	*data = ver->value;
 
-		for (k = ptr[0]; k <= ptr[1]; k++)
-			adreno_cx_misc_regread(adreno_dev,
-					k - adreno_dev->cx_misc_base, data++);
+	return DEBUG_SECTION_SZ(1);
+}
+
+void adreno_snapshot_gmu_versions(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot)
+{
+	int i;
+	struct gmu_core_device *gmu = &device->gmu_core;
+	struct kgsl_snapshot_gmu_version gmu_vers[] = {
+		{ .type = SNAPSHOT_DEBUG_GMU_CORE_VERSION,
+			.value = gmu->ver.core, },
+		{ .type = SNAPSHOT_DEBUG_GMU_CORE_DEV_VERSION,
+			.value = gmu->ver.core_dev, },
+		{ .type = SNAPSHOT_DEBUG_GMU_PWR_VERSION,
+			.value = gmu->ver.pwr, },
+		{ .type = SNAPSHOT_DEBUG_GMU_PWR_DEV_VERSION,
+			.value = gmu->ver.pwr_dev, },
+		{ .type = SNAPSHOT_DEBUG_GMU_HFI_VERSION,
+			.value = gmu->ver.hfi, },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(gmu_vers); i++)
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+				snapshot, snapshot_gmu_version, &gmu_vers[i]);
+}
+
+size_t adreno_snapshot_gmu_mem(struct kgsl_device *device,
+		u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_snapshot_gmu_mem *mem_hdr =
+		(struct kgsl_snapshot_gmu_mem *)buf;
+	void *data = buf + sizeof(*mem_hdr);
+	struct gmu_mem_type_desc *desc = priv;
+
+	if (priv == NULL || desc->memdesc->hostptr == NULL)
+		return 0;
+
+	if (remain < desc->memdesc->size + sizeof(*mem_hdr)) {
+		dev_err(device->dev,
+			"snapshot: Not enough memory for the gmu section %d\n",
+			desc->type);
+		return 0;
 	}
 
-	/* Return the size of the section */
-	return (count * sizeof(u32));
+	mem_hdr->type = desc->type;
+	mem_hdr->hostaddr = (u64)(uintptr_t)desc->memdesc->hostptr;
+	mem_hdr->gmuaddr = desc->memdesc->gmuaddr;
+	mem_hdr->gpuaddr = 0;
+
+	/* The hw fence queues are mapped as iomem in the kernel */
+	if (desc->type == SNAPSHOT_GMU_MEM_HW_FENCE)
+		memcpy_fromio(data, desc->memdesc->hostptr, desc->memdesc->size);
+	else
+		memcpy(data, desc->memdesc->hostptr, desc->memdesc->size);
+
+	return desc->memdesc->size + sizeof(*mem_hdr);
+}
+
+/* Snapshot the preemption related buffers */
+static size_t snapshot_preemption_record(struct kgsl_device *device,
+	u8 *buf, size_t remain, void *priv)
+{
+	struct kgsl_memdesc *memdesc = priv;
+	struct kgsl_snapshot_gpu_object_v2 *header =
+		(struct kgsl_snapshot_gpu_object_v2 *)buf;
+	u8 *ptr = buf + sizeof(*header);
+	u64 ctxt_record_size = min_t(u64, device->snapshot_ctxt_record_size, memdesc->size);
+
+	if (remain < (ctxt_record_size + sizeof(*header))) {
+		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
+		return 0;
+	}
+
+	header->size = ctxt_record_size >> 2;
+	header->gpuaddr = memdesc->gpuaddr;
+	header->ptbase =
+		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
+	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
+
+	memcpy(ptr, memdesc->hostptr, ctxt_record_size);
+
+	return ctxt_record_size + sizeof(*header);
+}
+
+void adreno_snapshot_preemption_record(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_ringbuffer *rb;
+	u32 i;
+
+	if (adreno_is_preemption_enabled(adreno_dev)) {
+		FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
+			kgsl_snapshot_add_section(device,
+				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
+				snapshot, snapshot_preemption_record,
+				rb->preemption_desc);
+		}
+	}
 }

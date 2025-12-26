@@ -159,8 +159,6 @@ struct a6xx_cp_smmu_info {
 #define A6XX_CP_CTXRECORD_MAGIC_REF     0xAE399D6EUL
 /* Size of each CP preemption record */
 #define A6XX_CP_CTXRECORD_SIZE_IN_BYTES     (2112 * 1024)
-/* Size of the user context record block (in bytes) */
-#define A6XX_CP_CTXRECORD_USER_RESTORE_SIZE (192 * 1024)
 /* Size of the performance counter save/restore block (in bytes) */
 #define A6XX_CP_PERFCOUNTER_SAVE_RESTORE_SIZE   (4 * 1024)
 
@@ -169,9 +167,6 @@ struct a6xx_cp_smmu_info {
 
 /* Size of the CP_INIT pm4 stream in dwords */
 #define A6XX_CP_INIT_DWORDS 11
-
-/* Size of the perf counter enable pm4 stream in dwords */
-#define A6XX_PERF_COUNTER_ENABLE_DWORDS 3
 
 #define A6XX_INT_MASK \
 	((1 << A6XX_INT_CP_AHB_ERROR) |			\
@@ -212,21 +207,6 @@ to_a6xx_core(struct adreno_device *adreno_dev)
 	return container_of(core, struct adreno_a6xx_core, base);
 }
 
-/**
- * a6xx_is_smmu_stalled() - Check whether smmu is stalled or not
- * @device: Pointer to KGSL device
- *
- * Return - True if smmu is stalled or false otherwise
- */
-static inline bool a6xx_is_smmu_stalled(struct kgsl_device *device)
-{
-	u32 val;
-
-	kgsl_regread(device, A6XX_RBBM_STATUS3, &val);
-
-	return val & BIT(24);
-}
-
 /* Preemption functions */
 void a6xx_preemption_trigger(struct adreno_device *adreno_dev, bool atomic);
 void a6xx_preemption_schedule(struct adreno_device *adreno_dev);
@@ -255,12 +235,7 @@ u32 a6xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,
 		struct adreno_ringbuffer *rb, struct adreno_context *drawctxt,
 		u32 *cmds);
 
-unsigned int a6xx_set_marker(unsigned int *cmds,
-		enum adreno_cp_marker_type type);
-
 void a6xx_preemption_callback(struct adreno_device *adreno_dev, int bit);
-
-int a6xx_preemption_context_init(struct kgsl_context *context);
 
 void a6xx_preemption_context_destroy(struct kgsl_context *context);
 
@@ -338,14 +313,6 @@ int a6xx_probe_common(struct platform_device *pdev,
 	const struct adreno_gpu_core *gpucore);
 
 /**
- * a6xx_hw_isidle - Check whether a6xx gpu is idle or not
- * @adreno_dev: An Adreno GPU handle
- *
- * Return: True if gpu is idle, otherwise false
- */
-bool a6xx_hw_isidle(struct adreno_device *adreno_dev);
-
-/**
  * a6xx_spin_idle_debug - Debug logging used when gpu fails to idle
  * @adreno_dev: An Adreno GPU handle
  *
@@ -377,25 +344,6 @@ int a6xx_ringbuffer_init(struct adreno_device *adreno_dev);
 extern const struct adreno_perfcounters adreno_a630_perfcounters;
 extern const struct adreno_perfcounters adreno_a6xx_perfcounters;
 extern const struct adreno_perfcounters adreno_a6xx_legacy_perfcounters;
-extern const struct adreno_perfcounters adreno_a6xx_hwsched_perfcounters;
-
-/**
- * a6xx_rdpm_mx_freq_update - Update the mx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU mx frequency(in Mhz) changes to rdpm.
- */
-void a6xx_rdpm_mx_freq_update(struct a6xx_gmu_device *gmu, u32 freq);
-
-/**
- * a6xx_rdpm_cx_freq_update - Update the cx frequency
- * @gmu: An Adreno GMU handle
- * @freq: Frequency in KHz
- *
- * This function communicates GPU cx frequency(in Mhz) changes to rdpm.
- */
-void a6xx_rdpm_cx_freq_update(struct a6xx_gmu_device *gmu, u32 freq);
 
 /**
  * a6xx_ringbuffer_addcmds - Submit a command to the ringbuffer

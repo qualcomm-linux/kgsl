@@ -69,7 +69,7 @@ static void _a5xx_preemption_done(struct adreno_device *adreno_dev)
 			     adreno_dev->next_rb->wptr);
 
 		/* Set a fault and restart */
-		adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 
 		return;
 	}
@@ -110,7 +110,7 @@ static void _a5xx_preemption_fault(struct adreno_device *adreno_dev)
 			adreno_set_preempt_state(adreno_dev,
 				ADRENO_PREEMPT_COMPLETE);
 
-			adreno_dispatcher_schedule(device);
+			adreno_scheduler_queue(adreno_dev);
 			return;
 		}
 	}
@@ -124,7 +124,7 @@ static void _a5xx_preemption_fault(struct adreno_device *adreno_dev)
 		     adreno_get_rptr(adreno_dev->next_rb),
 		     adreno_dev->next_rb->wptr);
 
-	adreno_dispatcher_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
+	adreno_scheduler_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 }
 
 static void _a5xx_preemption_worker(struct work_struct *work)
@@ -136,12 +136,12 @@ static void _a5xx_preemption_worker(struct work_struct *work)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	/* Need to take the mutex to make sure that the power stays on */
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_FAULTED))
 		_a5xx_preemption_fault(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 /* Find the highest priority active ringbuffer */
@@ -276,7 +276,7 @@ void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 		 * there then we have to assume something bad happened
 		 */
 		adreno_set_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE);
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 		return;
 	}
 
@@ -307,14 +307,14 @@ void a5xx_preemption_schedule(struct adreno_device *adreno_dev)
 	if (!adreno_is_preemption_enabled(adreno_dev))
 		return;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_COMPLETE))
 		_a5xx_preemption_done(adreno_dev);
 
 	a5xx_preemption_trigger(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 u32 a5xx_preemption_pre_ibsubmit(struct adreno_device *adreno_dev,

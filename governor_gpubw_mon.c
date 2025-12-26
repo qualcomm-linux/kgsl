@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/devfreq.h>
@@ -116,7 +116,7 @@ static u32 generate_hint(struct devfreq_msm_adreno_tz_data *priv, int buslevel,
 	}
 
 	/* Increase BW vote to avoid starving GPU for BW if required */
-	if (priv->avoid_ddr_stall && minfreq == freq) {
+	if (priv->fast_bus_hint && minfreq == freq) {
 		if (wait_active_percent > 95)
 			return BUSMON_FLAG_SUPER_FAST_HINT;
 

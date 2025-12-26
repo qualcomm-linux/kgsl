@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_HFI_H_
@@ -39,8 +39,6 @@
 #define GEN7_HWSCHED_HW_FENCE_ABORT_BIT 0x2
 
 struct gen7_hwsched_hfi {
-	struct hfi_mem_alloc_entry mem_alloc_table[32];
-	u32 mem_alloc_entries;
 	/** @irq_mask: Store the hfi interrupt mask */
 	u32 irq_mask;
 	/** @msglock: To protect the list of un-ACKed hfi packets */
@@ -55,37 +53,10 @@ struct gen7_hwsched_hfi {
 	struct kgsl_memdesc *big_ib;
 	/** @big_ib_recurring: GMU buffer to hold big recurring IBs */
 	struct kgsl_memdesc *big_ib_recurring;
+	/** @perfctr_scratch: Buffer to hold perfcounter PM4 commands */
+	struct kgsl_memdesc *perfctr_scratch;
 	/** @msg_mutex: Mutex for accessing the msgq */
 	struct mutex msgq_mutex;
-	struct {
-		/** @lock: Spinlock for managing hardware fences */
-		spinlock_t lock;
-		/**
-		 * @unack_count: Number of hardware fences sent to GMU but haven't yet been ack'd
-		 * by GMU
-		 */
-		u32 unack_count;
-		/**
-		 * @unack_wq: Waitqueue to wait on till number of unacked hardware fences drops to
-		 * a desired threshold
-		 */
-		wait_queue_head_t unack_wq;
-		/**
-		 * @defer_drawctxt: Drawctxt to send hardware fences from as soon as unacked
-		 * hardware fences drops to a desired threshold
-		 */
-		struct adreno_context *defer_drawctxt;
-		/**
-		 * @defer_ts: The timestamp of the hardware fence which got deferred
-		 */
-		u32 defer_ts;
-		/**
-		 * @flags: Flags to control the creation of new hardware fences
-		 */
-		unsigned long flags;
-		/** @seqnum: Sequence number for hardware fence packet header */
-		atomic_t seqnum;
-	} hw_fence;
 	/**
 	 * @hw_fence_timer: Timer to trigger fault if unack'd hardware fence count does'nt drop
 	 * to a desired threshold in given amount of time
@@ -232,6 +203,19 @@ u32 gen7_hwsched_preempt_count_get(struct adreno_device *adreno_dev);
 int gen7_hwsched_lpac_cp_init(struct adreno_device *adreno_dev);
 
 /**
+ * gen7_hwsched_hfi_set_value - Send SET_VALUE packet to GMU to set the value of a property
+ * @adreno_dev: Pointer to adreno device
+ * @type: Type of the property to set
+ * @subtype: Sub type of the property to set
+ * @data: Value to be set to the property
+ *
+ * This functions sends SET_VALUE HFI packet to set value of a property
+ *
+ * Return: On success, return 0. On failure, return error code
+ */
+int gen7_hwsched_hfi_set_value(struct adreno_device *adreno_dev, u32 type, u32 subtype, u32 data);
+
+/**
  * gen7_hfi_send_lpac_feature_ctrl - Send the lpac feature hfi packet
  * @adreno_dev: Pointer to the adreno device
  *
@@ -284,18 +268,6 @@ void gen7_hwsched_create_hw_fence(struct adreno_device *adreno_dev,
 	struct kgsl_sync_fence *kfence);
 
 /**
- * gen7_hwsched_drain_context_hw_fences - Drain context's hardware fences via GMU
- * @adreno_dev: Pointer to adreno device
- * @drawctxt: Pointer to the adreno context which is to be flushed
- *
- * Trigger hardware fences that were never dispatched to GMU
- *
- * Return: Zero on success or negative error on failure
- */
-int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
-		struct adreno_context *drawctxt);
-
-/**
  * gen7_hwsched_check_context_inflight_hw_fences - Check whether all hardware fences
  * from a context have been sent to the TxQueue or not
  * @adreno_dev: Pointer to adreno device
@@ -308,25 +280,6 @@ int gen7_hwsched_drain_context_hw_fences(struct adreno_device *adreno_dev,
  */
 int gen7_hwsched_check_context_inflight_hw_fences(struct adreno_device *adreno_dev,
 	struct adreno_context *drawctxt);
-
-/**
- * gen7_remove_hw_fence_entry - Remove hardware fence entry
- * @adreno_dev: pointer to the adreno device
- * @entry: Pointer to the hardware fence entry
- */
-void gen7_remove_hw_fence_entry(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *entry);
-
-/**
- * gen7_trigger_hw_fence_cpu - Trigger hardware fence from cpu
- * @adreno_dev: pointer to the adreno device
- * @fence: hardware fence entry to be triggered
- *
- * Trigger the hardware fence by sending it to GMU's TxQueue and raise the
- * interrupt from GMU to APPS
- */
-void gen7_trigger_hw_fence_cpu(struct adreno_device *adreno_dev,
-	struct adreno_hw_fence_entry *fence);
 
 /**
  * gen7_hwsched_disable_hw_fence_throttle - Disable hardware fence throttling after reset
@@ -357,5 +310,4 @@ void gen7_hwsched_process_msgq(struct adreno_device *adreno_dev);
  * Return: Zero on success or negative error on failure
  */
 int gen7_hwsched_boot_gpu(struct adreno_device *adreno_dev);
-
 #endif

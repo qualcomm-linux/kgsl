@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _GEN7_REG_H
@@ -55,6 +55,7 @@
 #define GEN7_CP_CHICKEN_DBG              0x841
 #define GEN7_CP_DBG_ECO_CNTL             0x843
 #define GEN7_CP_APRIV_CNTL               0x844
+#define GEN7_CP_SEMAPHORE_REG_0          0x846
 #define GEN7_CP_PROTECT_CNTL             0x84f
 #define GEN7_CP_PROTECT_REG              0x850
 #define GEN7_CP_CONTEXT_SWITCH_CNTL      0x8a0
@@ -108,11 +109,13 @@
 #define GEN7_CP_IB2_BASE                 0x92b
 #define GEN7_CP_IB2_BASE_HI              0x92c
 #define GEN7_CP_IB2_REM_SIZE             0x92d
+#define GEN7_CP_IB3_BASE                 0xa67
+#define GEN7_CP_IB3_BASE_HI              0xa68
+#define GEN7_CP_IB3_REM_SIZE             0xa69
 #define GEN7_CP_ALWAYS_ON_COUNTER_LO     0x980
 #define GEN7_CP_ALWAYS_ON_COUNTER_HI     0x981
 #define GEN7_CP_ALWAYS_ON_CONTEXT_LO     0x982
 #define GEN7_CP_ALWAYS_ON_CONTEXT_HI     0x983
-#define GEN7_CP_AHB_CNTL                 0x98d
 #define GEN7_CP_RL_ERROR_DETAILS_0       0x9b4
 #define GEN7_CP_RL_ERROR_DETAILS_1       0x9cf
 #define GEN7_CP_APERTURE_CNTL_HOST       0xa00
@@ -179,6 +182,20 @@
 #define GEN7_CP_AQE_STAT_DATA_0          0xbbc
 #define GEN7_CP_AQE_STAT_DATA_1          0xbbd
 #define GEN7_LPAC_RBBM_STATUS            0x5fe
+
+/* CP Peripheral registers */
+#define GEN7_CP_PERIPH_IB1_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7005 : 0x7002)
+#define GEN7_CP_PERIPH_IB1_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7006 : 0x7003)
+#define GEN7_CP_PERIPH_IB1_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x7007 : 0x7004)
+#define GEN7_CP_PERIPH_IB1_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x7008 : 0x7005)
+#define GEN7_CP_PERIPH_IB2_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x7009 : 0x7006)
+#define GEN7_CP_PERIPH_IB2_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700a : 0x7007)
+#define GEN7_CP_PERIPH_IB2_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x700b : 0x7008)
+#define GEN7_CP_PERIPH_IB2_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x700c : 0x7009)
+#define GEN7_CP_PERIPH_IB3_BASE_LO(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700d : 0x700a)
+#define GEN7_CP_PERIPH_IB3_BASE_HI(adreno_dev)   (adreno_is_gen7_9_x(adreno_dev) ? 0x700e : 0x700b)
+#define GEN7_CP_PERIPH_IB3_SIZE(adreno_dev)      (adreno_is_gen7_9_x(adreno_dev) ? 0x700f : 0x700c)
+#define GEN7_CP_PERIPH_IB3_OFFSET(adreno_dev)    (adreno_is_gen7_9_x(adreno_dev) ? 0x7010 : 0x700d)
 
 /* RBBM registers */
 #define GEN7_RBBM_INT_0_STATUS                   0x201
@@ -746,9 +763,11 @@
 #define GEN7_DBGC_PERF_ATB_DRAIN_CMD                0x64a
 #define GEN7_DBGC_ECO_CNTL                          0x650
 #define GEN7_DBGC_AHB_DBG_CNTL                      0x651
+#define GEN7_DBGC_CFG_DBGBUS_MISC_MODE              0x658
 #define GEN7_DBGC_TRACE_BUFFER_STATUS               0x699
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_ADDR          0x69b
 #define GEN7_DBGC_DBG_TRACE_BUFFER_RD_DATA          0x69c
+#define GEN7_DBGC_SMMU_FAULT_BLOCK_HALT_CFG         0x69e
 
 /* VSC registers */
 #define GEN7_VSC_PERFCTR_VSC_SEL_0          0xcd8
@@ -908,6 +927,7 @@
 
 /* SP registers */
 #define GEN7_SP_NC_MODE_CNTL                0xae02
+#define GEN7_SP_CHICKEN_BITS_2              0xae09
 #define GEN7_SP_PERFCTR_HLSQ_SEL_0          0xae60
 #define GEN7_SP_PERFCTR_HLSQ_SEL_1          0xae61
 #define GEN7_SP_PERFCTR_HLSQ_SEL_2          0xae62
@@ -950,6 +970,7 @@
 #define GEN7_SP_PERFCTR_SP_SEL_33           0xaea1
 #define GEN7_SP_PERFCTR_SP_SEL_34           0xaea2
 #define GEN7_SP_PERFCTR_SP_SEL_35           0xaea3
+#define GEN7_SP_LPAC_CHICKEN_BITS_2         0xaf84
 
 /* TP registers */
 #define GEN7_TPL1_DBG_ECO_CNTL1             0xb602
@@ -1014,6 +1035,7 @@
 #define GBIF_AXI1_WRITE_DATA_TOTAL_BEATS   47
 
 /* GBIF registers */
+#define GEN7_GBIF_CX_CONFIG               0x3c00
 #define GEN7_GBIF_SCACHE_CNTL0            0x3c01
 #define GEN7_GBIF_SCACHE_CNTL1            0x3c02
 #define GEN7_GBIF_QSB_SIDE0               0x3c03
@@ -1101,6 +1123,7 @@
 #define GEN7_CX_DBGC_PERF_ATB_DRAIN_CMD                 0x1844a
 #define GEN7_CX_DBGC_ECO_CNTL                           0x18450
 #define GEN7_CX_DBGC_AHB_DBG_CNTL                       0x18451
+#define GEN7_CX_DBGC_CFG_DBGBUS_MISC_MODE               0x18458
 #define GEN7_CX_DBGC_TCM_DBG_ADDR                       0x18580
 #define GEN7_CX_DBGC_TCM_DBG_DATA                       0x18581
 
@@ -1159,8 +1182,6 @@
 #define GEN7_GMU_CX_GMU_POWER_COUNTER_SELECT_3	0x1f87f
 #define GEN7_GMU_CX_AO_COUNTER_LO		0x1f880
 #define GEN7_GMU_CX_AO_COUNTER_HI		0x1f881
-#define GEN7_GMU_CX_GMU_ALWAYS_ON_COUNTER_L	0x1f888
-#define GEN7_GMU_CX_GMU_ALWAYS_ON_COUNTER_H	0x1f889
 #define GEN7_GMU_PWR_COL_INTER_FRAME_CTRL	0x1f8c0
 #define GEN7_GMU_PWR_COL_INTER_FRAME_HYST	0x1f8c1
 #define GEN7_GMU_GFX_PWR_CLK_STATUS		0x1f8d0
@@ -1238,7 +1259,6 @@
 #define GEN7_GMU_AHB_FENCE_STATUS		0x23b13
 #define GEN7_GMU_AHB_FENCE_STATUS_CLR		0x23b14
 #define GEN7_GMU_RBBM_INT_UNMASKED_STATUS	0x23b15
-#define GEN7_GMU_AO_SPARE_CNTL			0x23b16
 #define GEN7_GPU_GMU_AO_GPU_LPAC_BUSY_STATUS	0x23b30
 
 /* GMU RSC control registers */
@@ -1252,8 +1272,10 @@
 #define GEN7_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
+#define GEN7_11_0_GPU_CC_CX_CFG_GDSCR		0x26424
+#define GEN7_GPU_CC_CX_CFG_GDSCR		0x26443
+#define GEN7_17_0_GPU_CC_CX_CFG_GDSCR		0x26445
 #define GEN7_GPU_CC_GX_DOMAIN_MISC3		0x26541
-#define GEN7_GPU_CC_CX_GDSCR			0x26442
 
 /* GPU RSC sequencer registers */
 #define GEN7_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
@@ -1301,11 +1323,14 @@
 #define GEN7_SMMU_BASE				0x28000
 
 /* GPU CX_MISC registers */
-#define GEN7_CX_MISC_BASE			0x27800
-#define GEN7_GPU_CX_MISC_TCM_RET_CNTL		0x39
-#define GEN7_GPU_CX_MISC_AO_COUNTER_LO		0x80
-#define GEN7_GPU_CX_MISC_AO_COUNTER_HI		0x81
-#define GEN7_GPU_CX_MISC_SW_FUSE_VALUE		0x400
+#define GEN7_GPU_CX_MISC_CX_AHB_AON_CNTL	0x27810
+#define GEN7_GPU_CX_MISC_CX_AHB_GMU_CNTL	0x27811
+#define GEN7_GPU_CX_MISC_CX_AHB_CP_CNTL		0x27812
+#define GEN7_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL	0x27813
+#define GEN7_GPU_CX_MISC_CX_AHB_HOST_CNTL	0x27814
+#define GEN7_GPU_CX_MISC_AO_COUNTER_LO		0x27880
+#define GEN7_GPU_CX_MISC_AO_COUNTER_HI		0x27881
+#define GEN7_GPU_CX_MISC_SW_FUSE_VALUE		0x27C00
 
 /* GPU SW Fuse Feature bit fields */
 #define GEN7_FASTBLEND_SW_FUSE		0

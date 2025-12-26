@@ -11,8 +11,6 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
-#include <linux/regulator/consumer.h>
-#include <linux/soc/qcom/llcc-qcom.h>
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -49,29 +47,6 @@ static struct a6xx_rgmu_device *to_a6xx_rgmu(struct adreno_device *adreno_dev)
 					struct a6xx_device, adreno_dev);
 
 	return &a6xx_dev->rgmu;
-}
-
-static void a6xx_rgmu_active_count_put(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
-		return;
-
-	if (WARN(atomic_read(&device->active_cnt) == 0,
-		"Unbalanced get/put calls to KGSL active count\n"))
-		return;
-
-	if (atomic_dec_and_test(&device->active_cnt)) {
-		kgsl_pwrscale_update_stats(device);
-		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
-	}
-
-	trace_kgsl_active_count(device,
-		(unsigned long) __builtin_return_address(0));
-
-	wake_up(&device->active_cnt_wq);
 }
 
 static irqreturn_t a6xx_rgmu_irq_handler(int irq, void *data)
@@ -116,7 +91,7 @@ static irqreturn_t a6xx_oob_irq_handler(int irq, void *data)
 
 		dev_err_ratelimited(&rgmu->pdev->dev,
 				"RGMU oob irq error\n");
-		adreno_dispatcher_fault(adreno_dev, ADRENO_GMU_FAULT);
+		adreno_scheduler_fault(adreno_dev, ADRENO_GMU_FAULT);
 	}
 	if (status & ~RGMU_OOB_IRQ_MASK)
 		dev_err_ratelimited(&rgmu->pdev->dev,
@@ -169,7 +144,7 @@ static int a6xx_rgmu_oob_set(struct kgsl_device *device,
 		dev_err(&rgmu->pdev->dev,
 				"Timed out while setting OOB req:%s status:0x%x\n",
 				oob_to_str(req), status);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return ret;
 	}
 
@@ -371,7 +346,7 @@ static int a6xx_rgmu_wait_for_lowest_idle(struct adreno_device *adreno_dev)
 			reg[7], reg[8], reg[9]);
 
 	WARN_ON(1);
-	gmu_core_fault_snapshot(device);
+	gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 	return -ETIMEDOUT;
 }
 
@@ -459,7 +434,7 @@ static int a6xx_rgmu_fw_start(struct adreno_device *adreno_dev,
 		gmu_core_regread(device, A6XX_RGMU_CX_PCC_DEBUG, &status);
 		dev_err(&rgmu->pdev->dev,
 				"rgmu boot Failed. status:%08x\n", status);
-		gmu_core_fault_snapshot(device);
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
 		return -ETIMEDOUT;
 	}
 
@@ -616,9 +591,13 @@ static int a6xx_rgmu_load_firmware(struct adreno_device *adreno_dev)
 }
 
 /* Halt RGMU execution */
-static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force)
+static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force,
+				     enum gmu_fault_panic_policy gf_policy)
 {
-	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(ADRENO_DEVICE(device));
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
+	u64 ticks = gpudev->read_alwayson(adreno_dev);
 	unsigned int index, status, fence;
 
 	if (!device->gmu_fault)
@@ -650,6 +629,7 @@ static void a6xx_rgmu_halt_execution(struct kgsl_device *device, bool force)
 	 */
 	gmu_core_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
 
+	KGSL_GMU_CORE_FORCE_PANIC(device->gmu_core.gf_panic, rgmu->pdev, ticks, gf_policy);
 }
 
 static void halt_gbif_arb(struct adreno_device *adreno_dev)
@@ -721,9 +701,6 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
-
 	adreno_set_active_ctxs_null(adreno_dev);
 
 	ret = kgsl_mmu_start(device);
@@ -755,6 +732,7 @@ static int a6xx_gpu_boot(struct adreno_device *adreno_dev)
 	ret = a6xx_rb_start(adreno_dev);
 	if (ret) {
 		a6xx_disable_gpu_irq(adreno_dev);
+		adreno_llcc_slice_deactivate(adreno_dev);
 		goto err_oob_clear;
 	}
 
@@ -803,16 +781,14 @@ static int a6xx_rgmu_boot(struct adreno_device *adreno_dev)
 
 	a6xx_rgmu_irq_enable(adreno_dev);
 
+	/* Clear any GPU faults that might have been left over */
+	adreno_clear_gpu_fault(adreno_dev);
+
 	ret = a6xx_rgmu_fw_start(adreno_dev, GMU_COLD_BOOT);
 	if (ret)
 		goto err;
 
-	/* Request default DCVS level */
-	ret = kgsl_pwrctrl_set_default_gpu_pwrlevel(device);
-	if (ret)
-		goto err;
-
-	ret = kgsl_pwrctrl_axi(device, true);
+	ret = kgsl_pwrctrl_setup_default_votes(device);
 	if (ret)
 		goto err;
 
@@ -837,14 +813,13 @@ static void rgmu_idle_check(struct work_struct *work)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	if (test_bit(GMU_DISABLE_SLUMBER, &device->gmu_core.flags))
 		goto done;
 
 	if (atomic_read(&device->active_cnt) || time_is_after_jiffies(device->idle_jiffies)) {
 		kgsl_pwrscale_update(device);
-		kgsl_start_idle_timer(device);
 		goto done;
 	}
 
@@ -867,7 +842,7 @@ static void rgmu_idle_check(struct work_struct *work)
 	}
 
 done:
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 static void rgmu_idle_timer(struct timer_list *t)
@@ -1015,6 +990,8 @@ static int a6xx_first_boot(struct adreno_device *adreno_dev)
 
 	device->pwrctrl.last_stat_updated = ktime_get();
 
+	set_bit(ADRENO_DEVICE_FIRST_BOOT_DONE, &adreno_dev->priv);
+
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 
 	return 0;
@@ -1035,7 +1012,7 @@ static int a6xx_rgmu_first_open(struct adreno_device *adreno_dev)
 	 * check by incrementing the active count and immediately releasing it.
 	 */
 	atomic_inc(&device->active_cnt);
-	a6xx_rgmu_active_count_put(adreno_dev);
+	adreno_active_count_put(adreno_dev);
 
 	return 0;
 }
@@ -1046,15 +1023,7 @@ static int a6xx_power_off(struct adreno_device *adreno_dev)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	int ret;
 
-	adreno_suspend_context(device);
-
-	/*
-	 * adreno_suspend_context() unlocks the device mutex, which
-	 * could allow a concurrent thread to attempt SLUMBER sequence.
-	 * Hence, check the flags before proceeding with SLUMBER.
-	 */
-	if (!test_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags))
-		return 0;
+	adreno_check_idle(device);
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SLUMBER);
 
@@ -1100,11 +1069,7 @@ no_gx_power:
 
 	adreno_ringbuffer_stop(adreno_dev);
 
-	if (!IS_ERR_OR_NULL(adreno_dev->gpu_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpu_llc_slice);
-
-	if (!IS_ERR_OR_NULL(adreno_dev->gpuhtw_llc_slice))
-		llcc_slice_deactivate(adreno_dev->gpuhtw_llc_slice);
+	adreno_llcc_slice_deactivate(adreno_dev);
 
 	clear_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags);
 
@@ -1128,6 +1093,8 @@ int a6xx_rgmu_reset(struct adreno_device *adreno_dev)
 
 	a6xx_reset_preempt_records(adreno_dev);
 
+	adreno_llcc_slice_deactivate(adreno_dev);
+
 	clear_bit(RGMU_PRIV_GPU_STARTED, &rgmu->flags);
 
 	/* Attempt rebooting the rgmu and gpu */
@@ -1140,7 +1107,7 @@ static int a6xx_rgmu_active_count_get(struct adreno_device *adreno_dev)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
 	int ret = 0;
 
-	if (WARN_ON(!mutex_is_locked(&device->mutex)))
+	if (WARN_ON(!kgsl_mutex_is_locked(&device->mutex)))
 		return -EINVAL;
 
 	if (test_bit(RGMU_PRIV_PM_SUSPEND, &rgmu->flags))
@@ -1169,18 +1136,7 @@ static int a6xx_rgmu_pm_suspend(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_SUSPEND);
 
-	/* Halt any new submissions */
-	reinit_completion(&device->halt_gate);
-
-	/* wait for active count so device can be put in slumber */
-	ret = kgsl_active_count_wait(device, 0, HZ);
-	if (ret) {
-		dev_err(device->dev,
-			"Timed out waiting for the active count\n");
-		goto err;
-	}
-
-	ret = adreno_idle(device);
+	ret = adreno_drain_and_idle(device);
 	if (ret)
 		goto err;
 
@@ -1297,7 +1253,6 @@ const struct adreno_power_ops a6xx_rgmu_power_ops = {
 	.first_open = a6xx_rgmu_first_open,
 	.last_close = a6xx_power_off,
 	.active_count_get = a6xx_rgmu_active_count_get,
-	.active_count_put = a6xx_rgmu_active_count_put,
 	.pm_suspend = a6xx_rgmu_pm_suspend,
 	.pm_resume = a6xx_rgmu_pm_resume,
 	.touch_wakeup = a6xx_rgmu_touch_wakeup,
@@ -1319,6 +1274,8 @@ int a6xx_rgmu_device_probe(struct platform_device *pdev,
 
 	adreno_dev = &a6xx_dev->adreno_dev;
 
+	adreno_dev->irq_mask = A6XX_INT_MASK;
+
 	ret = a6xx_probe_common(pdev, adreno_dev, chipid, gpucore);
 	if (ret)
 		return ret;
@@ -1332,8 +1289,6 @@ int a6xx_rgmu_device_probe(struct platform_device *pdev,
 	INIT_WORK(&device->idle_check_ws, rgmu_idle_check);
 
 	timer_setup(&device->idle_timer, rgmu_idle_timer, 0);
-
-	adreno_dev->irq_mask = A6XX_INT_MASK;
 
 	return 0;
 }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __MSM_HW_FENCE_H
@@ -216,4 +216,9 @@ static inline int msm_hw_fence_trigger_signal(void *client_handle, u32 tx_client
 	return -EINVAL;
 }
 
+static inline int msm_hw_fence_wait_update_v2(void *client_handle,
+	struct dma_fence **fences, u64 *handles, u64 *client_data_list, u32 num_fences, bool reg)
+{
+	return -EINVAL;
+}
 #endif

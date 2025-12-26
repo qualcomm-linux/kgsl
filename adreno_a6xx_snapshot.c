@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
@@ -1426,6 +1426,9 @@ static void a6xx_snapshot_debugbus(struct adreno_device *adreno_dev,
 	int i;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
+	if (device->debug_bus_bin)
+		return;
+
 	kgsl_regwrite(device, A6XX_DBGC_CFG_DBGBUS_CNTLT,
 		(0xf << A6XX_DBGC_CFG_DBGBUS_CNTLT_SEGT_SHIFT) |
 		(0x0 << A6XX_DBGC_CFG_DBGBUS_CNTLT_GRANU_SHIFT) |
@@ -1554,30 +1557,6 @@ static void a6xx_snapshot_debugbus(struct adreno_device *adreno_dev,
 	}
 }
 
-
-
-/* a6xx_snapshot_sqe() - Dump SQE data in snapshot */
-static size_t a6xx_snapshot_sqe(struct kgsl_device *device, u8 *buf,
-		size_t remain, void *priv)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
-	struct adreno_firmware *fw = ADRENO_FW(adreno_dev, ADRENO_FW_SQE);
-
-	if (remain < DEBUG_SECTION_SZ(1)) {
-		SNAPSHOT_ERR_NOMEM(device, "SQE VERSION DEBUG");
-		return 0;
-	}
-
-	/* Dump the SQE firmware version */
-	header->type = SNAPSHOT_DEBUG_SQE_VERSION;
-	header->size = 1;
-	*data = fw->version;
-
-	return DEBUG_SECTION_SZ(1);
-}
-
 static void _a6xx_do_crashdump(struct kgsl_device *device)
 {
 	u32 val = 0;
@@ -1593,7 +1572,7 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 		return;
 
 	/* IF the SMMU is stalled we cannot do a crash dump */
-	if (a6xx_is_smmu_stalled(device))
+	if (adreno_smmu_is_stalled(ADRENO_DEVICE(device)))
 		return;
 
 	/* Turn on APRIV for legacy targets so we can access the buffers */
@@ -1636,81 +1615,6 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 	}
 
 	crash_dump_valid = true;
-}
-
-static size_t a6xx_snapshot_isense_registers(struct kgsl_device *device,
-		u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_snapshot_regs *header = (struct kgsl_snapshot_regs *)buf;
-	struct kgsl_snapshot_registers *regs = priv;
-	unsigned int *data = (unsigned int *)(buf + sizeof(*header));
-	int count = 0, j, k;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	/* Figure out how many registers we are going to dump */
-
-	for (j = 0; j < regs->count; j++) {
-		int start = regs->regs[j * 2];
-		int end = regs->regs[j * 2 + 1];
-
-		count += (end - start + 1);
-	}
-
-	if (remain < (count * 8) + sizeof(*header)) {
-		SNAPSHOT_ERR_NOMEM(device, "ISENSE REGISTERS");
-		return 0;
-	}
-
-	for (j = 0; j < regs->count; j++) {
-		unsigned int start = regs->regs[j * 2];
-		unsigned int end = regs->regs[j * 2 + 1];
-
-		for (k = start; k <= end; k++) {
-			unsigned int val;
-
-			adreno_isense_regread(adreno_dev,
-				k - (adreno_dev->isense_base >> 2), &val);
-			*data++ = k;
-			*data++ = val;
-		}
-	}
-
-	header->count = count;
-
-	/* Return the size of the section */
-	return (count * 8) + sizeof(*header);
-}
-
-/* Snapshot the preemption related buffers */
-static size_t snapshot_preemption_record(struct kgsl_device *device,
-	u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-	u8 *ptr = buf + sizeof(*header);
-	const struct adreno_a6xx_core *gpucore = to_a6xx_core(ADRENO_DEVICE(device));
-	u64 ctxt_record_size = A6XX_CP_CTXRECORD_SIZE_IN_BYTES;
-
-	if (gpucore->ctxt_record_size)
-		ctxt_record_size = gpucore->ctxt_record_size;
-
-	ctxt_record_size = min_t(u64, ctxt_record_size, device->snapshot_ctxt_record_size);
-
-	if (remain < (ctxt_record_size + sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return 0;
-	}
-
-	header->size = ctxt_record_size >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, ctxt_record_size);
-
-	return ctxt_record_size + sizeof(*header);
 }
 
 static size_t a6xx_snapshot_cp_roq(struct kgsl_device *device, u8 *buf,
@@ -1761,7 +1665,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		struct kgsl_snapshot *snapshot)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	struct adreno_ringbuffer *rb;
 	bool sptprac_on;
 	unsigned int i;
 	u32 hi, lo;
@@ -1775,15 +1678,15 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	 */
 	a6xx_snapshot_debugbus(adreno_dev, snapshot);
 
-	/* RSCC registers are on cx */
-	if (adreno_is_a650_family(adreno_dev)) {
+	/* Isense registers are on cx */
+	if (adreno_dev->isense_reg_mapped) {
 		struct kgsl_snapshot_registers r;
 
 		r.regs = a650_isense_registers;
 		r.count = ARRAY_SIZE(a650_isense_registers) / 2;
 
 		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS,
-			snapshot, a6xx_snapshot_isense_registers, &r);
+			snapshot, kgsl_snapshot_dump_registers, &r);
 	}
 
 	if (!gmu_core_isenabled(device)) {
@@ -1895,10 +1798,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, a6xx_snapshot_cp_roq, NULL);
 
-	/* SQE Firmware */
-	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
-		snapshot, a6xx_snapshot_sqe, NULL);
-
 	/* Mempool debug data */
 	if (adreno_is_a650_family(adreno_dev))
 		a650_snapshot_mempool(device, snapshot);
@@ -1915,7 +1814,7 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		/* Shader memory */
 		a6xx_snapshot_shader(device, snapshot);
 
-		if (!a6xx_is_smmu_stalled(device))
+		if (!adreno_smmu_is_stalled(adreno_dev))
 			memset(a6xx_crashdump_registers->hostptr, 0xaa,
 					a6xx_crashdump_registers->size);
 	}
@@ -1933,14 +1832,7 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 	}
 
 	/* Preemption record */
-	if (adreno_is_preemption_enabled(adreno_dev)) {
-		FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
-			kgsl_snapshot_add_section(device,
-				KGSL_SNAPSHOT_SECTION_GPU_OBJECT_V2,
-				snapshot, snapshot_preemption_record,
-				rb->preemption_desc);
-		}
-	}
+	adreno_snapshot_preemption_record(device, snapshot);
 }
 
 static int _a6xx_crashdump_init_mvc(struct adreno_device *adreno_dev,

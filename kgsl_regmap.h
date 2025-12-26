@@ -49,9 +49,11 @@ struct kgsl_regmap {
 	 */
 	struct resource *base;
 	/** @region: Array of regions for this regmap */
-	struct kgsl_regmap_region region[4];
+	struct kgsl_regmap_region region[5];
 	/** @count: Number of active regions in @region */
 	int count;
+	/** @use_relaxed: To use relaxed variant of IO access API */
+	bool use_relaxed;
 };
 
 /**

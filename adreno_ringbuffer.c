@@ -9,9 +9,6 @@
 #include <linux/slab.h>
 #include <soc/qcom/dcvs.h>
 
-#include "a3xx_reg.h"
-#include "a5xx_reg.h"
-#include "a6xx_reg.h"
 #include "adreno.h"
 #include "adreno_pm4types.h"
 #include "adreno_ringbuffer.h"
@@ -158,7 +155,7 @@ int adreno_ringbuffer_setup(struct adreno_device *adreno_dev,
 
 void adreno_preemption_timer(struct timer_list *t)
 {
-	struct adreno_preemption *preempt = timer_container_of(preempt, t, timer);
+	struct adreno_preemption *preempt = kgsl_timer_container_of(preempt, t, timer);
 	struct adreno_device *adreno_dev = container_of(preempt,
 						struct adreno_device, preempt);
 
@@ -181,7 +178,8 @@ void adreno_drawobj_set_constraint(struct kgsl_device *device,
 	 * Check if the context has a constraint and constraint flags are
 	 * set.
 	 */
-	if (context->pwr_constraint.type &&
+	if (device->host_based_dcvs &&
+		context->pwr_constraint.type &&
 		((context->flags & KGSL_CONTEXT_PWR_CONSTRAINT) ||
 			(drawobj->flags & KGSL_CONTEXT_PWR_CONSTRAINT)))
 		kgsl_pwrctrl_set_constraint(device, &context->pwr_constraint,
@@ -227,7 +225,7 @@ void adreno_drawobj_set_constraint(struct kgsl_device *device,
 				DCVS_SLOW_PATH);
 			if (!ret) {
 				trace_kgsl_constraint(device,
-					KGSL_CONSTRAINT_L3_PWRLEVEL, new_l3, 1);
+					KGSL_CONSTRAINT_L3_PWRLEVEL, new_l3, 1, 0);
 				device->cur_l3_pwrlevel = new_l3;
 			} else {
 				dev_err_ratelimited(device->dev,
@@ -353,7 +351,7 @@ int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
 /**
  * adreno_ringbuffer_wait_callback() - Callback function for event registered
  * on a ringbuffer timestamp
- * @device: Device for which the the callback is valid
+ * @device: Device for which the callback is valid
  * @context: The context of the event
  * @priv: The private parameter of the event
  * @result: Result of the event trigger
@@ -405,7 +403,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 	if (ret)
 		return ret;
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 
 	wait_time = msecs_to_jiffies(msecs);
 	if (wait_event_timeout(rb->ts_expire_waitq,
@@ -414,7 +412,7 @@ int adreno_ringbuffer_waittimestamp(struct adreno_ringbuffer *rb,
 		wait_time) == 0)
 		ret  = -ETIMEDOUT;
 
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 	/*
 	 * after wake up make sure that expected timestamp has retired
 	 * because the wakeup could have happened due to a cancel event

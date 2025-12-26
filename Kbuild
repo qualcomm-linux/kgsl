@@ -27,6 +27,9 @@ endif
 ifeq ($(CONFIG_ARCH_BLAIR), y)
 	include $(KGSL_PATH)/config/gki_blair.conf
 endif
+ifeq ($(CONFIG_ARCH_PITTI), y)
+	include $(KGSL_PATH)/config/gki_pitti.conf
+endif
 ifeq ($(CONFIG_ARCH_SA8155), y)
 	include $(KGSL_PATH)/config/gki_sa8155.conf
 endif
@@ -56,6 +59,28 @@ ifeq ($(CONFIG_ARCH_QCS405), y)
 endif
 ifeq ($(CONFIG_ARCH_HOLI), y)
 	include $(KGSL_PATH)/config/gki_blair.conf
+endif
+ifeq ($(CONFIG_ARCH_SDM670), y)
+	include $(KGSL_PATH)/config/gki_qcs605.conf
+endif
+ifeq ($(CONFIG_ARCH_NIOBE), y)
+	include $(KGSL_PATH)/config/gki_niobe.conf
+endif
+ifeq ($(CONFIG_ARCH_BENGAL), y)
+        include $(KGSL_PATH)/config/gki_bengal.conf
+endif
+ifeq ($(CONFIG_ARCH_PARROT), y)
+	include $(KGSL_PATH)/config/gki_parrot.conf
+endif
+ifeq ($(CONFIG_ARCH_SCUBA), y)
+	include $(KGSL_PATH)/config/gki_scuba.conf
+endif
+ifeq ($(CONFIG_ARCH_NEO), y)
+	include $(KGSL_PATH)/config/gki_neo.conf
+endif
+ifeq ($(CONFIG_ARCH_SM6150), y)
+	include $(KGSL_PATH)/config/gki_sm6150.conf
+	subdir-ccflags-y += $(LE_EXTRA_CFLAGS)
 endif
 
 ccflags-y += -I$(KGSL_PATH) -I$(KGSL_PATH)/include/linux -I$(KGSL_PATH)/include -I$(KERNEL_SRC)/drivers/devfreq
@@ -91,12 +116,16 @@ ifndef CONFIG_QCOM_KGSL_USE_SHMEM
 	msm_kgsl-y += kgsl_pool.o
 endif
 
+ifndef CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ
+	msm_kgsl-y += governor_msm_adreno_tz.o
+endif
+
+ifndef CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON
+	msm_kgsl-y += governor_gpubw_mon.o
+endif
+
 msm_kgsl-y += \
 	adreno.o \
-	adreno_a3xx.o \
-	adreno_a3xx_perfcounter.o \
-	adreno_a3xx_ringbuffer.o \
-	adreno_a3xx_snapshot.o \
 	adreno_a5xx.o \
 	adreno_a5xx_perfcounter.o \
 	adreno_a5xx_preempt.o \
@@ -128,7 +157,20 @@ msm_kgsl-y += \
 	adreno_gen7_ringbuffer.o \
 	adreno_gen7_rpmh.o \
 	adreno_gen7_snapshot.o \
+	adreno_gen8.o \
+	adreno_gen8_gmu.o \
+	adreno_gen8_gmu_snapshot.o \
+	adreno_gen8_hfi.o \
+	adreno_gen8_hwsched.o \
+	adreno_gen8_hwsched_hfi.o \
+	adreno_gen8_perfcounter.o \
+	adreno_gen8_preempt.o \
+	adreno_gen8_ringbuffer.o \
+	adreno_gen8_rpmh.o \
+	adreno_gen8_snapshot.o \
+	adreno_rpmh.o \
 	adreno_hwsched.o \
+	adreno_hwsched_snapshot.o \
 	adreno_ioctl.o \
 	adreno_perfcounter.o \
 	adreno_ringbuffer.o \
@@ -138,10 +180,8 @@ msm_kgsl-y += \
 
 msm_kgsl-$(CONFIG_COMPAT) += adreno_compat.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_coresight.o
-msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_a3xx_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_a5xx_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_a6xx_coresight.o
 msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_gen7_coresight.o
+msm_kgsl-$(CONFIG_QCOM_KGSL_CORESIGHT) += adreno_gen8_coresight.o
 msm_kgsl-$(CONFIG_DEBUG_FS) += adreno_debugfs.o adreno_profile.o
-msm_kgsl-$(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ) += governor_msm_adreno_tz.o
-msm_kgsl-$(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON) += governor_gpubw_mon.o

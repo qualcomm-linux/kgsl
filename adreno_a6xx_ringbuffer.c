@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include "adreno.h"
@@ -148,7 +148,6 @@ int a6xx_ringbuffer_submit(struct adreno_ringbuffer *rb,
 	spin_lock_irqsave(&rb->preempt_lock, flags);
 	if (adreno_in_preempt_state(adreno_dev, ADRENO_PREEMPT_NONE)) {
 		if (adreno_dev->cur_rb == rb) {
-			kgsl_pwrscale_busy(device);
 			ret = a6xx_fenced_write(adreno_dev,
 				A6XX_CP_RB_WPTR, rb->_wptr,
 				FENCE_STATUS_WRITEDROPPED0_MASK);
@@ -167,8 +166,8 @@ int a6xx_ringbuffer_submit(struct adreno_ringbuffer *rb,
 		 * If WPTR update fails, take inline snapshot and trigger
 		 * recovery.
 		 */
-		gmu_core_fault_snapshot(device);
-		adreno_dispatcher_fault(adreno_dev,
+		gmu_core_fault_snapshot(device, GMU_FAULT_PANIC_NONE);
+		adreno_scheduler_fault(adreno_dev,
 			ADRENO_GMU_FAULT_SKIP_SNAPSHOT);
 	}
 

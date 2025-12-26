@@ -7,7 +7,9 @@
 #include <linux/debugfs.h>
 
 #include "adreno.h"
+#include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "kgsl_util.h"
 
 static void wait_callback(struct kgsl_device *device,
 		struct kgsl_event_group *group, void *priv, int result)
@@ -168,11 +170,11 @@ int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 			_check_context_timestamp(device, context, timestamp),
 			msecs_to_jiffies(timeout));
 
-	if (ret_temp == 0) {
-		ret = -ETIMEDOUT;
-		goto done;
-	} else if (ret_temp < 0) {
-		ret = (int) ret_temp;
+	if (ret_temp <= 0) {
+		kgsl_cancel_event(device, &context->events, timestamp,
+			wait_callback, (void *)drawctxt);
+
+		ret = ret_temp ? (int)ret_temp : -ETIMEDOUT;
 		goto done;
 	}
 	ret = 0;
@@ -264,6 +266,9 @@ void adreno_drawctxt_invalidate(struct kgsl_device *device,
 	spin_lock(&drawctxt->lock);
 	set_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv);
 
+	if (!list_empty(&drawctxt->hw_fence_list))
+		set_bit(KGSL_CONTEXT_PRIV_INVALID_DRAIN_HW_FENCE, &context->priv);
+
 	/*
 	 * set the timestamp to the last value since the context is invalidated
 	 * and we want the pending events for this context to go away
@@ -306,6 +311,83 @@ void adreno_drawctxt_set_guilty(struct kgsl_device *device,
 	adreno_drawctxt_invalidate(device, context);
 }
 
+u32 adreno_prepare_preib_preempt_scratch(struct adreno_device *adreno_dev,
+		struct adreno_context *drawctxt, u32 *cmds)
+{
+	struct adreno_ringbuffer *rb = drawctxt->rb;
+	u32 *cmds_orig = cmds;
+	u64 gpuaddr, dest;
+
+	if (!drawctxt->base.user_ctxt_record)
+		return 0;
+
+	dest = PREEMPT_SCRATCH_ADDR(adreno_dev, rb->id);
+	gpuaddr = drawctxt->base.user_ctxt_record->memdesc.gpuaddr;
+
+	*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
+	cmds += cp_gpuaddr(adreno_dev, cmds, dest);
+	*cmds++ = lower_32_bits(gpuaddr);
+	*cmds++ = upper_32_bits(gpuaddr);
+
+	return (u32) (cmds - cmds_orig);
+}
+
+u32 adreno_prepare_preib_postamble_scratch(struct adreno_device *adreno_dev, u32 *cmds)
+{
+	u32 *cmds_orig = cmds;
+	u64 kmd_postamble_addr;
+
+	if (!adreno_dev->preempt.postamble_len)
+		return 0;
+
+	kmd_postamble_addr = SCRATCH_POSTAMBLE_ADDR(KGSL_DEVICE(adreno_dev));
+
+	*cmds++ = cp_type7_packet(CP_SET_AMBLE, 3);
+	*cmds++ = lower_32_bits(kmd_postamble_addr);
+	*cmds++ = upper_32_bits(kmd_postamble_addr);
+	*cmds++ = FIELD_PREP(GENMASK(22, 20), CP_KMD_AMBLE_TYPE)
+		| (FIELD_PREP(GENMASK(19, 0), adreno_dev->preempt.postamble_len));
+
+	return (u32) (cmds - cmds_orig);
+}
+
+static int drawctxt_preemption_init(struct kgsl_context *context)
+{
+	struct kgsl_device *device = context->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	u64 flags = 0;
+
+	/*
+	 * User context record is needed for a6x and beyond targets only. Also,
+	 * highest priority ringbuffer i.e. RB0 always runs to completion without
+	 * preemption. Thus, user context records are not needed for RB0.
+	 */
+	if (!adreno_preemption_feature_set(adreno_dev) || (ADRENO_GPUREV(adreno_dev) < 600) ||
+			(adreno_get_level(context) == 0))
+		return 0;
+
+	if (context->flags & KGSL_CONTEXT_SECURE)
+		flags |= KGSL_MEMFLAGS_SECURE;
+
+	if (is_compat_task())
+		flags |= KGSL_MEMFLAGS_FORCE_32BIT;
+
+	/*
+	 * gpumem_alloc_entry takes an extra refcount. Put it only when
+	 * destroying the context to keep the context record valid
+	 */
+	context->user_ctxt_record = gpumem_alloc_entry(context->dev_priv,
+			ADRENO_CP_CTXRECORD_USER_RESTORE_SIZE, flags);
+	if (IS_ERR(context->user_ctxt_record)) {
+		int ret = PTR_ERR(context->user_ctxt_record);
+
+		context->user_ctxt_record = NULL;
+		return ret;
+	}
+
+	return 0;
+}
+
 #define KGSL_CONTEXT_PRIORITY_MED	0x8
 
 /**
@@ -322,7 +404,6 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	struct adreno_context *drawctxt;
 	struct kgsl_device *device = dev_priv->device;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	int ret;
 	unsigned int local;
 
@@ -358,7 +439,7 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	}
 
 	/* Make sure that our target can support secure contexts if requested */
-	if (!kgsl_mmu_is_secured(&dev_priv->device->mmu) &&
+	if (!kgsl_mmu_is_secured(&device->mmu) &&
 			(local & KGSL_CONTEXT_SECURE)) {
 		dev_err_once(device->dev, "Secure context not supported\n");
 		return ERR_PTR(-EOPNOTSUPP);
@@ -429,15 +510,20 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	INIT_LIST_HEAD(&drawctxt->hw_fence_list);
 	INIT_LIST_HEAD(&drawctxt->hw_fence_inflight_list);
 
-	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context)
-		adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
-
-	if (gpudev->preemption_context_init) {
-		ret = gpudev->preemption_context_init(&drawctxt->base);
-		if (ret != 0) {
+	if (adreno_dev->dispatch_ops && adreno_dev->dispatch_ops->setup_context) {
+		ret = adreno_dev->dispatch_ops->setup_context(adreno_dev, drawctxt);
+		if (ret) {
+			dev_err_ratelimited(device->dev,
+				"Context initialization failed ret:%d\n", ret);
 			kgsl_context_detach(&drawctxt->base);
 			return ERR_PTR(ret);
 		}
+	}
+
+	ret = drawctxt_preemption_init(&drawctxt->base);
+	if (ret) {
+		kgsl_context_detach(&drawctxt->base);
+		return ERR_PTR(ret);
 	}
 
 	/* copy back whatever flags we dediced were valid */
@@ -457,7 +543,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 	 * internal_timestamp is set in adreno_ringbuffer_addcmds,
 	 * which holds the device mutex.
 	 */
-	mutex_lock(&device->mutex);
+	kgsl_mutex_lock(&device->mutex);
 
 	/*
 	 * Wait for the last global timestamp to pass before continuing.
@@ -486,10 +572,10 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 		adreno_set_gpu_fault(adreno_dev,
 				ADRENO_CTX_DETATCH_TIMEOUT_FAULT);
-		mutex_unlock(&device->mutex);
+		kgsl_mutex_unlock(&device->mutex);
 
 		/* Schedule dispatcher to kick in recovery */
-		adreno_dispatcher_schedule(device);
+		adreno_scheduler_queue(adreno_dev);
 
 		/* Wait for context to be invalidated and release context */
 		wait_event_interruptible_timeout(drawctxt->timeout,
@@ -508,7 +594,7 @@ static void wait_for_timestamp_rb(struct kgsl_device *device,
 
 	adreno_profile_process_results(adreno_dev);
 
-	mutex_unlock(&device->mutex);
+	kgsl_mutex_unlock(&device->mutex);
 }
 
 void adreno_drawctxt_detach(struct kgsl_context *context)

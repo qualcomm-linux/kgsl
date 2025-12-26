@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _UAPI_MSM_KGSL_H
@@ -247,6 +247,8 @@ enum kgsl_user_mem_type {
 #define KGSL_UBWC_2_0	2
 #define KGSL_UBWC_3_0	3
 #define KGSL_UBWC_4_0	4
+#define KGSL_UBWC_5_0	5
+#define KGSL_UBWC_6_0	6
 
 /*
  * Reset status values for context
@@ -359,6 +361,7 @@ enum kgsl_timestamp_type {
 #define KGSL_PROP_IS_AQE_ENABLED	0x30
 #define KGSL_PROP_GPU_SECURE_VA_SIZE	0x31
 #define KGSL_PROP_GPU_SECURE_VA_INUSE	0x32
+#define KGSL_PROP_DCVS_PROFILE		0x33
 
 /*
  * kgsl_capabilities_properties returns a list of supported properties.
@@ -505,7 +508,9 @@ struct kgsl_gpu_model {
 #define KGSL_PERFCOUNTER_GROUP_BV_RAS 0x34
 #define KGSL_PERFCOUNTER_GROUP_BV_LRZ 0x35
 #define KGSL_PERFCOUNTER_GROUP_BV_HLSQ 0x36
-#define KGSL_PERFCOUNTER_GROUP_MAX 0x37
+#define KGSL_PERFCOUNTER_GROUP_BV_CCU 0x37
+#define KGSL_PERFCOUNTER_GROUP_BV_RB 0x38
+#define KGSL_PERFCOUNTER_GROUP_MAX 0x39
 
 #define KGSL_PERFCOUNTER_NOT_USED 0xFFFFFFFF
 #define KGSL_PERFCOUNTER_BROKEN 0xFFFFFFFE
@@ -1233,11 +1238,18 @@ struct kgsl_device_constraint {
 #define KGSL_CONSTRAINT_L3_NONE	2
 #define KGSL_CONSTRAINT_L3_PWRLEVEL	3
 
-/* PWRLEVEL constraint level*/
-/* set to min frequency */
+/* PWRLEVEL constraint sub type */
+/* Set to min frequency */
 #define KGSL_CONSTRAINT_PWR_MIN    0
-/* set to max frequency */
+/* Set to max frequency */
 #define KGSL_CONSTRAINT_PWR_MAX    1
+/**
+ * Supported PWR_PERC_X constraint values range from 2 to 100, where X is the floor value
+ * of X percent of the maximum gpu frequency. The resulting frequency will be matched to
+ * the closest available lower frequency, with clamping to the minimum gpu frequency.
+ */
+#define KGSL_CONSTRAINT_PWR_PERC_MIN 2
+#define KGSL_CONSTRAINT_PWR_PERC_MAX 100
 
 struct kgsl_device_constraint_pwrlevel {
 	unsigned int level;
@@ -1354,6 +1366,11 @@ struct kgsl_gpuobj_alloc {
 /* Let the user know that this header supports the gpuobj metadata */
 #define KGSL_GPUOBJ_ALLOC_METADATA_MAX 64
 
+/*
+ * For 32 bit MMUs, this IOCTL returns 32-bit virtual address.
+ * For 64-bit MMUs, if KGSL_MEMFLAGS_FORCE_32BIT is not set, this
+ * IOCTL will return 64-bit VA for both 64-bit and compat tasks.
+ */
 #define IOCTL_KGSL_GPUOBJ_ALLOC \
 	_IOWR(KGSL_IOC_TYPE, 0x45, struct kgsl_gpuobj_alloc)
 
@@ -1392,7 +1409,7 @@ struct kgsl_gpu_event_timestamp {
 };
 
 /**
- * struct kgsl_gpu_event_fence - Specifies a fence ID to to free a GPU object on
+ * struct kgsl_gpu_event_fence - Specifies a fence ID to free a GPU object on
  * @fd: File descriptor for the fence
  */
 struct kgsl_gpu_event_fence {
@@ -2155,5 +2172,68 @@ struct kgsl_read_calibrated_timestamps {
 
 #define IOCTL_KGSL_READ_CALIBRATED_TIMESTAMPS \
 	_IOWR(KGSL_IOC_TYPE, 0x60, struct kgsl_read_calibrated_timestamps)
+
+/* Macro for unused field in kgsl_dcvs_attrs structure */
+#define KGSL_DCVS_ATTR_UNUSED 0xFFFFFFFF
+
+/**
+ * struct kgsl_dcvs_attrs - Descriptor for DCVS profile attributes
+ * @min_gpu_freq: Minimum GPU frequency in MHz
+ * Requested frequency is floor GPU frequency clamped to the supported range
+ * and rounded down to a supported frequency level
+ * @max_gpu_freq: Maximum GPU frequency in MHz
+ * Requested frequency is ceil GPU frequency clamped to the supported range
+ * and rounded down to a supported frequency level
+ * @target_fps: Target frame rate input to DCVS algorithm
+ * @penalty_up: Average gpu busy% threshold to step up one level
+ * @penalty_down: Average gpu busy% threshold to step down one level
+ * @first_step_down_count: Number of consecutive down recommendations before first step down
+ * @subsequent_step_down_count: Number of consecutive down recommendations for subsequent step down
+ * after first step down
+ * @num_samples_up: Moving average window size used for vote up decision
+ * @num_samples_down: Moving average window size used for vote down decision
+ * @strict_frame: Flag used to enable/disable vote up decision if the average gpu busy% over some
+ * consecutive samples is very high. This node takes effect only when target_fps is configured
+ * @non_linear_ramp_up: Flag used to enable/disable non-linear ramp up which supports a larger
+ * stride jump if the gpu busy% is very high
+ * @non_linear_ramp_down: Flag used to enable/disable non-linear ramp down which supports a
+ * larger stride jump if the gpu busy% is very low enough
+ * @min_bus_freq: Minimum bus frequency in MHz
+ * @max_bus_freq: Maximum bus frequency in MHz
+ */
+struct kgsl_dcvs_attrs {
+	__u32 min_gpu_freq;
+	__u32 max_gpu_freq;
+	__u32 target_fps;
+	__u32 penalty_up;
+	__u32 penalty_down;
+	__u32 first_step_down_count;
+	__u32 subsequent_step_down_count;
+	__u32 num_samples_up;
+	__u32 num_samples_down;
+	__u32 strict_frame;
+	__u32 non_linear_ramp_up;
+	__u32 non_linear_ramp_down;
+	__u32 min_bus_freq;
+	__u32 max_bus_freq;
+};
+
+/**
+ * struct kgsl_dcvs_profile - Argument for IOCTL_KGSL_SETPROPERTY
+ * @attrs: User pointer to kgsl_dcvs_attrs structure
+ * @attrs_size: Size of kgsl_dcvs_attrs structure in bytes
+ *
+ * A container to register/unregister the DCVS profile when IOCTL_KGSL_SETPROPERTY
+ * is called with type KGSL_PROP_DCVS_PROFILE.
+ *
+ * User is expected to initialize @struct kgsl_dcvs_attrs with set of property
+ * used by app profile and set the unused fields to KGSL_DCVS_ATTR_UNUSED.
+ */
+struct kgsl_dcvs_profile {
+	__u64 attrs;
+	__u32 attrs_size;
+	/* private: 64 bit compatibility */
+	__u32 padding;
+};
 
 #endif /* _UAPI_MSM_KGSL_H */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/amba/bus.h>
@@ -63,6 +63,8 @@ static struct adreno_coresight_register gen7_coresight_regs[] = {
 	{ GEN7_DBGC_PERF_ATB_DRAIN_CMD },
 	{ GEN7_DBGC_ECO_CNTL },
 	{ GEN7_DBGC_AHB_DBG_CNTL },
+	{ GEN7_DBGC_CFG_DBGBUS_MISC_MODE },
+	{ GEN7_DBGC_SMMU_FAULT_BLOCK_HALT_CFG },
 };
 
 static struct adreno_coresight_register gen7_coresight_regs_cx[] = {
@@ -118,6 +120,7 @@ static struct adreno_coresight_register gen7_coresight_regs_cx[] = {
 	{ GEN7_CX_DBGC_PERF_ATB_DRAIN_CMD },
 	{ GEN7_CX_DBGC_ECO_CNTL },
 	{ GEN7_CX_DBGC_AHB_DBG_CNTL },
+	{ GEN7_CX_DBGC_CFG_DBGBUS_MISC_MODE },
 };
 
 static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_sel_a, &gen7_coresight_regs[0]);
@@ -174,6 +177,7 @@ static ADRENO_CORESIGHT_ATTR(perf_atb_trig_intf_sel_1,
 static ADRENO_CORESIGHT_ATTR(perf_atb_drain_cmd, &gen7_coresight_regs[49]);
 static ADRENO_CORESIGHT_ATTR(eco_cntl, &gen7_coresight_regs[50]);
 static ADRENO_CORESIGHT_ATTR(ahb_dbg_cntl, &gen7_coresight_regs[51]);
+static ADRENO_CORESIGHT_ATTR(cfg_dbgbus_misc_mode, &gen7_coresight_regs[52]);
 
 /*CX debug registers*/
 static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_sel_a,
@@ -280,6 +284,8 @@ static ADRENO_CORESIGHT_ATTR(cx_eco_cntl,
 				&gen7_coresight_regs_cx[50]);
 static ADRENO_CORESIGHT_ATTR(cx_ahb_dbg_cntl,
 				&gen7_coresight_regs_cx[51]);
+static ADRENO_CORESIGHT_ATTR(cx_cfg_dbgbus_misc_mode,
+				&gen7_coresight_regs_cx[52]);
 
 static struct attribute *gen7_coresight_attrs[] = {
 	&coresight_attr_cfg_dbgbus_sel_a.attr.attr,
@@ -334,6 +340,7 @@ static struct attribute *gen7_coresight_attrs[] = {
 	&coresight_attr_perf_atb_drain_cmd.attr.attr,
 	&coresight_attr_eco_cntl.attr.attr,
 	&coresight_attr_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 
@@ -391,6 +398,7 @@ static struct attribute *gen7_coresight_attrs_cx[] = {
 	&coresight_attr_cx_perf_atb_drain_cmd.attr.attr,
 	&coresight_attr_cx_eco_cntl.attr.attr,
 	&coresight_attr_cx_ahb_dbg_cntl.attr.attr,
+	&coresight_attr_cx_cfg_dbgbus_misc_mode.attr.attr,
 	NULL,
 };
 
@@ -424,13 +432,6 @@ static const struct adreno_coresight gen7_coresight_cx = {
 	.groups = gen7_coresight_groups_cx,
 };
 
-static int name_match(struct device *dev, void *data)
-{
-	char *child_name = data;
-
-	return strcmp(child_name, dev_name(dev)) == 0;
-}
-
 void gen7_coresight_init(struct adreno_device *adreno_dev)
 {
 	struct adreno_funnel_device *funnel_gfx = &adreno_dev->funnel_gfx;
@@ -441,7 +442,7 @@ void gen7_coresight_init(struct adreno_device *adreno_dev)
 	if (!amba_dev)
 		return;
 
-	funnel_gfx->funnel_dev = device_find_child(amba_dev, "coresight-funnel-gfx", name_match);
+	funnel_gfx->funnel_dev = device_find_child_by_name(amba_dev, "coresight-funnel-gfx");
 	if (funnel_gfx->funnel_dev == NULL)
 		return;
 

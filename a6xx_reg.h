@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _A6XX_REG_H
@@ -1020,8 +1020,6 @@
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_8_H	0x1F875
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_L	0x1F876
 #define A6XX_GMU_CX_GMU_POWER_COUNTER_XOCLK_9_H	0x1F877
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_L	0x1F888
-#define A6XX_GMU_CX_GMU_ALWAYS_ON_COUNTER_H	0x1F889
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_ENABLE	0x1F8A0
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_0	0x1F8A1
 #define A6XX_GMU_CX_GMU_PERF_COUNTER_SELECT_1	0x1F8A2
@@ -1129,15 +1127,18 @@
 #define A6XX_GMU_CM3_BUSY_CYCLES		0
 
 /* GPUCC registers */
-#define A6XX_GPU_CC_GX_GDSCR                   0x24403
-#define A6XX_GPU_CC_GX_DOMAIN_MISC             0x24542
-#define A6XX_GPU_CC_GX_DOMAIN_MISC3            0x24563
-#define A6XX_GPU_CC_CX_GDSCR                   0x2441B
+#define A6XX_GPU_CC_GX_GDSCR			0x24403
+#define A6XX_GPU_CC_GX_DOMAIN_MISC		0x24542
+#define A6XX_GPU_CC_GX_DOMAIN_MISC3		0x24563
+#define A6XX_GPU_CC_CX_CFG_GDSCR		0x2441C
 
 /* GPUCC offsets are different for A662 */
-#define A662_GPU_CC_GX_GDSCR                   0x26417
-#define A662_GPU_CC_GX_DOMAIN_MISC3            0x26541
-#define A662_GPU_CC_CX_GDSCR                   0x26442
+#define A662_GPU_CC_GX_GDSCR			0x26417
+#define A662_GPU_CC_GX_DOMAIN_MISC3		0x26541
+#define A662_GPU_CC_CX_CFG_GDSCR		0x26443
+
+/* GPUCC offsets are different for A622 */
+#define A622_GPU_CC_CX_CFG_GDSCR		0x26445
 
 /* GPU CPR registers */
 #define A6XX_GPU_CPR_FSM_CTL			0x26801
@@ -1167,6 +1168,19 @@
 #define A6XX_RSCC_TCS7_DRV0_STATUS                      0x007DE
 #define A6XX_RSCC_TCS8_DRV0_STATUS                      0x00886
 #define A6XX_RSCC_TCS9_DRV0_STATUS                      0x0092E
+
+/* GPU RSC sequencer offsets are different for A622 */
+#define A622_RSCC_SEQ_MEM_0_DRV0			0x00154
+#define A622_RSCC_TCS0_DRV0_STATUS			0x0034a
+#define A622_RSCC_TCS1_DRV0_STATUS			0x003f2
+#define A622_RSCC_TCS2_DRV0_STATUS			0x0049a
+#define A622_RSCC_TCS3_DRV0_STATUS			0x00542
+#define A622_RSCC_TCS4_DRV0_STATUS			0x005ea
+#define A622_RSCC_TCS5_DRV0_STATUS			0x00692
+#define A622_RSCC_TCS6_DRV0_STATUS			0x0073a
+#define A622_RSCC_TCS7_DRV0_STATUS			0x007e2
+#define A622_RSCC_TCS8_DRV0_STATUS			0x0088a
+#define A622_RSCC_TCS9_DRV0_STATUS			0x00932
 
 /* GPU PDC sequencer registers in AOSS.RPMh domain */
 #define PDC_GPU_ENABLE_PDC			0x1140
@@ -1222,8 +1236,8 @@
 #define A6XX_RGMU_CX_PCC_DEBUG			0x1F83D
 
 /* GPU CX_MISC registers */
-#define A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0	0x1
-#define A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1	0x2
+#define A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_0	0x27801
+#define A6XX_GPU_CX_MISC_SYSTEM_CACHE_CNTL_1	0x27802
 #define A6XX_LLC_NUM_GPU_SCIDS			5
 #define A6XX_GPU_LLC_SCID_NUM_BITS		5
 #define A6XX_GPU_LLC_SCID_MASK \
@@ -1231,6 +1245,10 @@
 #define A6XX_GPUHTW_LLC_SCID_SHIFT		25
 #define A6XX_GPUHTW_LLC_SCID_MASK \
 	(((1 << A6XX_GPU_LLC_SCID_NUM_BITS) - 1) << A6XX_GPUHTW_LLC_SCID_SHIFT)
+#define A6XX_GPUMV_LLC_SCID_SHIFT		15
+#define A6XX_GPUMV_LLC_SCID_MASK \
+	(((1 << A6XX_GPU_LLC_SCID_NUM_BITS) - 1) << A6XX_GPUMV_LLC_SCID_SHIFT)
+
 
 /* FUSA registers */
 #define A6XX_GPU_FUSA_REG_BASE			0x3FC00

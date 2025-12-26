@@ -1,15 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2014, 2017, 2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __ADRENO_IB_PARSER__
 #define __ADRENO_IB_PARSER__
 
 #include "adreno.h"
-
-extern const unsigned int a3xx_cp_addr_regs[];
-extern const unsigned int a4xx_cp_addr_regs[];
 
 /*
  * struct adreno_ib_object - Structure containing information about an
@@ -94,8 +92,6 @@ enum adreno_cp_addr_regs {
 	ADRENO_CP_ADDR_SP_FS_PVT_MEM_ADDR,
 	ADRENO_CP_ADDR_SP_VS_OBJ_START_REG,
 	ADRENO_CP_ADDR_SP_FS_OBJ_START_REG,
-	ADRENO_CP_UCHE_INVALIDATE0,
-	ADRENO_CP_UCHE_INVALIDATE1,
 	ADRENO_CP_ADDR_MAX,
 };
 
@@ -117,51 +113,6 @@ static inline void adreno_ib_init_ib_obj(uint64_t gpuaddr,
 	ib_obj->size = size;
 	ib_obj->snapshot_obj_type = obj_type;
 	ib_obj->entry = entry;
-}
-
-/*
- * adreno_cp_parser_getreg() - Returns the value of register offset
- * @adreno_dev: The adreno device being operated upon
- * @reg_enum: Enum index of the register whose offset is returned
- */
-static inline int adreno_cp_parser_getreg(struct adreno_device *adreno_dev,
-					enum adreno_cp_addr_regs reg_enum)
-{
-	if (reg_enum == ADRENO_CP_ADDR_MAX)
-		return -EEXIST;
-
-	if (!adreno_is_a3xx(adreno_dev))
-		return -EEXIST;
-	return a3xx_cp_addr_regs[reg_enum];
-}
-
-/*
- * adreno_cp_parser_regindex() - Returns enum index for a given register offset
- * @adreno_dev: The adreno device being operated upon
- * @offset: Register offset
- * @start: The start index to search from
- * @end: The last index to search
- *
- * Checks the list of registers defined for the device and returns the index
- * whose offset value matches offset parameter.
- */
-static inline int adreno_cp_parser_regindex(struct adreno_device *adreno_dev,
-				unsigned int offset,
-				enum adreno_cp_addr_regs start,
-				enum adreno_cp_addr_regs end)
-{
-	int i;
-	const unsigned int *regs;
-
-	if (!adreno_is_a3xx(adreno_dev))
-		return -EEXIST;
-
-	regs = a3xx_cp_addr_regs;
-
-	for (i = start; i <= end && i < ADRENO_CP_ADDR_MAX; i++)
-		if (regs[i] == offset)
-			return i;
-	return -EEXIST;
 }
 
 int adreno_ib_create_object_list(

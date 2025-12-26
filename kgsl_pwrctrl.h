@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2010-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __KGSL_PWRCTRL_H
 #define __KGSL_PWRCTRL_H
@@ -12,7 +12,7 @@
 /*****************************************************************************
  * power flags
  ****************************************************************************/
-#define KGSL_MAX_CLKS 18
+#define KGSL_MAX_CLKS 19
 
 #define KGSL_MAX_PWRLEVELS 32
 
@@ -29,6 +29,13 @@
 
 #define KGSL_XO_CLK_FREQ	19200000
 #define KGSL_ISENSE_CLK_FREQ	200000000
+
+#define KGSL_PWRCTRL_LOG_FREQLIM(device) dev_err_ratelimited(device->dev,	\
+	"GPU req freq %u from prev freq %u unsupported for speed_bin: %d, soc_code: 0x%x\n",	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.active_pwrlevel].gpu_freq,	\
+	device->pwrctrl.pwrlevels[device->pwrctrl.previous_pwrlevel].gpu_freq,	\
+	device->speed_bin,	\
+	device->soc_code)
 
 struct platform_device;
 struct icc_path;
@@ -49,7 +56,7 @@ struct kgsl_pwr_constraint {
 };
 
 /**
- * struct kgsl_pwrlevel - Struct holding different pwrlevel info obtained from
+ * struct kgsl_pwrlevel - Struct holding different pwrlevel info obtained
  * from dtsi file
  * @gpu_freq:          GPU frequency vote in Hz
  * @bus_freq:          Bus bandwidth vote index
@@ -77,10 +84,10 @@ struct kgsl_pwrlevel {
  * @active_pwrlevel - The currently active power level
  * @previous_pwrlevel - The power level before transition
  * @thermal_pwrlevel - maximum powerlevel constraint from thermal
- * @thermal_pwrlevel_floor - minimum powerlevel constraint from thermal
  * @default_pwrlevel - device wake up power level
  * @max_pwrlevel - maximum allowable powerlevel per the user
  * @min_pwrlevel - minimum allowable powerlevel per the user
+ * @min_render_pwrlevel - minimum allowable powerlevel for rendering
  * @num_pwrlevels - number of available power levels
  * @throttle_mask - LM throttle mask
  * @interval_timeout - timeout to be idle before a power event
@@ -107,8 +114,15 @@ struct kgsl_pwrctrl {
 	struct regulator *cx_regulator;
 	/** @gx_regulator: Pointer to the GX domain regulator if applicable */
 	struct regulator *gx_regulator;
-	/** @cx_pd: Power domain for controlling CX GDSC */
+	/**
+	 * @cx_pd: Power domain for registering CX GDSC notifier
+	 *
+	 * Only GMU device votes for GMU_CX_PD. Other client votes are consolidated
+	 * in the CX GenPD instance, so use this for registering the notifier.
+	 */
 	struct device *cx_pd;
+	/** @gmu_cx_pd: Power domain for controlling GMU CX GDSC instance */
+	struct device *gmu_cx_pd;
 	/** @gx_pd: Power domain for controlling GX GDSC */
 	struct device *gx_pd;
 	/** @gx_regulator_parent: Pointer to the GX domain parent supply */
@@ -121,8 +135,8 @@ struct kgsl_pwrctrl {
 	struct completion cx_gdsc_gate;
 	/** @cx_gdsc_wait: Whether to wait for cx gdsc to turn off */
 	bool cx_gdsc_wait;
-	/** @cx_gdsc_offset: Offset of CX GDSC register */
-	u32 cx_gdsc_offset;
+	/** @cx_cfg_gdsc_offset: Offset of CX CFG GDSC register */
+	u32 cx_cfg_gdsc_offset;
 	int isense_clk_indx;
 	int isense_clk_on_level;
 	unsigned long power_flags;
@@ -131,14 +145,16 @@ struct kgsl_pwrctrl {
 	unsigned int active_pwrlevel;
 	unsigned int previous_pwrlevel;
 	unsigned int thermal_pwrlevel;
-	unsigned int thermal_pwrlevel_floor;
 	unsigned int default_pwrlevel;
 	unsigned int max_pwrlevel;
 	unsigned int min_pwrlevel;
+	unsigned int min_render_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int throttle_mask;
-	u32 interval_timeout;
+	atomic64_t interval_timeout;
 	u64 clock_times[KGSL_MAX_PWRLEVELS];
+	/** @thermal_time: Time in usecs the GPU is limited by thermal constraints */
+	u64 thermal_time;
 	struct kgsl_clk_stats clk_stats;
 	bool bus_control;
 	int bus_mod;
@@ -163,6 +179,12 @@ struct kgsl_pwrctrl {
 	u32 cur_ab;
 	/** @sysfs_thermal_req - PM QoS maximum frequency request from user (via sysfs) */
 	struct dev_pm_qos_request sysfs_thermal_req;
+	/* pmqos_max_pwrlevel: Max power level limit set from the PMQOS notifier */
+	u32 pmqos_max_pwrlevel;
+	/* cooling_dev: Handle to thermal cooling dev */
+	struct thermal_cooling_device *cooling_dev;
+	/* pmqos_max_freq: Handle to raise PMQOS MAX FREQUENCY request */
+	struct dev_pm_qos_request pmqos_max_freq;
 	/** @time_in_pwrlevel: Each pwrlevel active duration in usec */
 	u64 time_in_pwrlevel[KGSL_MAX_PWRLEVELS];
 	/** @last_stat_updated: The last time stats were updated */
@@ -175,6 +197,24 @@ struct kgsl_pwrctrl {
 	u32 rt_bus_hint;
 	/** @rt_bus_hint_active: Boolean flag to indicate if RT bus hint is active */
 	bool rt_bus_hint_active;
+	/** @rt_pwrlevel_hint: power level hint for real time clients i.e. RB-0 */
+	u32 rt_pwrlevel_hint;
+	/** @wake_on_touch: If true our last wakeup was due to a touch event */
+	bool wake_on_touch;
+	/** @cooling_worker: kthread worker for handling thermal mitigation event */
+	struct kthread_worker *cooling_worker;
+	/** @cooling_work: ws to update pwrlevel as per the thermal mitigation request */
+	struct kthread_work cooling_work;
+	/** @update_dcvs_table: Set when the dcvs table needs an update for GMU */
+	bool update_dcvs_table;
+	/** @stats_lock: Spinlock for updating pwr stats */
+	spinlock_t stats_lock;
+	/** @aggr_max_pwrlevel: Aggregated max allowed gpu pwrlevel **/
+	u32 aggr_max_pwrlevel;
+	/** @accum_busy_stats: Accumulated gpu busy time */
+	u64 accum_busy_stats;
+	/** @accum_total_time: Accumulated gpu total sampling time */
+	u64 accum_total_time;
 };
 
 int kgsl_pwrctrl_init(struct kgsl_device *device);
@@ -185,9 +225,6 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 	unsigned int level);
 int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
 int kgsl_pwrctrl_change_state(struct kgsl_device *device, int state);
-
-unsigned int kgsl_pwrctrl_adjust_pwrlevel(struct kgsl_device *device,
-	unsigned int new_level);
 
 /*
  * kgsl_pwrctrl_active_freq - get currently configured frequency
@@ -211,7 +248,7 @@ kgsl_pwrctrl_active_freq(struct kgsl_pwrctrl *pwr)
  */
 int kgsl_active_count_wait(struct kgsl_device *device, int count,
 	unsigned long wait_jiffies);
-void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy);
+void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy, u64 ticks);
 
 /**
  * kgsl_pwrctrl_set_constraint() - Validate and change enforced constraint
@@ -227,7 +264,6 @@ void kgsl_pwrctrl_busy_time(struct kgsl_device *device, u64 time, u64 busy);
  */
 void kgsl_pwrctrl_set_constraint(struct kgsl_device *device,
 			struct kgsl_pwr_constraint *pwrc, u32 id, u32 ts);
-int kgsl_pwrctrl_set_default_gpu_pwrlevel(struct kgsl_device *device);
 
 /**
  * kgsl_pwrctrl_request_state - Request a specific power state
@@ -317,4 +353,24 @@ void kgsl_pwrctrl_disable_gx_gdsc(struct kgsl_device *device);
  * Return: 0 on success or negative error on failure
  */
 int kgsl_pwrctrl_probe_gdscs(struct kgsl_device *device, struct platform_device *pdev);
+
+/**
+ * kgsl_pwrctrl_get_acv_perfmode_lvl - Retrieve DDR level for GPU performance mode
+ * @device: Pointer to the kgsl device
+ * @ddr_freq: Target specific DDR frequency from where GPU needs to vote for perf mode
+ *
+ * Return: DDR vote level from where GPU should vote for performance mode
+ */
+u32 kgsl_pwrctrl_get_acv_perfmode_lvl(struct kgsl_device *device, u32 ddr_freq);
+
+/**
+ * kgsl_pwrctrl_setup_default_votes - Set up default power level and bandwidth vote
+ * @device: Pointer to the kgsl device
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int kgsl_pwrctrl_setup_default_votes(struct kgsl_device *device);
+
+static int kgsl_regulator_disable_wait(struct regulator *reg, u32 timeout);
+
 #endif /* __KGSL_PWRCTRL_H */

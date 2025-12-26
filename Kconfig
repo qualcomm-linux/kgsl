@@ -2,7 +2,7 @@
 config QCOM_KGSL
 	tristate "Qualcomm Technologies, Inc. 3D Graphics driver"
 	depends on ARCH_QCOM
-	depends on NVMEM_QCOM_QFPROM
+	depends on NVMEM_QCOM_QFPROM || QCOM_QFPROM
 	select QCOM_MDT_LOADER
 	select INTERVAL_TREE
 	select TRACE_GPU_MEM
@@ -11,24 +11,6 @@ config QCOM_KGSL
 	  Required to use hardware accelerated OpenGL, compute and Vulkan
 	  on QTI targets. This includes power management, memory management,
 	  and scheduling for the Adreno GPUs.
-
-config DEVFREQ_GOV_QCOM_ADRENO_TZ
-	tristate "Qualcomm Technologies, Inc. GPU frequency governor"
-	depends on PM_DEVFREQ
-	help
-	  GPU frequency governor for the Adreno GPU. Sets the frequency
-	  using an "on demand" algorithm in conjunction with other
-	  components on Adreno platforms. This is not useful for non-Adreno
-	  devices.
-
-config DEVFREQ_GOV_QCOM_GPUBW_MON
-	tristate "Qualcomm Technologies, Inc. GPU bandwidth governor"
-	depends on DEVFREQ_GOV_QCOM_ADRENO_TZ
-	help
-	  This governor works together with the Adreno GPU governor to
-	  select bus frequency votes using an "on-demand" algorithm.
-	  This governor will not be useful for non-Adreno based
-	  targets.
 
 config QCOM_KGSL_FENCE_TRACE
 	bool "Enable built-in tracing for adreno fence timeouts"
@@ -118,6 +100,32 @@ config QCOM_KGSL_HIBERNATION
 	  Say 'Y' to enable hibernation support in kgsl. If enabled, kgsl
 	  will register necessary power manager callbacks to support
 	  hibernation.
+
+config QCOM_KGSL_SYNX
+	bool "Use synx APIs in KGSL for HW fences"
+	help
+	  Say 'Y' to enable synx API in kgsl. If enabled, kgsl  will use
+	  synx API for HW fence feature. This allows hardware fence inter-op
+	  between HW fence clients and SYNX clients. If not enabled, then
+	  kgsl will use msm_hw_fence APIs for hardware fence feature.
+
+config QCOM_KGSL_RT_MUTEX
+	bool "Use RT-mutex in KGSL"
+	depends on RT_MUTEXES
+	help
+	  Say 'Y' to use RT-mutex instead of mutex in KGSL driver. If
+	  enabled, KGSL will use RT-mutex instead of mutex to prevent
+	  priority inversion. RT-mutexes extend the semantics of simple
+	  mutexes by the priority inheritance protocol.
+
+config QCOM_KGSL_DEVCOREDUMP
+	bool "Use devcoredump for KGSL snapshots"
+	depends on DEV_COREDUMP
+	help
+	  Say 'Y' to use devcoredump framework for GPU snapshot dumps
+	  instead of the custom sysfs interface. Snapshot data will be
+	  accessible through /sys/class/devcoredump/ interface. If enabled,
+	  the snapshot/dump sysfs node will not be set up.
 
 config QCOM_KGSL_UPSTREAM
 	bool "Enable KGSL compilation with upstream kernel"

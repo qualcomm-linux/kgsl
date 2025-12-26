@@ -16,7 +16,7 @@ struct gen7_dcvs_table {
 	u32 gpu_level_num;
 	u32 gmu_level_num;
 	struct opp_gx_desc gx_votes[MAX_GX_LEVELS];
-	struct opp_desc cx_votes[MAX_CX_LEVELS];
+	struct opp_desc cx_votes[MAX_CX_LEVELS_LEGACY];
 };
 
 /**
@@ -24,62 +24,25 @@ struct gen7_dcvs_table {
  * @ver: GMU Version information
  * @irq: GMU interrupt number
  * @fw_image: GMU FW image
- * @hfi_mem: pointer to HFI shared memory
- * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
- * @num_gpupwrlevels: number GPU frequencies in GPU freq table
- * @num_bwlevel: number of GPU BW levels
- * @num_cnocbwlevel: number CNOC BW levels
- * @rpmh_votes: RPMh TCS command set for GPU, GMU voltage and bw scaling
- * @clks: GPU subsystem clocks required for GMU functionality
- * @wakeup_pwrlevel: GPU wake up power/DCVS level in case different
- *  than default power level
  * @idle_level: Minimal GPU idle power level
- * @fault_count: GMU fault count
  * @mailbox: Messages to AOP for ACD enable/disable go through this
  * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct gen7_gmu_device {
-	struct {
-		u32 core;
-		u32 core_dev;
-		u32 pwr;
-		u32 pwr_dev;
-		u32 hfi;
-	} ver;
-	struct platform_device *pdev;
 	int irq;
 	const struct firmware *fw_image;
-	struct kgsl_memdesc *dump_mem;
 	struct kgsl_memdesc *gmu_log;
 	/** @gmu_init_scratch: Memory to store the initial HFI messages */
 	struct kgsl_memdesc *gmu_init_scratch;
 	/** @gpu_boot_scratch: Memory to store the bootup HFI messages */
 	struct kgsl_memdesc *gpu_boot_scratch;
-	/** @vrb: GMU virtual register bank memory */
-	struct kgsl_memdesc *vrb;
-	/** @trace: gmu trace container */
-	struct kgsl_gmu_trace trace;
 	struct gen7_hfi hfi;
-	struct clk_bulk_data *clks;
-	/** @num_clks: Number of entries in the @clks array */
-	int num_clks;
 	unsigned int idle_level;
-	/** @freqs: Array of GMU frequencies */
-	u32 freqs[GMU_MAX_PWRLEVELS];
-	/** @vlvls: Array of GMU voltage levels */
-	u32 vlvls[GMU_MAX_PWRLEVELS];
-	/** @qmp: Pointer to qmp sturct used for AOP messages*/
+	/** @qmp: Pointer to qmp struct used for AOP messages*/
 	struct qmp *qmp;
 	struct kgsl_mailbox mailbox;
-	/** @gmu_globals: Array to store gmu global buffers */
-	struct kgsl_memdesc gmu_globals[GMU_KERNEL_ENTRIES];
-	/** @global_entries: To keep track of number of gmu buffers */
-	u32 global_entries;
-	struct gmu_vma_entry *vma;
-	/** @num_vmas: Number of entries in the @vma array */
-	u32 num_vmas;
 	unsigned int log_wptr_retention;
 	/** @cm3_fault: whether gmu received a cm3 fault interrupt */
 	atomic_t cm3_fault;
@@ -92,24 +55,13 @@ struct gen7_gmu_device {
 	unsigned long flags;
 	/** @rscc_virt: Pointer where RSCC block is mapped */
 	void __iomem *rscc_virt;
-	/** @domain: IOMMU domain for the kernel context */
-	struct iommu_domain *domain;
-	/** @group: IOMMU group for the kernel context */
-	struct iommu_group *group;
 	/** @log_stream_enable: GMU log streaming enable. Disabled by default */
 	bool log_stream_enable;
 	/** @log_group_mask: Allows overriding default GMU log group mask */
 	u32 log_group_mask;
 	struct kobject log_kobj;
-	/*
-	 * @perf_ddr_bw: The lowest ddr bandwidth that puts CX at a corner at
-	 * which GMU can run at higher frequency.
-	 */
-	u32 perf_ddr_bw;
-	/** @rdpm_cx_virt: Pointer where the RDPM CX block is mapped */
-	void __iomem *rdpm_cx_virt;
-	/** @rdpm_mx_virt: Pointer where the RDPM MX block is mapped */
-	void __iomem *rdpm_mx_virt;
+	/** @pdc_cfg_base: Base address of PDC cfg registers */
+	void __iomem *pdc_cfg_base;
 	/** @num_oob_perfcntr: Number of active oob_perfcntr requests */
 	u32 num_oob_perfcntr;
 	/** @acd_debug_val: DVM value to calibrate ACD for a level */
@@ -135,78 +87,6 @@ struct gen7_gmu_device *to_gen7_gmu(struct adreno_device *adreno_dev);
 
 /* Helper function to get to adreno device from gen7 gmu device */
 struct adreno_device *gen7_gmu_to_adreno(struct gen7_gmu_device *gmu);
-
-/**
- * gen7_reserve_gmu_kernel_block() - Allocate a global gmu buffer
- * @gmu: Pointer to the gen7 gmu device
- * @addr: Desired gmu virtual address
- * @size: Size of the buffer in bytes
- * @vma_id: Target gmu vma where this buffer should be mapped
- * @align: Alignment for the GMU VA and GMU mapping size
- *
- * This function allocates a global gmu buffer and maps it in
- * the desired gmu vma
- *
- * Return: Pointer to the memory descriptor or error pointer on failure
- */
-struct kgsl_memdesc *gen7_reserve_gmu_kernel_block(struct gen7_gmu_device *gmu,
-		u32 addr, u32 size, u32 vma_id, u32 align);
-
-/**
- * gen7_reserve_gmu_kernel_block_fixed() - Maps phyical resource address to gmu
- * @gmu: Pointer to the gen7 gmu device
- * @addr: Desired gmu virtual address
- * @size: Size of the buffer in bytes
- * @vma_id: Target gmu vma where this buffer should be mapped
- * @resource: Name of the resource to get the size and address to allocate
- * @attrs: Attributes for the mapping
- * @align: Alignment for the GMU VA and GMU mapping size
- *
- * This function maps the physcial resource address to desired gmu vma
- *
- * Return: Pointer to the memory descriptor or error pointer on failure
- */
-struct kgsl_memdesc *gen7_reserve_gmu_kernel_block_fixed(struct gen7_gmu_device *gmu,
-	u32 addr, u32 size, u32 vma_id, const char *resource, int attrs, u32 align);
-
-/**
- * gen7_alloc_gmu_kernel_block() - Allocate a gmu buffer
- * @gmu: Pointer to the gen7 gmu device
- * @md: Pointer to the memdesc
- * @size: Size of the buffer in bytes
- * @vma_id: Target gmu vma where this buffer should be mapped
- * @attrs: Attributes for the mapping
- *
- * This function allocates a buffer and maps it in the desired gmu vma
- *
- * Return: 0 on success or error code on failure
- */
-int gen7_alloc_gmu_kernel_block(struct gen7_gmu_device *gmu,
-	struct kgsl_memdesc *md, u32 size, u32 vma_id, int attrs);
-
-/**
- * gen7_gmu_import_buffer() - Import a gmu buffer
- * @gmu: Pointer to the gen7 gmu device
- * @vma_id: Target gmu vma where this buffer should be mapped
- * @md: Pointer to the memdesc to be mapped
- * @attrs: Attributes for the mapping
- * @align: Alignment for the GMU VA and GMU mapping size
- *
- * This function imports and maps a buffer to a gmu vma
- *
- * Return: 0 on success or error code on failure
- */
-int gen7_gmu_import_buffer(struct gen7_gmu_device *gmu, u32 vma_id,
-			struct kgsl_memdesc *md, u32 attrs, u32 align);
-
-/**
- * gen7_free_gmu_block() - Free a gmu buffer
- * @gmu: Pointer to the gen7 gmu device
- * @md: Pointer to the memdesc that is to be freed
- *
- * This function frees a gmu block allocated by gen7_reserve_gmu_kernel_block()
- */
-void gen7_free_gmu_block(struct gen7_gmu_device *gmu, struct kgsl_memdesc *md);
 
 /**
  * gen7_build_rpmh_tables - Build the rpmh tables
@@ -373,11 +253,12 @@ void gen7_gmu_irq_disable(struct adreno_device *adreno_dev);
 /**
  * gen7_gmu_suspend - Hard reset the gpu and gmu
  * @adreno_dev: Pointer to the adreno device
+ * @force:Set to true to enforce a hard reset
  *
  * In case we hit a gmu fault, hard reset the gpu and gmu
  * to recover from the fault
  */
-void gen7_gmu_suspend(struct adreno_device *adreno_dev);
+void gen7_gmu_suspend(struct adreno_device *adreno_dev, bool force);
 
 /**
  * gen7_gmu_oob_set - send gmu oob request
@@ -466,15 +347,6 @@ void gen7_load_rsc_ucode(struct adreno_device *adreno_dev);
 void gen7_gmu_remove(struct kgsl_device *device);
 
 /**
- * gen7_gmu_enable_clks - Enable gmu clocks
- * @adreno_dev: Pointer to the adreno device
- * @level: GMU frequency level
- *
- * Return: 0 on success or negative error on failure
- */
-int gen7_gmu_enable_clks(struct adreno_device *adreno_dev, u32 level);
-
-/**
  * gen7_gmu_handle_watchdog - Handle watchdog interrupt
  * @adreno_dev: Pointer to the adreno device
  */
@@ -483,35 +355,15 @@ void gen7_gmu_handle_watchdog(struct adreno_device *adreno_dev);
 /**
  * gen7_gmu_send_nmi - Send NMI to GMU
  * @device: Pointer to the kgsl device
+ * @gf_policy: GMU fault panic setting policy
  * @force: Boolean to forcefully send NMI irrespective of GMU state
  */
-void gen7_gmu_send_nmi(struct kgsl_device *device, bool force);
+void gen7_gmu_send_nmi(struct kgsl_device *device, bool force,
+		       enum gmu_fault_panic_policy gf_policy);
 
 /**
  * gen7_gmu_add_to_minidump - Register gen7_device with va minidump
  * @adreno_dev: Pointer to the adreno device
  */
 int gen7_gmu_add_to_minidump(struct adreno_device *adreno_dev);
-
-/**
- * gen7_snapshot_gmu_mem - Snapshot a GMU memory descriptor
- * @device: Pointer to the kgsl device
- * @buf: Destination snapshot buffer
- * @remain: Remaining size of the snapshot buffer
- * @priv: Opaque handle
- *
- * Return: Number of bytes written to snapshot buffer
- */
-size_t gen7_snapshot_gmu_mem(struct kgsl_device *device,
-	u8 *buf, size_t remain, void *priv);
-
-/**
- * gen7_bus_ab_quantize - Calculate the AB vote that needs to be sent to GMU
- * @adreno_dev: Handle to the adreno device
- * @ab: ab request that needs to be scaled in MBps
- *
- * Returns the AB value that needs to be prefixed to bandwidth vote in kbps
- */
-u32 gen7_bus_ab_quantize(struct adreno_device *adreno_dev, u32 ab);
-
 #endif

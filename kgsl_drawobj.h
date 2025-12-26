@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __KGSL_DRAWOBJ_H
@@ -90,9 +90,20 @@ struct kgsl_drawobj_cmd {
 };
 
 /* This sync object cannot be sent to hardware */
-#define KGSL_SYNCOBJ_SW BIT(0)
+#define KGSL_SYNCOBJ_SW 0
 /* This sync object can be sent to hardware */
-#define KGSL_SYNCOBJ_HW BIT(1)
+#define KGSL_SYNCOBJ_HW 1
+/* This hw sync object has been assigned a timestamp */
+#define KGSL_SYNCOBJ_HW_TS 2
+
+struct kgsl_drawobj_sync_hw_fence {
+	/** @fence: Pointer to hardware fence */
+	struct dma_fence *fence;
+	/**
+	 * context: Pointer to kgsl context if this hardware fence is owned by a kgsl context
+	 */
+	struct kgsl_context *context;
+};
 
 /**
  * struct kgsl_drawobj_sync - KGSL sync object
@@ -113,9 +124,13 @@ struct kgsl_drawobj_sync {
 	struct timer_list timer;
 	unsigned long timeout_jiffies;
 	/** @flags: sync object internal flags */
-	u32 flags;
+	unsigned long flags;
 	/** @num_hw_fence: number of hw fences in this syncobj */
 	u32 num_hw_fence;
+	/**
+	 * @hw_fences: Array to hold information regarding hardware fences that are in this syncobj
+	 */
+	struct kgsl_drawobj_sync_hw_fence *hw_fences;
 };
 
 #define KGSL_BINDOBJ_STATE_START 0
@@ -149,7 +164,7 @@ struct kgsl_drawobj_timeline {
 	/* @timelines: Array of timeline events to signal */
 	struct kgsl_timeline_event *timelines;
 	/** @count: Number of items in timelines */
-	int count;
+	u32 count;
 };
 
 static inline struct kgsl_drawobj_timeline *
@@ -226,6 +241,7 @@ struct kgsl_drawobj_sync_event {
  * @CMDOBJ_RECURRING_START: To track recurring command object at GMU
  * @CMDOBJ_RECURRING_STOP: To untrack recurring command object from GMU
  * @CMDOBJ_MARKER_EXPIRED: Whether this MARKER object is retired or not
+ * @CMDOBJ_NOP_SUBMISSION: NOP submission to do force retire via GMU
  */
 enum kgsl_drawobj_cmd_priv {
 	CMDOBJ_SKIP = 0,
@@ -236,6 +252,7 @@ enum kgsl_drawobj_cmd_priv {
 	CMDOBJ_RECURRING_START,
 	CMDOBJ_RECURRING_STOP,
 	CMDOBJ_MARKER_EXPIRED,
+	CMDOBJ_NOP_SUBMISSION,
 };
 
 struct kgsl_ibdesc;

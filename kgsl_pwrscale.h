@@ -22,20 +22,18 @@ struct kgsl_power_stats {
 /**
  * struct kgsl_pwrscale - Power scaling settings for a KGSL device
  * @devfreqptr - Pointer to the devfreq device
+ * @gpu_ro_df - Pointer to the msm-adreno-ro devfreq device
  * @gpu_profile - GPU profile data for the devfreq device
  * @bus_profile - Bus specific data for the bus devfreq device
  * @freq_table - GPU frequencies for the DCVS algorithm
  * @accum_stats - Accumulated statistics for various frequency calculations
  * @enabled - Whether or not power scaling is enabled
  * @time - Last submitted sample timestamp
- * @on_time - Timestamp when gpu busy begins
  * @devfreq_wq - Main devfreq workqueue
  * @devfreq_suspend_ws - Pass device suspension to devfreq
  * @devfreq_resume_ws - Pass device resume to devfreq
- * @devfreq_notify_ws - Notify devfreq to update sampling
  * @next_governor_call - Timestamp after which the governor may be notified of
  * a new sample
- * @cooling_dev - Thermal cooling device handle
  * @ctxt_aware_enable - Whether or not ctxt aware DCVS feature is enabled
  * @ctxt_aware_busy_penalty - The time in microseconds required to trigger
  * ctxt aware power level jump
@@ -44,19 +42,21 @@ struct kgsl_power_stats {
  */
 struct kgsl_pwrscale {
 	struct devfreq *devfreqptr;
+	struct devfreq *gpu_ro_df;
 	struct msm_adreno_extended_profile gpu_profile;
 	struct msm_busmon_extended_profile bus_profile;
 	unsigned long freq_table[KGSL_MAX_PWRLEVELS];
 	struct kgsl_power_stats accum_stats;
 	bool enabled;
 	ktime_t time;
-	s64 on_time;
 	struct workqueue_struct *devfreq_wq;
 	struct work_struct devfreq_suspend_ws;
 	struct work_struct devfreq_resume_ws;
-	struct work_struct devfreq_notify_ws;
+	/** @devfreq_notify_worker: kthread worker to handle devfreq notify event */
+	struct kthread_worker *devfreq_notify_worker;
+	/** @devfreq_notify_work: work struct to update devfreq as per request */
+	struct kthread_work devfreq_notify_work;
 	ktime_t next_governor_call;
-	struct thermal_cooling_device *cooling_dev;
 	bool ctxt_aware_enable;
 	unsigned int ctxt_aware_target_pwrlevel;
 	unsigned int ctxt_aware_busy_penalty;
@@ -66,42 +66,58 @@ struct kgsl_pwrscale {
 	struct devfreq *bus_devfreq;
 	/** @devfreq_enabled: Whether or not devfreq is enabled */
 	bool devfreq_enabled;
-	/**
-	 * @avoid_ddr_stall: Whether or not to increase IB vote on high
-	 * ddr stall
-	 */
-	bool avoid_ddr_stall;
 };
 
 /**
  * kgsl_pwrscale_init - Initialize the pwrscale subsystem
- * @device: A GPU device handle
- * @pdev: A pointer to the GPU platform device
- * @governor: default devfreq governor to use for GPU frequency scaling
- *
- * Return: 0 on success or negative on failure
+ * @device: Pointer to KGSL device
+ * @pdev: Pointer to the GPU platform device
  */
-int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev,
-		const char *governor);
-void kgsl_pwrscale_close(struct kgsl_device *device);
+int kgsl_pwrscale_init(struct kgsl_device *device, struct platform_device *pdev);
 
+/**
+ * kgsl_pwrscale_close - Clean up registered governor
+ * @device: Pointer to KGSL device
+ */
+void kgsl_pwrscale_close(struct kgsl_device *device);
 void kgsl_pwrscale_update(struct kgsl_device *device);
 void kgsl_pwrscale_update_stats(struct kgsl_device *device);
-void kgsl_pwrscale_busy(struct kgsl_device *device);
 void kgsl_pwrscale_sleep(struct kgsl_device *device);
 void kgsl_pwrscale_wake(struct kgsl_device *device);
+void kgsl_pwrscale_governor_enable(struct kgsl_device *device);
+void kgsl_pwrscale_governor_disable(struct kgsl_device *device, bool turbo);
+void kgsl_pwrscale_fast_bus_hint(bool on);
 
-void kgsl_pwrscale_enable(struct kgsl_device *device);
-void kgsl_pwrscale_disable(struct kgsl_device *device, bool turbo);
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ)
+static inline int msm_adreno_tz_init(void)
+{
+	return 0;
+}
 
-int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags);
-int kgsl_devfreq_get_dev_status(struct device *dev,
-			struct devfreq_dev_status *stat);
-int kgsl_devfreq_get_cur_freq(struct device *dev, unsigned long *freq);
+static inline void msm_adreno_tz_exit(void)
+{
+}
+#else
+int msm_adreno_tz_init(void);
 
-int kgsl_busmon_target(struct device *dev, unsigned long *freq, u32 flags);
-int kgsl_busmon_get_dev_status(struct device *dev,
-			struct devfreq_dev_status *stat);
-int kgsl_busmon_get_cur_freq(struct device *dev, unsigned long *freq);
+void msm_adreno_tz_exit(void);
+#endif
+
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON)
+static inline int devfreq_gpubw_init(void)
+{
+	return 0;
+}
+
+static inline void devfreq_gpubw_exit(void)
+{
+}
+#else
+int devfreq_gpubw_init(void);
+
+void devfreq_gpubw_exit(void);
+#endif
+
+bool kgsl_is_msm_adreno_tz_governor(struct kgsl_device *device);
 
 #endif

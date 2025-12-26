@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kthread.h>
@@ -31,21 +31,117 @@ struct work_struct reclaim_work;
 
 static atomic_t kgsl_nr_to_reclaim;
 
+#if (KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE)
+static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
+		struct kgsl_memdesc *memdesc)
+{
+	struct folio_batch fbatch;
+	int i;
+
+	/*
+	 * Pages that are first allocated are by default added to
+	 * unevictable list. To reclaim them, we first clear the
+	 * AS_UNEVICTABLE flag of the shmem file address space thus
+	 * check_move_unevictable_folios() places them on the
+	 * evictable list.
+	 *
+	 * Once reclaim is done, hint that further shmem allocations
+	 * will have to be on the unevictable list.
+	 */
+	mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
+	folio_batch_init(&fbatch);
+	for (i = 0; i < memdesc->page_count; i++) {
+		set_page_dirty_lock(memdesc->pages[i]);
+		spin_lock(&memdesc->lock);
+		folio_batch_add(&fbatch, page_folio(memdesc->pages[i]));
+		memdesc->pages[i] = NULL;
+		atomic_inc(&process->unpinned_page_count);
+		spin_unlock(&memdesc->lock);
+		if (folio_batch_count(&fbatch) == PAGEVEC_SIZE) {
+			check_move_unevictable_folios(&fbatch);
+			__folio_batch_release(&fbatch);
+		}
+	}
+
+	if (folio_batch_count(&fbatch)) {
+		check_move_unevictable_folios(&fbatch);
+		__folio_batch_release(&fbatch);
+	}
+}
+
+static int kgsl_read_mapping(struct kgsl_memdesc *memdesc, struct page **page, int i)
+{
+	struct folio *folio = shmem_read_folio_gfp(memdesc->shmem_filp->f_mapping,
+						   i, kgsl_gfp_mask(0));
+
+	if (!IS_ERR(folio)) {
+		*page = folio_page(folio, 0);
+		return 0;
+	}
+
+	return PTR_ERR(folio);
+}
+#else
+static void kgsl_memdesc_clear_unevictable(struct kgsl_process_private *process,
+		struct kgsl_memdesc *memdesc)
+{
+	struct pagevec pvec;
+	int i;
+
+	/*
+	 * Pages that are first allocated are by default added to
+	 * unevictable list. To reclaim them, we first clear the
+	 * AS_UNEVICTABLE flag of the shmem file address space thus
+	 * check_move_unevictable_pages() places them on the
+	 * evictable list.
+	 *
+	 * Once reclaim is done, hint that further shmem allocations
+	 * will have to be on the unevictable list.
+	 */
+	mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
+	pagevec_init(&pvec);
+	for (i = 0; i < memdesc->page_count; i++) {
+		set_page_dirty_lock(memdesc->pages[i]);
+		spin_lock(&memdesc->lock);
+		pagevec_add(&pvec, memdesc->pages[i]);
+		memdesc->pages[i] = NULL;
+		atomic_inc(&process->unpinned_page_count);
+		spin_unlock(&memdesc->lock);
+		if (pagevec_count(&pvec) == PAGEVEC_SIZE) {
+			check_move_unevictable_pages(&pvec);
+			__pagevec_release(&pvec);
+		}
+	}
+
+	if (pagevec_count(&pvec)) {
+		check_move_unevictable_pages(&pvec);
+		__pagevec_release(&pvec);
+	}
+}
+
+static int kgsl_read_mapping(struct kgsl_memdesc *memdesc, struct page **page, int i)
+{
+	*page = shmem_read_mapping_page_gfp(memdesc->shmem_filp->f_mapping,
+					   i, kgsl_gfp_mask(0));
+	return PTR_ERR_OR_ZERO(*page);
+}
+#endif
+
 static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 {
 	struct kgsl_memdesc *memdesc = &entry->memdesc;
 	int i, ret;
-	struct page *page;
+	struct page *page = NULL;
 
+	spin_lock(&memdesc->lock);
 	for (i = 0; i < memdesc->page_count; i++) {
 		if (memdesc->pages[i])
 			continue;
 
-		page = shmem_read_mapping_page_gfp(
-			memdesc->shmem_filp->f_mapping, i, kgsl_gfp_mask(0));
-
-		if (IS_ERR(page))
-			return PTR_ERR(page);
+		spin_unlock(&memdesc->lock);
+		ret = kgsl_read_mapping(memdesc, &page, i);
+		if (ret)
+			return ret;
 
 		kgsl_page_sync(memdesc->dev, page, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
@@ -61,6 +157,7 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 			put_page(page);
 		spin_unlock(&memdesc->lock);
 	}
+	spin_unlock(&memdesc->lock);
 
 	ret = kgsl_mmu_map(memdesc->pagetable, memdesc);
 	if (ret)
@@ -68,8 +165,7 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 
 	trace_kgsl_reclaim_memdesc(entry, false);
 
-	memdesc->priv &= ~KGSL_MEMDESC_RECLAIMED;
-	memdesc->priv &= ~KGSL_MEMDESC_SKIP_RECLAIM;
+	CLEAR_FLAG(KGSL_MEMDESC_RECLAIMED | KGSL_MEMDESC_SKIP_RECLAIM, &memdesc->priv);
 
 	return 0;
 }
@@ -96,7 +192,7 @@ int kgsl_reclaim_to_pinned_state(
 			break;
 		}
 
-		if (entry->memdesc.priv & KGSL_MEMDESC_RECLAIMED)
+		if (TEST_FLAG(KGSL_MEMDESC_RECLAIMED, &entry->memdesc.priv))
 			valid_entry = kgsl_mem_entry_get(entry);
 		spin_unlock(&process->mem_lock);
 
@@ -126,6 +222,231 @@ static void kgsl_reclaim_foreground_work(struct work_struct *work)
 		kgsl_reclaim_to_pinned_state(process);
 	kgsl_process_private_put(process);
 }
+
+#ifdef CONFIG_QCOM_KGSL_HYBRID_ALLOCATION
+static void _copy_page(struct kgsl_memdesc *memdesc, struct page *dest, struct page *src)
+{
+	void *src_ptr, *dest_ptr;
+
+	set_page_dirty_lock(src);
+
+	src_ptr = kmap_local_page(src);
+	dest_ptr = kmap_local_page(dest);
+
+	memcpy(dest_ptr, src_ptr, PAGE_SIZE);
+	kunmap_local(src_ptr);
+	kunmap_local(dest_ptr);
+
+	kgsl_page_sync(memdesc->dev, dest, PAGE_SIZE, DMA_BIDIRECTIONAL);
+}
+
+static u32 kgsl_shmem_mem_entry_migrate(struct mm_struct *mm, struct kgsl_mem_entry *entry)
+{
+	struct kgsl_memdesc *memdesc = &entry->memdesc;
+	u32 page_count = 0;
+	struct page **pages = NULL;
+	struct file *shmem_filp = NULL;
+	int i = 0;
+	int ret = 1;
+	int vidx;
+	struct vm_area_struct *vma;
+	int page_size = PAGE_SIZE;
+	struct page **old_pages;
+
+	/* Skip mem entries that are mapped into a VBO */
+	if (atomic_read(&entry->vbo_count))
+		return 0;
+
+	/* Check if migrating this memdesc will put us over the limit */
+	if ((atomic_read(&entry->priv->migrated_page_count) + memdesc->page_count) >
+		kgsl_reclaim_max_page_limit)
+		return 0;
+
+	pages = kvcalloc(memdesc->page_count, sizeof(*pages), GFP_KERNEL);
+	if (!pages)
+		return 0;
+
+	shmem_filp = kgsl_memdesc_file_setup(memdesc);
+	if (IS_ERR_OR_NULL(shmem_filp))
+		goto cleanup_pages;
+
+	/* Allocate replacement shmem pages */
+	for (i = 0; i < memdesc->page_count; i++) {
+		ret = kgsl_alloc_shmem_page(memdesc, shmem_filp, &page_size, &pages[i], NULL, i);
+		if (ret <= 0) {
+			pr_err_ratelimited(
+				"kgsl: Failed to alloc shmem page process %d entry %d offset %d\n",
+				pid_nr(entry->priv->pid), entry->id, i);
+			goto cleanup_shmem;
+		}
+	}
+
+	/* Unmap the memdesc from the mmu */
+	ret = kgsl_mmu_unmap(memdesc->pagetable, memdesc);
+	if (ret) {
+		pr_err_ratelimited("kgsl: Failed to unmap process %d entry %d\n",
+				pid_nr(entry->priv->pid), entry->id);
+		kill_pid(entry->priv->pid, SIGKILL, 1);
+		goto cleanup_shmem;
+	}
+
+	/* Take the mmap write lock to prevent concurrent entry mmaps and vm_faults */
+	mmap_write_lock(mm);
+
+	/*
+	 * Zap ptes to force a vm_fault on the next userspace access.
+	 * vma_idr is protected by the mmap lock
+	 */
+	idr_for_each_entry(&memdesc->vma_idr, vma, vidx) {
+		zap_page_range_single(vma, vma->vm_start,
+			vma->vm_end - vma->vm_start, NULL);
+	}
+
+	for (i = 0; i < memdesc->page_count; ) {
+		struct page *p;
+		int n;
+		int count;
+
+		p = memdesc->pages[i];
+		count = 1 << compound_order(p);
+
+		/* Copy over existing data */
+		for (n = 0; n < count; n++) {
+			struct page *page = memdesc->pages[i + n];
+			struct page *new_page = pages[i + n];
+
+			_copy_page(memdesc, new_page, page);
+			page_count++;
+		}
+
+		i += count;
+	}
+
+	old_pages = memdesc->pages;
+	spin_lock(&memdesc->lock);
+	memdesc->pages = pages;
+	memdesc->shmem_filp = shmem_filp;
+	SET_FLAG(KGSL_MEMDESC_MIGRATED, &memdesc->priv);
+	spin_unlock(&memdesc->lock);
+
+	/* Re-enable mmaps and vm_faults on the entry memdesc */
+	mmap_write_unlock(mm);
+
+	/* Free the old pages back into the pool */
+	kgsl_pool_free_pages(old_pages, memdesc->page_count);
+	kvfree(old_pages);
+
+	/* Map the new pages to the mmu */
+	ret = kgsl_mmu_map(memdesc->pagetable, memdesc);
+	if (ret) {
+		pr_err_ratelimited("kgsl: Failed to map process %d entry %d\n",
+					pid_nr(entry->priv->pid), entry->id);
+		kill_pid(entry->priv->pid, SIGKILL, 1);
+	}
+
+	atomic_add(memdesc->page_count, &entry->priv->migrated_page_count);
+	trace_kgsl_migrate_memdesc(entry);
+
+	return page_count;
+
+cleanup_shmem:
+	for (i--; i >= 0; i--)
+		put_page(pages[i]);
+
+	kgsl_memdesc_pagelist_cleanup(shmem_filp, memdesc);
+	SHMEM_I(shmem_filp->f_mapping->host)->android_vendor_data1 = 0;
+	fput(shmem_filp);
+
+cleanup_pages:
+	kvfree(pages);
+
+	return 0;
+}
+
+static void kgsl_shmem_migrate(struct kgsl_process_private *process)
+{
+	u32 migrate_count = 0;
+	struct kgsl_mem_entry *entry;
+	struct task_struct *task;
+	struct mm_struct *mm;
+	u32 next = 0;
+
+	/* Skip migration if we're already over the limit for the process */
+	if (atomic_read(&process->migrated_page_count) >= kgsl_reclaim_max_page_limit)
+		return;
+
+	if (!mutex_trylock(&process->reclaim_lock))
+		return;
+
+	task = get_pid_task(process->pid, PIDTYPE_PID);
+	if (!task)
+		goto done;
+
+	mm = get_task_mm(task);
+	if (!mm)
+		goto put_task;
+
+	for ( ; ; ) {
+		struct kgsl_mem_entry *valid_entry = NULL;
+		u32 priv;
+
+		/* Abort migration if process submitted work. */
+		if (atomic_read(&process->cmd_count))
+			goto abort;
+
+		if (atomic_read(&process->migrated_page_count) >= kgsl_reclaim_max_page_limit)
+			break;
+
+		spin_lock(&process->mem_lock);
+		entry = idr_get_next(&process->mem_idr, &next);
+		if (entry == NULL) {
+			spin_unlock(&process->mem_lock);
+			break;
+		}
+
+		/*
+		 * Skip entries that are pending free or are already migrated or
+		 * cannot be reclaimed
+		 */
+		priv = atomic_read(&entry->memdesc.priv);
+		if (!(entry->pending_free || (priv & KGSL_MEMDESC_MIGRATED) ||
+			!(priv & KGSL_MEMDESC_CAN_RECLAIM)))
+			valid_entry = kgsl_mem_entry_get(entry);
+
+		spin_unlock(&process->mem_lock);
+
+		next++;
+		if (!valid_entry)
+			continue;
+
+		migrate_count += kgsl_shmem_mem_entry_migrate(mm, valid_entry);
+		kgsl_mem_entry_put(valid_entry);
+	}
+
+	clear_bit(KGSL_PROC_CAN_MIGRATE, &process->state);
+abort:
+	trace_kgsl_migrate_process(process, migrate_count);
+	mmput(mm);
+put_task:
+	put_task_struct(task);
+done:
+	mutex_unlock(&process->reclaim_lock);
+}
+
+static void kgsl_background_work(struct work_struct *work)
+{
+	struct kgsl_process_private *process =
+		container_of(work, struct kgsl_process_private, bg_work);
+
+	if (!test_bit(KGSL_PROC_STATE, &process->state))
+		kgsl_shmem_migrate(process);
+	kgsl_process_private_put(process);
+}
+#else
+static void kgsl_background_work(struct work_struct *work)
+{
+}
+#endif
 
 static ssize_t kgsl_proc_state_show(struct kobject *kobj,
 		struct kgsl_process_attribute *attr, char *buf)
@@ -211,18 +532,12 @@ ssize_t kgsl_nr_to_scan_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", kgsl_nr_to_scan);
 }
 
-static void kgsl_release_page_vec(struct pagevec *pvec)
-{
-	check_move_unevictable_pages(pvec);
-	__pagevec_release(pvec);
-}
-
 static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 		u32 pages_to_reclaim)
 {
 	struct kgsl_memdesc *memdesc;
 	struct kgsl_mem_entry *entry, *valid_entry;
-	u32 next = 0, remaining = pages_to_reclaim;
+	u32 next = 0, remaining = pages_to_reclaim, priv = 0;
 
 	/*
 	 * If we do not get the lock here, it means that the buffers are
@@ -255,10 +570,11 @@ static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 		}
 
 		memdesc = &entry->memdesc;
+		priv = atomic_read(&memdesc->priv);
 		if (!entry->pending_free &&
-				(memdesc->priv & KGSL_MEMDESC_CAN_RECLAIM) &&
-				!(memdesc->priv & KGSL_MEMDESC_RECLAIMED) &&
-				!(memdesc->priv & KGSL_MEMDESC_SKIP_RECLAIM))
+				(priv & KGSL_MEMDESC_CAN_RECLAIM) &&
+				!(priv & KGSL_MEMDESC_RECLAIMED) &&
+				!(priv & KGSL_MEMDESC_SKIP_RECLAIM))
 			valid_entry = kgsl_mem_entry_get(entry);
 		spin_unlock(&process->mem_lock);
 
@@ -288,38 +604,11 @@ static u32 kgsl_reclaim_process(struct kgsl_process_private *process,
 		}
 
 		if (!kgsl_mmu_unmap(memdesc->pagetable, memdesc)) {
-			int i;
-			struct pagevec pvec;
-
-			/*
-			 * Pages that are first allocated are by default added to
-			 * unevictable list. To reclaim them, we first clear the
-			 * AS_UNEVICTABLE flag of the shmem file address space thus
-			 * check_move_unevictable_pages() places them on the
-			 * evictable list.
-			 *
-			 * Once reclaim is done, hint that further shmem allocations
-			 * will have to be on the unevictable list.
-			 */
-			mapping_clear_unevictable(memdesc->shmem_filp->f_mapping);
-			pagevec_init(&pvec);
-			for (i = 0; i < memdesc->page_count; i++) {
-				set_page_dirty_lock(memdesc->pages[i]);
-				spin_lock(&memdesc->lock);
-				pagevec_add(&pvec, memdesc->pages[i]);
-				memdesc->pages[i] = NULL;
-				atomic_inc(&process->unpinned_page_count);
-				spin_unlock(&memdesc->lock);
-				if (pagevec_count(&pvec) == PAGEVEC_SIZE)
-					kgsl_release_page_vec(&pvec);
-				remaining--;
-			}
-			if (pagevec_count(&pvec))
-				kgsl_release_page_vec(&pvec);
-
+			kgsl_memdesc_clear_unevictable(process, memdesc);
+			remaining -= memdesc->page_count;
 			reclaim_shmem_address_space(memdesc->shmem_filp->f_mapping);
 			mapping_set_unevictable(memdesc->shmem_filp->f_mapping);
-			memdesc->priv |= KGSL_MEMDESC_RECLAIMED;
+			SET_FLAG(KGSL_MEMDESC_RECLAIMED, &memdesc->priv);
 			trace_kgsl_reclaim_memdesc(entry, true);
 		}
 

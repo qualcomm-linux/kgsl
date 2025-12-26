@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/errno.h>
@@ -28,7 +28,11 @@ void adreno_fence_trace_array_init(struct kgsl_device *device)
 {
 	int i;
 
+#if (KERNEL_VERSION(6, 7, 0) >= LINUX_VERSION_CODE)
 	device->fence_trace_array = trace_array_get_by_name("kgsl-fence");
+#else
+	device->fence_trace_array = trace_array_get_by_name("kgsl-fence", NULL);
+#endif
 
 	if (!device->fence_trace_array)
 		return;
