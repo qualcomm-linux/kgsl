@@ -2336,7 +2336,7 @@ static int gen7_gmu_reg_probe(struct adreno_device *adreno_dev)
 	struct gen7_gmu_device *gmu = to_gen7_gmu(adreno_dev);
 	int ret;
 
-	ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev, "gmu", NULL, NULL);
+	ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev, "gmu", -EINVAL, NULL, NULL);
 
 	if (ret)
 		dev_err(&gmu->pdev->dev, "Unable to map the GMU registers\n");
@@ -2344,7 +2344,7 @@ static int gen7_gmu_reg_probe(struct adreno_device *adreno_dev)
 	 * gmu_ao_blk_dec1 and gmu_ao_blk_dec2 are contiguous and contained within the gmu region
 	 * mapped above. gmu_ao_blk_dec0 is not within the gmu region and is mapped separately.
 	 */
-	kgsl_regmap_add_region(&device->regmap, gmu->pdev, "gmu_ao_blk_dec0", NULL, NULL);
+	kgsl_regmap_add_region(&device->regmap, gmu->pdev, "gmu_ao_blk_dec0", -EINVAL, NULL, NULL);
 
 	return ret;
 }

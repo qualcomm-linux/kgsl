@@ -63,13 +63,16 @@ int kgsl_regmap_init(struct platform_device *pdev, struct kgsl_regmap *regmap,
 
 /* Add a new region to the regmap */
 int kgsl_regmap_add_region(struct kgsl_regmap *regmap, struct platform_device *pdev,
-		const char *name, const struct kgsl_regmap_ops *ops, void *priv)
+		const char *name, int index, const struct kgsl_regmap_ops *ops, void *priv)
 {
 	struct kgsl_regmap_region *region;
 	struct resource *res;
 	int ret;
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, name);
+	if (!res && index >= 0)
+		res = platform_get_resource(pdev, IORESOURCE_MEM, index);
+
 	if (!res)
 		return -ENODEV;
 

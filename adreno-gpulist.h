@@ -1507,6 +1507,8 @@ static const struct adreno_a6xx_core adreno_gpu_core_a612 = {
 		.bus_width = 32,
 		.snapshot_size = SZ_1M,
 		.chipid = 0x06010200,
+		.ubwc_mode = 2,
+		.mal = 32,
 	},
 	.prim_fifo_threshold = 0x00080000,
 	.sqefw_name = "a630_sqe.fw",

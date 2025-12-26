@@ -505,6 +505,10 @@ static void a6xx_rgmu_disable_clks(struct adreno_device *adreno_dev)
 
 done:
 	clk_bulk_disable_unprepare(rgmu->num_clks, rgmu->clks);
+
+	/* If gpu_clk is NOT in the bulk list, disable it explicitly */
+	if (!kgsl_of_clk_by_name(rgmu->clks, rgmu->num_clks, "core"))
+		clk_disable_unprepare(rgmu->gpu_clk);
 }
 
 void a6xx_rgmu_snapshot(struct adreno_device *adreno_dev,
@@ -563,9 +567,22 @@ static int a6xx_rgmu_enable_clks(struct adreno_device *adreno_dev)
 		return ret;
 	}
 
+	/* If gpu_clk is NOT in the bulk list, enable it explicitly */
+	if (!kgsl_of_clk_by_name(rgmu->clks, rgmu->num_clks, "core")) {
+		ret = clk_prepare_enable(rgmu->gpu_clk);
+		if (ret) {
+			dev_err(&rgmu->pdev->dev, "Failed to enable core clock\n");
+			goto err_bulk_disable;
+		}
+	}
+
 	device->state = KGSL_STATE_AWARE;
 
 	return 0;
+
+err_bulk_disable:
+	clk_bulk_disable_unprepare(rgmu->num_clks, rgmu->clks);
+	return ret;
 }
 
 /*
@@ -1210,8 +1227,8 @@ static int a6xx_rgmu_irq_probe(struct kgsl_device *device)
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(ADRENO_DEVICE(device));
 	int ret;
 
-	/* Try with "hfi" irq first. Use Fallback legacy name "kgsl_oob" if not found. */
-	ret = kgsl_request_irq(rgmu->pdev, "hfi", "kgsl_oob", -EINVAL,
+	/* Try with "oob" irq first. Use Fallback legacy name "kgsl_oob" if not found. */
+	ret = kgsl_request_irq(rgmu->pdev, "oob", "kgsl_oob", -EINVAL,
 			a6xx_oob_irq_handler, device);
 
 	if (ret < 0)
@@ -1233,6 +1250,9 @@ static int a6xx_rgmu_irq_probe(struct kgsl_device *device)
 static int a6xx_rgmu_clocks_probe(struct a6xx_rgmu_device *rgmu,
 		struct device_node *node)
 {
+	struct a6xx_device *a6xx_dev = container_of(rgmu,
+					struct a6xx_device, rgmu);
+	struct kgsl_device *device = KGSL_DEVICE(&a6xx_dev->adreno_dev);
 	int ret, i;
 
 	ret = devm_clk_bulk_get_all(&rgmu->pdev->dev, &rgmu->clks);
@@ -1254,7 +1274,11 @@ static int a6xx_rgmu_clocks_probe(struct a6xx_rgmu_device *rgmu,
 	}
 	rgmu->num_clks = ret;
 
-	rgmu->gpu_clk = kgsl_of_clk_by_name(rgmu->clks, ret, "core");
+	/* Get the "core" gfx3d clock from gpu pdev, fallback to rgmu pdev if unavailable */
+	rgmu->gpu_clk = devm_clk_get(&device->pdev->dev, "core");
+	if (!rgmu->gpu_clk)
+		rgmu->gpu_clk = kgsl_of_clk_by_name(rgmu->clks, ret, "core");
+
 	if (!rgmu->gpu_clk) {
 		dev_err(&rgmu->pdev->dev, "The GPU clock isn't defined\n");
 		return -ENODEV;
@@ -1343,8 +1367,10 @@ static int a6xx_rgmu_probe(struct kgsl_device *device,
 	if (ret)
 		return ret;
 
+	/* Try to get the resource by index (i.e. 0), fallback to legacy "kgsl_rgmu" if not found */
 	ret = kgsl_regmap_add_region(&device->regmap, pdev,
-		"kgsl_rgmu", NULL, NULL);
+		"kgsl_rgmu", 0, NULL, NULL);
+
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to map the RGMU registers\n");
 		return ret;

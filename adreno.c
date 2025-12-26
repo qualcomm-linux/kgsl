@@ -1688,7 +1688,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	adreno_fence_trace_array_init(device);
 
 	/* Add CX_DBGC block to the regmap*/
-	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", NULL, NULL);
+	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", -EINVAL, NULL, NULL);
 
 	/* Probe for the optional CX_MISC block */
 	adreno_cx_misc_probe(device);

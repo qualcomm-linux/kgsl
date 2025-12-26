@@ -231,7 +231,7 @@ static int a6xx_nogmu_init(struct adreno_device *adreno_dev)
 
 	/* Try to map the GMU wrapper region if applicable */
 	ret = kgsl_regmap_add_region(&device->regmap, device->pdev,
-		"gmu_wrapper", NULL, NULL);
+		"gmu_wrapper", -EINVAL, NULL, NULL);
 	if (ret && ret != -ENODEV)
 		dev_err(device->dev, "Couldn't map the GMU wrapper registers\n");
 

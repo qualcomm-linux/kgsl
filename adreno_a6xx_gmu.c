@@ -2739,10 +2739,10 @@ static int a6xx_gmu_reg_probe(struct adreno_device *adreno_dev)
 
 	/* Try to get the "gmu" resource, fallback to legacy "kgsl_gmu_reg" if not found */
 	ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev,
-		"gmu", NULL, NULL);
+		"gmu", -EINVAL, NULL, NULL);
 	if (ret)
 		ret = kgsl_regmap_add_region(&device->regmap, gmu->pdev,
-			"kgsl_gmu_reg", NULL, NULL);
+			"kgsl_gmu_reg", -EINVAL, NULL, NULL);
 
 	if (ret)
 		dev_err(&gmu->pdev->dev, "Unable to map the GMU registers\n");
