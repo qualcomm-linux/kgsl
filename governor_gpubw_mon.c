@@ -6,8 +6,14 @@
 
 #include <linux/devfreq.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
+#if (KERNEL_VERSION(6, 19, 0) <= LINUX_VERSION_CODE)
+#include <linux/devfreq-governor.h>
+#else
 #include "governor.h"
+#endif
+
 #include "msm_adreno_devfreq.h"
 
 #define MIN_BUSY                1000
