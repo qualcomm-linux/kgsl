@@ -4561,6 +4561,8 @@ static const struct gen8_nonctxt_regs gen8_11_0_nonctxt_regs[] = {
 	/* Disable early EOBlk return */
 	{ GEN8_RB_DBG_ECO_CNTL, BIT(17), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_GC_GMEM_PROTECT, 0x12000000, BIT(PIPE_BR) },
+	/* Disable pre-mvcc dead draw merge scheme on LRZ-RB */
+	{ GEN8_RB_RBP_CNTL, BIT(6), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, 0x00000007, BIT(PIPE_BR) },
 	{ GEN8_RB_CMP_DBG_ECO_CNTL, 0x00004000, BIT(PIPE_BR) },
 	{ GEN8_RBBM_NC_MODE_CNTL, 0x00000001, BIT(PIPE_NONE) },
