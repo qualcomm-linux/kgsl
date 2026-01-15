@@ -21,6 +21,7 @@
 #include "adreno_a6xx_hwsched.h"
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_trace.h"
 #include "kgsl_util.h"
 
@@ -2006,6 +2007,7 @@ static int a6xx_probe(struct platform_device *pdev,
 {
 	struct adreno_device *adreno_dev;
 	struct kgsl_device *device;
+	struct platform_device *gmu_wrapper_pdev;
 	int ret;
 
 	adreno_dev = (struct adreno_device *)
@@ -2019,11 +2021,48 @@ static int a6xx_probe(struct platform_device *pdev,
 	if (ret)
 		return ret;
 
-	ret = adreno_dispatcher_init(adreno_dev);
+	device = KGSL_DEVICE(adreno_dev);
+
+	/*
+	 * In standard DT bindings, no-GMU targets have a wrapper device
+	 * with a dedicated "gmu" register range. In contrast, non-standard
+	 * DT bindings include these registers within "kgsl_3d0_reg_memory"
+	 * for such targets. To handle the first case, add the "gmu" block to
+	 * the regmap if the wrapper device is present.
+	 */
+	gmu_wrapper_pdev = get_gmu_wrapper_pdev();
+
+	if (gmu_wrapper_pdev) {
+		struct resource *res;
+		struct kgsl_regmap *regmap = &device->regmap;
+		struct kgsl_regmap_region *region;
+
+		res = platform_get_resource_byname(gmu_wrapper_pdev, IORESOURCE_MEM, "gmu");
+
+		if (!res) {
+			platform_device_put(gmu_wrapper_pdev);
+			return -ENODEV;
+		}
+
+		if (WARN_ON(regmap->count >= ARRAY_SIZE(regmap->region))) {
+			platform_device_put(gmu_wrapper_pdev);
+			return -ENODEV;
+		}
+
+		region = &regmap->region[regmap->count];
+
+		ret = kgsl_regmap_init_region(regmap, device->pdev, region, res, NULL, NULL);
+		if (!ret)
+			regmap->count++;
+		platform_device_put(gmu_wrapper_pdev);
+	}
+
 	if (ret)
 		return ret;
 
-	device = KGSL_DEVICE(adreno_dev);
+	ret = adreno_dispatcher_init(adreno_dev);
+	if (ret)
+		return ret;
 
 	timer_setup(&device->idle_timer, kgsl_timer, 0);
 

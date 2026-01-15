@@ -44,6 +44,7 @@
 #include "adreno_pm4types.h"
 #include "adreno_trace.h"
 #include "kgsl_bus.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_power_trace.h"
 #include "kgsl_reclaim.h"
 #include "kgsl_trace.h"
@@ -1562,7 +1563,25 @@ static u32 adreno_get_vk_device_id(struct kgsl_device *device)
 static int adreno_probe_llcc(struct adreno_device *adreno_dev,
 		struct platform_device *pdev)
 {
+	struct device_node *node;
 	int ret;
+
+	/*
+	 * Unlike some non-standard kernels, the llcc_slice_getd API
+	 * in the standard kernel does not check for the cache-controller
+	 * node in the device tree and returns EPROBE_DEFER for targets
+	 * without LLCC support. Therefore, explicitly check for the node
+	 * and return early in the LLCC probe.
+	 */
+	node = of_find_node_by_name(NULL, "system-cache-controller");
+	if (!node)
+		return 0;
+
+	if (!of_device_is_available(node)) {
+		of_node_put(node);
+		return 0;
+	}
+	of_node_put(node);
 
 	/* Get the system cache slice descriptor for GPU */
 	adreno_dev->gpu_llc_slice = llcc_slice_getd(LLCC_GPU);
@@ -1957,6 +1976,19 @@ static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 }
 #endif
 
+static int adreno_bind_components(struct device *dev)
+{
+	/*
+	 * Bind components before performing the KGSL platform probe.
+	 * Note: with standard DT bindings, there are no components to bind
+	 * for no GMU targets, so skip invoking component_bind_all in this case.
+	 */
+	if (!is_gmu_wrapper_available())
+		return component_bind_all(dev, NULL);
+
+	return 0;
+}
+
 int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
@@ -2051,8 +2083,7 @@ int adreno_device_probe(struct platform_device *pdev,
 		!adreno_is_gen7_14_0_family(adreno_dev)))
 		kgsl_mmu_set_feature(device, KGSL_MMU_FORCE_LLCC_NWA);
 
-	 /* Bind the components before doing the KGSL platform probe. */
-	status = component_bind_all(dev, NULL);
+	status = adreno_bind_components(dev);
 	if (status)
 		goto err_remove_llcc;
 
@@ -4606,6 +4637,14 @@ static int adreno_probe(struct platform_device *pdev)
 		matches = adreno_component_match;
 	}
 
+	/*
+	 * With standard DT bindings, there is no component to match
+	 * from adreno_component_match list for no GMU targets. Invoke
+	 * adreno_bind directly in this case.
+	 */
+	if (is_gmu_wrapper_available())
+		return adreno_bind(&pdev->dev);
+
 	adreno_add_components(&pdev->dev, &match, matches);
 
 	if (!match)
@@ -4618,12 +4657,18 @@ static int adreno_probe(struct platform_device *pdev)
 #if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
 static void adreno_remove(struct platform_device *pdev)
 {
-	component_master_del(&pdev->dev, &adreno_ops);
+	if (is_gmu_wrapper_available())
+		adreno_unbind(&pdev->dev);
+	else
+		component_master_del(&pdev->dev, &adreno_ops);
 }
 #else
 static int adreno_remove(struct platform_device *pdev)
 {
-	component_master_del(&pdev->dev, &adreno_ops);
+	if (is_gmu_wrapper_available())
+		adreno_unbind(&pdev->dev);
+	else
+		component_master_del(&pdev->dev, &adreno_ops);
 
 	return 0;
 }

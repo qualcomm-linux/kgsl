@@ -18,9 +18,10 @@
 #include <linux/units.h>
 #include <soc/qcom/dcvs.h>
 
-#include "kgsl_device.h"
 #include "kgsl_bus.h"
 #include "kgsl_eventlog.h"
+#include "kgsl_device.h"
+#include "kgsl_gmu_core.h"
 #include "kgsl_power_trace.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_sysfs.h"
@@ -1796,8 +1797,32 @@ static int _get_clocks(struct kgsl_device *device)
 		int i;
 
 		for (i = 0; i < KGSL_MAX_CLKS; i++) {
-			if (pwr->grp_clks[i] || strcmp(clocks[i], name))
+			bool match = false;
+
+			/* Skip if clock already acquired */
+			if (pwr->grp_clks[i])
 				continue;
+
+			/*
+			 * Try matching with the non-standard clk name first. If it is not matched,
+			 * then remove "_clk" and retry with corresponding standard clock name.
+			 * Also the non-standard clk "rbbmtimer_clk" corresponds to the standard
+			 * clk "xo".
+			 */
+			if (!strcmp(clocks[i], name))
+				match = true;
+			else if (strlen(clocks[i]) > 4 &&
+				!strcmp(clocks[i] + strlen(clocks[i]) - 4, "_clk")) {
+				if ((strlen(name) == strlen(clocks[i]) - 4) &&
+					str_has_prefix(clocks[i], name))
+					match = true;
+				else if (!strcmp(clocks[i], "rbbmtimer_clk") && !strcmp(name, "xo"))
+					match = true;
+			}
+
+			if (!match)
+				continue;
+
 			/* apb_pclk should only be enabled if QCOM_KGSL_QDSS_STM is enabled */
 			if (!strcmp(name, "apb_pclk") && !IS_ENABLED(CONFIG_QCOM_KGSL_QDSS_STM))
 				continue;
@@ -2031,6 +2056,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 {
 	int i, result, freq;
 	struct platform_device *pdev = device->pdev;
+	struct platform_device *gmu_wrapper_pdev = get_gmu_wrapper_pdev();
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
 	result = _get_clocks(device);
@@ -2078,12 +2104,24 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	_isense_clk_set_rate(pwr, pwr->num_pwrlevels - 1);
 
 	if (of_property_read_bool(pdev->dev.of_node, "vddcx-supply") ||
-		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "cx") >= 0))
+		(of_property_match_string(pdev->dev.of_node,
+		"power-domain-names", "cx") >= 0))
 		kgsl_pwrctrl_probe_cx_gdsc(device, pdev);
+	else if (gmu_wrapper_pdev &&
+		of_property_match_string(gmu_wrapper_pdev->dev.of_node,
+		"power-domain-names", "cx") >= 0)
+		kgsl_pwrctrl_probe_cx_gdsc(device, gmu_wrapper_pdev);
 
 	if (of_property_read_bool(pdev->dev.of_node, "vdd-supply") ||
-		(of_property_match_string(pdev->dev.of_node, "power-domain-names", "gx") >= 0))
+		(of_property_match_string(pdev->dev.of_node,
+		"power-domain-names", "gx") >= 0))
 		kgsl_pwrctrl_probe_gx_gdsc(device, pdev);
+	else if	(gmu_wrapper_pdev &&
+		of_property_match_string(gmu_wrapper_pdev->dev.of_node,
+		"power-domain-names", "gx") >= 0)
+		kgsl_pwrctrl_probe_gx_gdsc(device, gmu_wrapper_pdev);
+
+	platform_device_put(gmu_wrapper_pdev);
 
 	result = kgsl_device_link_add_cxpd_iommu(device);
 	if (result)

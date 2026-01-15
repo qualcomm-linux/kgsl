@@ -1008,4 +1008,19 @@ void gmu_core_scale_gmu_frequency(struct kgsl_device *device, int buslevel);
  */
 int gmu_core_hwsched_memory_init(struct kgsl_device *device);
 
+
+/**
+ * get_gmu_wrapper_pdev() - Get the GMU wrapper platform device
+ *
+ * Return: pointer to the GMU wrapper pdev if found, NULL otherwise.
+ */
+struct platform_device *get_gmu_wrapper_pdev(void);
+
+/**
+ * is_gmu_wrapper_available() - Check for the GMU wrapper device
+ *
+ * Returns: true if GMU wrapper device exists and available in the DT, false otherwise.
+ */
+bool is_gmu_wrapper_available(void);
+
 #endif /* __KGSL_GMU_CORE_H */

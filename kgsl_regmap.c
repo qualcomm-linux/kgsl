@@ -14,7 +14,7 @@
 #define region_addr(region, _offset) \
 	((region)->virt + (((_offset) - (region)->offset) << 2))
 
-static int kgsl_regmap_init_region(struct kgsl_regmap *regmap,
+int kgsl_regmap_init_region(struct kgsl_regmap *regmap,
 		struct platform_device *pdev,
 		struct kgsl_regmap_region *region,
 		struct resource *res, const struct kgsl_regmap_ops *ops,

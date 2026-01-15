@@ -66,6 +66,26 @@ struct kgsl_regmap_list {
 	u32 val;
 };
 
+
+/**
+ * kgsl_regmap_init_region - Map a resource & add region relative to the regmap base
+ * @regmap: Pointer to the regmap to initialize
+ * @pdev:   Pointer to the platform device that owns @name
+ * @region: Output region to initialize
+ * @res:    Resource (MMIO range) to map
+ * @ops:    Pointer to the regmap ops for this region
+ * @priv:   Private data to pass to the regmap ops
+ *
+ * Map a resource and add it as a DWORD-based region relative to the regmap base
+
+ * Return: 0 on success or negative error on failure.
+ */
+int kgsl_regmap_init_region(struct kgsl_regmap *regmap,
+		struct platform_device *pdev,
+		struct kgsl_regmap_region *region,
+		struct resource *res, const struct kgsl_regmap_ops *ops,
+		void *priv);
+
 /**
  * kgsl_regmap_init - Initialize a regmap
  * @pdev: Pointer to the platform device that owns @name
