@@ -643,15 +643,24 @@ static int gen8_complete_rpmh_votes(struct gen8_gmu_device *gmu,
 #define GX_CLK_OFF		BIT(1)
 #define MALU_GDSC_POWER_OFF	BIT(9)
 #define MALU_CLK_OFF		BIT(10)
+#define CX_MISC_GX_GDSC_POWER_OFF	BIT(3)
+#define CX_MISC_GX_CLK_OFF		BIT(4)
+
 #define is_on(val)		(!(val & (GX_GDSC_POWER_OFF | GX_CLK_OFF)))
+#define is_cx_misc_gx_on(val)	(!(val & (CX_MISC_GX_GDSC_POWER_OFF | CX_MISC_GX_CLK_OFF)))
 #define is_malu_on(val)		(!(val & (MALU_GDSC_POWER_OFF | MALU_CLK_OFF)))
 
 bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 {
-	u32 val;
+	u32 val = 0;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	gmu_core_regread(KGSL_DEVICE(adreno_dev),
-			GEN8_GMUCX_GFX_PWR_CLK_STATUS, &val);
+	if (adreno_is_gen8_11_0(adreno_dev)) {
+		kgsl_regread(device, GEN8_GPU_CX_MISC_GFX_PWR_CLK_STATUS, &val);
+		return is_cx_misc_gx_on(val);
+	}
+
+	gmu_core_regread(device, GEN8_GMUCX_GFX_PWR_CLK_STATUS, &val);
 	return is_on(val);
 }
 
