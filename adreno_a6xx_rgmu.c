@@ -1347,6 +1347,7 @@ static int a6xx_rgmu_probe(struct kgsl_device *device,
 
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 	device->gmu_core.dev_ops = &a6xx_rgmudev;
+	device->gmu_core.pdev = rgmu->pdev;
 
 	return 0;
 }
