@@ -1232,8 +1232,9 @@ static int adreno_of_parse_pwrlevels(struct adreno_device *adreno_dev)
 	/* Set the max power level */
 	pwr->max_pwrlevel = 0;
 
-	/* Set the min power level */
+	/* Set the min power level and min render power level */
 	pwr->min_pwrlevel = pwr->num_pwrlevels - 1;
+	pwr->min_render_pwrlevel = pwr->num_pwrlevels - 1;
 
 	return 0;
 }
