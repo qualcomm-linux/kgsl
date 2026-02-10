@@ -2261,6 +2261,7 @@ static struct gen8_reg_list gen8_11_0_misc_registers[] = {
 	{ UNSLICE, gen8_11_0_dbgc_registers },
 	{ SLICE, gen8_11_0_dbgc_slice_registers },
 	{ UNSLICE, gen8_11_0_cx_dbgc_registers },
+	{ UNSLICE, NULL },
 };
 
 static struct gen8_reg_list gen8_11_0_ahb_registers[] = {
