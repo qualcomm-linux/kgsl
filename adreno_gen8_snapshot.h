@@ -644,6 +644,11 @@ static const u32 gen8_cx_debugbus_blocks[] = {
 	DEBUGBUS_CX_GC_US_I_0,
 };
 
+struct gen8_debugbus_info {
+	u32 debugbus_id;
+	u32 debugbus_size;
+};
+
 enum gen8_statetype_ids {
 	TP0_NCTX_REG                   = 0,
 	TP0_CTX0_3D_CVS_REG            = 1,
@@ -754,6 +759,14 @@ struct gen8_snapshot_block_list {
 	const u32 *cx_debugbus_blocks;
 	/* cx_debugbus_blocks_len : Length of the CX debugbus list */
 	size_t cx_debugbus_blocks_len;
+	/* gx_debugbus_blocks : List of debugbus blocks with sizes */
+	struct gen8_debugbus_info *sized_gx_debugbus_blocks;
+	/* gx_debugbus_blocks_len : Length of the GX debugbus list */
+	size_t sized_gx_debugbus_blocks_len;
+	/* cx_debugbus_blocks : List of CX debugbus blocks with sizes */
+	struct gen8_debugbus_info *sized_cx_debugbus_blocks;
+	/* cx_debugbus_blocks_len : Length of CX the debugbus list */
+	size_t sized_cx_debugbus_blocks_len;
 	/* external_core_regs : List of external core registers */
 	const u32 **external_core_regs;
 	/* num_external_core_regs : length of external core registers list */
