@@ -676,24 +676,54 @@ static void a6xx_rgmu_power_off(struct adreno_device *adreno_dev)
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 }
 
+static int a6xx_rgmu_set_opp(struct kgsl_device *device, struct kgsl_pwrlevel *level)
+{
+	struct device *dev = &device->pdev->dev;
+	int ret;
+
+	/*
+	 * level->opp is initialized with a valid OPP pointer only when the driver
+	 * is probed with standard DT bindings. Use this to distinguish standard
+	 * vs non‑standard kernels here.
+	 *
+	 * On non‑standard kernels (level->opp == NULL), vote the core clock using
+	 * clk_set_rate API. The downstream clock driver internally handles the
+	 * required regulator voting.
+	 *
+	 * On standard kernels (level->opp != NULL), use dev_pm_opp_set_opp() API
+	 * and OPP framework will take care of all required votes.
+	 */
+	if (!level->opp) {
+		struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+		struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+
+		ret = clk_set_rate(rgmu->gpu_clk, level->gpu_freq);
+		if (ret)
+			dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+
+		return ret;
+	}
+
+	ret = dev_pm_opp_set_opp(dev, level->opp);
+	if (ret)
+		dev_err(device->dev, "GPU OPP configure failure: %d\n", ret);
+
+	return ret;
+}
+
 static int a6xx_rgmu_clock_set(struct adreno_device *adreno_dev,
 		u32 pwrlevel)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct a6xx_rgmu_device *rgmu = to_a6xx_rgmu(adreno_dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrlevel *level = &pwr->pwrlevels[pwrlevel];
 	int ret;
-	unsigned long rate;
 
 	if (pwrlevel == INVALID_DCVS_IDX)
 		return -EINVAL;
 
-	rate = device->pwrctrl.pwrlevels[pwrlevel].gpu_freq;
-
-	ret = clk_set_rate(rgmu->gpu_clk, rate);
-	if (ret)
-		dev_err(&rgmu->pdev->dev, "Couldn't set the GPU clock\n");
-
-	return ret;
+	return a6xx_rgmu_set_opp(device, level);
 }
 
 static int a6xx_gpu_boot(struct adreno_device *adreno_dev)

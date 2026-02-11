@@ -73,6 +73,8 @@ struct kgsl_pwrlevel {
 	u32 cx_level;
 	/** @voltage_level: Voltage level used by the GMU to vote RPMh */
 	u32 voltage_level;
+	/** @opp:  OPP node corresponding to GPU OPP table */
+	struct dev_pm_opp *opp;
 };
 
 /**

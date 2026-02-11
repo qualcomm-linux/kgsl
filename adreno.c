@@ -1178,7 +1178,17 @@ static int adreno_parse_opp_node(struct kgsl_device *device,
 {
 	int ret;
 
+	level->opp = opp;
+
 	level->voltage_level = dev_pm_opp_get_level(opp);
+
+	if (level->voltage_level == U32_MAX)
+		level->voltage_level = dev_pm_opp_get_required_pstate(opp, 0);
+
+	if (level->voltage_level == U32_MAX) {
+		dev_err(device->dev, "Failed to get valid voltage level from OPP\n");
+		return -EINVAL;
+	}
 
 	level->cx_level = 0xffffffff;
 	of_property_read_u32(dev_pm_opp_get_of_node(opp), "qcom,opp-acd-level", &level->acd_level);
@@ -1200,9 +1210,37 @@ static int adreno_of_parse_pwrlevels(struct adreno_device *adreno_dev)
 	unsigned long freq = ULONG_MAX;
 	int ret;
 
+	/* Only handle the core clock for no GMU and RGMU targets */
+	if (is_gmu_wrapper_available() || ADRENO_GPUREV(adreno_dev) == ADRENO_REV_A612) {
+		/*
+		 * This can only be done before devm_pm_opp_of_add_table(), or
+		 * dev_pm_opp_set_config() will WARN_ON()
+		 */
+		if (IS_ERR(devm_clk_get(dev, "core"))) {
+			/*
+			 * If "core" is absent, go for the legacy clock name.
+			 * If we got this far in probing, it's a given one of
+			 * them exists.
+			 */
+			ret = devm_pm_opp_set_clkname(dev, "core_clk");
+		} else
+			ret = devm_pm_opp_set_clkname(dev, "core");
+	}
+
+	if (ret) {
+		dev_err(dev, "Failed to set OPP clock name, ret: %d\n", ret);
+		return ret;
+	}
+
 	ret = devm_pm_opp_of_add_table(&device->pdev->dev);
 	if (ret) {
-		dev_err(&device->pdev->dev, "Unable to initialize opp table from device tree\n");
+		dev_err(dev, "Unable to initialize opp table from device tree\n");
+		return ret;
+	}
+
+	ret = dev_pm_opp_of_find_icc_paths(dev, NULL);
+	if (ret) {
+		dev_err(dev, "Unable to fetch the interconnects from device tree\n");
 		return ret;
 	}
 
@@ -4281,30 +4319,62 @@ int adreno_power_cycle_u32(struct adreno_device *adreno_dev,
 	return adreno_power_cycle(adreno_dev, cycle_set_u32, &data);
 }
 
+static int adreno_set_opp(struct kgsl_device *device, struct kgsl_pwrlevel *level)
+{
+	struct device *dev = &device->pdev->dev;
+	int ret;
+
+	/*
+	 * level->opp is initialized with a valid OPP pointer only when the driver
+	 * is probed with standard DT bindings. Use this to distinguish standard
+	 * vs non‑standard kernels here.
+	 *
+	 * On non‑standard kernels (level->opp == NULL), vote the core clock using
+	 * clk_set_rate API. The downstream clock driver internally handles the
+	 * required regulator voting.
+	 *
+	 * On standard kernels (level->opp != NULL), use dev_pm_opp_set_opp() API
+	 * and OPP framework will take care of all required votes.
+	 */
+	if (!level->opp) {
+		struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+
+		ret = clk_set_rate(pwr->grp_clks[0], level->gpu_freq);
+		if (ret)
+			dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
+
+		return ret;
+	}
+
+	ret = dev_pm_opp_set_opp(dev, level->opp);
+	if (ret)
+		dev_err(device->dev, "GPU OPP configure failure: %d\n", ret);
+
+	return ret;
+}
+
 static int adreno_gpu_clock_set(struct kgsl_device *device, u32 pwrlevel)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_power_ops *ops = ADRENO_POWER_OPS(adreno_dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	struct kgsl_pwrlevel *pl = &pwr->pwrlevels[pwrlevel];
+	struct kgsl_pwrlevel *level = &pwr->pwrlevels[pwrlevel];
 	u32 prev_pwrlevel = pwr->previous_pwrlevel;
 	int ret;
 
 	if (ops->gpu_clock_set) {
 		ret = ops->gpu_clock_set(adreno_dev, pwrlevel);
-	} else {
-		ret = clk_set_rate(pwr->grp_clks[0], pl->gpu_freq);
-		if (ret)
-			dev_err(device->dev, "GPU clk freq set failure: %d\n", ret);
-	}
+	} else
+		ret = adreno_set_opp(device, level);
+
 
 	if (ret)
 		return ret;
 
-	trace_kgsl_pwrlevel(device, pwrlevel, pl->gpu_freq,
+	trace_kgsl_pwrlevel(device, pwrlevel, level->gpu_freq,
 		prev_pwrlevel, pwr->pwrlevels[prev_pwrlevel].gpu_freq, 0);
 
-	KGSL_TRACE_GPU_FREQ(pl->gpu_freq/1000, 0, 0);
+	KGSL_TRACE_GPU_FREQ(level->gpu_freq/1000, 0, 0);
 	return 0;
 }
 
