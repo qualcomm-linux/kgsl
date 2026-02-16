@@ -10,6 +10,10 @@
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
 #include <soc/qcom/of_common.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+#include <linux/soc/qcom/ubwc.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_gen7.h"
@@ -343,12 +347,37 @@ int gen7_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 	return 0;
 }
 
+static void gen7_calc_ubwc_config_legacy(struct adreno_device *adreno_dev)
+{
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
+
+	if (adreno_dev->ubwc_mode == KGSL_UBWC_4_0)
+		ubwc_props->rgb565_predicator = true;
+}
+
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+static void gen7_calc_ubwc_config(struct adreno_device *adreno_dev)
+{
+	struct qcom_ubwc_cfg_data *cfg = (struct qcom_ubwc_cfg_data *)adreno_dev->ubwc_cfg_data;
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
+
+	if (!cfg)
+		return gen7_calc_ubwc_config_legacy(adreno_dev);
+
+	ubwc_props->rgb565_predicator = cfg->ubwc_enc_version >= UBWC_4_0;
+}
+#else
+static void gen7_calc_ubwc_config(struct adreno_device *adreno_dev)
+{
+	gen7_calc_ubwc_config_legacy(adreno_dev);
+}
+#endif
+
 int gen7_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
 
-	adreno_dev->highest_bank_bit = gen7_core->highest_bank_bit;
 	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
 			gen7_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen7_core->bcl_data;
@@ -356,9 +385,7 @@ int gen7_init(struct adreno_device *adreno_dev)
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 			ADRENO_COOP_RESET);
 
-	/* If the memory type is DDR 4, override the existing configuration */
-	if (kgsl_get_ddrtype() == 0x7)
-		adreno_dev->highest_bank_bit = 14;
+	gen7_calc_ubwc_config(adreno_dev);
 
 	gen7_crashdump_init(adreno_dev);
 
@@ -844,9 +871,8 @@ int gen7_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen7_core *gen7_core = to_gen7_core(adreno_dev);
-	u32 rgb565_predicator = 0;
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
 	u32 mal = adreno_dev->mal;
-	u32 mode = adreno_dev->ubwc_mode;
 	struct gen7_device *gen7_dev = container_of(adreno_dev, struct gen7_device, adreno_dev);
 	/*
 	 * HBB values 13 to 16 can represented LSB of HBB from 0 to 3.
@@ -921,16 +947,13 @@ int gen7_start(struct adreno_device *adreno_dev)
 		kgsl_regrmw(device, GEN7_GMU_CX_GMU_POWER_COUNTER_SELECT_1, GENMASK(15, 8),
 				FIELD_PREP(GENMASK(15, 8), 0x26));
 
-	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
+	if (adreno_dev->highest_bank_bit) {
 		hbb_lo = (adreno_dev->highest_bank_bit - 13) & 3;
 		hbb_hi = ((adreno_dev->highest_bank_bit - 13) >> 2) & 1;
 	}
 
-	if (mode == KGSL_UBWC_4_0)
-		rgb565_predicator = 1;
-
 	kgsl_regwrite(device, GEN7_RB_NC_MODE_CNTL,
-			((rgb565_predicator == 1) ? BIT(11) : 0) |
+			(ubwc_props->rgb565_predicator ? BIT(11) : 0) |
 			((hbb_hi == 1) ? BIT(10) : 0) |
 			BIT(4) | /*AMSBC is enabled on UBWC 3.0 and 4.0 */
 			((mal == 64) ? BIT(3) : 0) |

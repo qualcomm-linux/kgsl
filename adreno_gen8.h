@@ -188,8 +188,6 @@ struct adreno_gen8_core {
 	const struct gen8_nonctxt_regs *nonctxt_regs;
 	/** @ctxt_record_size: Size of the preemption record in bytes */
 	u64 ctxt_record_size;
-	/** @highest_bank_bit: Highest bank bit value */
-	u32 highest_bank_bit;
 	/** @gen8_snapshot_block_list: Device-specific blocks dumped in the snapshot */
 	const struct gen8_snapshot_block_list *gen8_snapshot_block_list;
 	/** @gmu_hub_clk_freq: Gmu hub interface clock frequency */

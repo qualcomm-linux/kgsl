@@ -10,6 +10,10 @@
 #include <linux/of_fdt.h>
 #include <linux/of_device.h>
 #include <soc/qcom/of_common.h>
+#include <linux/version.h>
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+#include <linux/soc/qcom/ubwc.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_gen8.h"
@@ -873,6 +877,78 @@ int gen8_fenced_write(struct adreno_device *adreno_dev, u32 offset,
 	return 0;
 }
 
+#define MIN_HBB 13
+
+static void gen8_calc_ubwc_config_legacy(struct adreno_device *adreno_dev)
+{
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
+
+	switch (adreno_dev->ubwc_mode) {
+	case KGSL_UBWC_6_0:
+		ubwc_props->yuvnotcomptofc = true;
+		ubwc_props->mode2 = 5;
+		break;
+	case KGSL_UBWC_5_0:
+		ubwc_props->amsbc = true;
+		ubwc_props->rgb565_predicator = true;
+		ubwc_props->mode2 = 4;
+		break;
+	case KGSL_UBWC_4_0:
+		ubwc_props->amsbc = true;
+		ubwc_props->rgb565_predicator = true;
+		ubwc_props->fp16compoptdis = true;
+		ubwc_props->rgba8888_lossless = true;
+		ubwc_props->mode2 = 2;
+		break;
+	case KGSL_UBWC_3_0:
+		ubwc_props->amsbc = true;
+		ubwc_props->mode2 = 1;
+		break;
+	default:
+		break;
+	}
+}
+
+#if (KERNEL_VERSION(6, 19, 0) <= LINUX_VERSION_CODE)
+static void gen8_calc_ubwc_config(struct adreno_device *adreno_dev)
+{
+	struct qcom_ubwc_cfg_data *cfg = (struct qcom_ubwc_cfg_data *)adreno_dev->ubwc_cfg_data;
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
+	u32 enc_ver;
+
+	if (!cfg)
+		return gen8_calc_ubwc_config_legacy(adreno_dev);
+
+	enc_ver = cfg->ubwc_enc_version;
+
+	ubwc_props->mode = (enc_ver == UBWC_1_0) ? 1 : 0;
+
+	if (enc_ver >= UBWC_6_0) {
+		ubwc_props->mode2 = 5;
+		ubwc_props->yuvnotcomptofc = true;
+	} else if (enc_ver >= UBWC_5_0) {
+		ubwc_props->mode2 = 4;
+		ubwc_props->amsbc = true;
+		ubwc_props->rgb565_predicator = true;
+	} else if (enc_ver >= UBWC_4_0) {
+		ubwc_props->mode2 = 2;
+		ubwc_props->amsbc = true;
+		ubwc_props->rgb565_predicator = true;
+		ubwc_props->fp16compoptdis = true;
+		ubwc_props->rgba8888_lossless = true;
+	} else if (enc_ver >= UBWC_3_0) {
+		ubwc_props->mode2 = 1;
+		ubwc_props->amsbc = true;
+	} else
+		ubwc_props->mode2 = 0;
+}
+#else
+static void gen8_calc_ubwc_config(struct adreno_device *adreno_dev)
+{
+	gen8_calc_ubwc_config_legacy(adreno_dev);
+}
+#endif
+
 int gen8_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -880,7 +956,6 @@ int gen8_init(struct adreno_device *adreno_dev)
 					struct gen8_device, adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
 
-	adreno_dev->highest_bank_bit = gen8_core->highest_bank_bit;
 	adreno_dev->ahb_timeout_val = adreno_get_ahb_timeout_val(adreno_dev,
 			gen8_core->noc_timeout_us);
 	adreno_dev->bcl_data = gen8_core->bcl_data;
@@ -888,9 +963,7 @@ int gen8_init(struct adreno_device *adreno_dev)
 	adreno_dev->cooperative_reset = ADRENO_FEATURE(adreno_dev,
 			ADRENO_COOP_RESET);
 
-	/* If the memory type is DDR 4, override the existing configuration */
-	if (of_fdt_get_ddrtype() == 0x7)
-		adreno_dev->highest_bank_bit = 14;
+	gen8_calc_ubwc_config(adreno_dev);
 
 	gen8_crashdump_init(adreno_dev);
 
@@ -1593,14 +1666,14 @@ void gen8_enable_ahb_timeout_detection(struct adreno_device *adreno_dev)
 	kgsl_regwrite(device, GEN8_GPU_CX_MISC_CX_AHB_HOST_CNTL, val);
 }
 
-#define MIN_HBB 13
 int gen8_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	const struct adreno_gen8_core *gen8_core = to_gen8_core(adreno_dev);
-	u32 pipe_id, mode2 = 0, rgb565_predicator = 0, amsbc = 0, yuvnotcomptofc = 0;
+	u32 pipe_id;
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
 	u32 mal = adreno_dev->mal;
-	u32 mode = adreno_dev->ubwc_mode;
+
 	struct gen8_device *gen8_dev = container_of(adreno_dev,
 					struct gen8_device, adreno_dev);
 	/*
@@ -1612,7 +1685,6 @@ int gen8_start(struct adreno_device *adreno_dev)
 	u32 hbb_lo = 1, hbb_hi = 0, hbb = 1;
 	struct cpu_gpu_lock *pwrup_lock = adreno_dev->pwrup_reglist->hostptr;
 	u64 uche_trap_base = gen8_get_uche_trap_base();
-	u32 rgba8888_lossless = 0, fp16compoptdis = 0;
 	int is_current_rt = rt_task(current);
 	int nice = task_nice(current);
 
@@ -1686,32 +1758,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 		kgsl_regrmw(device, GEN8_GMUCX_POWER_COUNTER_SELECT_XOCLK_1, GENMASK(15, 8),
 				FIELD_PREP(GENMASK(15, 8), 0x26));
 
-	switch (mode) {
-	case KGSL_UBWC_6_0:
-		yuvnotcomptofc = 1;
-		mode2 = 5;
-		break;
-	case KGSL_UBWC_5_0:
-		amsbc = 1;
-		rgb565_predicator = 1;
-		mode2 = 4;
-		break;
-	case KGSL_UBWC_4_0:
-		amsbc = 1;
-		rgb565_predicator = 1;
-		fp16compoptdis = 1;
-		rgba8888_lossless = 1;
-		mode2 = 2;
-		break;
-	case KGSL_UBWC_3_0:
-		amsbc = 1;
-		mode2 = 1;
-		break;
-	default:
-		break;
-	}
-
-	if (!WARN_ON(!adreno_dev->highest_bank_bit)) {
+	if (adreno_dev->highest_bank_bit) {
 		hbb = adreno_dev->highest_bank_bit - MIN_HBB;
 		hbb_lo = hbb & 3;
 		hbb_hi = (hbb >> 2) & 1;
@@ -1724,17 +1771,17 @@ int gen8_start(struct adreno_device *adreno_dev)
 	gen8_regwrite_aperture(device, GEN8_GRAS_NC_MODE_CNTL,
 			       FIELD_PREP(GENMASK(8, 5), hbb), PIPE_BR, 0, 0);
 	gen8_regwrite_aperture(device, GEN8_RB_CCU_NC_MODE_CNTL,
-			       FIELD_PREP(GENMASK(6, 6), yuvnotcomptofc) |
+			       FIELD_PREP(GENMASK(6, 6), ubwc_props->yuvnotcomptofc) |
 			       FIELD_PREP(GENMASK(3, 3), hbb_hi) |
 			       FIELD_PREP(GENMASK(2, 1), hbb_lo),
 			       PIPE_BR, 0, 0);
 	gen8_regwrite_aperture(device, GEN8_RB_CMP_NC_MODE_CNTL,
-			       FIELD_PREP(GENMASK(17, 15), mode2) |
-			       FIELD_PREP(GENMASK(6, 6), yuvnotcomptofc) |
-			       FIELD_PREP(GENMASK(4, 4), rgba8888_lossless) |
-			       FIELD_PREP(GENMASK(3, 3), fp16compoptdis) |
-			       FIELD_PREP(GENMASK(2, 2), rgb565_predicator) |
-			       FIELD_PREP(GENMASK(1, 1), amsbc) |
+			       FIELD_PREP(GENMASK(17, 15), ubwc_props->mode2) |
+			       FIELD_PREP(GENMASK(6, 6), ubwc_props->yuvnotcomptofc) |
+			       FIELD_PREP(GENMASK(4, 4), ubwc_props->rgba8888_lossless) |
+			       FIELD_PREP(GENMASK(3, 3), ubwc_props->fp16compoptdis) |
+			       FIELD_PREP(GENMASK(2, 2), ubwc_props->rgb565_predicator) |
+			       FIELD_PREP(GENMASK(1, 1), ubwc_props->amsbc) |
 			       FIELD_PREP(GENMASK(0, 0), mal),
 			       PIPE_BR, 0, 0);
 

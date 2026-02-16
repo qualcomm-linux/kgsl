@@ -187,7 +187,6 @@ static int a5xx_microcode_read(struct adreno_device *adreno_dev);
 
 static int a5xx_init(struct adreno_device *adreno_dev)
 {
-	const struct adreno_a5xx_core *a5xx_core = to_a5xx_core(adreno_dev);
 	int ret;
 
 	ret = a5xx_ringbuffer_init(adreno_dev);
@@ -200,8 +199,6 @@ static int a5xx_init(struct adreno_device *adreno_dev)
 
 	if (a5xx_has_gpmu(adreno_dev))
 		INIT_WORK(&adreno_dev->gpmu_work, a5xx_gpmu_reset);
-
-	adreno_dev->highest_bank_bit = a5xx_core->highest_bank_bit;
 
 	INIT_WORK(&adreno_dev->irq_storm_work, a5xx_irq_storm_worker);
 

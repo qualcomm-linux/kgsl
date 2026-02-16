@@ -34,6 +34,9 @@
 #if (KERNEL_VERSION(6, 10, 0) <= LINUX_VERSION_CODE)
 #include <linux/soc/qcom/socinfo.h>
 #endif
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+#include <linux/soc/qcom/ubwc.h>
+#endif
 
 #include "adreno.h"
 #include "adreno_a6xx.h"
@@ -1863,6 +1866,97 @@ static void validate_pwrlevels(struct kgsl_device *device)
 	}
 }
 
+static int adreno_init_ubwc_legacy(struct adreno_device *adreno_dev)
+{
+	if (adreno_dev->gpucore->ubwc_mode)
+		adreno_dev->ubwc_mode = adreno_dev->gpucore->ubwc_mode;
+	else {
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+		int status;
+
+		status = of_property_read_u32(device->pdev->dev.of_node,
+			"qcom,ubwc-mode", &adreno_dev->ubwc_mode);
+		if (status) {
+			dev_err(device->dev, "Failed to get ubwc-mode\n");
+			return status;
+		}
+	}
+
+	adreno_dev->highest_bank_bit = adreno_dev->gpucore->highest_bank_bit;
+
+	if (kgsl_get_ddrtype() != 0x7)
+		return 0;
+
+	/* If the memory type is DDR 4, override the existing configuration */
+	if (adreno_is_gen8(adreno_dev) || adreno_is_gen7(adreno_dev) ||
+		adreno_is_a660_shima(adreno_dev) || adreno_is_a642l(adreno_dev) ||
+		adreno_is_a643(adreno_dev) || adreno_is_a662(adreno_dev) ||
+		adreno_is_gen6_3_26_0(adreno_dev))
+		adreno_dev->highest_bank_bit = 14;
+	else if (adreno_is_a650(adreno_dev) || adreno_is_a660(adreno_dev))
+		adreno_dev->highest_bank_bit = 15;
+
+	return 0;
+}
+
+#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+static inline u32 ubwc_encoder_to_kgsl_mode(u32 enc_version)
+{
+	/* Convert UBWC encoder version to KGSL UBWC mode */
+	switch (enc_version) {
+	case UBWC_1_0:
+		return KGSL_UBWC_1_0;
+	case UBWC_2_0:
+		return KGSL_UBWC_2_0;
+	case UBWC_3_0:
+		return KGSL_UBWC_3_0;
+	case UBWC_4_0:
+		return KGSL_UBWC_4_0;
+	case UBWC_5_0:
+		return KGSL_UBWC_5_0;
+#if (KERNEL_VERSION(6, 19, 0) <= LINUX_VERSION_CODE)
+	case UBWC_6_0:
+		return KGSL_UBWC_6_0;
+#endif
+	default:
+		return KGSL_UBWC_NONE;
+	}
+}
+
+static int adreno_init_ubwc(struct adreno_device *adreno_dev)
+{
+	struct qcom_ubwc_cfg_data *cfg = qcom_ubwc_config_get_data();
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret = 0;
+
+	if (cfg) {
+		adreno_dev->ubwc_cfg_data = cfg;
+		adreno_dev->ubwc_mode = ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version);
+		adreno_dev->highest_bank_bit = cfg->highest_bank_bit;
+	} else
+		ret = adreno_init_ubwc_legacy(adreno_dev);
+
+	if (!adreno_dev->highest_bank_bit)
+		dev_warn(device->dev, "Invalid highest bank bit\n");
+
+	return ret;
+}
+
+#else
+static int adreno_init_ubwc(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	int ret;
+
+	ret = adreno_init_ubwc_legacy(adreno_dev);
+
+	if (!adreno_dev->highest_bank_bit)
+		dev_warn(device->dev, "Invalid highest bank bit\n");
+
+	return ret;
+}
+#endif
+
 int adreno_device_probe(struct platform_device *pdev,
 		struct adreno_device *adreno_dev)
 {
@@ -2009,12 +2103,13 @@ int adreno_device_probe(struct platform_device *pdev,
 		goto err_unbind;
 	}
 
-	/* Initialize UBWC mode and mal */
-	if (adreno_dev->gpucore->ubwc_mode)
-		adreno_dev->ubwc_mode = adreno_dev->gpucore->ubwc_mode;
-	else
-		of_property_read_u32(device->pdev->dev.of_node,
-			"qcom,ubwc-mode", &adreno_dev->ubwc_mode);
+	/* Initialize UBWC mode and HBB */
+	status = adreno_init_ubwc(adreno_dev);
+	if (status) {
+		trace_array_put(device->fence_trace_array);
+		kgsl_device_platform_remove(device);
+		goto err_unbind;
+	}
 
 	if (adreno_dev->gpucore->mal)
 		adreno_dev->mal = adreno_dev->gpucore->mal;

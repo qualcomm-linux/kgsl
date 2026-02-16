@@ -82,8 +82,6 @@ struct adreno_a6xx_core {
 	bool disable_tseskip;
 	/** @gx_cpr_toggle: True to toggle GX CPR FSM to avoid CPR stalls */
 	bool gx_cpr_toggle;
-	/** @highest_bank_bit: The bit of the highest DDR bank */
-	u32 highest_bank_bit;
 	/** @ctxt_record_size: Size of the preemption record in bytes */
 	u64 ctxt_record_size;
 	/** @gmu_hub_clk_freq: Gmu hub interface clock frequency */

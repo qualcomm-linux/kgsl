@@ -530,6 +530,25 @@ struct adreno_power_ops {
 	void (*set_thermal_index)(struct adreno_device *adreno_dev);
 };
 
+struct adreno_ubwc_props {
+	/** @mode: UBWC mode value */
+	u32 mode;
+	/** @mode2: Secondary UBWC mode (Gen8 only) */
+	u32 mode2;
+	/** @level2_swizzling_dis: Level 2 swizzling disable (Gen6 only) */
+	u32 level2_swizzling_dis;
+	/** @amsbc: AMSBC enable flag */
+	bool amsbc;
+	/** @rgb565_predicator: RGB565 predictor enable */
+	bool rgb565_predicator;
+	/** @yuvnotcomptofc: YUV not compressed to FC (Gen8 only) */
+	bool yuvnotcomptofc;
+	/** @fp16compoptdis: FP16 compression optimization disable (Gen8 only) */
+	bool fp16compoptdis;
+	/** @rgba8888_lossless: RGBA8888 lossless mode (Gen8 only) */
+	bool rgba8888_lossless;
+};
+
 /**
  * struct adreno_gpu_core - A specific GPU core definition
  * @gpurev: Unique GPU revision identifier
@@ -577,6 +596,8 @@ struct adreno_gpu_core {
 	u32 ubwc_mode;
 	/** @mal: Minimum access length */
 	u32 mal;
+	/** @highest_bank_bit: The bit of the highest DDR bank */
+	u32 highest_bank_bit;
 };
 
 /**
@@ -878,6 +899,14 @@ struct adreno_device {
 	bool dcvs_profile_enabled;
 	/** @aqe_ctxt_record_sz: Size of the AQE section in preemption record in bytes */
 	u64 aqe_ctxt_record_sz;
+	/** @ubwc_cfg: Pointer to hold struct qcom_ubwc_cfg_data fetched from
+	 * qcom_ubwc_config_get_data() API
+	 */
+	void *ubwc_cfg_data;
+	/** @adreno_ubwc_props: Container of all UBWC props required to program NC_MODE_CNTL
+	 * registers
+	 */
+	struct adreno_ubwc_props ubwc_props;
 };
 
 /* Time to wait for suspend recovery gate to complete */
