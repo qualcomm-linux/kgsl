@@ -1289,11 +1289,6 @@ static void _kgsl_free_pages(struct kgsl_memdesc *memdesc)
 	fput(memdesc->shmem_filp);
 }
 
-/* If CONFIG_QCOM_KGSL_USE_SHMEM is defined we don't use compound pages */
-static u32 kgsl_get_page_order(struct page *page)
-{
-	return 0;
-}
 #else
 void kgsl_register_shmem_callback(void) { }
 
@@ -1332,10 +1327,6 @@ static void _kgsl_free_pages(struct kgsl_memdesc *memdesc)
 	memdesc->pages = NULL;
 }
 
-static u32 kgsl_get_page_order(struct page *page)
-{
-	return compound_order(page);
-}
 #endif
 
 void kgsl_page_sync(struct device *dev, struct page *page,
@@ -1439,7 +1430,7 @@ static int _kgsl_alloc_pages(struct kgsl_memdesc *memdesc,
 			}
 
 			for (i = 0; i < count; ) {
-				int n = 1 << kgsl_get_page_order(local[i]);
+				int n = 1 << compound_order(local[i]);
 
 				kgsl_free_page(memdesc, local[i]);
 				i += n;
