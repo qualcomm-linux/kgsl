@@ -176,6 +176,7 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 	const struct adreno_gen7_core *gpucore = to_gen7_core(ADRENO_DEVICE(device));
 	const struct gen7_snapshot_block_list *gen7_snapshot_block_list =
 						gpucore->gen7_snapshot_block_list;
+	const u32 *regs_ptr = (const u32 *)gen7_snapshot_block_list->gmu_ao_regs;
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_GMU_MEMORY,
 		snapshot, gen7_gmu_snapshot_itcm, gmu);
@@ -186,6 +187,11 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		adreno_snapshot_registers_v2, (void *) gen7_snapshot_block_list->gmu_regs);
+
+	if (regs_ptr && kgsl_regmap_valid_offset(&device->regmap, regs_ptr[0])) {
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
+		adreno_snapshot_registers_v2, (void *) gen7_snapshot_block_list->gmu_ao_regs);
+	}
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		gen7_snapshot_rscc_registers, (void *) gen7_snapshot_block_list->rscc_regs);
@@ -200,6 +206,13 @@ static void gen7_gmu_device_snapshot(struct kgsl_device *device,
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
 		adreno_snapshot_registers_v2, (void *) gen7_snapshot_block_list->gmu_gx_regs);
+
+	regs_ptr = (const u32 *)gen7_snapshot_block_list->gmu_gx_blk_dec0_dec1_regs;
+	if (regs_ptr && kgsl_regmap_valid_offset(&device->regmap, regs_ptr[0])) {
+		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS_V2, snapshot,
+		adreno_snapshot_registers_v2,
+		(void *) gen7_snapshot_block_list->gmu_gx_blk_dec0_dec1_regs);
+	}
 
 	/*
 	 * A stalled SMMU can lead to NoC timeouts when host accesses DTCM.

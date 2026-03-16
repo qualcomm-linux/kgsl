@@ -130,8 +130,12 @@ struct gen7_snapshot_block_list {
 	size_t num_external_core_regs;
 	/* gmu_regs : List of GMU registers */
 	const u32 *gmu_regs;
+	/* gmu_ao_regs : List of GMU registers for ao areas */
+	const u32 *gmu_ao_regs;
 	/* gmu_gx_regs : List of GMU GX registers */
 	const u32 *gmu_gx_regs;
+	/* gmu_gx_blk_dec0_dec1_regs : List of GMU GX registers for blk dec0 and dec1 areas*/
+	const u32 *gmu_gx_blk_dec0_dec1_regs;
 	/* rscc_regs : List of RSCC registers */
 	const u32 *rscc_regs;
 	/* reg_list : List of GPU internal registers */
