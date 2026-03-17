@@ -1397,7 +1397,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev) ||
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev) ||
 			adreno_is_gen8_1_0(adreno_dev)) {
 		if (adreno_slice_mask_override != U32_MAX)
 			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
@@ -1738,7 +1738,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_1_0(adreno_dev)) {
 		reglist[items].regs = gen8_1_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_1_0_ifpc_pwrup_reglist);
-	} else if (adreno_is_gen8_11_0(adreno_dev)) {
+	} else if (adreno_is_gen8_11_x(adreno_dev)) {
 		reglist[items].regs = gen8_11_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_11_0_ifpc_pwrup_reglist);
 	} else {
@@ -1758,7 +1758,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_1_0(adreno_dev)) {
 		reglist[items].regs = gen8_1_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_1_0_pwrup_reglist);
-	} else if (adreno_is_gen8_11_0(adreno_dev)) {
+	} else if (adreno_is_gen8_11_x(adreno_dev)) {
 		reglist[items].regs = gen8_11_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_11_0_pwrup_reglist);
 	} else {
@@ -1857,7 +1857,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		} else if (adreno_is_gen8_1_0(adreno_dev)) {
 			ext_list = gen8_1_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_1_0_pwrup_extlist);
-		} else if (adreno_is_gen8_11_0(adreno_dev)) {
+		} else if (adreno_is_gen8_11_x(adreno_dev)) {
 			ext_list = gen8_11_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_11_0_pwrup_extlist);
 		} else {
@@ -1975,7 +1975,7 @@ void gen8_setup_adreno_props(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	u32 reg;
 
-	if (!adreno_is_gen8_11_0(adreno_dev))
+	if (!adreno_is_gen8_11_x(adreno_dev))
 		return;
 
 	/* Store the multidraw and visibility flush settings */
@@ -2228,7 +2228,7 @@ int gen8_start(struct adreno_device *adreno_dev)
 			pipe_id, 0, 0);
 
 		/* Disable the CP_SW_RTWROVF bit for BV pipe to prevent false interrupt from CP */
-		if (adreno_is_gen8_11_0(adreno_dev) && (pipe_id == PIPE_BV))
+		if (adreno_is_gen8_11_x(adreno_dev) && (pipe_id == PIPE_BV))
 			val &= ~(BIT(CP_SW_RTWROVF));
 
 		gen8_regwrite_aperture(device, GEN8_CP_INTERRUPT_STATUS_MASK_PIPE,
@@ -3801,11 +3801,11 @@ u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 		return (adreno_dev->gpucore->gmem_size / GEN8_1_0_NUM_PHYSICAL_SLICES) *
 		gen8_get_num_slices(adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev)) {
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev)) {
 		if (adreno_is_gen8_9_0(adreno_dev))
 			return (adreno_dev->gpucore->gmem_size / GEN8_9_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
-		else if (adreno_is_gen8_11_0(adreno_dev))
+		else if (adreno_is_gen8_11_x(adreno_dev))
 			return (adreno_dev->gpucore->gmem_size / GEN8_11_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
 		else

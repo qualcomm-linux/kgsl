@@ -354,7 +354,7 @@ int gen8_rscc_sleep_sequence(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
 	int ret;
-	u32 bitmask = (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_0(adreno_dev)) ?
+	u32 bitmask = (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev)) ?
 		BIT(30) : BIT(16);
 
 	if (!test_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags))
@@ -655,7 +655,7 @@ bool gen8_gmu_gx_is_on(struct adreno_device *adreno_dev)
 	u32 val = 0;
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
-	if (adreno_is_gen8_11_0(adreno_dev)) {
+	if (adreno_is_gen8_11_x(adreno_dev)) {
 		kgsl_regread(device, GEN8_GPU_CX_MISC_GFX_PWR_CLK_STATUS, &val);
 		return is_cx_misc_gx_on(val);
 	}

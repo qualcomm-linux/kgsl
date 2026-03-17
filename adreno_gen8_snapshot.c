@@ -2019,7 +2019,7 @@ static bool gen8_snapshot_pc_indexed_regs(struct kgsl_device *device,
 	bool ret = true;
 	int i;
 
-	if (!adreno_is_gen8_11_0(adreno_dev))
+	if (!adreno_is_gen8_11_x(adreno_dev))
 		return true;
 
 	for (i = 0; i < gen8_snapshot_block_list->pc_index_registers_len; i++) {
@@ -2202,7 +2202,7 @@ void gen8_crashdump_init(struct adreno_device *adreno_dev)
 	u64 capturescript_regs_pages =
 		((adreno_is_gen8_2_x(adreno_dev) ||
 		 adreno_is_gen8_1_0(adreno_dev) ||
-		adreno_is_gen8_11_0(adreno_dev)) ? 400 : 200);
+		adreno_is_gen8_11_x(adreno_dev)) ? 400 : 200);
 
 	ret = adreno_allocate_global(device, &gen8_capturescript,
 		50 * PAGE_SIZE, 0, KGSL_MEMFLAGS_GPUREADONLY,

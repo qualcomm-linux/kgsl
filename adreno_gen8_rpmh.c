@@ -325,7 +325,7 @@ static int build_bw_table(struct adreno_device *adreno_dev)
 	u32 count = 0;
 	int ret;
 
-	if (adreno_is_gen8_11_0(adreno_dev))
+	if (adreno_is_gen8_11_x(adreno_dev))
 		ddr = adreno_rpmh_build_bw_votes(gen8_11_0_ddr_bcms, ARRAY_SIZE(gen8_11_0_ddr_bcms),
 			pwr->ddr_table, pwr->ddr_table_count, ACV_GPU_PERFMODE_VOTE, perfmode_lvl,
 			adreno_dev->gmu_ab);
