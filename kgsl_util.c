@@ -103,7 +103,28 @@ int kgsl_clk_set_rate(struct clk_bulk_data *clks, int num_clks,
 	return clk_set_rate(clk, rate);
 }
 
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE)
+static int _kgsl_scm_gpu_init_regs(u32 gpu_req)
+{
+	return -EOPNOTSUPP;
+}
+#elif (KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE)
+static int _kgsl_scm_gpu_init_regs(u32 gpu_req)
+{
+	return qcom_scm_gpu_init_regs(gpu_req);
+}
+#elif (IS_ENABLED(CONFIG_QCOM_KGSL_UPSTREAM) && !IS_ENABLED(CONFIG_QCOM_SCM_ADDON))
+static int _kgsl_scm_gpu_init_regs(u32 gpu_req)
+{
+	return -EINVAL;
+}
+#else
+static int _kgsl_scm_gpu_init_regs(u32 gpu_req)
+{
+	return qcom_scm_kgsl_init_regs(gpu_req);
+}
+#endif
+
 int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
 {
 	int ret;
@@ -111,14 +132,13 @@ int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
 	if (!gpu_req)
 		return -EOPNOTSUPP;
 
-	ret = qcom_scm_kgsl_init_regs(gpu_req);
-	if (ret)
+	ret = _kgsl_scm_gpu_init_regs(gpu_req);
+	if (ret && (ret != -EOPNOTSUPP))
 		dev_err(dev, "Scm call for requests:0x%x failed with ret:: %d\n",
 									gpu_req, ret);
 
 	return ret;
 }
-#endif
 
 int kgsl_hwlock(struct cpu_gpu_lock *lock)
 {

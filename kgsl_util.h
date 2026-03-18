@@ -202,14 +202,7 @@ void kgsl_detach_iommu_group(struct iommu_domain *domain, struct iommu_group *gr
  * Return: 0 on success or negative on failure and EOPNOTSUPP if scm call
  * not supported
  */
-#if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
 int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req);
-#else
-static inline int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
-{
-	return -EOPNOTSUPP;
-}
-#endif
 
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 /**
@@ -293,13 +286,6 @@ static inline int qcom_scm_kgsl_set_smmu_lpac_aperture(
  * Return: ddr type on success or negative error on failure.
  */
 int kgsl_get_ddrtype(void);
-
-#if !IS_ENABLED(CONFIG_QCOM_SCM_ADDON)
-static inline int qcom_scm_kgsl_init_regs(u32 gpu_req)
-{
-	return -EOPNOTSUPP;
-}
-#endif
 
 #endif
 
