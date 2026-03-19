@@ -1559,6 +1559,10 @@ const char *adreno_get_gpu_model(struct kgsl_device *device)
 	if (model)
 		goto done;
 
+	model = ADRENO_DEVICE(device)->gpucore->gpu_model;
+	if (model)
+		goto done;
+
 	scnprintf(gpu_model, sizeof(gpu_model), "Adreno%u%u%uv%u",
 		(u32)ADRENO_CHIPID_CORE(ADRENO_DEVICE(device)->chipid),
 		(u32)ADRENO_CHIPID_MAJOR(ADRENO_DEVICE(device)->chipid),

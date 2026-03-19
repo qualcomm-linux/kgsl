@@ -599,6 +599,8 @@ struct adreno_gpu_core {
 	u32 mal;
 	/** @highest_bank_bit: The bit of the highest DDR bank */
 	u32 highest_bank_bit;
+	/** @gpu_model: Gpu model name */
+	const char *gpu_model;
 };
 
 /**

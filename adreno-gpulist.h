@@ -2550,6 +2550,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_5_0 = {
 		.ubwc_mode = 4,
 		.mal = 32,
 		.highest_bank_bit = 17,
+		.gpu_model = "Adreno X1-85",
 	},
 	.sqefw_name = "gen70500_sqe.fw",
 	.gmufw_name = "gen70500_gmu.bin",
