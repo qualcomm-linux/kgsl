@@ -1225,11 +1225,11 @@ static int adreno_of_parse_pwrlevels(struct adreno_device *adreno_dev)
 			ret = devm_pm_opp_set_clkname(dev, "core_clk");
 		} else
 			ret = devm_pm_opp_set_clkname(dev, "core");
-	}
 
-	if (ret) {
-		dev_err(dev, "Failed to set OPP clock name, ret: %d\n", ret);
-		return ret;
+		if (ret) {
+			dev_err(dev, "Failed to set OPP clock name, ret: %d\n", ret);
+			return ret;
+		}
 	}
 
 	ret = devm_pm_opp_of_add_table(&device->pdev->dev);
