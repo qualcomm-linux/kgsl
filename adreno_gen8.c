@@ -1034,6 +1034,26 @@ void gen8_cx_timer_init(struct adreno_device *adreno_dev)
 	set_bit(ADRENO_DEVICE_CX_TIMER_INITIALIZED, &adreno_dev->priv);
 }
 
+/**
+ * gen8_read_softfuse_speedbin - Read speedbin from SW fuse register
+ * @adreno_dev: An Adreno GPU handle
+ * @speedbin: Pointer to store the speedbin value
+ *
+ * For ADRENO_SOFTFUSE targets, the actual speedbin is read from
+ * GEN8_GPU_CX_MISC_SW_FUSE_FREQ_LIMIT_STATUS.
+ */
+static void gen8_read_softfuse_speedbin(struct adreno_device *adreno_dev, u32 *speedbin)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 val;
+
+	kgsl_regread(device, GEN8_GPU_CX_MISC_SW_FUSE_FREQ_LIMIT_STATUS, &val);
+
+	/* bits [8:0]: speedbin — combined speedbin value from HW and SW fuses */
+	*speedbin = FIELD_GET(GENMASK(8, 0), val);
+}
+
+
 void gen8_get_gpu_feature_info(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -1058,7 +1078,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
-	if (adreno_is_gen8_2_x(adreno_dev)) {
+	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)) {
 		if (adreno_slice_mask_override != U32_MAX)
 			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
 					adreno_slice_mask_override);
@@ -1066,9 +1086,10 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 		kgsl_regread(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_FINAL, &slice_mask);
 		if (adreno_is_gen8_9_0(adreno_dev))
 			slice_mask = GET_SLICE_MASK(GEN8_9_0_NUM_PHYSICAL_SLICES, slice_mask);
+		else if (adreno_is_gen8_1_0(adreno_dev))
+			slice_mask = GET_SLICE_MASK(GEN8_1_0_NUM_PHYSICAL_SLICES, slice_mask);
 		else
 			slice_mask = GET_SLICE_MASK(GEN8_2_0_NUM_PHYSICAL_SLICES, slice_mask);
-
 		/*
 		 * Update the chipid with the number of active slices. This is the number
 		 * of bits set in the slice mask.
@@ -1862,8 +1883,11 @@ int gen8_start(struct adreno_device *adreno_dev)
 	/*
 	 * Enable hardware clock gating here to prevent any register access
 	 * issue due to internal clock gating.
+	 *
+	 * Gen8_2_0 and gen8_1_0 need to set up HW clock gating after
+	 * CP INIT in the bootup sequence.
 	 */
-	if (!adreno_is_gen8_2_x(adreno_dev))
+	if (!(adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	/* Ensure very last register write is finished before we return from this function */
@@ -2152,7 +2176,7 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 	}
 
 	ret = gen8_post_start(adreno_dev);
-	if (!ret && adreno_is_gen8_2_x(adreno_dev))
+	if (!ret && (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	return ret;
@@ -3400,6 +3424,10 @@ done:
  */
 u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 {
+	if (adreno_is_gen8_1_0(adreno_dev))
+		return (adreno_dev->gpucore->gmem_size / GEN8_1_0_NUM_PHYSICAL_SLICES) *
+		gen8_get_num_slices(adreno_dev);
+
 	if (adreno_is_gen8_2_x(adreno_dev)) {
 		if (adreno_is_gen8_9_0(adreno_dev))
 			return (adreno_dev->gpucore->gmem_size / GEN8_9_0_NUM_PHYSICAL_SLICES) *
@@ -3472,6 +3500,7 @@ const struct gen8_gpudev adreno_gen8_gmu_gpudev = {
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
 		.get_gmem_size = gen8_get_gmem_size,
+		.read_speedbin = gen8_read_softfuse_speedbin,
 	},
 	.hfi_probe = gen8_gmu_hfi_probe,
 	.handle_watchdog = gen8_gmu_handle_watchdog,

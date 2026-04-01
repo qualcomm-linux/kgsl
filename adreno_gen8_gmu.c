@@ -1905,9 +1905,15 @@ static void gen8_gmu_acd_probe(struct kgsl_device *device,
 			"AOP qmp init failed: %d\n", ret);
 }
 
+/* Byte offset of RSCC from GPU (kgsl_3d0_reg_memory) base */
+#define GEN8_RSCC_OFFSET_FROM_KGSL_3D0 0x50000
+#define GEN8_RSCC_SIZE 0x10000
+
 static int gen8_gmu_reg_probe(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
+	struct resource *res;
 	int ret;
 
 	ret = kgsl_regmap_add_region(&device->regmap,
@@ -1921,6 +1927,39 @@ static int gen8_gmu_reg_probe(struct adreno_device *adreno_dev)
 	 */
 	kgsl_regmap_add_region(&device->regmap, GMU_PDEV(device), "gmu_ao_blk_dec0", -EINVAL,
 				NULL, NULL);
+
+	/* In standard device tree bindings, rscc range is part of GMU pdev */
+	res = platform_get_resource_byname(GMU_PDEV(device), IORESOURCE_MEM, "rscc");
+	if (!res)
+		res = platform_get_resource_byname(device->pdev,
+			IORESOURCE_MEM, "rscc");
+	if (res) {
+		gmu->rscc_virt = devm_ioremap(&device->pdev->dev, res->start,
+					resource_size(res));
+	} else {
+		/*
+		 * RSCC lives at GPU base + 0x50000, inside the
+		 * kgsl_3d0_reg_memory range. Derive from GPU base.
+		 */
+		struct resource *kgsl_res;
+
+		kgsl_res = platform_get_resource_byname(device->pdev,
+				IORESOURCE_MEM, "kgsl_3d0_reg_memory");
+		if (!kgsl_res) {
+			dev_err(GMU_PDEV_DEV(device),
+				"Failed to get kgsl_3d0_reg_memory for RSCC\n");
+			return -ENODEV;
+		}
+
+		gmu->rscc_virt = devm_ioremap(&device->pdev->dev,
+					kgsl_res->start + GEN8_RSCC_OFFSET_FROM_KGSL_3D0,
+					GEN8_RSCC_SIZE);
+	}
+
+	if (!gmu->rscc_virt) {
+		dev_err(GMU_PDEV_DEV(device), "rscc ioremap failed\n");
+		return -ENOMEM;
+	}
 
 	return ret;
 }
@@ -1969,7 +2008,6 @@ int gen8_gmu_probe(struct kgsl_device *device,
 	struct gmu_core_device *gmu_core = &device->gmu_core;
 	u64 freq = gen8_core->gmu_hub_clk_freq;
 	struct device *dev = &pdev->dev;
-	struct resource *res;
 	int ret, i;
 
 	adreno_dev->gmu_hub_clk_freq = freq ? freq : 150000000;
@@ -1981,24 +2019,6 @@ int gen8_gmu_probe(struct kgsl_device *device,
 
 	dma_coerce_mask_and_coherent(&gmu_core->pdev->dev, DMA_BIT_MASK(64));
 	set_dma_ops(GMU_PDEV_DEV(device), NULL);
-
-	/* In standard device tree bindings, rscc range is part of GMU pdev */
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "rscc");
-	if (!res)
-		res = platform_get_resource_byname(device->pdev,
-			IORESOURCE_MEM, "rscc");
-
-	if (!res) {
-		dev_err(GMU_PDEV_DEV(device), "Failed to get rscc resource\n");
-		return -ENODEV;
-	}
-
-	gmu->rscc_virt = devm_ioremap(&device->pdev->dev, res->start,
-					resource_size(res));
-	if (!gmu->rscc_virt) {
-		dev_err(GMU_PDEV_DEV(device), "rscc ioremap failed\n");
-		return -ENOMEM;
-	}
 
 	/* Setup any rdpm register ranges */
 	gmu_core_rdpm_probe(device);

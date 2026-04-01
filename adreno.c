@@ -916,17 +916,31 @@ static int adreno_setup_speedbin(struct kgsl_device *device)
 	struct device_node *node;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	const struct adreno_gpu_core *gpucore = adreno_dev->gpucore;
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	u32 supp_hw, speedbin;
 	int ret;
 
+	/* Use speedbin fuse if present. Otherwise, fallback to softfuse */
 	ret = adreno_read_speed_bin(pdev, &speedbin);
 	/*
 	 * -ENOENT means that the platform doesn't support speedbin which is
-	 * fine
+	 * fine.
 	 */
 	if (ret == -ENOENT) {
-		device->speed_bin = 0;
-		return 0;
+		/*
+		 * For ADRENO_SOFTFUSE targets the actual speedbin is read from
+		 * GPU_CX_MISC_SW_FUSE_FREQ_LIMIT_STATUS.
+		 */
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_SOFTFUSE)) {
+
+			if (!gpudev->read_speedbin)
+				return -ENODEV;
+
+			gpudev->read_speedbin(adreno_dev, &speedbin);
+		} else {
+			device->speed_bin = 0;
+			return 0;
+		}
 	} else if (ret)
 		return ret;
 
@@ -2051,6 +2065,20 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
+	/*
+	 * Add kgsl_3d0_reg_memory and cx_mem/cx_misc region early
+	 * to access softSKU register inside adreno_setup_speedbin().
+	 */
+	status = kgsl_regmap_init(pdev, &device->regmap, "kgsl_3d0_reg_memory",
+		&adreno_regmap_ops, device);
+	if (status)
+		goto err;
+
+	/* Try to probe the optional "cx_mem" resource, fallback to legacy "cx_misc" if not found */
+	status = kgsl_regmap_add_region(&device->regmap, pdev, "cx_mem", -EINVAL, NULL, NULL);
+	if (status)
+		kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", -EINVAL, NULL, NULL);
+
 	status = adreno_setup_speedbin(device);
 	if (status)
 		goto err;
@@ -2064,11 +2092,6 @@ int adreno_device_probe(struct platform_device *pdev,
 		goto err;
 
 	validate_pwrlevels(device);
-
-	status = kgsl_regmap_init(pdev, &device->regmap, "kgsl_3d0_reg_memory",
-		&adreno_regmap_ops, device);
-	if (status)
-		goto err_bus_close;
 
 	/*
 	 * The SMMU APIs use unsigned long for virtual addresses which means
@@ -2149,11 +2172,6 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", -EINVAL, NULL, NULL);
-
-	/* Try to probe the optional "cx_mem" resource, fallback to legacy "cx_misc" if not found */
-	status = kgsl_regmap_add_region(&device->regmap, pdev, "cx_mem", -EINVAL, NULL, NULL);
-	if (status)
-		kgsl_regmap_add_region(&device->regmap, pdev, "cx_misc", -EINVAL, NULL, NULL);
 
 	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", -EINVAL, NULL, NULL) == 0)
 		adreno_dev->isense_reg_mapped = true;
