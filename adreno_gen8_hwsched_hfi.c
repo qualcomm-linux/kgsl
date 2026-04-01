@@ -4241,6 +4241,8 @@ static void gen8_hwsched_raise_dispatch_interrupt(struct adreno_device *adreno_d
 		if (adreno_hwsched_drawobj_replay(adreno_dev, drawobj))
 			gmu_core_regwrite(KGSL_DEVICE(adreno_dev), GEN8_GMUCX_HOST2GMU_INTR_SET,
 				DISPQ_IRQ_BIT(get_irq_bit(adreno_dev, drawobj->context)));
+		else
+			adreno_hwsched_retire_cmdlist_obj(adreno_dev, obj);
 	}
 }
 
