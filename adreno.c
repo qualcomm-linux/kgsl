@@ -189,26 +189,62 @@ int adreno_populate_ctxt_record_size(struct adreno_device *adreno_dev)
 	return -ENOENT;
 }
 
+struct adreno_fw_work {
+	struct work_struct work;
+	const struct firmware **fw;
+	const char *name;
+	struct device *device;
+	int ret;
+};
+
+static void adreno_fw_load_worker(struct work_struct *work)
+{
+	struct adreno_fw_work *fw_work =
+		container_of(work, struct adreno_fw_work, work);
+
+	fw_work->ret = firmware_request_nowarn(fw_work->fw, fw_work->name, fw_work->device);
+}
+
+static int adreno_fw_dispatch(struct adreno_fw_work *work)
+{
+	queue_work(kgsl_driver.lockless_workqueue, &work->work);
+	flush_work(&work->work);
+	return work->ret;
+}
+
+/*
+ * Dispatch firmware_request_nowarn() to a workqueue thread rather than calling
+ * it directly. When the GPU device is first opened, request_firmware() would
+ * otherwise be called from within the path_openat() call chain
+ * (open -> kgsl_open -> ... -> adreno_request_firmware). The kernel tracks
+ * symlink traversal depth in current->nameidata->total_link_count, which is
+ * never reset between nested path_openat() calls. With multiple firmware files,
+ * compressed variants, and symlinks in the firmware search paths (e.g.
+ * /lib -> /usr/lib), total_link_count can reach MAXSYMLINKS (40), causing
+ * request_firmware() to fail with -ELOOP. A workqueue thread has
+ * current->nameidata == NULL, so total_link_count is reset for every lookup.
+ */
 int adreno_request_firmware(const struct firmware **fw, const char *name,
 		struct device *device, bool log_error)
 {
-	int ret;
-	char *newname;
+	struct adreno_fw_work work = {
+		.fw = fw, .name = name, .device = device,
+	};
 
-	if (!firmware_request_nowarn(fw, name, device))
+	INIT_WORK(&work.work, adreno_fw_load_worker);
+	if (!adreno_fw_dispatch(&work))
 		return 0;
 
-	newname = kasprintf(GFP_KERNEL, "qcom/%s", name);
-	if (!newname)
+	work.name = kasprintf(GFP_KERNEL, "qcom/%s", name);
+	if (!work.name)
 		return -ENOMEM;
 
-	ret = firmware_request_nowarn(fw, newname, device);
-	if (ret && log_error)
-		pr_err("Firmware request for %s failed with error %d\n",
-				name, ret);
-	kfree(newname);
+	if (adreno_fw_dispatch(&work) && log_error)
+		dev_err(device, "Firmware request for %s failed with error %d\n",
+				name, work.ret);
+	kfree(work.name);
 
-	return ret;
+	return work.ret;
 }
 
 int adreno_get_firmware(struct adreno_device *adreno_dev,
@@ -305,11 +341,9 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	if (ret)
 		return ret;
 
-	ret = request_firmware(&fw, firmware_name, dev);
-	if (ret) {
-		dev_err(dev, "Couldn't load the firmware %s\n", firmware_name);
+	ret = adreno_request_firmware(&fw, firmware_name, dev, true);
+	if (ret)
 		return ret;
-	}
 
 	mem_size = qcom_mdt_get_size(fw);
 	if (mem_size < 0) {
