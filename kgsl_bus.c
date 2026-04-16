@@ -129,6 +129,10 @@ static u32 *kgsl_bus_get_table_from_opp_freqs(struct platform_device *pdev, int 
 	if (!levels)
 		return ERR_PTR(-ENOMEM);
 
+	/* Set lowest bandwidth vote to zero. */
+	levels[0] = 0;
+	index++;
+
 	for_each_child_of_node(node, child) {
 		if (index >= KGSL_MAX_PWRLEVELS) {
 			dev_err(&pdev->dev, "opp-table items exceed the capacity\n");
@@ -153,7 +157,7 @@ static u32 *kgsl_bus_get_table_from_opp_freqs(struct platform_device *pdev, int 
 			levels[index++] = bus_freq;
 	}
 
-	if (!index) {
+	if (index == 1) {
 		kfree(levels);
 		return ERR_PTR(-EINVAL);
 	}
