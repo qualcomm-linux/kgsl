@@ -28,6 +28,7 @@ static const struct of_device_id gmu_match_table[] = {
 	{ .compatible = "qcom,adreno-gmu-635.0", .data = &a6xx_gmu_driver },
 	{ .compatible = "qcom,adreno-rgmu", .data = &a6xx_rgmu_driver },
 	{ .compatible = "qcom,adreno-gmu-x185.1", .data = &gen7_gmu_driver },
+	{ .compatible = "qcom,adreno-gmu-x145.0", .data = &gen7_gmu_driver },
 	{},
 };
 
