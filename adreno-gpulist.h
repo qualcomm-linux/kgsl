@@ -4826,6 +4826,11 @@ static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {
 	/* Disable GS Quad primitive */
 	{ GEN8_PC_CHICKEN_BITS_5, BIT(28), BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_RB_CCU_CNTL, 0x00000068, BIT(PIPE_BR) },
+	/*
+	 * BIT(10): Disable sysmem nonfclear feature
+	 * BIT(9): Disable DINT to c/z be data forwarding
+	 */
+	{ GEN8_RB_CCU_DBG_ECO_CNTL, BIT(10) | BIT(9), BIT(PIPE_BR) },
 	/* GEN8_RB_CCU_NC_MODE_CNTL explicitly set elsewhere */
 	/* GEN8_RB_CMP_NC_MODE_CNTL explicitly set elsewhere */
 	/* Disable early EOBlk return */
