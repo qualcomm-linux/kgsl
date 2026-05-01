@@ -360,4 +360,13 @@ int gen8_gmu_add_to_minidump(struct adreno_device *adreno_dev);
  * Returns true on active or false otherwise
  */
 bool gen8_gmu_rpmh_pwr_state_is_active(struct kgsl_device *device);
+
+/**
+ * gen8_gmu_malu_is_on - Check the state of MALU HW
+ * @adreno_dev: Pointer to the adreno device
+ *
+ * Returns true on active or false otherwise
+ */
+bool gen8_gmu_malu_is_on(struct adreno_device *adreno_dev);
+
 #endif

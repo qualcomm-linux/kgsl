@@ -224,6 +224,9 @@ struct kgsl_snapshot_mvc_regs_v3 {
 /* Slice mask info */
 #define SNAPSHOT_DEBUG_SLICE_MASK 8192
 
+/* Malu GDSC on/off */
+#define SNAPSHOT_DEBUG_MALU_STATUS 8194
+
 struct kgsl_snapshot_debug {
 	int type;    /* Type identifier for the attached tata */
 	int size;   /* Size of the section in dwords */

@@ -908,6 +908,25 @@ static size_t gen8_snapshot_rbbm_status(struct kgsl_device *device, u8 *buf,
 	return DEBUG_SECTION_SZ(1);
 }
 
+static size_t gen8_snapshot_malu_status(struct kgsl_device *device, u8 *buf,
+		size_t remain, void *priv)
+{
+	struct kgsl_snapshot_debug *header = (struct kgsl_snapshot_debug *)buf;
+	u32 *data = (u32 *)(buf + sizeof(*header));
+
+	if (remain < DEBUG_SECTION_SZ(1)) {
+		SNAPSHOT_ERR_NOMEM(device, "MALU STATUS");
+		return 0;
+	}
+
+	/* Dump the malu status information */
+	header->type = SNAPSHOT_DEBUG_MALU_STATUS;
+	header->size = 1;
+	*data = gen8_gmu_malu_is_on(ADRENO_DEVICE(device));
+
+	return DEBUG_SECTION_SZ(1);
+}
+
 static size_t gen8_snapshot_slice_mask(struct kgsl_device *device, u8 *buf,
 		size_t remain, void *priv)
 {
@@ -2071,6 +2090,9 @@ void gen8_snapshot(struct adreno_device *adreno_dev,
 
 	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
 		snapshot, gen8_snapshot_rbbm_status, NULL);
+
+	kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_DEBUG,
+		snapshot, gen8_snapshot_malu_status, NULL);
 
 	gen8_snapshot_cx_debugbus(adreno_dev, snapshot);
 
