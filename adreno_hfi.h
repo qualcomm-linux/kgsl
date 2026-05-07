@@ -10,7 +10,7 @@
 
 #define HW_FENCE_QUEUE_SIZE		SZ_4K
 #define HFI_QUEUE_SIZE			SZ_4K /* bytes, must be base 4dw */
-#define MAX_RCVD_PAYLOAD_SIZE		16 /* dwords */
+#define MAX_RCVD_PAYLOAD_SIZE		32 /* dwords */
 #define MAX_RCVD_SIZE			(MAX_RCVD_PAYLOAD_SIZE + 3) /* dwords */
 #define HFI_MAX_MSG_SIZE		(SZ_1K)
 
