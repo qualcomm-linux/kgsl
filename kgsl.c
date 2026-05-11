@@ -24,6 +24,7 @@
 #include <linux/security.h>
 #include <linux/sort.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 #include <soc/qcom/secure_buffer.h>
 
 #include "adreno.h"
@@ -5140,6 +5141,18 @@ static struct kobj_type kgsl_gpu_sysfs_ktype = {
 	.release = kgsl_gpu_sysfs_release,
 };
 
+#if (KERNEL_VERSION(7, 2, 0) <= LINUX_VERSION_CODE)
+static void kgsl_dev_set_dma_coherent(struct device *dev)
+{
+	dev_set_dma_coherent(dev);
+}
+#else
+static void kgsl_dev_set_dma_coherent(struct device *dev)
+{
+	dev->dma_coherent = true;
+}
+#endif
+
 static int _register_device(struct kgsl_device *device)
 {
 	static u64 dma_mask = (u64)DMA_BIT_MASK(64);
@@ -5189,7 +5202,7 @@ static int _register_device(struct kgsl_device *device)
 	 */
 	if (kgsl_mmu_has_feature(device, KGSL_MMU_IO_COHERENT) &&
 		IS_ENABLED(CONFIG_QCOM_KGSL_IOCOHERENCY_DEFAULT))
-		device->dev->dma_coherent = true;
+		kgsl_dev_set_dma_coherent(device->dev);
 
 	dma_set_max_seg_size(device->dev, (u32)DMA_BIT_MASK(32));
 
