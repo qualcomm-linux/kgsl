@@ -4821,7 +4821,7 @@ static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {
 	{ GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1, 0x00000002, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_CHICKEN_BITS_1, 0x00000003, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_CHICKEN_BITS_2, 0x00000200, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_PC_CHICKEN_BITS_3, 0x00500000, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_3, 0x00400000, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_PC_CHICKEN_BITS_4, 0x00500050, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	/* Disable GS Quad primitive */
 	{ GEN8_PC_CHICKEN_BITS_5, BIT(28), BIT(PIPE_BV) | BIT(PIPE_BR) },
@@ -4860,11 +4860,12 @@ static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {
 	{ GEN8_SP_CHICKEN_BITS_5, BIT(3), BIT(PIPE_NONE) },
 	/* GEN8_SP_NC_MODE_CNTL explicitly set elsewhere */
 	{ GEN8_SP_PERFCTR_SHADER_MASK, 0x0000003f, BIT(PIPE_NONE) },
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, 0x04000000, BIT(PIPE_NONE) },
 	/* HLSQ ignores the shared constant feedback from SP:MAS */
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_1, BIT(17), BIT(PIPE_NONE) },
 	{ GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP, 0x00000080, BIT(PIPE_NONE) },
 	{ GEN8_SP_READ_SEL, 0x0001ff00, BIT(PIPE_NONE) },
-	{ GEN8_SP_L0_PERF_TUNE, 0x00000091, BIT(PIPE_NONE) },
+	{ GEN8_SP_L0_PERF_TUNE, 0x00000024, BIT(PIPE_NONE) },
 	/* BIT(20): Disable alpha only optimization in TP */
 	{ GEN8_TPL1_DBG_ECO_CNTL, 0x10100000, BIT(PIPE_NONE) },
 	{ GEN8_TPL1_DBG_ECO_CNTL1, 0x00000720, BIT(PIPE_NONE) },
@@ -4884,7 +4885,7 @@ static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {
 	{ GEN8_VFD_CB_BUSY_REQ_CNT, 0x00200020, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VFD_CB_LP_REQ_CNT, 0x00080020, BIT(PIPE_BV) | BIT(PIPE_BR) },
 	{ GEN8_VPC_FLATSHADE_MODE_CNTL, 0x00000001, BIT(PIPE_BV) | BIT(PIPE_BR) },
-	{ GEN8_VSC_VISIBILITY_FLUSH_CNTL, 0x00100010, BIT(PIPE_NONE) },
+	{ GEN8_VSC_VISIBILITY_FLUSH_CNTL, 0x00080004, BIT(PIPE_NONE) },
 	{ 0 },
 };
 
@@ -4914,8 +4915,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_14_0 = {
 	.zap_name = "gen81100_zap.mbn",
 	.ao_hwcg = gen8_2_0_ao_hwcg_regs,
 	.ao_hwcg_count = ARRAY_SIZE(gen8_2_0_ao_hwcg_regs),
-	.gbif = gen8_0_0_gbif_cx_regs,
-	.gbif_count = ARRAY_SIZE(gen8_0_0_gbif_cx_regs),
+	.gbif = gen8_11_0_gbif_cx_regs,
+	.gbif_count = ARRAY_SIZE(gen8_11_0_gbif_cx_regs),
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen8_11_0_protected_regs,
 	.nonctxt_regs = gen8_14_0_nonctxt_regs,
