@@ -4420,7 +4420,7 @@ static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
 			.mode = 0,
 			.sid_val = 0xC,
 			.mit_time = 5,
-			.curr_limit = 6000,
+			.curr_limit = 30000,
 		}
 	},
 	{
@@ -4431,10 +4431,10 @@ static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
 			.enable = 1,
 			.msg_path = 0,
 			.lkgen = 0,
-			.mode = 0,
+			.mode = BIT(1),
 			.sid_val = 0x12,
 			.mit_time = 2000,
-			.curr_limit = 6000,
+			.curr_limit = 5000,
 		}
 	},
 	{
@@ -4446,7 +4446,7 @@ static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
 			.msg_path = 0,
 			.lkgen = 0,
 			.mode = 0,
-			.sid_val = 7,
+			.sid_val = 0x8,
 			.mit_time = 3,
 			.curr_limit = 30000,
 		}
@@ -4459,10 +4459,10 @@ static const struct hfi_limits_mit_tbl gen8_11_0_limits_mit_tbl[] = {
 			.enable = 0,
 			.msg_path = 0,
 			.lkgen = 0,
-			.mode = 0,
-			.sid_val = 7,
+			.mode = BIT(1),
+			.sid_val = 0x8,
 			.mit_time = 3,
-			.curr_limit = 6000,
+			.curr_limit = 5000,
 		}
 	},
 };
