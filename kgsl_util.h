@@ -335,4 +335,16 @@ int cmp_u32(const void *first, const void *second);
 #define kgsl_nth_page(page, n) nth_page((page), (n))
 #endif
 
+/*
+ * Create and wake a kthread worker. On kernel versions below 6.14, kthread_create_worker
+ * created a kthread worker and immediately woke it up. This was changed on kernel version 6.14
+ * to only create the kthread worker. Use kthread_run_worker to restore the kthread worker
+ * behavior.
+ */
+#if (KERNEL_VERSION(6, 14, 0) <= LINUX_VERSION_CODE)
+#define kgsl_kthread_run_worker kthread_run_worker
+#else
+#define kgsl_kthread_run_worker kthread_create_worker
+#endif
+
 #endif

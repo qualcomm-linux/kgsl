@@ -5330,7 +5330,7 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	if (status)
 		goto error;
 
-	device->events_worker = kthread_create_worker(0, "kgsl-events");
+	device->events_worker = kgsl_kthread_run_worker(0, "kgsl-events");
 
 	if (IS_ERR(device->events_worker)) {
 		status = PTR_ERR(device->events_worker);
