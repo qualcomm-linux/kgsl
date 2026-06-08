@@ -4389,7 +4389,7 @@ static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
 	.domain = {
 		/* GFX domain */
 		{
-			.data0 = CLX_DATA(60, 6, 1, 1),
+			.data0 = CLX_DATA(60, 5, 0, 1),
 			.clxt = 0,
 			.clxh = 0,
 			.urgmode = 1,
@@ -4398,12 +4398,12 @@ static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
 		},
 		/* MxG domain */
 		{
-			.data0 = CLX_DATA(60, 1, 1, 1),
+			.data0 = CLX_DATA(30, 1, 1, 1),
 			.clxt = 0,
 			.clxh = 0,
 			.urgmode = 1,
 			.lkgen = 0,
-			.currbudget = 50,
+			.currbudget = 100,
 		},
 	},
 };
