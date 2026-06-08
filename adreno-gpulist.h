@@ -4863,6 +4863,8 @@ static const struct gen8_nonctxt_regs gen8_14_0_nonctxt_regs[] = {
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL, 0x04000000, BIT(PIPE_NONE) },
 	/* HLSQ ignores the shared constant feedback from SP:MAS */
 	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_1, BIT(17), BIT(PIPE_NONE) },
+	/* Disable HLSQ large instruction async mode check */
+	{ GEN8_SP_HLSQ_DBG_ECO_CNTL_3, BIT(1), BIT(PIPE_NONE) },
 	{ GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP, 0x00000080, BIT(PIPE_NONE) },
 	{ GEN8_SP_READ_SEL, 0x0001ff00, BIT(PIPE_NONE) },
 	{ GEN8_SP_L0_PERF_TUNE, 0x00000024, BIT(PIPE_NONE) },
