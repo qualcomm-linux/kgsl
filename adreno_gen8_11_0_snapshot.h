@@ -8,7 +8,6 @@
 #include "adreno_gen8_snapshot.h"
 
 static const u32 gen8_11_0_debugbus_blocks[] = {
-	DEBUGBUS_GBIF_GX_GC_US_I_0,
 	DEBUGBUS_GMU_GX_GC_US_I_0,
 	DEBUGBUS_DBGC_GC_US_I_0,
 	DEBUGBUS_RBBM_GC_US_I_0,
@@ -548,6 +547,17 @@ static const u32 gen8_11_0_ahb_precd_gpu_slice_registers[] = {
 static_assert(IS_ALIGNED(sizeof(gen8_11_0_ahb_precd_gpu_slice_registers), 8));
 
 /*
+ * Block   : ['AHB_SECURE']
+ * REGION  : UNSLICE
+ * pairs   : 3 (Regs:8)
+ */
+static const u32 gen8_11_0_ahb_secure_gpu_registers[] = {
+	 0x0f400, 0x0f400, 0x0f800, 0x0f804, 0x0fc00, 0x0fc01,
+	 UINT_MAX, UINT_MAX,
+};
+static_assert(IS_ALIGNED(sizeof(gen8_11_0_ahb_secure_gpu_registers), 8));
+
+/*
  * Block   : ['GBIF']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
@@ -567,7 +577,7 @@ static_assert(IS_ALIGNED(sizeof(gen8_11_0_gbif_registers), 8));
  * Block   : ['VFD', 'VPC', 'VSC']
  * REGION  : UNSLICE
  * Pipeline: PIPE_NONE
- * pairs   : 118 (Regs:1221)
+ * pairs   : 115 (Regs:1213)
  */
 static const u32 gen8_11_0_gpu_registers[] = {
 	 0x00008, 0x0000d, 0x00010, 0x00011, 0x00018, 0x00018, 0x0001e, 0x0001e,
@@ -598,7 +608,6 @@ static const u32 gen8_11_0_gpu_registers[] = {
 	 0x0ed52, 0x0ed52, 0x0ed66, 0x0ed68, 0x0ed6b, 0x0ed6d, 0x0ed6f, 0x0ed6f,
 	 0x0ed80, 0x0ed81, 0x0ed85, 0x0ed85, 0x0ed87, 0x0ed87, 0x0ed8a, 0x0ed8a,
 	 0x0ed92, 0x0ed92, 0x0eda6, 0x0eda8, 0x0edab, 0x0edad, 0x0edaf, 0x0edaf,
-	 0x0f400, 0x0f400, 0x0f800, 0x0f804, 0x0fc00, 0x0fc01,
 	 UINT_MAX, UINT_MAX,
 };
 static_assert(IS_ALIGNED(sizeof(gen8_11_0_gpu_registers), 8));
@@ -2491,6 +2500,7 @@ static struct gen8_reg_list gen8_11_0_ahb_registers[] = {
 	{ UNSLICE, gen8_11_0_gbif_registers },
 	{ UNSLICE, gen8_11_0_ahb_precd_gpu_registers },
 	{ SLICE, gen8_11_0_ahb_precd_gpu_slice_registers },
+	{ UNSLICE, gen8_11_0_ahb_secure_gpu_registers },
 };
 
 static struct gen8_reg_list gen8_11_0_gmu_registers[] = {
