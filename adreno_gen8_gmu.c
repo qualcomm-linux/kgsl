@@ -11,6 +11,7 @@
 #include <linux/interconnect.h>
 #include <linux/io.h>
 #include <linux/kobject.h>
+#include <linux/pm_domain.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
 #include <linux/vmalloc.h>
@@ -1122,6 +1123,17 @@ static inline void gen8_gbif_gx_reinit(struct kgsl_device *device)
 		dev_err(device->dev, "GBIF reinit timed out: ack = 0x%x\n", ack);
 }
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static void gen8_genpd_synced_poweroff(struct device *dev)
+{
+	dev_pm_genpd_synced_poweroff(dev);
+}
+#else
+static inline void gen8_genpd_synced_poweroff(struct device *dev)
+{
+}
+#endif
+
 static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 {
 	struct gen8_gmu_device *gmu = to_gen8_gmu(adreno_dev);
@@ -1160,6 +1172,12 @@ static void gen8_gmu_pwrctrl_suspend(struct adreno_device *adreno_dev)
 	 */
 	if (gen8_gmu_gx_is_on(adreno_dev)) {
 		kgsl_pwrctrl_enable_gx_gdsc(device);
+		/*
+		 * The gxclkctl driver implements a custom disable callback that prevents
+		 * the OS from collapsing GX GDSC unless the GenPD synced_poweroff flag
+		 * is set.
+		 */
+		gen8_genpd_synced_poweroff(device->pwrctrl.gx_pd);
 		kgsl_pwrctrl_disable_gx_gdsc(device);
 	}
 
