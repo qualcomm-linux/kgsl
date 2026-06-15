@@ -16,6 +16,7 @@
 #include <linux/thermal.h>
 #include <linux/msm_kgsl.h>
 #include <linux/units.h>
+#include <linux/version.h>
 #include <soc/qcom/dcvs.h>
 
 #include "kgsl_bus.h"
@@ -2020,6 +2021,24 @@ static const struct thermal_cooling_device_ops kgsl_cooling_ops = {
 	.set_cur_state = kgsl_cooling_set_cur_state,
 };
 
+#if (KERNEL_VERSION(7, 2, 0) <= LINUX_VERSION_CODE)
+static struct thermal_cooling_device *
+kgsl_thermal_of_cooling_device_register(struct device_node *np,
+		const char *type, void *devdata,
+		const struct thermal_cooling_device_ops *ops)
+{
+	return thermal_of_cooling_device_register(np, 0, type, devdata, ops);
+}
+#else
+static struct thermal_cooling_device *
+kgsl_thermal_of_cooling_device_register(struct device_node *np,
+		const char *type, void *devdata,
+		const struct thermal_cooling_device_ops *ops)
+{
+	return thermal_of_cooling_device_register(np, type, devdata, ops);
+}
+#endif
+
 static int register_thermal_cooling_device(struct kgsl_device *device, struct device_node *np)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
@@ -2031,7 +2050,7 @@ static int register_thermal_cooling_device(struct kgsl_device *device, struct de
 	if (ret)
 		goto err;
 
-	pwr->cooling_dev = thermal_of_cooling_device_register(np, name, device,
+	pwr->cooling_dev = kgsl_thermal_of_cooling_device_register(np, name, device,
 			&kgsl_cooling_ops);
 	if (IS_ERR(pwr->cooling_dev)) {
 		dev_pm_qos_remove_request(&pwr->pmqos_max_freq);
