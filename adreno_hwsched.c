@@ -326,6 +326,16 @@ done:
 	return entry;
 }
 
+void adreno_hwsched_retire_cmdlist_obj(struct adreno_device *adreno_dev,
+				       struct cmd_list_obj *obj)
+{
+	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
+
+	list_del_init(&obj->node);
+	kmem_cache_free(obj_cache, obj);
+	hwsched->inflight--;
+}
+
 int adreno_hwsched_process_mem_alloc(struct adreno_device *adreno_dev,
 	struct hfi_mem_alloc_desc *mad)
 {
@@ -1838,9 +1848,7 @@ void adreno_hwsched_replay(struct adreno_device *adreno_dev)
 
 		retired++;
 
-		list_del_init(&obj->node);
-		kmem_cache_free(obj_cache, obj);
-		hwsched->inflight--;
+		adreno_hwsched_retire_cmdlist_obj(adreno_dev, obj);
 	}
 
 	if (hwsched->recurring_cmdobj) {
@@ -1937,7 +1945,7 @@ static struct cmd_list_obj *get_active_cmdobj_lpac(
 	list_for_each_entry_safe(obj, tmp, &hwsched->cmd_list, node) {
 		drawobj = obj->drawobj;
 
-		if (!(kgsl_context_is_lpac(drawobj->context)))
+		if (!is_cmdobj(drawobj) || !kgsl_context_is_lpac(drawobj->context))
 			continue;
 
 		kgsl_readtimestamp(device, drawobj->context,
