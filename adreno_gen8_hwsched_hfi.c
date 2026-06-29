@@ -4248,7 +4248,7 @@ static int gen8_hwsched_hfi_msg_reply(struct adreno_device *adreno_dev,
 }
 
 static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
-			  u32 mask, const char *client)
+			  u32 mask, u32 ack_mask, const char *client)
 {
 	u32 ack;
 	unsigned long t;
@@ -4258,13 +4258,13 @@ static void _do_gbif_halt(struct kgsl_device *device, u32 reg, u32 ack_reg,
 	t = jiffies + msecs_to_jiffies(100);
 	do {
 		kgsl_regread(device, ack_reg, &ack);
-		if ((ack & mask) == mask)
+		if ((ack & ack_mask) == ack_mask)
 			return;
 		usleep_range(10, 100);
 	} while (!time_after(jiffies, t));
 
 	kgsl_regread(device, ack_reg, &ack);
-	if ((ack & mask) == mask)
+	if ((ack & ack_mask) == ack_mask)
 		return;
 
 	dev_err(device->dev, "%s GBIF halt timed out\n", client);
@@ -4307,10 +4307,18 @@ int gen8_hwsched_soft_reset(struct adreno_device *adreno_dev,
 	gen8_disable_gpu_irq(adreno_dev);
 
 	/* Halt GX traffic */
-	_do_gbif_halt(device, GEN8_RBBM_GBIF_HALT,
-			GEN8_RBBM_GBIF_HALT_ACK,
-			GEN8_GBIF_GX_HALT_MASK,
-			"GX");
+	if (adreno_is_gen8_11_x(adreno_dev)) {
+		/*
+		 * On gen8_11_x targets, RBBM_GBIF_HALT_ACK may be prematurely set. Use the updated
+		 * GX halt / acknowledgment sequence per recommendation.
+		 */
+		_do_gbif_halt(device, GEN8_RBBM_GBIF_GX_DBG_HALT_CTRL,
+				GEN8_RBBM_GBIF_GX_DBG_HALT_STATUS, GEN8_GBIF_GX_HALT_CTRL_MASK,
+				GEN8_GBIF_GX_HALT_STATUS_MASK, "GX");
+	} else {
+		_do_gbif_halt(device, GEN8_RBBM_GBIF_HALT, GEN8_RBBM_GBIF_HALT_ACK,
+				GEN8_GBIF_GX_HALT_MASK, GEN8_GBIF_GX_HALT_ACK_MASK, "GX");
+	}
 
 	kgsl_regwrite(device, GEN8_RBBM_SW_RESET_CMD, 0x1);
 

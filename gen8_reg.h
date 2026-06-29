@@ -518,6 +518,8 @@
 
 #define GEN8_RBBM_PERFCTR_SRAM_INIT_CMD          0x449
 #define GEN8_RBBM_PERFCTR_FLUSH_HOST_CMD         0x44c
+#define GEN8_RBBM_GBIF_GX_DBG_HALT_CTRL          0x44d
+#define GEN8_RBBM_GBIF_GX_DBG_HALT_STATUS        0x44e
 #define GEN8_RBBM_PERFCTR_CNTL                   0x460
 
 /* GPU Slice registers */
@@ -1322,6 +1324,9 @@
 #define GEN8_GBIF_CLIENT_HALT_MASK        BIT(0)
 #define GEN8_GBIF_ARB_HALT_MASK           BIT(1)
 #define GEN8_GBIF_GX_HALT_MASK            BIT(0)
+#define GEN8_GBIF_GX_HALT_ACK_MASK        BIT(0)
+#define GEN8_GBIF_GX_HALT_CTRL_MASK       (BIT(4) | BIT(0))
+#define GEN8_GBIF_GX_HALT_STATUS_MASK     BIT(1)
 #define GEN8_GBIF_REINIT_GX_IDLE_MASK     BIT(0)
 
 #define GEN8_GBIF_PERF_PWR_CNT_EN                0x3cc0
