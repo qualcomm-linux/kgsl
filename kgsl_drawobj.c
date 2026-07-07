@@ -563,7 +563,7 @@ static int drawobj_add_sync_timeline(struct kgsl_device *device,
 		return -EFAULT;
 
 	fence = kgsl_timelines_to_fence_array(device, sync.timelines,
-		sync.count, sync.timelines_size, false);
+		sync.count, sync.timelines_size);
 	if (IS_ERR(fence))
 		return PTR_ERR(fence);
 

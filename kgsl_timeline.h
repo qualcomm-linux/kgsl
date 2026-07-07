@@ -144,16 +144,12 @@ static inline void kgsl_timeline_put(struct kgsl_timeline *timeline)
  * @timelines: Userspace pointer to an array of &struct kgsl_timeline_val
  * @count: Number of entries in @timelines
  * @usize: Size of each entry in @timelines
- * @any: True if the fence should expire on any timeline expiring or false if it
- * should wait until all timelines have expired
  *
- * Give a list of &struct kgsl_timeline_val entries, create a dma-fence-array
- * containing fences for each timeline/seqno pair. If @any is set the
- * dma-fence-array will be set to expire if any of the encapsulated timeline
- * fences expire.  If @any is false, then the fence will wait for ALL of the
- * encapsulated timeline fences to expire.
+ * Given a list of &struct kgsl_timeline_val entries, create a dma-fence-array
+ * containing fences for each timeline/seqno pair. The fence will wait for ALL
+ * of the encapsulated timeline fences to expire.
  */
 struct dma_fence *kgsl_timelines_to_fence_array(struct kgsl_device *device,
-		u64 timelines, u32 count, u64 usize, bool any);
+		u64 timelines, u32 count, u64 usize);
 
 #endif

@@ -9,6 +9,7 @@
 #include <linux/list.h>
 #include <linux/kref.h>
 #include <linux/sync_file.h>
+#include <linux/version.h>
 
 #include "kgsl_device.h"
 #include "kgsl_eventlog.h"
@@ -23,11 +24,20 @@ struct kgsl_timeline_fence {
 	struct list_head node;
 };
 
-struct dma_fence *kgsl_timelines_to_fence_array(struct kgsl_device *device,
-		u64 timelines, u32 count, u64 usize, bool any)
+/*
+ * kgsl_timelines_collect_fences - Collect timeline fences from userspace
+ * @device: A KGSL device handle
+ * @timelines: Userspace pointer to an array of &struct kgsl_timeline_val
+ * @count: Number of entries in @timelines
+ * @usize: Size of each entry in @timelines
+ *
+ * Returns an array of dma_fence pointers on success, or ERR_PTR on failure.
+ */
+static struct dma_fence **kgsl_timelines_collect_fences(
+		struct kgsl_device *device, u64 timelines, u32 count,
+		u64 usize)
 {
 	void __user *uptr = u64_to_user_ptr(timelines);
-	struct dma_fence_array *array;
 	struct dma_fence **fences;
 	int i, ret = 0;
 
@@ -71,21 +81,7 @@ struct dma_fence *kgsl_timelines_to_fence_array(struct kgsl_device *device,
 		uptr += usize;
 	}
 
-	/* No need for a fence array for only one fence */
-	if (count == 1) {
-		struct dma_fence *fence = fences[0];
-
-		kfree(fences);
-		return fence;
-	}
-
-	array = dma_fence_array_create(count, fences,
-		dma_fence_context_alloc(1), 0, any);
-
-	if (array)
-		return &array->base;
-
-	ret = -ENOMEM;
+	return fences;
 err:
 	for (i = 0; i < count; i++) {
 		if (!IS_ERR_OR_NULL(fences[i]))
@@ -94,6 +90,52 @@ err:
 
 	kfree(fences);
 	return ERR_PTR(ret);
+}
+
+#if (KERNEL_VERSION(7, 2, 0) <= LINUX_VERSION_CODE)
+static struct dma_fence_array *kgsl_dma_fence_array_create(int count,
+		struct dma_fence **fences)
+{
+	return dma_fence_array_create(count, fences,
+		dma_fence_context_alloc(1), 0);
+}
+#else
+static struct dma_fence_array *kgsl_dma_fence_array_create(int count,
+		struct dma_fence **fences)
+{
+	return dma_fence_array_create(count, fences,
+		dma_fence_context_alloc(1), 0, false);
+}
+#endif
+
+struct dma_fence *kgsl_timelines_to_fence_array(struct kgsl_device *device,
+		u64 timelines, u32 count, u64 usize)
+{
+	struct dma_fence_array *array;
+	struct dma_fence **fences;
+	int i;
+
+	fences = kgsl_timelines_collect_fences(device, timelines, count, usize);
+	if (IS_ERR(fences))
+		return ERR_CAST(fences);
+
+	if (count == 1) {
+		struct dma_fence *fence = fences[0];
+
+		kfree(fences);
+		return fence;
+	}
+
+	array = kgsl_dma_fence_array_create(count, fences);
+
+	if (array)
+		return &array->base;
+
+	for (i = 0; i < count; i++)
+		dma_fence_put(fences[i]);
+
+	kfree(fences);
+	return ERR_PTR(-ENOMEM);
 }
 
 void kgsl_timeline_destroy(struct kref *kref)
@@ -452,9 +494,11 @@ long kgsl_ioctl_timeline_wait(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_timeline_wait *param = data;
-	struct dma_fence *fence;
+	struct dma_fence_array *array;
+	struct dma_fence **fences;
 	unsigned long timeout;
 	signed long ret;
+	int i;
 
 	if (param->flags != KGSL_TIMELINE_WAIT_ANY &&
 		param->flags != KGSL_TIMELINE_WAIT_ALL)
@@ -463,12 +507,11 @@ long kgsl_ioctl_timeline_wait(struct kgsl_device_private *dev_priv,
 	if (param->padding)
 		return -EINVAL;
 
-	fence = kgsl_timelines_to_fence_array(device, param->timelines,
-		param->count, param->timelines_size,
-		(param->flags == KGSL_TIMELINE_WAIT_ANY));
+	fences = kgsl_timelines_collect_fences(device, param->timelines,
+		param->count, param->timelines_size);
 
-	if (IS_ERR(fence))
-		return PTR_ERR(fence);
+	if (IS_ERR(fences))
+		return PTR_ERR(fences);
 
 	if (param->tv_sec >= KTIME_SEC_MAX)
 		timeout = MAX_SCHEDULE_TIMEOUT;
@@ -480,19 +523,30 @@ long kgsl_ioctl_timeline_wait(struct kgsl_device_private *dev_priv,
 
 	trace_kgsl_timeline_wait(param->flags, param->tv_sec, param->tv_nsec);
 
-	/* secs.nsecs to jiffies */
-	if (!timeout)
-		ret = dma_fence_is_signaled(fence) ? 0 : -EBUSY;
-	else {
-		ret = dma_fence_wait_timeout(fence, true, timeout);
+	if (param->flags == KGSL_TIMELINE_WAIT_ANY) {
+		ret = dma_fence_wait_any_timeout(fences, param->count,
+			true, timeout, NULL);
 
-		if (!ret)
-			ret = -ETIMEDOUT;
-		else if (ret > 0)
-			ret = 0;
+		for (i = 0; i < param->count; i++)
+			dma_fence_put(fences[i]);
+		kfree(fences);
+	} else {
+		array = kgsl_dma_fence_array_create(param->count, fences);
+		if (!array) {
+			for (i = 0; i < param->count; i++)
+				dma_fence_put(fences[i]);
+			kfree(fences);
+			return -ENOMEM;
+		}
+
+		ret = dma_fence_wait_timeout(&array->base, true, timeout);
+		dma_fence_put(&array->base);
 	}
 
-	dma_fence_put(fence);
+	if (!ret)
+		ret = (!timeout) ? -EBUSY : -ETIMEDOUT;
+	else if (ret > 0)
+		ret = 0;
 
 	return ret;
 }
