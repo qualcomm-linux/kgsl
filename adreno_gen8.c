@@ -1789,7 +1789,8 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		if ((r == gen8_ifpc_pwrup_reglist ||
 				r == gen8_1_0_ifpc_pwrup_reglist ||
 				r == gen8_2_0_ifpc_pwrup_reglist ||
-				r == gen8_3_0_ifpc_pwrup_reglist)) {
+				r == gen8_3_0_ifpc_pwrup_reglist ||
+				r == gen8_11_0_ifpc_pwrup_reglist)) {
 			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
 
 			lock->ifpc_list_len += cs_len;
@@ -1807,7 +1808,8 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			if ((reglist[i].regs == gen8_ifpc_pwrup_reglist ||
 				reglist[i].regs == gen8_1_0_ifpc_pwrup_reglist ||
 				reglist[i].regs == gen8_3_0_ifpc_pwrup_reglist ||
-				reglist[i].regs == gen8_2_0_ifpc_pwrup_reglist) &&
+				reglist[i].regs == gen8_2_0_ifpc_pwrup_reglist ||
+				reglist[i].regs == gen8_11_0_ifpc_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 1)) {
 				*dest++ = nc_overrides[j].offset;
 				kgsl_regread(device, nc_overrides[j].offset, dest++);
@@ -1815,7 +1817,8 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 			} else if ((reglist[i].regs == gen8_pwrup_reglist ||
 				reglist[i].regs == gen8_1_0_pwrup_reglist ||
 				reglist[i].regs == gen8_3_0_pwrup_reglist ||
-				reglist[i].regs == gen8_2_0_pwrup_reglist) &&
+				reglist[i].regs == gen8_2_0_pwrup_reglist ||
+				reglist[i].regs == gen8_11_0_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 2)) {
 				*dest++ = nc_overrides[j].offset;
 				kgsl_regread(device, nc_overrides[j].offset, dest++);
