@@ -4384,6 +4384,8 @@ static const struct adreno_a6xx_core adreno_gpu_core_a623 = {
 	.ctxt_record_size = 2496 * 1024,
 };
 
+extern const struct gen8_snapshot_block_list gen8_10_0_snapshot_block_list;
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_10_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_10_0,
@@ -4417,6 +4419,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_10_0 = {
 	.cl_no_ft_timeout_ms = 6500,
 	.ctxt_record_size = (23088 * SZ_1K),
 	.bcl_data = 1,
+	.gen8_snapshot_block_list = &gen8_10_0_snapshot_block_list,
 };
 
 static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
