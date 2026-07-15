@@ -341,6 +341,73 @@ static const u32 gen8_ifpc_pwrup_reglist[] = {
 	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
 };
 
+/* IFPC only static powerup restore list for gen8_1_0 */
+static const u32 gen8_1_0_ifpc_pwrup_reglist[] = {
+	GEN8_RBBM_NC_MODE_CNTL,
+	GEN8_RBBM_SLICE_NC_MODE_CNTL,
+	GEN8_RBBM_SLICE_PERFCTR_CNTL,
+	GEN8_RBBM_SLICE_INTERFACE_HANG_INT_CNTL,
+	GEN8_RBBM_PERFCTR_CNTL,
+	GEN8_SP_NC_MODE_CNTL,
+	GEN8_SP_CHICKEN_BITS_2,
+	GEN8_SP_CHICKEN_BITS_3,
+	GEN8_SP_PERFCTR_SHADER_MASK,
+	GEN8_SP_HLSQ_DBG_ECO_CNTL_2,
+	GEN8_CP_INTERRUPT_STATUS_MASK_GLOBAL,
+	GEN8_CP_PROTECT_REG_GLOBAL,
+	GEN8_CP_PROTECT_REG_GLOBAL + 1,
+	GEN8_CP_PROTECT_REG_GLOBAL + 2,
+	GEN8_CP_PROTECT_REG_GLOBAL + 3,
+	GEN8_CP_PROTECT_REG_GLOBAL + 4,
+	GEN8_CP_PROTECT_REG_GLOBAL + 5,
+	GEN8_CP_PROTECT_REG_GLOBAL + 6,
+	GEN8_CP_PROTECT_REG_GLOBAL + 7,
+	GEN8_CP_PROTECT_REG_GLOBAL + 8,
+	GEN8_CP_PROTECT_REG_GLOBAL + 9,
+	GEN8_CP_PROTECT_REG_GLOBAL + 10,
+	GEN8_CP_PROTECT_REG_GLOBAL + 11,
+	GEN8_CP_PROTECT_REG_GLOBAL + 12,
+	GEN8_CP_PROTECT_REG_GLOBAL + 13,
+	GEN8_CP_PROTECT_REG_GLOBAL + 14,
+	GEN8_CP_PROTECT_REG_GLOBAL + 15,
+	GEN8_CP_PROTECT_REG_GLOBAL + 16,
+	GEN8_CP_PROTECT_REG_GLOBAL + 17,
+	GEN8_CP_PROTECT_REG_GLOBAL + 18,
+	GEN8_CP_PROTECT_REG_GLOBAL + 19,
+	GEN8_CP_PROTECT_REG_GLOBAL + 20,
+	GEN8_CP_PROTECT_REG_GLOBAL + 21,
+	GEN8_CP_PROTECT_REG_GLOBAL + 22,
+	GEN8_CP_PROTECT_REG_GLOBAL + 23,
+	GEN8_CP_PROTECT_REG_GLOBAL + 24,
+	GEN8_CP_PROTECT_REG_GLOBAL + 25,
+	GEN8_CP_PROTECT_REG_GLOBAL + 26,
+	GEN8_CP_PROTECT_REG_GLOBAL + 27,
+	GEN8_CP_PROTECT_REG_GLOBAL + 28,
+	GEN8_CP_PROTECT_REG_GLOBAL + 29,
+	GEN8_CP_PROTECT_REG_GLOBAL + 30,
+	GEN8_CP_PROTECT_REG_GLOBAL + 31,
+	GEN8_CP_PROTECT_REG_GLOBAL + 32,
+	GEN8_CP_PROTECT_REG_GLOBAL + 33,
+	GEN8_CP_PROTECT_REG_GLOBAL + 34,
+	GEN8_CP_PROTECT_REG_GLOBAL + 35,
+	GEN8_CP_PROTECT_REG_GLOBAL + 36,
+	GEN8_CP_PROTECT_REG_GLOBAL + 37,
+	GEN8_CP_PROTECT_REG_GLOBAL + 38,
+	GEN8_CP_PROTECT_REG_GLOBAL + 39,
+	GEN8_CP_PROTECT_REG_GLOBAL + 40,
+	GEN8_CP_PROTECT_REG_GLOBAL + 41,
+	GEN8_CP_PROTECT_REG_GLOBAL + 42,
+	GEN8_CP_PROTECT_REG_GLOBAL + 43,
+	GEN8_CP_PROTECT_REG_GLOBAL + 44,
+	GEN8_CP_PROTECT_REG_GLOBAL + 45,
+	GEN8_CP_PROTECT_REG_GLOBAL + 46,
+	GEN8_CP_PROTECT_REG_GLOBAL + 47,
+	GEN8_CP_PROTECT_REG_GLOBAL + 48,
+	GEN8_CP_PROTECT_REG_GLOBAL + 49,
+	GEN8_CP_PROTECT_REG_GLOBAL + 50,
+	GEN8_CP_PROTECT_REG_GLOBAL + 63,
+};
+
 /* IFPC only static powerup restore list for gen8_2_0 */
 static const u32 gen8_2_0_ifpc_pwrup_reglist[] = {
 	GEN8_RBBM_NC_MODE_CNTL,
@@ -471,6 +538,86 @@ static const u32 gen8_3_0_ifpc_pwrup_reglist[] = {
 	GEN8_CP_PROTECT_REG_GLOBAL + 45,
 	GEN8_CP_PROTECT_REG_GLOBAL + 46,
 	GEN8_CP_PROTECT_REG_GLOBAL + 63,
+};
+
+/* IFPC + Preemption static powerup restore list for gen8_1_0 */
+static const u32 gen8_1_0_pwrup_reglist[] = {
+	GEN8_SP_HLSQ_TIMEOUT_THRESHOLD_DP,
+	GEN8_SP_READ_SEL,
+	GEN8_UCHE_MODE_CNTL,
+	GEN8_UCHE_VARB_IDLE_TIMEOUT,
+	GEN8_UCHE_GBIF_GX_CONFIG,
+	GEN8_UCHE_CCHE_MODE_CNTL,
+	GEN8_UCHE_CCHE_CACHE_WAYS,
+	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_LO,
+	GEN8_UCHE_CCHE_GC_GMEM_RANGE_MIN_HI,
+	GEN8_UCHE_CCHE_TRAP_BASE_LO,
+	GEN8_UCHE_CCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_CCHE_WRITE_THRU_BASE_HI,
+	GEN8_UCHE_WRITE_THRU_BASE_LO,
+	GEN8_UCHE_WRITE_THRU_BASE_HI,
+	GEN8_UCHE_TRAP_BASE_LO,
+	GEN8_UCHE_TRAP_BASE_HI,
+	GEN8_UCHE_CLIENT_PF,
+	GEN8_RB_CMP_NC_MODE_CNTL,
+	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_LO,
+	GEN8_SP_HLSQ_GC_GMEM_RANGE_MIN_HI,
+	GEN8_TPL1_NC_MODE_CNTL,
+	GEN8_TPL1_DBG_ECO_CNTL,
+	GEN8_TPL1_DBG_ECO_CNTL1,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_1,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_2,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_3,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_4,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_5,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_6,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_7,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_8,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_9,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_10,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_11,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_12,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_13,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_14,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_15,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_16,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_17,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_18,
+	GEN8_TPL1_BICUBIC_WEIGHTS_TABLE_19,
+};
+
+/* Dynamic IFPC + Preemption extlist for gen8_1_0 */
+static const struct gen8_pwrup_extlist gen8_1_0_pwrup_extlist[] = {
+	{ GEN8_GRAS_TSEFE_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_GRAS_NC_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_GRAS_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_AUTO_VERTEX_STRIDE, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_1, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_2, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_3, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CHICKEN_BITS_4, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_CONTEXT_SWITCH_STABILIZE_CNTL_1, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_PC_VIS_STREAM_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_RB_CCU_NC_MODE_CNTL, BIT(PIPE_BR) },
+	{ GEN8_RB_CMP_NC_MODE_CNTL, BIT(PIPE_BR) },
+	{ GEN8_RB_RESOLVE_PREFETCH_CNTL, BIT(PIPE_BR) },
+	/* Note: RB_DBG_ECO_CNTL intentionally absent (x285 differs from a840) */
+	{ GEN8_RB_CMP_DBG_ECO_CNTL, BIT(PIPE_BR) },
+	{ GEN8_VFD_DBG_ECO_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_VFD_CB_BV_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_VFD_CB_BR_THRESHOLD, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_VFD_CB_BUSY_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_VFD_CB_LP_REQ_CNT, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_VPC_FLATSHADE_MODE_CNTL, BIT(PIPE_BV) | BIT(PIPE_BR) },
+	{ GEN8_CP_HW_FAULT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
+	{ GEN8_CP_INTERRUPT_STATUS_MASK_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC)
+		| BIT(PIPE_AQE0) | BIT(PIPE_AQE1) | BIT(PIPE_DDE_BR) | BIT(PIPE_DDE_BV) },
+	{ GEN8_CP_PROTECT_CNTL_PIPE, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC) },
+	{ GEN8_CP_PROTECT_REG_PIPE + 15, BIT(PIPE_BR) | BIT(PIPE_BV) | BIT(PIPE_LPAC) },
+	{ GEN8_RB_GC_GMEM_PROTECT, BIT(PIPE_BR) },
+	{ GEN8_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE, BIT(PIPE_BR) },
 };
 
 static const struct gen8_pwrup_extlist gen8_0_0_pwrup_extlist[] = {
@@ -1416,6 +1563,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {
 		reglist[items].regs = gen8_2_0_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_2_0_ifpc_pwrup_reglist);
+	} else if (adreno_is_gen8_1_0(adreno_dev)) {
+		reglist[items].regs = gen8_1_0_ifpc_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen8_1_0_ifpc_pwrup_reglist);
 	} else {
 		reglist[items].regs = gen8_ifpc_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_ifpc_pwrup_reglist);
@@ -1430,6 +1580,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	} else if (adreno_is_gen8_2_x(adreno_dev)) {
 		reglist[items].regs = gen8_2_0_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_2_0_pwrup_reglist);
+	} else if (adreno_is_gen8_1_0(adreno_dev)) {
+		reglist[items].regs = gen8_1_0_pwrup_reglist;
+		reglist[items].count = ARRAY_SIZE(gen8_1_0_pwrup_reglist);
 	} else {
 		reglist[items].regs = gen8_pwrup_reglist;
 		reglist[items].count = ARRAY_SIZE(gen8_pwrup_reglist);
@@ -1450,6 +1603,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		}
 
 		if ((r == gen8_ifpc_pwrup_reglist ||
+				r == gen8_1_0_ifpc_pwrup_reglist ||
 				r == gen8_2_0_ifpc_pwrup_reglist ||
 				r == gen8_3_0_ifpc_pwrup_reglist)) {
 			u32 cs_len = adreno_coresight_patch_pwrup_reglist(adreno_dev, dest);
@@ -1467,6 +1621,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 				continue;
 
 			if ((reglist[i].regs == gen8_ifpc_pwrup_reglist ||
+				reglist[i].regs == gen8_1_0_ifpc_pwrup_reglist ||
 				reglist[i].regs == gen8_3_0_ifpc_pwrup_reglist ||
 				reglist[i].regs == gen8_2_0_ifpc_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 1)) {
@@ -1474,6 +1629,7 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 				kgsl_regread(device, nc_overrides[j].offset, dest++);
 				lock->ifpc_list_len++;
 			} else if ((reglist[i].regs == gen8_pwrup_reglist ||
+				reglist[i].regs == gen8_1_0_pwrup_reglist ||
 				reglist[i].regs == gen8_3_0_pwrup_reglist ||
 				reglist[i].regs == gen8_2_0_pwrup_reglist) &&
 				(nc_overrides[j].list_type == 2)) {
@@ -1520,6 +1676,9 @@ void gen8_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 		if (adreno_is_gen8_2_x(adreno_dev)) {
 			ext_list = gen8_2_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_2_0_pwrup_extlist);
+		} else if (adreno_is_gen8_1_0(adreno_dev)) {
+			ext_list = gen8_1_0_pwrup_extlist;
+			ext_len = ARRAY_SIZE(gen8_1_0_pwrup_extlist);
 		} else {
 			ext_list = gen8_0_0_pwrup_extlist;
 			ext_len = ARRAY_SIZE(gen8_0_0_pwrup_extlist);
