@@ -287,6 +287,11 @@ static inline int qcom_scm_kgsl_set_smmu_lpac_aperture(
  */
 int kgsl_get_ddrtype(void);
 
+static inline void qcom_clk_dump(struct clk *clk, struct regulator *regulator,
+		bool calltrace)
+{
+}
+
 #endif
 
 /**
