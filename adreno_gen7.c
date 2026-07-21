@@ -2337,6 +2337,10 @@ static void gen7_set_isdb_breakpoint_registers(struct adreno_device *adreno_dev)
 	struct clk *clk;
 	int ret;
 
+	/* QDSS unavailable, suppress force panic */
+	if (!IS_ENABLED(CONFIG_QCOM_KGSL_QDSS_STM))
+		goto err;
+
 	if (!device->set_isdb_breakpoint || device->ftbl->is_hwcg_on(device)
 			|| device->qdss_gfx_virt == NULL || !device->force_panic)
 		return;
