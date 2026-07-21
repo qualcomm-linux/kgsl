@@ -2559,10 +2559,13 @@ static int kgsl_iommu_setup_context_common(struct kgsl_mmu *mmu,
 	dev_set_drvdata(&pdev->dev, &context->adreno_smmu);
 
 	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
-	if (!context->domain) {
+	if (IS_ERR_OR_NULL(context->domain)) {
+		ret = (context->domain) ? PTR_ERR(context->domain) : -ENODEV;
+		dev_err(&device->pdev->dev, "Failed to allocate domain for %s: %d\n", name, ret);
+		context->domain = NULL;
 		if (restore_drvdata)
 			dev_set_drvdata(&pdev->dev, kgsl_drvdata);
-		return -ENODEV;
+		goto err_device_put;
 	}
 
 	qcom_iommu_set_fault_model(context->domain, QCOM_IOMMU_FAULT_MODEL_NON_FATAL);
@@ -2575,27 +2578,34 @@ static int kgsl_iommu_setup_context_common(struct kgsl_mmu *mmu,
 	if (restore_drvdata)
 		dev_set_drvdata(&pdev->dev, kgsl_drvdata);
 
-	if (ret) {
-		iommu_domain_free(context->domain);
-		context->domain = NULL;
-		return ret;
-	}
+	if (ret)
+		goto err_domain_free;
 
 	iommu_set_fault_handler(context->domain, handler, mmu);
 
 	context->cb_num = qcom_iommu_get_context_bank_nr(context->domain);
 
-	if (context->cb_num >= 0)
+	if (context->cb_num >= 0) {
+		of_node_put(node);
 		return 0;
+	}
 
+	ret = context->cb_num;
 	dev_err(&device->pdev->dev, "Couldn't get the context bank for %s: %d\n",
-		context->name, context->cb_num);
+		context->name, ret);
 
 	kgsl_detach_iommu_group(context->domain, context->group);
+
+err_domain_free:
 	iommu_domain_free(context->domain);
 	context->domain = NULL;
-
-	return context->cb_num;
+err_device_put:
+	platform_device_put(pdev);
+	context->pdev = NULL;
+err_node_put:
+	of_node_put(node);
+err:
+	return ret;
 }
 
 static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
@@ -2603,21 +2613,35 @@ static int kgsl_iommu_setup_context(struct kgsl_mmu *mmu,
 		struct kgsl_iommu_context *context, const char *name,
 		iommu_fault_handler_t handler)
 {
-	struct device_node *node = of_find_node_by_name(parent, name);
+	struct device_node *node;
 	struct platform_device *pdev;
 	int ret;
 
-	if (!node)
-		return -ENOENT;
+	node = of_find_node_by_name(parent, name);
+	if (!node) {
+		ret = -ENOENT;
+		goto err;
+	}
 
 	pdev = of_find_device_by_node(node);
-	ret = of_dma_configure(&pdev->dev, node, true);
-	of_node_put(node);
+	if (!pdev) {
+		ret = -ENODEV;
+		goto err_node_put;
+	}
 
+	ret = of_dma_configure(&pdev->dev, node, true);
 	if (ret)
-		return ret;
+		goto err_device_put;
 
 	return kgsl_iommu_setup_context_common(mmu, pdev, node, context, name, handler, false);
+
+err_device_put:
+	platform_device_put(pdev);
+	context->pdev = NULL;
+err_node_put:
+	of_node_put(node);
+err:
+	return ret;
 }
 
 static int iommu_probe_user_context(struct kgsl_device *device,
@@ -2737,8 +2761,11 @@ static int iommu_probe_secure_context(struct kgsl_device *device,
 	ratelimit_default_init(&context->ratelimit);
 
 	context->domain = kgsl_iommu_domain_alloc(&context->pdev->dev);
-	if (!context->domain) {
-		ret = -ENODEV;
+	if (IS_ERR_OR_NULL(context->domain)) {
+		ret = (context->domain) ? PTR_ERR(context->domain) : -ENODEV;
+		dev_err(&device->pdev->dev,
+				"Failed to allocate domain for secure context: %d\n", ret);
+		context->domain = NULL;
 		goto err_device_put;
 	}
 
@@ -2783,7 +2810,7 @@ err_device_put:
 err_node_put:
 	of_node_put(node);
 	mmu->secured = false;
-
+	mmu->securepagetable = NULL;
 	return ret;
 }
 
@@ -2871,12 +2898,24 @@ static int kgsl_iommu_setup_context_standard(struct kgsl_mmu *mmu,
 	int ret;
 
 	pdev = of_find_device_by_node(node);
+	if (!pdev) {
+		ret = -ENODEV;
+		goto err_node_put;
+	}
 
 	ret = of_dma_configure(&pdev->dev, node, true);
 	if (ret)
-		return ret;
+		goto err_device_put;
 
 	return kgsl_iommu_setup_context_common(mmu, pdev, node, context, name, handler, true);
+
+err_device_put:
+	platform_device_put(pdev);
+	context->pdev = NULL;
+err_node_put:
+	of_node_put(node);
+err:
+	return ret;
 }
 
 int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev)

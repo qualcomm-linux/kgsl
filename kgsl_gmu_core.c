@@ -708,9 +708,10 @@ int gmu_core_iommu_init(struct kgsl_device *device)
 	int ret;
 
 	device->gmu_core.domain = gmu_core_iommu_domain_alloc(gmu_pdev_dev);
-	if (!device->gmu_core.domain) {
-		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain\n");
-		return -ENODEV;
+	if (IS_ERR_OR_NULL(device->gmu_core.domain)) {
+		ret = (device->gmu_core.domain) ? PTR_ERR(device->gmu_core.domain) : -ENODEV;
+		dev_err(gmu_pdev_dev, "Unable to allocate GMU IOMMU domain: %d\n", ret);
+		return ret;
 	}
 
 	/*
