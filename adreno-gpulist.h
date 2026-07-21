@@ -3747,7 +3747,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_1_0 = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_1_0,
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
-			ADRENO_SOFTFUSE | ADRENO_ACD,
+			ADRENO_SOFTFUSE | ADRENO_ACD | ADRENO_PREEMPTION,
 		.gpudev = &adreno_gen8_gmu_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3784,6 +3784,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_1_0 = {
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
 	.ctxt_record_size = (23088 * SZ_1K),
+	.preempt_level = 1,
 };
 
 static const struct adreno_gen8_core adreno_gpu_core_gen8_5_0 = {
