@@ -2897,6 +2897,9 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 		.gmem_size = SZ_1M,
 		.bus_width = 32,
 		.snapshot_size = SZ_2M,
+		.chipid = 0x43020100,
+		.ubwc_mode = 5,
+		.mal = 32,
 		.highest_bank_bit = 15,
 	},
 	.sqefw_name = "gen70e00_sqe.fw",
@@ -2911,6 +2914,7 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_17_0 = {
 	.hang_detect_cycles = 0xcfffff,
 	.protected_regs = gen7_0_0_protected_regs,
 	.gen7_snapshot_block_list = &gen7_17_0_snapshot_block_list,
+	.preempt_level = 1,
 	.ctxt_record_size = 1536 * 1024
 };
 
