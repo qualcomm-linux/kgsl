@@ -3742,6 +3742,8 @@ static const struct kgsl_regmap_list gen8_1_0_ao_hwcg_regs[] = {
 	{ GEN8_GMUAO_CGC_HYST_CNTL, 0x00055555 },
 };
 
+extern const struct gen8_snapshot_block_list gen8_1_0_snapshot_block_list;
+
 static const struct adreno_gen8_core adreno_gpu_core_gen8_1_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_1_0,
@@ -3780,6 +3782,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_1_0 = {
 	.protected_regs = gen8_1_0_protected_regs,
 	.nonctxt_regs = gen8_1_0_nonctxt_regs,
 	.gmu_hub_clk_freq = 200000000,
+	.gen8_snapshot_block_list = &gen8_1_0_snapshot_block_list,
 	.fast_bus_hint = true,
 	.acv_perfmode_ddr_freq = MHZ_TO_KBPS(2736, 4),
 	.noc_timeout_us = 3410, /* 3.41 msec */
