@@ -1,0 +1,115 @@
+name: owl_build
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image:
+        description: Docker image
+        type: string
+        required: false
+        default: kernel/kmake-image:ver.1.1
+      branch:
+        description: Branch name
+        type: string
+        required: false
+      repo:
+        description: Target repository
+        type: string
+        required: true
+
+jobs:
+  build:
+    runs-on:
+      ubuntu-latest
+    outputs:
+      kernel_version: ${{ steps.build_workspace.outputs.kernel_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: build docker image
+        id: build_docker_image
+        run |
+           docker image   build -t owl_kbuild
+
+      - name: Sync codebase
+        id: sync
+        uses: qualcomm-linux/kernel-config/.github/actions/sync@main
+        with:
+          base_branch: ${{ inputs.branch }}
+          GH_TOKEN: ${{ secrets.PAT }}
+          repo: ${{ inputs.repo }}
+
+      - name: Pull docker image
+        uses: qualcomm-linux/kernel-config/.github/actions/pull_docker_image@main
+        with:
+          image: ${{ inputs.docker_image }}
+          registry: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+      - name: Build workspace
+        id: build_workspace
+        uses: qualcomm-linux/kernel-config/.github/actions/build@main
+        with:
+          docker_image: ${{ inputs.docker_image }}
+          workspace_path: ${{ steps.sync.outputs.workspace_path }}
+          variant: ${{ inputs.variant }}
+
+      - name: Generate flat build
+        id: generate_flat_build
+        uses: qualcomm-linux/kernel-config/.github/actions/flat_meta_generation@main
+        with:
+          docker_image: ${{ inputs.docker_image }}
+          workspace_path: ${{ steps.sync.outputs.workspace_path }}
+          s3_bucket: qli-prd-kernel-gh-artifacts
+          rootfs_matrix: ${{inputs.rootfs_matrix }}
+
+      - name: Create file list for artifacts upload
+        run: |
+          workspace=${{ steps.sync.outputs.workspace_path }}
+          mkdir -p $workspace/../artifacts/
+          touch $workspace/../artifacts/file_list.txt
+          cd $workspace/../kobj/tar-install
+          tar -cJf ${{ github.workspace }}/modules.tar.xz lib/modules/
+
+          echo "${{ github.workspace }}/modules.tar.xz" >> $workspace/../artifacts/file_list.txt
+          echo "$workspace/../kobj/arch/arm64/boot/Image" >> $workspace/../artifacts/file_list.txt
+          echo "$workspace/../kobj/vmlinux" >> $workspace/../artifacts/file_list.txt
+
+          # Loop through all machines from the rootfs_matrix input
+          machines='${{ inputs.rootfs_matrix }}'
+          for machine in $(echo "$machines" | jq -r '.[].machine'); do
+            echo "$workspace/../kobj/arch/arm64/boot/dts/qcom/${machine}.dtb" >> $workspace/../artifacts/file_list.txt
+          done
+
+          # Loop through all rootfs_matrix and add flat meta to the list
+          rootfs_matrix='${{ inputs.rootfs_matrix }}'
+          for row in $(echo "$rootfs_matrix" | jq -c '.[]'); do
+            machine=$(echo "$row" | jq -r '.machine')
+            rootfs=$(echo "$row" | jq -r '.rootfs')
+            echo $workspace/qcom-multimedia-image-${rootfs}.rootfs.qcomflash.tar.gz >> $workspace/../artifacts/file_list.txt
+          done
+
+      - name: Clean up
+        run: |
+          rm -rf artifacts
+          rm -rf kobj
+          rm -rf modules.tar.xz
+
+      - name: Update summary
+        if: success() || failure()
+        shell: bash
+        run: |
+          if [ ${{ steps.build_workspace.outcome }} == 'success' ]; then
+            echo "Build was successful"
+            summary=":heavy_check_mark: Build Success"
+          else
+            echo "Build failed"
+            summary=":x: Build Failed"
+          fi
+          SUMMARY='
+          <details><summary><i>Build Summary</i></summary>
+          '${summary}'
+          </details>
+          '
+          echo -e "$SUMMARY" >> $GITHUB_STEP_SUMMARY
