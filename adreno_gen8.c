@@ -1404,7 +1404,7 @@ void gen8_get_gpu_slice_info(struct adreno_device *adreno_dev)
 	struct gen8_device *gen8_dev = container_of(adreno_dev, struct gen8_device, adreno_dev);
 
 	if (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_11_x(adreno_dev) ||
-			adreno_is_gen8_1_0(adreno_dev)) {
+			adreno_is_gen8_1_0(adreno_dev) || adreno_is_gen8_10_0(adreno_dev)) {
 		if (adreno_slice_mask_override != U32_MAX)
 			kgsl_regwrite(device, GEN8_GPU_CX_MISC_SLICE_ENABLE_TEST,
 					adreno_slice_mask_override);
@@ -2260,10 +2260,12 @@ int gen8_start(struct adreno_device *adreno_dev)
 	 * Enable hardware clock gating here to prevent any register access
 	 * issue due to internal clock gating.
 	 *
-	 * Gen8_2_0 and gen8_1_0 need to set up HW clock gating after
+	 * Gen8_2_0, gen8_1_0 and gen8_10_0 need to set up HW clock gating after
 	 * CP INIT in the bootup sequence.
 	 */
-	if (!(adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)))
+	if (!(adreno_is_gen8_2_x(adreno_dev) ||
+		  adreno_is_gen8_1_0(adreno_dev) ||
+		  adreno_is_gen8_10_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	/* Ensure very last register write is finished before we return from this function */
@@ -2552,7 +2554,8 @@ int gen8_rb_start(struct adreno_device *adreno_dev)
 	}
 
 	ret = gen8_post_start(adreno_dev);
-	if (!ret && (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev)))
+	if (!ret && (adreno_is_gen8_2_x(adreno_dev) || adreno_is_gen8_1_0(adreno_dev) ||
+			adreno_is_gen8_10_0(adreno_dev)))
 		gen8_hwcg_set(adreno_dev, true);
 
 	return ret;
@@ -3831,6 +3834,11 @@ u32 gen8_get_gmem_size(struct adreno_device *adreno_dev)
 			return (adreno_dev->gpucore->gmem_size / GEN8_2_0_NUM_PHYSICAL_SLICES) *
 			gen8_get_num_slices(adreno_dev);
 	}
+
+	if (adreno_is_gen8_10_0(adreno_dev))
+		return (adreno_dev->gpucore->gmem_size / GEN8_10_0_NUM_PHYSICAL_SLICES) *
+			gen8_get_num_slices(adreno_dev);
+
 	return adreno_dev->gpucore->gmem_size;
 }
 
