@@ -230,21 +230,29 @@ int adreno_request_firmware(const struct firmware **fw, const char *name,
 	struct adreno_fw_work work = {
 		.fw = fw, .name = name, .device = device,
 	};
+	int ret;
 
-	INIT_WORK(&work.work, adreno_fw_load_worker);
-	if (!adreno_fw_dispatch(&work))
-		return 0;
+	INIT_WORK_ONSTACK(&work.work, adreno_fw_load_worker);
+	ret = adreno_fw_dispatch(&work);
+	if (!ret)
+		goto out;
 
 	work.name = kasprintf(GFP_KERNEL, "qcom/%s", name);
-	if (!work.name)
-		return -ENOMEM;
+	if (!work.name) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
-	if (adreno_fw_dispatch(&work) && log_error)
+	ret = adreno_fw_dispatch(&work);
+	if (ret && log_error)
 		dev_err(device, "Firmware request for %s failed with error %d\n",
-				name, work.ret);
+				name, ret);
 	kfree(work.name);
 
-	return work.ret;
+out:
+	destroy_work_on_stack(&work.work);
+
+	return ret;
 }
 
 int adreno_get_firmware(struct adreno_device *adreno_dev,
