@@ -294,6 +294,46 @@ static inline void qcom_clk_dump(struct clk *clk, struct regulator *regulator,
 
 #endif
 
+#if IS_ENABLED(CONFIG_QCOM_PAS)
+#include <linux/firmware/qcom/qcom_pas.h>
+
+static inline int kgsl_pas_auth_and_reset(u32 pas_id)
+{
+	return qcom_pas_auth_and_reset(pas_id);
+}
+
+static inline int kgsl_pas_shutdown(u32 pas_id)
+{
+	return qcom_pas_shutdown(pas_id);
+}
+
+static inline int kgsl_pas_set_remote_state(u32 state, u32 pas_id)
+{
+	return qcom_pas_set_remote_state(state, pas_id);
+}
+#else
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+#include <linux/firmware/qcom/qcom_scm.h>
+#else
+#include <linux/qcom_scm.h>
+#endif
+
+static inline int kgsl_pas_auth_and_reset(u32 pas_id)
+{
+	return qcom_scm_pas_auth_and_reset(pas_id);
+}
+
+static inline int kgsl_pas_shutdown(u32 pas_id)
+{
+	return qcom_scm_pas_shutdown_retry(pas_id);
+}
+
+static inline int kgsl_pas_set_remote_state(u32 state, u32 pas_id)
+{
+	return qcom_scm_set_remote_state(state, pas_id);
+}
+#endif
+
 /**
  * isdb_write - Program isdb registers to issue break commands to SP
  * @base: Base address of qdss registers to be programmed

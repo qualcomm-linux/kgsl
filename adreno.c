@@ -23,11 +23,6 @@
 #include <linux/trace.h>
 #include <linux/units.h>
 #include <linux/version.h>
-#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
-#include <linux/firmware/qcom/qcom_scm.h>
-#else
-#include <linux/qcom_scm.h>
-#endif
 #include <soc/qcom/dcvs.h>
 #include <soc/qcom/socinfo.h>
 #include <linux/suspend.h>
@@ -371,7 +366,7 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 		goto out;
 	}
 
-	ret = qcom_scm_pas_auth_and_reset(GPU_PASID);
+	ret = kgsl_pas_auth_and_reset(GPU_PASID);
 
 out:
 	if (mem_region)
@@ -392,7 +387,7 @@ static void adreno_zap_shader_unload(struct adreno_device *adreno_dev)
 	int ret;
 
 	if (adreno_dev->zap_loaded) {
-		ret = qcom_scm_pas_shutdown_retry(GPU_PASID);
+		ret = kgsl_pas_shutdown(GPU_PASID);
 		if (ret)
 			dev_err(&device->pdev->dev, "Error %d while PAS shutdown\n", ret);
 		else
