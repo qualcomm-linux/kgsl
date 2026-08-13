@@ -2512,7 +2512,7 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
 	if (!hwsched->ctxt_bad)
 		return -ENOMEM;
 
-	adreno_dev->scheduler_worker = kthread_create_worker(0, "kgsl_hwsched");
+	adreno_dev->scheduler_worker = kgsl_kthread_run_worker(0, "kgsl_hwsched");
 	if (IS_ERR(adreno_dev->scheduler_worker)) {
 		kfree(hwsched->ctxt_bad);
 		return PTR_ERR(adreno_dev->scheduler_worker);

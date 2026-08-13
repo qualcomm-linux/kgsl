@@ -2715,7 +2715,7 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 	if (ret)
 		return ret;
 
-	adreno_dev->scheduler_worker = kthread_create_worker(0, "kgsl_dispatcher");
+	adreno_dev->scheduler_worker = kgsl_kthread_run_worker(0, "kgsl_dispatcher");
 	if (IS_ERR(adreno_dev->scheduler_worker)) {
 		kobject_put(&dispatcher->kobj);
 		return PTR_ERR(adreno_dev->scheduler_worker);

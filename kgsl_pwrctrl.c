@@ -2187,7 +2187,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		dev_err(device->dev, "Unable to register notifier call for PMQOS updates: %d\n",
 				result);
 
-	pwr->cooling_worker = kthread_create_worker(0, "kgsl_cooling_worker");
+	pwr->cooling_worker = kgsl_kthread_run_worker(0, "kgsl_cooling_worker");
 	if (IS_ERR(pwr->cooling_worker)) {
 		result = PTR_ERR(pwr->cooling_worker);
 		dev_err(device->dev, "Failed to create cooling worker: %d\n", result);

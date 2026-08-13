@@ -12,6 +12,7 @@
 #include "kgsl_device.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_trace.h"
+#include "kgsl_util.h"
 
 static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
 	.bus = {
@@ -843,7 +844,7 @@ static int kgsl_pwrscale_governor_init(struct kgsl_device *device, struct platfo
 		return -ENOMEM;
 	}
 
-	pwrscale->devfreq_notify_worker = kthread_create_worker(0, "kgsl_devfreq_notifier");
+	pwrscale->devfreq_notify_worker = kgsl_kthread_run_worker(0, "kgsl_devfreq_notifier");
 	if (IS_ERR(pwrscale->devfreq_notify_worker)) {
 		ret = PTR_ERR(pwrscale->devfreq_notify_worker);
 		destroy_workqueue(pwrscale->devfreq_wq);
