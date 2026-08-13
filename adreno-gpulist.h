@@ -4390,8 +4390,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_10_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN8_10_0,
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
-		.features = ADRENO_APRIV | ADRENO_IOCOHERENT |
-			    ADRENO_BCL | ADRENO_ACD,
+		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_BCL | ADRENO_ACD
+			| ADRENO_IFPC | ADRENO_CONTENT_PROTECTION | ADRENO_PREEMPTION,
 		.compatible = "qcom,adreno-gpu-gen8-10-0",
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
@@ -4420,6 +4420,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_10_0 = {
 	.ctxt_record_size = (23088 * SZ_1K),
 	.bcl_data = 1,
 	.gen8_snapshot_block_list = &gen8_10_0_snapshot_block_list,
+	.preempt_level = 1,
 };
 
 static const struct hfi_clx_table_v2_cmd gen8_11_0_clx_table = {
