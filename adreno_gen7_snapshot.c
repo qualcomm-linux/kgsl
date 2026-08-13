@@ -702,8 +702,8 @@ static void gen7_snapshot_trace_buffer(struct kgsl_device *device,
 		info.ping_blk[i] = FIELD_GET(GENMASK(24, 16), (sel_gx | sel_cx));
 	}
 
-	/* Zero the header if not programmed to export any buffer */
-	if (!val_gx && !val_cx) {
+	/* Zero the header if not programmed to export any buffer or QDSS is unavailable */
+	if ((!val_gx && !val_cx) || !IS_ENABLED(CONFIG_QCOM_KGSL_QDSS_STM)) {
 		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_TRACE_BUFFER,
 			snapshot, NULL, &info);
 		return;
