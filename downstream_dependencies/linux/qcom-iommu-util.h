@@ -45,7 +45,7 @@ static inline int qcom_iommu_get_context_bank_nr(struct iommu_domain *domain)
 
 static inline int qcom_iommu_get_asid_nr(struct iommu_domain *domain)
 {
-	return -EINVAL;
+	return 0;
 }
 
 static inline int qcom_iommu_set_secure_vmid(struct iommu_domain *domain, enum vmid vmid)

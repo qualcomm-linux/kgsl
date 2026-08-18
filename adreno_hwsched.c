@@ -275,6 +275,18 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 		break;
 	case HFI_MEMKIND_CSW_PRIV_NON_SECURE:
 	case HFI_MEMKIND_CSW_PRIV_SECURE:
+		/*
+		 * Standard kernel does not support secure SIDs. But GMU FW
+		 * always requests a secure preempt buffer regardless. Back it
+		 * with a PAGE_SIZE non-secure dummy buffer to give CP a valid
+		 * GPU VA to write to.
+		 */
+		if (desc->mem_kind == HFI_MEMKIND_CSW_PRIV_SECURE &&
+			!kgsl_mmu_is_secured(&device->mmu)) {
+			entry->desc.flags &= ~HFI_MEMFLAG_GFX_SECURE;
+			flags &= ~KGSL_MEMFLAGS_SECURE;
+			entry->desc.size = PAGE_SIZE;
+		}
 		if (ADRENO_FEATURE(adreno_dev, ADRENO_DEFER_GMEM_ALLOC)) {
 			ret = process_preempt_record_mem_alloc(adreno_dev, entry);
 			if (ret)
@@ -289,7 +301,7 @@ static struct hfi_mem_alloc_entry *get_mem_alloc_entry(
 		/* Allocate global through legacy approach */
 		fallthrough;
 	default:
-		entry->md = kgsl_allocate_global(device, desc->size, 0, flags,
+		entry->md = kgsl_allocate_global(device, entry->desc.size, 0, flags,
 			priv, memkind_string);
 		break;
 	}

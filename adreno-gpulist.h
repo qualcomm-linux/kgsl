@@ -3750,7 +3750,7 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_1_0 = {
 				  UINT_MAX, UINT_MAX, UINT_MAX, ANY_ID),
 		.features = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_CONTENT_PROTECTION |
 			ADRENO_SOFTFUSE | ADRENO_ACD | ADRENO_PREEMPTION,
-		.gpudev = &adreno_gen8_gmu_gpudev.base,
+		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
 		.gmem_size = 21 * SZ_1M,

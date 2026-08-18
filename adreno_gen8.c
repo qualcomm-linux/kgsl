@@ -3630,6 +3630,7 @@ const struct gen8_gpudev adreno_gen8_hwsched_gpudev = {
 		.acquire_cp_semaphore = gen8_acquire_cp_semaphore,
 		.release_cp_semaphore = gen8_release_cp_semaphore,
 		.get_gmem_size = gen8_get_gmem_size,
+		.read_speedbin = gen8_read_softfuse_speedbin,
 	},
 	.hfi_probe = gen8_hwsched_hfi_probe,
 	.hfi_remove = gen8_hwsched_hfi_remove,
