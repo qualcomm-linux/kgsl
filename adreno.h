@@ -119,7 +119,10 @@
  * core
  */
 #define ADRENO_FEATURE(_dev, _bit) \
-	((_dev)->gpucore->features & (_bit))
+	(((_dev)->gpucore->features_standard && \
+	of_device_is_compatible((_dev)->dev.pdev->dev.of_node, "qcom,adreno")) \
+	? ((_dev)->gpucore->features_standard & (_bit)) \
+	: ((_dev)->gpucore->features & (_bit)))
 
 /**
  * ADRENO_QUIRK - return true if the specified quirk is required by the GPU
@@ -578,6 +581,8 @@ struct adreno_gpu_core {
 	 */
 	const char *compatible;
 	u64 features;
+	/** @features_standard: Features only supported on standard kernel */
+	u64 features_standard;
 	const struct adreno_gpudev *gpudev;
 	const struct adreno_perfcounters *perfcounters;
 	u32 uche_gmem_alignment;
