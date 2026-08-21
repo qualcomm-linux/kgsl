@@ -673,6 +673,14 @@ static void a6xx_rgmu_power_off(struct adreno_device *adreno_dev)
 
 	kgsl_pwrctrl_clear_l3_vote(device);
 
+	/* Clear the active OPP state for the device */
+	if (device->pwrctrl.pwrlevels[0].opp) {
+		ret = dev_pm_opp_set_opp(&device->pdev->dev, NULL);
+		if (ret)
+			dev_err(&device->pdev->dev,
+					"Failed to clear active OPP state: %d\n", ret);
+	}
+
 	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 }
 

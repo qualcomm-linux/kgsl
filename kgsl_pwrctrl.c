@@ -10,6 +10,7 @@
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/pm_domain.h>
+#include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
@@ -2413,6 +2414,16 @@ static void kgsl_pwrctrl_disable(struct kgsl_device *device)
 	kgsl_pwrctrl_axi(device, false);
 	kgsl_pwrctrl_clk(device, false, KGSL_STATE_SLUMBER);
 	kgsl_pwrctrl_pwrrail(device, false);
+
+	/* Clear the active OPP state for the device in nogmu targets */
+	if (!gmu_core_gpmu_isenabled(device) &&
+			device->pwrctrl.pwrlevels[0].opp) {
+		int ret = dev_pm_opp_set_opp(&device->pdev->dev, NULL);
+
+		if (ret)
+			dev_err(&device->pdev->dev,
+				"Failed to clear active OPP state: %d\n", ret);
+	}
 }
 
 /**
