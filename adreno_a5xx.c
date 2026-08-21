@@ -10,11 +10,6 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/version.h>
-#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
-#include <linux/firmware/qcom/qcom_scm.h>
-#else
-#include <linux/qcom_scm.h>
-#endif
 #if IS_ENABLED(CONFIG_QCOM_SCM_ADDON)
 #include <linux/firmware/qcom/qcom_scm_addon.h>
 #endif
@@ -1628,11 +1623,11 @@ static int a5xx_gpmu_init(struct adreno_device *adreno_dev)
 
 static int a5xx_zap_shader_resume(struct kgsl_device *device)
 {
-	int ret = qcom_scm_set_remote_state(0, 13);
+	int ret = kgsl_pas_set_remote_state(0, 13);
 
 	if (ret)
 		dev_err(device->dev,
-			"SCM zap resume call failed: %d\n", ret);
+			"zap resume call failed: %d\n", ret);
 
 	return ret;
 }
