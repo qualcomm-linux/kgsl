@@ -3258,6 +3258,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 			ADRENO_IFPC | ADRENO_HW_FENCE | ADRENO_PREEMPTION |
 			ADRENO_ACD | ADRENO_CLX | ADRENO_GMU_THERMAL_MITIGATION |
 			ADRENO_GMU_AB,
+		.features_standard = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_PREEMPTION |
+			ADRENO_IFPC | ADRENO_AQE | ADRENO_CONTENT_PROTECTION,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3266,6 +3268,18 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_0_1 = {
 		.snapshot_size = SZ_8M,
 		.num_ddr_channels = 4,
 		.highest_bank_bit = 16,
+		.chipid = 0x44050001,
+		.speedbins = KGSL_SPEEDBINS(
+			{ 0,   0 },
+			{ 252, 1 },
+			{ 242, 2 },
+			{ 232, 3 },
+			{ 221, 4 },
+			{ 190, 5 },
+		),
+		.ubwc_mode = 5,
+		.mal = 32,
+		.gpu_model = "Adreno830",
 	},
 	.aqefw_name = "gen80000_aqe.fw",
 	.sqefw_name = "gen80000_sqe.fw",
@@ -3601,6 +3615,8 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 			ADRENO_GMU_THERMAL_MITIGATION | ADRENO_CLX | ADRENO_DEFER_GMEM_ALLOC |
 			ADRENO_GMU_MINBW | ADRENO_DCVS_PROFILE | ADRENO_TSENSE_DYNAMIC_PERIOD |
 			ADRENO_GMU_AB,
+		.features_standard = ADRENO_APRIV | ADRENO_IOCOHERENT | ADRENO_PREEMPTION |
+			ADRENO_IFPC | ADRENO_AQE | ADRENO_CONTENT_PROTECTION,
 		.gpudev = &adreno_gen8_hwsched_gpudev.base,
 		.perfcounters = &adreno_gen8_2_x_perfcounters,
 		.uche_gmem_alignment = SZ_64M,
@@ -3609,6 +3625,16 @@ static const struct adreno_gen8_core adreno_gpu_core_gen8_2_1 = {
 		.snapshot_size = SZ_8M,
 		.num_ddr_channels = 4,
 		.highest_bank_bit = 16,
+		.chipid = 0x44050a01,
+		.speedbins = KGSL_SPEEDBINS(
+			{ 0,   0 },
+			{ 273, 1 },
+			{ 252, 2 },
+			{ 221, 3 },
+		),
+		.ubwc_mode = 6,
+		.mal = 32,
+		.gpu_model = "Adreno840",
 	},
 	.aqefw_name = "gen80200_aqe.fw",
 	.sqefw_name = "gen80200_sqe.fw",
