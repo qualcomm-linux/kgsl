@@ -215,7 +215,23 @@ static void a6xx_calc_ubwc_config_legacy(struct adreno_device *adreno_dev)
 	}
 }
 
-#if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(7, 3, 0) <= LINUX_VERSION_CODE)
+static void a6xx_calc_ubwc_config(struct adreno_device *adreno_dev)
+{
+	const struct qcom_ubwc_cfg_data *cfg =
+		(const struct qcom_ubwc_cfg_data *)adreno_dev->ubwc_cfg_data;
+	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
+
+	if (!cfg)
+		return a6xx_calc_ubwc_config_legacy(adreno_dev);
+
+	ubwc_props->mode = qcom_ubwc_get_ubwc_mode(cfg);
+	ubwc_props->amsbc = qcom_ubwc_enable_amsbc(cfg);
+	ubwc_props->rgb565_predicator = cfg->ubwc_enc_version >= UBWC_4_0;
+	ubwc_props->level2_swizzling_dis =
+		!(qcom_ubwc_swizzle(cfg) & UBWC_SWIZZLE_ENABLE_LVL2);
+}
+#elif (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
 static void a6xx_calc_ubwc_config(struct adreno_device *adreno_dev)
 {
 	struct qcom_ubwc_cfg_data *cfg = (struct qcom_ubwc_cfg_data *)adreno_dev->ubwc_cfg_data;
