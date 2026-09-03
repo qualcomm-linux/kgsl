@@ -243,7 +243,7 @@ static void a6xx_calc_ubwc_config(struct adreno_device *adreno_dev)
 	ubwc_props->mode = (cfg->ubwc_enc_version == UBWC_1_0) ? 1 : 0;
 	ubwc_props->amsbc = cfg->ubwc_enc_version >= UBWC_3_0;
 	ubwc_props->rgb565_predicator = cfg->ubwc_enc_version >= UBWC_4_0;
-	ubwc_props->level2_swizzling_dis = !(cfg->ubwc_swizzle & UBWC_SWIZZLE_ENABLE_LVL2);
+	ubwc_props->level2_swizzling_dis = !(qcom_ubwc_swizzle(cfg) & UBWC_SWIZZLE_ENABLE_LVL2);
 }
 #else
 static void a6xx_calc_ubwc_config(struct adreno_device *adreno_dev)
