@@ -2003,6 +2003,34 @@ static int adreno_init_ubwc_legacy(struct adreno_device *adreno_dev)
 	return 0;
 }
 
+static void adreno_init_mal_legacy(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+
+	if (adreno_dev->gpucore->mal)
+		adreno_dev->mal = adreno_dev->gpucore->mal;
+	else if (of_property_read_u32(device->pdev->dev.of_node,
+			"qcom,min-access-length", &adreno_dev->mal))
+		adreno_dev->mal = 32;
+}
+
+#if (KERNEL_VERSION(7, 1, 0) <= LINUX_VERSION_CODE)
+static void adreno_init_mal(struct adreno_device *adreno_dev)
+{
+	const struct qcom_ubwc_cfg_data *cfg = adreno_dev->ubwc_cfg_data;
+
+	if (cfg)
+		adreno_dev->mal = qcom_ubwc_min_acc_length_64b(cfg) ? 64 : 32;
+	else
+		adreno_init_mal_legacy(adreno_dev);
+}
+#else
+static void adreno_init_mal(struct adreno_device *adreno_dev)
+{
+	adreno_init_mal_legacy(adreno_dev);
+}
+#endif
+
 #if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
 static inline u32 ubwc_encoder_to_kgsl_mode(u32 enc_version)
 {
@@ -2040,6 +2068,8 @@ static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 	} else
 		ret = adreno_init_ubwc_legacy(adreno_dev);
 
+	adreno_init_mal(adreno_dev);
+
 	if (!adreno_dev->highest_bank_bit)
 		dev_warn(device->dev, "Invalid highest bank bit\n");
 
@@ -2053,6 +2083,7 @@ static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 	int ret;
 
 	ret = adreno_init_ubwc_legacy(adreno_dev);
+	adreno_init_mal_legacy(adreno_dev);
 
 	if (!adreno_dev->highest_bank_bit)
 		dev_warn(device->dev, "Invalid highest bank bit\n");
@@ -2230,12 +2261,6 @@ int adreno_device_probe(struct platform_device *pdev,
 		kgsl_device_platform_remove(device);
 		goto err_unbind;
 	}
-
-	if (adreno_dev->gpucore->mal)
-		adreno_dev->mal = adreno_dev->gpucore->mal;
-	else if (of_property_read_u32(device->pdev->dev.of_node,
-			"qcom,min-access-length", &adreno_dev->mal))
-		adreno_dev->mal = 32;
 
 	/* Initialize the snapshot engine */
 	size = adreno_dev->gpucore->snapshot_size;
