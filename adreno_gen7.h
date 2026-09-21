@@ -143,6 +143,12 @@ struct adreno_gen7_core {
 	bool fast_bus_hint;
 	/** @noc_timeout_us: GPU config NOC port timeout in usec */
 	u32 noc_timeout_us;
+	/**
+	 * @gmu_chipid: If non-zero, the exact value programmed into
+	 * GEN7_GMU_GENERAL_10 to tell the GMU firmware which chip it is
+	 * running on.
+	 */
+	u32 gmu_chipid;
 };
 
 /**

@@ -184,6 +184,30 @@ const struct gen7_snapshot_block_list gen7_9_0_snapshot_block_list = {
 	.index_registers_len = ARRAY_SIZE(gen7_9_0_cp_indexed_reg_list),
 };
 
+const struct gen7_snapshot_block_list gen7_13_0_snapshot_block_list = {
+	.pre_crashdumper_regs = gen7_9_0_pre_crashdumper_gpu_registers,
+	.debugbus_blocks = gen7_9_0_debugbus_blocks,
+	.debugbus_blocks_len = ARRAY_SIZE(gen7_9_0_debugbus_blocks),
+	.gbif_debugbus_blocks = gen7_9_0_gbif_debugbus_blocks,
+	.gbif_debugbus_blocks_len = ARRAY_SIZE(gen7_9_0_gbif_debugbus_blocks),
+	.cx_debugbus_blocks = gen7_9_0_cx_debugbus_blocks,
+	.cx_debugbus_blocks_len = ARRAY_SIZE(gen7_9_0_cx_debugbus_blocks),
+	.gmu_regs = gen7_9_0_gmu_registers,
+	.gmu_gx_regs = gen7_9_0_gmugx_registers,
+	.rscc_regs = gen7_9_0_rscc_registers,
+	.reg_list = gen7_9_0_reg_list,
+	.cx_misc_regs = gen7_9_0_cx_misc_registers,
+	.shader_blocks = gen7_9_0_shader_blocks,
+	.num_shader_blocks = ARRAY_SIZE(gen7_9_0_shader_blocks),
+	.clusters = gen7_9_0_clusters,
+	.num_clusters = ARRAY_SIZE(gen7_9_0_clusters),
+	.sptp_clusters = gen7_9_0_sptp_clusters,
+	.num_sptp_clusters = ARRAY_SIZE(gen7_9_0_sptp_clusters),
+	.post_crashdumper_regs = gen7_0_0_post_crashdumper_registers,
+	.index_registers = gen7_9_0_cp_indexed_reg_list,
+	.index_registers_len = ARRAY_SIZE(gen7_9_0_cp_indexed_reg_list),
+};
+
 const struct gen7_snapshot_block_list gen7_14_0_snapshot_block_list = {
 	.pre_crashdumper_regs = gen7_9_0_pre_crashdumper_gpu_registers,
 	.debugbus_blocks = gen7_14_0_debugbus_blocks,
