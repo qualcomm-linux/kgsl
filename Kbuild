@@ -117,13 +117,13 @@ ifndef CONFIG_QCOM_KGSL_USE_SHMEM
 endif
 
 ifndef CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ
-ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),"simple_ondemand")
+ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
 	msm_kgsl-y += governor_msm_adreno_tz.o
 endif
 endif
 
 ifndef CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON
-ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),"simple_ondemand")
+ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
 	msm_kgsl-y += governor_gpubw_mon.o
 endif
 endif
