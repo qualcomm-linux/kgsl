@@ -2031,14 +2031,17 @@ static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 {
 	struct qcom_ubwc_cfg_data *cfg = qcom_ubwc_config_get_data();
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	u32 ubwc_mode = cfg ? ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version)
+				: KGSL_UBWC_NONE;
 	int ret = 0;
 
-	if (cfg) {
+	if (ubwc_mode != KGSL_UBWC_NONE) {
 		adreno_dev->ubwc_cfg_data = cfg;
-		adreno_dev->ubwc_mode = ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version);
+		adreno_dev->ubwc_mode = ubwc_mode;
 		adreno_dev->highest_bank_bit = cfg->highest_bank_bit;
-	} else
+	} else {
 		ret = adreno_init_ubwc_legacy(adreno_dev);
+	}
 
 	if (!adreno_dev->highest_bank_bit)
 		dev_warn(device->dev, "Invalid highest bank bit\n");

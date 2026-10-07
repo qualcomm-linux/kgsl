@@ -753,10 +753,11 @@ void a6xx_start(struct adreno_device *adreno_dev)
 	}
 
 	/* macrotilingmode 0: 4 channels (default)
-	 * overwrite to 1: 8 channels for A680
+	 * overwrite to 1: 8 channels for supported gpus
 	 */
 	if (adreno_is_a680(adreno_dev) ||
-			adreno_is_a663(adreno_dev))
+			adreno_is_a663(adreno_dev) ||
+			adreno_is_a704(adreno_dev))
 		kgsl_regwrite(device, A6XX_RBBM_NC_MODE_CNTL, 1);
 
 	if (adreno_dev->highest_bank_bit) {
