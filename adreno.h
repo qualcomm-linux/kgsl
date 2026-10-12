@@ -916,7 +916,7 @@ struct adreno_device {
 	/** @ubwc_cfg: Pointer to hold struct qcom_ubwc_cfg_data fetched from
 	 * qcom_ubwc_config_get_data() API
 	 */
-	void *ubwc_cfg_data;
+	const void *ubwc_cfg_data;
 	/** @adreno_ubwc_props: Container of all UBWC props required to program NC_MODE_CNTL
 	 * registers
 	 */

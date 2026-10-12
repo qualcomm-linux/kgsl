@@ -358,7 +358,7 @@ static void gen7_calc_ubwc_config_legacy(struct adreno_device *adreno_dev)
 #if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
 static void gen7_calc_ubwc_config(struct adreno_device *adreno_dev)
 {
-	struct qcom_ubwc_cfg_data *cfg = (struct qcom_ubwc_cfg_data *)adreno_dev->ubwc_cfg_data;
+	const struct qcom_ubwc_cfg_data *cfg = adreno_dev->ubwc_cfg_data;
 	struct adreno_ubwc_props *ubwc_props = &adreno_dev->ubwc_props;
 
 	if (!cfg)

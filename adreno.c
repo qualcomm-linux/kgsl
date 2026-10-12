@@ -2035,11 +2035,11 @@ static inline u32 ubwc_encoder_to_kgsl_mode(u32 enc_version)
 
 static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 {
-	struct qcom_ubwc_cfg_data *cfg = qcom_ubwc_config_get_data();
+	const struct qcom_ubwc_cfg_data *cfg = qcom_ubwc_config_get_data();
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret = 0;
 
-	if (cfg) {
+	if (!IS_ERR_OR_NULL(cfg)) {
 		adreno_dev->ubwc_cfg_data = cfg;
 		adreno_dev->ubwc_mode = ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version);
 		adreno_dev->highest_bank_bit = cfg->highest_bank_bit;
