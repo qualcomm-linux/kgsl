@@ -598,6 +598,9 @@ static void gen7_hwcg_set(struct adreno_device *adreno_dev, bool on)
 	if (!adreno_dev->hwcg_enabled)
 		on = false;
 
+	if (adreno_is_gen7_13_0(adreno_dev))
+		on = false;
+
 	for (i = 0; i < gen7_core->ao_hwcg_count; i++)
 		gmu_core_regwrite(device, gen7_core->ao_hwcg[i].offset,
 			on ? gen7_core->ao_hwcg[i].val : 0);
@@ -1857,6 +1860,8 @@ int gen7_probe_common(struct platform_device *pdev,
 		pwr->cx_cfg_gdsc_offset = GEN7_11_0_GPU_CC_CX_CFG_GDSCR;
 	else if (adreno_is_gen7_17_0(adreno_dev))
 		pwr->cx_cfg_gdsc_offset = GEN7_17_0_GPU_CC_CX_CFG_GDSCR;
+	else if (adreno_is_gen7_13_0(adreno_dev))
+		pwr->cx_cfg_gdsc_offset = GEN7_13_0_GPU_CC_CX_CFG_GDSCR;
 	else
 		pwr->cx_cfg_gdsc_offset = GEN7_GPU_CC_CX_CFG_GDSCR;
 

@@ -958,7 +958,7 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 	kgsl_regmap_multi_write(&device->regmap, gen7_core->gbif,
 		gen7_core->gbif_count);
 
-	if (adreno_is_gen7_9_x(adreno_dev))
+	if (adreno_is_gen7_13_0(adreno_dev) || adreno_is_gen7_9_x(adreno_dev))
 		kgsl_regrmw(device, GEN7_GBIF_CX_CONFIG, GENMASK(31, 29),
 				FIELD_PREP(GENMASK(31, 29), 1));
 	else if (adreno_is_gen7_14_0_family(adreno_dev))
@@ -981,10 +981,13 @@ void gen7_gmu_register_config(struct adreno_device *adreno_dev)
 			gmu->log_wptr_retention);
 
 	/* Pass chipid to GMU FW, must happen before starting GMU */
-	gmu_core_regwrite(device, GEN7_GMU_GENERAL_10,
-			adreno_gmu_chipid_based(adreno_dev) ?
-			ADRENO_GMU_CHIPID(adreno_dev->chipid) :
-			ADRENO_GMU_REV(ADRENO_GPUREV(adreno_dev)));
+	if (gen7_core->gmu_chipid)
+		val = gen7_core->gmu_chipid;
+	else if (adreno_gmu_chipid_based(adreno_dev))
+		val = ADRENO_GMU_CHIPID(adreno_dev->chipid);
+	else
+		val = ADRENO_GMU_REV(ADRENO_GPUREV(adreno_dev));
+	gmu_core_regwrite(device, GEN7_GMU_GENERAL_10, val);
 
 	/* Log size is encoded in (number of 4K units - 1) */
 	val = (gmu->gmu_log->gmuaddr & GENMASK(31, 12)) |
