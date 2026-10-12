@@ -2006,8 +2006,14 @@ static int adreno_init_ubwc_legacy(struct adreno_device *adreno_dev)
 #if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
 static inline u32 ubwc_encoder_to_kgsl_mode(u32 enc_version)
 {
-	/* Convert UBWC encoder version to KGSL UBWC mode */
-	switch (enc_version) {
+	/*
+	 * Convert UBWC encoder version to KGSL UBWC mode. Match on the major
+	 * version only (UBWC_x_y is major << 28 | minor << 16): minor revisions
+	 * such as UBWC_3_1 (3.0 + macrotile, reported for qcm6490/sc7280 since
+	 * the 7.3 UBWC config rework) must still map to their major mode rather
+	 * than falling through to KGSL_UBWC_NONE.
+	 */
+	switch (enc_version & 0xf0000000) {
 	case UBWC_1_0:
 		return KGSL_UBWC_1_0;
 	case UBWC_2_0:
@@ -2037,6 +2043,8 @@ static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 		adreno_dev->ubwc_cfg_data = cfg;
 		adreno_dev->ubwc_mode = ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version);
 		adreno_dev->highest_bank_bit = cfg->highest_bank_bit;
+		dev_info(device->dev, "UBWC encoder version 0x%08x, kgsl UBWC mode %u\n",
+			cfg->ubwc_enc_version, adreno_dev->ubwc_mode);
 	} else
 		ret = adreno_init_ubwc_legacy(adreno_dev);
 
