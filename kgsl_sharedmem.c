@@ -706,6 +706,10 @@ static void _dma_cache_op(struct device *dev, struct page *page,
 {
 	struct scatterlist sgl;
 
+	/* Skip cache maintenance for the shared zero page. */
+	if (is_zero_page(page))
+		return;
+
 	sg_init_table(&sgl, 1);
 	sg_set_page(&sgl, page, PAGE_SIZE, 0);
 	sg_dma_address(&sgl) = page_to_phys(page);
