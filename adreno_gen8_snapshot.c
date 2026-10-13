@@ -764,7 +764,7 @@ static void gen8_snapshot_trace_buffer(struct kgsl_device *device,
 		val_gx |= sel_gx;
 		val_cx |= sel_cx;
 		info.ping_idx[i] = FIELD_GET(GENMASK(7, 0), (sel_gx | sel_cx));
-		info.ping_blk[i] = FIELD_GET(GENMASK(24, 16), (sel_gx | sel_cx));
+		info.ping_blk[i] = FIELD_GET(GENMASK(27, 16), (sel_gx | sel_cx));
 	}
 
 	/* Zero the header if not programmed to export any buffer or QDSS is unavailable */
@@ -1409,7 +1409,7 @@ static void gen8_cx_gc_us_i_0_debugbus_read(struct kgsl_device *device,
 	u32 reg_val;
 
 	reg_val = FIELD_PREP(GENMASK(7, 0), index) |
-		FIELD_PREP(GENMASK(24, 16), block_id);
+		FIELD_PREP(GENMASK(27, 16), block_id);
 
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg_val);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg_val);
@@ -1445,7 +1445,7 @@ static void gen8_dbgc_debug_bus_read(struct kgsl_device *device,
 	u32 reg;
 
 	reg = FIELD_PREP(GENMASK(7, 0), index) |
-		FIELD_PREP(GENMASK(24, 16), block_id);
+		FIELD_PREP(GENMASK(27, 16), block_id);
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_B, reg);
@@ -1491,7 +1491,7 @@ static void gen8_dbgc_side_debug_bus_read(struct kgsl_device *device,
 	u32 block_id, u32 index, u32 *val)
 {
 	u32 reg = FIELD_PREP(GENMASK(7, 0), index) |
-			FIELD_PREP(GENMASK(24, 16), block_id);
+			FIELD_PREP(GENMASK(27, 16), block_id);
 
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_DBGC_CFG_DBGBUS_SEL_B, reg);
@@ -1539,7 +1539,7 @@ static void gen8_cx_debug_bus_read(struct kgsl_device *device,
 	u32 block_id, u32 index, u32 *val)
 {
 	u32 reg = FIELD_PREP(GENMASK(7, 0), index) |
-		FIELD_PREP(GENMASK(24, 16), block_id);
+		FIELD_PREP(GENMASK(27, 16), block_id);
 
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg);
@@ -1603,7 +1603,7 @@ static void gen8_cx_side_debug_bus_read(struct kgsl_device *device,
 	u32 block_id, u32 index, u32 *val)
 {
 	u32 reg = FIELD_PREP(GENMASK(7, 0), index) |
-			FIELD_PREP(GENMASK(24, 16), block_id);
+			FIELD_PREP(GENMASK(27, 16), block_id);
 
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_A, reg);
 	kgsl_regwrite(device, GEN8_CX_DBGC_CFG_DBGBUS_SEL_B, reg);
