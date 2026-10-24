@@ -116,14 +116,19 @@ ifndef CONFIG_QCOM_KGSL_USE_SHMEM
 	msm_kgsl-y += kgsl_pool.o
 endif
 
+ifeq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
+	CONFIG_QCOM_KGSL_SKIP_MSM_GOVERNORS = y
+	ccflags-y += -DCONFIG_QCOM_KGSL_SKIP_MSM_GOVERNORS=1
+endif
+
 ifndef CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ
-ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
+ifndef CONFIG_QCOM_KGSL_SKIP_MSM_GOVERNORS
 	msm_kgsl-y += governor_msm_adreno_tz.o
 endif
 endif
 
 ifndef CONFIG_DEVFREQ_GOV_QCOM_GPUBW_MON
-ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
+ifndef CONFIG_QCOM_KGSL_SKIP_MSM_GOVERNORS
 	msm_kgsl-y += governor_gpubw_mon.o
 endif
 endif

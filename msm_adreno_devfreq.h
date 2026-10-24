@@ -79,7 +79,14 @@ typedef void(*getbw_func)(unsigned long *, unsigned long *, void *);
 int devfreq_vbif_update_bw(void);
 void devfreq_vbif_register_callback(getbw_func func, void *data);
 
+#if IS_ENABLED(CONFIG_QCOM_KGSL_SKIP_MSM_GOVERNORS)
+static inline int msm_adreno_tz_reinit(struct devfreq *devfreq)
+{
+	return 0;
+}
+#else
 int msm_adreno_tz_reinit(struct devfreq *devfreq);
+#endif
 
 #if defined(CONFIG_QTEE_SHM_BRIDGE)
 #include <linux/qtee_shmbridge.h>
