@@ -2032,41 +2032,23 @@ static void adreno_init_mal(struct adreno_device *adreno_dev)
 #endif
 
 #if (KERNEL_VERSION(6, 17, 0) <= LINUX_VERSION_CODE)
-static inline u32 ubwc_encoder_to_kgsl_mode(u32 enc_version)
-{
-	/* Convert UBWC encoder version to KGSL UBWC mode */
-	switch (enc_version) {
-	case UBWC_1_0:
-		return KGSL_UBWC_1_0;
-	case UBWC_2_0:
-		return KGSL_UBWC_2_0;
-	case UBWC_3_0:
-		return KGSL_UBWC_3_0;
-	case UBWC_4_0:
-		return KGSL_UBWC_4_0;
-	case UBWC_5_0:
-		return KGSL_UBWC_5_0;
-#if (KERNEL_VERSION(6, 19, 0) <= LINUX_VERSION_CODE)
-	case UBWC_6_0:
-		return KGSL_UBWC_6_0;
-#endif
-	default:
-		return KGSL_UBWC_NONE;
-	}
-}
-
 static int adreno_init_ubwc(struct adreno_device *adreno_dev)
 {
 	struct qcom_ubwc_cfg_data *cfg = qcom_ubwc_config_get_data();
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	/* Extract the UBWC major version from ubwc_enc_version[31:28].
+	 * If cfg is NULL, default to KGSL_UBWC_NONE.
+	 */
+	u32 ubwc_mode = cfg ? cfg->ubwc_enc_version >> 28 : KGSL_UBWC_NONE;
 	int ret = 0;
 
-	if (cfg) {
+	if (ubwc_mode != KGSL_UBWC_NONE) {
 		adreno_dev->ubwc_cfg_data = cfg;
-		adreno_dev->ubwc_mode = ubwc_encoder_to_kgsl_mode(cfg->ubwc_enc_version);
+		adreno_dev->ubwc_mode = ubwc_mode;
 		adreno_dev->highest_bank_bit = cfg->highest_bank_bit;
-	} else
+	} else {
 		ret = adreno_init_ubwc_legacy(adreno_dev);
+	}
 
 	adreno_init_mal(adreno_dev);
 
