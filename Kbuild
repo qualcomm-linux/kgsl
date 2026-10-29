@@ -116,6 +116,10 @@ ifndef CONFIG_QCOM_KGSL_USE_SHMEM
 	msm_kgsl-y += kgsl_pool.o
 endif
 
+ifeq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
+ccflags-y += -DQCOM_KGSL_SKIP_MSM_GOVERNORS
+endif
+
 ifndef CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ
 ifneq ($(CONFIG_QCOM_ADRENO_DEFAULT_GOVERNOR),\"simple_ondemand\")
 	msm_kgsl-y += governor_msm_adreno_tz.o
