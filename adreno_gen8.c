@@ -3156,6 +3156,8 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	u32 offset = ((lock->ifpc_list_len + lock->preemption_list_len) * 2) +
 			(gen8_dev->ext_pwrup_list_len * 3);
 	u32 *data = ptr + sizeof(*lock);
+	u64 reglist_size_dwords = adreno_dev->pwrup_reglist->size / sizeof(u32);
+	u64 lock_size_dwords = sizeof(*lock) / sizeof(u32);
 	int i, start_offset = -1;
 	u16 perfcntr_list_len = lock->dynamic_list_len - gen8_dev->ext_pwrup_list_len;
 	unsigned long irq_flags;
@@ -3186,8 +3188,8 @@ int gen8_perfcounter_update(struct adreno_device *adreno_dev,
 	}
 
 	/* Ensure there is enough space in the reglist buffer for new triplets */
-	if ((start_offset == -1) && (offset + (pending_triplets * 3)) >=
-		(adreno_dev->pwrup_reglist->size / sizeof(u32))) {
+	if ((start_offset == -1) && ((offset + (pending_triplets * 3) + lock_size_dwords) >=
+		reglist_size_dwords)) {
 		ret = -ENOSPC;
 		goto err;
 	}
