@@ -2360,6 +2360,7 @@ done:
 static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	const struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(adreno_dev);
 	struct adreno_hwsched *hwsched = &adreno_dev->hwsched;
 	int fault;
 
@@ -2403,7 +2404,8 @@ static bool adreno_hwsched_do_fault(struct adreno_device *adreno_dev)
 		} else {
 			int ret = adreno_hwsched_snapshot_and_soft_reset(adreno_dev, fault);
 
-			if (ret)
+			/* Without a soft reset, only a full reset recovers the GPU and clears the fault */
+			if (ret || !gpudev->soft_reset)
 				adreno_gpudev_reset(adreno_dev);
 		}
 	}
