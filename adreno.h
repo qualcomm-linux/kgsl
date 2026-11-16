@@ -820,6 +820,8 @@ struct adreno_device {
 	void *gpumv_llc_slice;
 	bool gpumv_llc_slice_enable;
 	unsigned int zap_loaded;
+	/** @zap_enabled: True when zap-shader is present */
+	bool zap_enabled;
 	/**
 	 * @critpkts: Memory descriptor for 5xx critical packets if applicable
 	 */

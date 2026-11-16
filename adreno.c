@@ -286,6 +286,17 @@ int adreno_get_firmware(struct adreno_device *adreno_dev,
  */
 #define GPU_PASID 13
 
+/* True when zap-shader is present */
+static bool adreno_check_zap_enabled(struct kgsl_device *device)
+{
+	struct device_node *np = of_get_child_by_name(device->pdev->dev.of_node,
+			"zap-shader");
+	bool present = of_device_is_available(np);
+
+	of_node_put(np);
+	return present;
+}
+
 int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 		const char *name)
 {
@@ -300,14 +311,13 @@ int adreno_zap_shader_load(struct adreno_device *adreno_dev,
 	ssize_t mem_size;
 	int ret;
 
-	if (adreno_dev->zap_loaded || IS_ENABLED(CONFIG_QCOM_KVM_ENABLED))
+	if (adreno_dev->zap_loaded || IS_ENABLED(CONFIG_QCOM_KVM_ENABLED) ||
+			!adreno_dev->zap_enabled)
 		return 0;
 
-	np = of_get_child_by_name(dev->of_node, "zap-shader");
-	if (!of_device_is_available(np)) {
-		of_node_put(np);
-		return 0;
-	}
+	np = of_get_child_by_name(dev->of_node,	"zap-shader");
+	if (!np)
+		return -ENODEV;
 
 	/*
 	 * While loading the zap firmware, follow the priority order below to determine
@@ -2114,6 +2124,7 @@ int adreno_device_probe(struct platform_device *pdev,
 	dev_set_drvdata(dev, device);
 
 	device->pdev = pdev;
+	adreno_dev->zap_enabled = adreno_check_zap_enabled(device);
 
 	adreno_update_soc_hw_revision_quirks(adreno_dev, pdev);
 
@@ -2176,7 +2187,8 @@ int adreno_device_probe(struct platform_device *pdev,
 	device->pwrctrl.bus_width = adreno_dev->gpucore->bus_width;
 
 	device->mmu.secured = (IS_ENABLED(CONFIG_QCOM_SECURE_BUFFER) &&
-		ADRENO_FEATURE(adreno_dev, ADRENO_CONTENT_PROTECTION));
+		ADRENO_FEATURE(adreno_dev, ADRENO_CONTENT_PROTECTION) &&
+		adreno_dev->zap_enabled);
 
 	/* Probe the LLCC - this could return -EPROBE_DEFER */
 	status = adreno_probe_llcc(adreno_dev, pdev);

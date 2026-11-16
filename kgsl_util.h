@@ -198,11 +198,12 @@ void kgsl_detach_iommu_group(struct iommu_domain *domain, struct iommu_group *gr
  * kgsl_scm_gpu_init_regs - Load secure registers through tz
  * @dev: Pointer to the GPU platform device
  * @gpu_req: Bit mask of requests to enable
+ * @zap_enabled: True when there is no zap-shader
  *
  * Return: 0 on success or negative on failure and EOPNOTSUPP if scm call
  * not supported
  */
-int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req);
+int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req, bool zap_enabled);
 
 #if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
 /**

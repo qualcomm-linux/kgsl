@@ -2289,7 +2289,7 @@ void gen8_scm_gpu_tsense_default(struct adreno_device *adreno_dev, bool default_
 	if (!default_req)
 		gpu_req |= GPU_TSENSE_MEASURE_DEFAULT_DISABLE;
 
-	kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
+	kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req, adreno_dev->zap_enabled);
 }
 
 int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
@@ -2306,7 +2306,8 @@ int gen8_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 
 	gpu_req |= GPU_TSENSE_EN_REQ;
 
-	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
+	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req,
+			adreno_dev->zap_enabled);
 
 	/*
 	 * For targets that support this scm call to program BCL id , enable BCL.

@@ -125,7 +125,7 @@ static int _kgsl_scm_gpu_init_regs(u32 gpu_req)
 }
 #endif
 
-int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
+int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req, bool zap_enabled)
 {
 	int ret;
 
@@ -133,9 +133,13 @@ int kgsl_scm_gpu_init_regs(struct device *dev, u32 gpu_req)
 		return -EOPNOTSUPP;
 
 	ret = _kgsl_scm_gpu_init_regs(gpu_req);
-	if (ret && (ret != -EOPNOTSUPP))
-		dev_err(dev, "Scm call for requests:0x%x failed with ret:: %d\n",
+	if (ret && (ret != -EOPNOTSUPP)) {
+		if (zap_enabled)
+			dev_err(dev, "Scm call for requests:0x%x failed with ret:: %d\n",
 									gpu_req, ret);
+		else
+			return -EOPNOTSUPP;
+	}
 
 	return ret;
 }

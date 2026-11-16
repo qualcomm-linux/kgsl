@@ -1108,7 +1108,8 @@ int gen7_scm_gpu_init_cx_regs(struct adreno_device *adreno_dev)
 	if (adreno_is_gen7_9_x(adreno_dev))
 		gpu_req |= GPU_TSENSE_EN_REQ;
 
-	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req);
+	ret = kgsl_scm_gpu_init_regs(&device->pdev->dev, gpu_req,
+			adreno_dev->zap_enabled);
 
 	/*
 	 * For targets that support this scm call to program BCL id , enable BCL.
