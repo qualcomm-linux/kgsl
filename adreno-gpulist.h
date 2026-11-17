@@ -2004,6 +2004,12 @@ static const struct adreno_a6xx_core adreno_gpu_core_a702 = {
 	.protected_regs = a620_protected_regs,
 };
 
+/* SMMU aperture registers: GC to context bank 0, LPAC disabled */
+static const struct kgsl_regmap_list a704_smmu_aperture_regs[] = {
+	{ 0x0, 0x000a8000 }, /* GC: CB0 */
+	{ 0x2, 0x00000000 }, /* CTRL: GC only */
+};
+
 static const struct adreno_a6xx_core adreno_gpu_core_a704 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A704, 7, 0, 4, ANY_ID),
@@ -2019,6 +2025,8 @@ static const struct adreno_a6xx_core adreno_gpu_core_a704 = {
 		.ubwc_mode = 2,
 		.mal = 32,
 		.gpu_model = "Adreno704v1",
+		.smmu_aperture = a704_smmu_aperture_regs,
+		.smmu_aperture_count = ARRAY_SIZE(a704_smmu_aperture_regs),
 	},
 	.prim_fifo_threshold = 0x0000c000,
 	.sqefw_name = "a702_sqe.fw",
@@ -2769,6 +2777,13 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_9_1 = {
 
 extern const struct gen7_snapshot_block_list gen7_13_0_snapshot_block_list;
 
+/* SMMU aperture registers: GC to context bank 0, LPAC to context bank 1 */
+static const struct kgsl_regmap_list gen7_13_0_smmu_aperture_regs[] = {
+	{ 0x0, 0x000c0000 }, /* GC: CB0 */
+	{ 0x1, 0x000c1000 }, /* LPAC: CB1 */
+	{ 0x2, 0x00000002 }, /* CTRL: GC + LPAC */
+};
+
 static const struct adreno_gen7_core adreno_gpu_core_gen7_13_0 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_GEN7_13_0,
@@ -2783,6 +2798,8 @@ static const struct adreno_gen7_core adreno_gpu_core_gen7_13_0 = {
 		.num_ddr_channels = 4,
 		.highest_bank_bit = 16,
 		.chipid = 0x43051701,
+		.smmu_aperture = gen7_13_0_smmu_aperture_regs,
+		.smmu_aperture_count = ARRAY_SIZE(gen7_13_0_smmu_aperture_regs),
 	},
 	.sqefw_name = "gen71300_sqe.fw",
 	.gmufw_name = "gen71300_gmu.bin",

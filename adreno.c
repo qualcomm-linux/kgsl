@@ -2102,6 +2102,7 @@ int adreno_device_probe(struct platform_device *pdev,
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct device *dev = &pdev->dev;
+	struct resource *res;
 	unsigned int priv = 0;
 	int status;
 	u32 size;
@@ -2224,6 +2225,14 @@ int adreno_device_probe(struct platform_device *pdev,
 
 	/* Add CX_DBGC block to the regmap*/
 	kgsl_regmap_add_region(&device->regmap, pdev, "cx_dbgc", -EINVAL, NULL, NULL);
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "aperture");
+	if (res) {
+		device->smmu_aperture_virt = devm_ioremap(dev, res->start,
+			resource_size(res));
+		if (!device->smmu_aperture_virt)
+			dev_warn(dev, "aperture ioremap failed\n");
+	}
 
 	if (kgsl_regmap_add_region(&device->regmap, pdev, "isense_cntl", -EINVAL, NULL, NULL) == 0)
 		adreno_dev->isense_reg_mapped = true;
@@ -2464,21 +2473,11 @@ static int adreno_pm_resume(struct device *dev)
 	adreno_dev = ADRENO_DEVICE(device);
 	ops = ADRENO_POWER_OPS(adreno_dev);
 
-#if IS_ENABLED(CONFIG_DEEPSLEEP)
-	if (pm_suspend_via_firmware()) {
-		struct kgsl_iommu *iommu = &device->mmu.iommu;
-		int status = kgsl_set_smmu_aperture(device, &iommu->user_context);
-
-		if (status)
-			return status;
-
-		status = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
-		if (status < 0)
-			return status;
-	}
-#endif
-
 	kgsl_mutex_lock(&device->mutex);
+#if IS_ENABLED(CONFIG_DEEPSLEEP)
+	if (pm_suspend_via_firmware())
+		device->mmu.iommu.smmu_aperture_set = false;
+#endif
 	ops->pm_resume(adreno_dev);
 	kgsl_mutex_unlock(&device->mutex);
 
@@ -4671,6 +4670,25 @@ static void adreno_set_thermal_index(struct kgsl_device *device)
 		ops->set_thermal_index(adreno_dev);
 }
 
+static int adreno_set_smmu_aperture(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_gpu_core *gpucore = adreno_dev->gpucore;
+	int i;
+
+	if (!gpucore->smmu_aperture_count || !device->smmu_aperture_virt)
+		return -ENODEV;
+
+	for (i = 0; i < gpucore->smmu_aperture_count; i++)
+		writel_relaxed(gpucore->smmu_aperture[i].val, device->smmu_aperture_virt +
+			(gpucore->smmu_aperture[i].offset << 2));
+
+	/* Make sure all of the preceding writes have posted */
+	wmb();
+
+	return 0;
+}
+
 static bool adreno_is_first_boot_done(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -4723,6 +4741,7 @@ static const struct kgsl_functable adreno_functable = {
 	.set_thermal_index = adreno_set_thermal_index,
 	.alloc_dcvs_profile_memory = adreno_alloc_dcvs_profile_memory,
 	.is_first_boot_done = adreno_is_first_boot_done,
+	.set_smmu_aperture = adreno_set_smmu_aperture,
 };
 
 static const struct component_master_ops adreno_ops = {
@@ -5016,13 +5035,7 @@ static int adreno_hibernation_resume(struct device *dev)
 	if (ret)
 		goto err;
 
-	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
-	if (ret)
-		goto err;
-
-	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
-	if (ret < 0)
-		goto err;
+	iommu->smmu_aperture_set = false;
 
 	gmu_core_dev_force_first_boot(device);
 

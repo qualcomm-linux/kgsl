@@ -194,6 +194,11 @@ struct kgsl_iommu {
 	 * be mapped in all contexts
 	 */
 	bool ppt_active;
+	/**
+	 * @smmu_aperture_set: Set once the SMMU aperture is programmed. Cleared
+	 * when the aperture is lost so that the next MMU start programs it again.
+	 */
+	bool smmu_aperture_set;
 	/** @cb0_offset: Offset of context bank 0 from iommu register base */
 	u32 cb0_offset;
 	/** @pagesize: Size of each context bank register space */
@@ -224,25 +229,6 @@ struct kgsl_iommu_pt {
 	struct io_pgtable_ops *pgtbl_ops;
 	struct io_pgtable_cfg cfg;
 };
-
-/**
- * kgsl_set_smmu_aperture - set SMMU Aperture for user context
- * @device: A GPU device handle
- *
- * Return: 0 on success or negative on failure.
- */
-int kgsl_set_smmu_aperture(struct kgsl_device *device,
-		struct kgsl_iommu_context *context);
-
-/**
- * kgsl_set_smmu_lpac_aperture - set SMMU Aperture for LPAC context
- * @device: Pointer to the KGSL device
- * @context: Pointer to the LPAC iommu context
- *
- * Return: 0 on success or negative on failure.
- */
-int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
-		struct kgsl_iommu_context *context);
 
 int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device *pdev);
 #endif

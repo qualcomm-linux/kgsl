@@ -212,6 +212,8 @@ struct kgsl_functable {
 		struct kgsl_process_private *proc_priv);
 	/** @is_first_boot_done: Check if the ADRENO device first boot is done */
 	bool (*is_first_boot_done)(struct kgsl_device *device);
+	/** @set_smmu_aperture: Target specific function to program the SMMU aperture registers */
+	int (*set_smmu_aperture)(struct kgsl_device *device);
 };
 
 struct kgsl_ioctl {
@@ -277,6 +279,9 @@ struct kgsl_device {
 
 	/* Starting kernel virtual address for QDSS GFX DBG register block */
 	void __iomem *qdss_gfx_virt;
+
+	/* Kernel virtual address for CX SMMU aperture register block */
+	void __iomem *smmu_aperture_virt;
 
 	struct kgsl_memdesc *memstore;
 	struct kgsl_memdesc *scratch;

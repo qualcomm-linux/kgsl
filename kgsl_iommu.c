@@ -1448,14 +1448,24 @@ static int _kgsl_set_smmu_aperture(u32 num_context_bank)
 {
 	return qcom_scm_set_gpu_smmu_aperture(num_context_bank);
 }
+
+static bool _kgsl_smmu_aperture_scm_available(void)
+{
+	return qcom_scm_is_available() && qcom_scm_set_gpu_smmu_aperture_is_available();
+}
 #else
 static int _kgsl_set_smmu_aperture(u32 num_context_bank)
 {
 	return qcom_scm_kgsl_set_smmu_aperture(num_context_bank);
 }
+
+static bool _kgsl_smmu_aperture_scm_available(void)
+{
+	return true;
+}
 #endif
 
-int kgsl_set_smmu_aperture(struct kgsl_device *device,
+static int kgsl_set_smmu_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
 	int ret;
@@ -1485,7 +1495,7 @@ static void kgsl_iommu_enable_ptwalk(struct kgsl_iommu_context *context)
 	wmb();
 }
 
-int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
+static int kgsl_set_smmu_lpac_aperture(struct kgsl_device *device,
 		struct kgsl_iommu_context *context)
 {
 	int ret;
@@ -1877,9 +1887,53 @@ static bool kgsl_iommu_ctx_terminated_on_fault(struct kgsl_mmu *mmu)
 	return false;
 }
 
+static int kgsl_iommu_set_aperture(struct kgsl_device *device)
+{
+	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	int ret;
+
+	if (!test_bit(KGSL_MMU_SMMU_APERTURE, &device->mmu.features) ||
+			!test_bit(KGSL_MMU_IOPGTABLE, &device->mmu.features) ||
+			iommu->smmu_aperture_set)
+		return 0;
+
+	/* Use the catalog to set the SMMU aperture only if the SCM call is not available */
+	if (!_kgsl_smmu_aperture_scm_available()) {
+		ret = device->ftbl->set_smmu_aperture(device);
+		if (ret) {
+			dev_err(&device->pdev->dev,
+				"Unable to set the SMMU aperture without the SCM call: %d\n", ret);
+			return ret;
+		}
+
+		iommu->smmu_aperture_set = true;
+		return 0;
+	}
+
+	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
+	if (ret)
+		return ret;
+
+	if (iommu->lpac_context.domain) {
+		ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
+		if (ret < 0 && ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
+			dev_err(&device->pdev->dev,
+				"Unable to set the LPAC SMMU aperture: %d.\n", ret);
+			dev_err(&device->pdev->dev,
+				"The aperture needs to be set to use per-process pagetables\n");
+			return ret;
+		}
+	}
+
+	iommu->smmu_aperture_set = true;
+	return 0;
+}
+
 static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 {
 	struct kgsl_iommu *iommu = &mmu->iommu;
+	int ret;
 
 	kgsl_iommu_enable_clk(mmu);
 
@@ -1896,6 +1950,12 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 	}
 
 	kgsl_iommu_configure_gpu_sctlr(mmu, mmu->pfpolicy, &iommu->user_context);
+
+	ret = kgsl_iommu_set_aperture(KGSL_MMU_DEVICE(mmu));
+	if (ret) {
+		kgsl_iommu_disable_clk(mmu);
+		return ret;
+	}
 
 	_iommu_context_set_prr(mmu, &iommu->user_context);
 	if (mmu->secured)
@@ -2699,20 +2759,8 @@ static int iommu_probe_user_context(struct kgsl_device *device,
 	/* Enable TTBR0 on the default and LPAC contexts */
 	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->cfg);
 
-	ret = kgsl_set_smmu_aperture(device, &iommu->user_context);
-	if (ret)
-		goto err;
-
 	kgsl_iommu_set_ttbr0(&iommu->lpac_context, mmu, &pt->cfg);
 
-	ret = kgsl_set_smmu_lpac_aperture(device, &iommu->lpac_context);
-	if (ret < 0 && ADRENO_FEATURE(adreno_dev, ADRENO_LPAC)) {
-		dev_err(&device->pdev->dev,
-			"Unable to set the LPAC SMMU aperture: %d.\n", ret);
-		dev_err(&device->pdev->dev,
-			"The aperture needs to be set to use per-process pagetables\n");
-		goto err;
-	}
 	return 0;
 
 err:
@@ -3053,8 +3101,6 @@ int kgsl_iommu_probe_standard(struct kgsl_device *device, struct platform_device
 
 	/* Enable TTBR0 on the default context */
 	kgsl_iommu_set_ttbr0(&iommu->user_context, mmu, &pt->cfg);
-
-	kgsl_set_smmu_aperture(device, &iommu->user_context);
 
 	/* Map any globals that might have been created early */
 	kgsl_iommu_map_globals(device, mmu);
