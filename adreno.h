@@ -619,6 +619,10 @@ struct adreno_gpu_core {
 	u32 highest_bank_bit;
 	/** @gpu_model: Gpu model name */
 	const char *gpu_model;
+	/** @smmu_aperture: List of registers and values to write for SMMU aperture */
+	const struct kgsl_regmap_list *smmu_aperture;
+	/** @smmu_aperture_count: Number of registers in @smmu_aperture */
+	u32 smmu_aperture_count;
 };
 
 /**
